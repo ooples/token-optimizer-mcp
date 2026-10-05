@@ -56,7 +56,13 @@
 
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { openSync, closeSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  openSync,
+  closeSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { dirname, join, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -95,7 +101,8 @@ const ARM_CHECK = comp('arm-selection.check.mjs');
 const WIT_CHECK = comp('load-witness.check.mjs');
 const RES_CHECK = comp('store-resolution.check.mjs');
 
-const digest = (p) => createHash('sha256').update(readFileSync(p)).digest('hex');
+const digest = (p) =>
+  createHash('sha256').update(readFileSync(p)).digest('hex');
 
 /**
  * Each mutant names the defect it reintroduces, the check that should refuse it,
@@ -107,8 +114,10 @@ const digest = (p) => createHash('sha256').update(readFileSync(p)).digest('hex')
 const MUTANTS = [
   {
     name: 'retention denominator is the raw scrape again',
-    defect: 'the buckets were counted over the safe subset and printed beside a larger set',
-    caughtBy: 'the buckets must close, and the denominator is enumerated by name',
+    defect:
+      'the buckets were counted over the safe subset and printed beside a larger set',
+    caughtBy:
+      'the buckets must close, and the denominator is enumerated by name',
     file: H2H,
     check: SCORER,
     from: 'const { want, unsafeIds } = splitScorable(scan.units);',
@@ -116,7 +125,8 @@ const MUTANTS = [
   },
   {
     name: 'a sinkless arm reports a measured zero',
-    defect: 'inSpill read 0 on every workload because the branch could not fire',
+    defect:
+      'inSpill read 0 on every workload because the branch could not fire',
     caughtBy: 'identity: the sinkless headline arm reports null',
     file: RET,
     check: SCORER,
@@ -125,7 +135,8 @@ const MUTANTS = [
   },
   {
     name: 'their token column is estimated, ours is tokenised',
-    defect: 'their own counter is len(text) // 4; using it for one side only biases every ratio',
+    defect:
+      'their own counter is len(text) // 4; using it for one side only biases every ratio',
     caughtBy: 'mirror: the same bytes must score the same token saving',
     file: H2H,
     check: SCORER,
@@ -143,7 +154,8 @@ const MUTANTS = [
   },
   {
     name: 'a short identifier is scored by substring after all',
-    defect: 'a three-character id matches by accident and lands in inOut as a free pass',
+    defect:
+      'a three-character id matches by accident and lands in inOut as a free pass',
     caughtBy: 'identity: the denominator is the set that was actually scored',
     file: RET,
     check: SCORER,
@@ -152,7 +164,8 @@ const MUTANTS = [
   },
   {
     name: 'identifiers found in the payload rather than the output',
-    defect: 'scoring retention against the input always reports perfect retention',
+    defect:
+      'scoring retention against the input always reports perfect retention',
     caughtBy: 'lossy: exactly DROP identifiers must have left the context',
     file: RET,
     check: SCORER,
@@ -161,7 +174,8 @@ const MUTANTS = [
   },
   {
     name: 'a cache read billed at the full input rate',
-    defect: 'cacheRead priced at 1.0 instead of 0.1, so cached traffic costs 10x',
+    defect:
+      'cacheRead priced at 1.0 instead of 0.1, so cached traffic costs 10x',
     caughtBy: 'cost-split: ten cache reads cost one plain input token',
     file: SPLIT,
     check: SPLIT_CHECK,
@@ -171,7 +185,8 @@ const MUTANTS = [
   {
     name: 'output billed as input',
     defect: 'output priced at 1x rather than 5x, understating the output share',
-    caughtBy: 'cost-split: each priced quantity converts at its own published rate',
+    caughtBy:
+      'cost-split: each priced quantity converts at its own published rate',
     file: SPLIT,
     check: SPLIT_CHECK,
     from: 'output: t.output * rates.outputPerInput,',
@@ -180,7 +195,8 @@ const MUTANTS = [
   {
     name: 'both cache TTLs charged at the 5-minute rate',
     defect: '1-hour writes billed at 1.25 instead of 2.0',
-    caughtBy: 'cost-split: each priced quantity converts at its own published rate',
+    caughtBy:
+      'cost-split: each priced quantity converts at its own published rate',
     file: SPLIT,
     check: SPLIT_CHECK,
     from: 'write: t.cacheWrite5m * rates.cacheWrite5m + t.cacheWrite1h * rates.cacheWrite1h,',
@@ -188,7 +204,8 @@ const MUTANTS = [
   },
   {
     name: 'turnsAfter divided by the 5-minute writes alone',
-    defect: 'the denominator drops 1-hour writes, inflating turnsAfter and every saving with it',
+    defect:
+      'the denominator drops 1-hour writes, inflating turnsAfter and every saving with it',
     caughtBy: 'cost-split: both write TTLs count as writes',
     file: SPLIT,
     check: SPLIT_CHECK,
@@ -197,7 +214,8 @@ const MUTANTS = [
   },
   {
     name: 'no traffic reported as a measured zero',
-    defect: 'an empty window returns turnsAfter 0 instead of null, so unmeasured reads as settled',
+    defect:
+      'an empty window returns turnsAfter 0 instead of null, so unmeasured reads as settled',
     caughtBy: 'cost-split: no writes gives null, not zero and not Infinity',
     file: SPLIT,
     check: SPLIT_CHECK,
@@ -206,7 +224,8 @@ const MUTANTS = [
   },
   {
     name: 'one session is enough to quote a base context',
-    defect: 'the readiness gate drops to a single session, so an unmeasured constant prints',
+    defect:
+      'the readiness gate drops to a single session, so an unmeasured constant prints',
     caughtBy: 'base-context: fewer than 5 sessions is not a measurement',
     file: BASE,
     check: BASE_CHECK,
@@ -215,8 +234,10 @@ const MUTANTS = [
   },
   {
     name: 'a zero-token prefix counted as a small session',
-    defect: 'sessions with no usage drag the median down, understating the base and inflating savings',
-    caughtBy: 'base-context: a zero-token prefix is dropped, not counted as a small session',
+    defect:
+      'sessions with no usage drag the median down, understating the base and inflating savings',
+    caughtBy:
+      'base-context: a zero-token prefix is dropped, not counted as a small session',
     file: BASE,
     check: BASE_CHECK,
     from: '    .filter((s) => s.tokens > 0);',
@@ -224,7 +245,8 @@ const MUTANTS = [
   },
   {
     name: 'first request seen instead of first request stamped',
-    defect: 'transcript order decides the prefix, so a later request can define the session base',
+    defect:
+      'transcript order decides the prefix, so a later request can define the session base',
     caughtBy: 'base-context: the earliest request of a session is the prefix',
     file: BASE,
     check: BASE_CHECK,
@@ -233,7 +255,8 @@ const MUTANTS = [
   },
   {
     name: 'spread taken over the maximum rather than the median',
-    defect: 'the reported spread shrinks, so a volatile environment looks settled',
+    defect:
+      'the reported spread shrinks, so a volatile environment looks settled',
     caughtBy: 'base-context: the spread is the range over the median',
     file: BASE,
     check: BASE_CHECK,
@@ -242,7 +265,8 @@ const MUTANTS = [
   },
   {
     name: 'every metered kind priced at 1x',
-    defect: 'rowCost ignores the rate table, so the cap bracket is in the wrong unit entirely',
+    defect:
+      'rowCost ignores the rate table, so the cap bracket is in the wrong unit entirely',
     caughtBy: 'calibrate: a mixed row prices at the published rates',
     file: METER,
     check: METER_CHECK,
@@ -251,7 +275,8 @@ const MUTANTS = [
   },
   {
     name: 'an unbounded cap given a floor anyway',
-    defect: 'a saving with no upper bound on the cap still prints a floor, which is the half a claim needs',
+    defect:
+      'a saving with no upper bound on the cap still prints a floor, which is the half a claim needs',
     caughtBy: 'calibrate: an unbounded cap leaves a saving with no floor',
     file: METER,
     check: METER_CHECK,
@@ -260,8 +285,10 @@ const MUTANTS = [
   },
   {
     name: 'a meter delta of 1 clears the weekly bar',
-    defect: 'a one-point delta bounds the cap from below only, so the weekly claim gets a ceiling and no floor',
-    caughtBy: 'calibrate: deltas of 1 do not clear the bar, however many there are',
+    defect:
+      'a one-point delta bounds the cap from below only, so the weekly claim gets a ceiling and no floor',
+    caughtBy:
+      'calibrate: deltas of 1 do not clear the bar, however many there are',
     file: METER,
     check: METER_CHECK,
     from: '  const qualifying = rows.filter((r) => r.y >= 2);',
@@ -271,7 +298,8 @@ const MUTANTS = [
     name: 'their passes pooled instead of reduced pass by pass',
     defect:
       'the asymmetry this file was extended for: their side back to one p10 over every reading, so a contaminated pass of theirs is no longer discarded',
-    caughtBy: 'speed-verdict: a contaminated minority of their passes is discarded, not pooled',
+    caughtBy:
+      'speed-verdict: a contaminated minority of their passes is discarded, not pooled',
     file: SPEED,
     check: SPEED_CHECK,
     from: '  const theirFast = quantile(theirPerPass, 0.5);',
@@ -281,7 +309,8 @@ const MUTANTS = [
     name: 'one pass on their side decides the row anyway',
     defect:
       'the refusal covered our side only, which is the state that shipped: their between-run spread assumed away while ours was measured',
-    caughtBy: 'speed-verdict: one pass on their side cannot decide it either, and the refusal says whose',
+    caughtBy:
+      'speed-verdict: one pass on their side cannot decide it either, and the refusal says whose',
     file: SPEED,
     check: SPEED_CHECK,
     from: '  theirPasses.length < 2',
@@ -291,7 +320,8 @@ const MUTANTS = [
     name: 'the refusal names the wrong side',
     defect:
       'a refusal that misreports which column is short sends the next capture to re-measure the wrong arm',
-    caughtBy: 'speed-verdict: one pass on their side cannot decide it either, and the refusal says whose',
+    caughtBy:
+      'speed-verdict: one pass on their side cannot decide it either, and the refusal says whose',
     file: SPEED,
     check: SPEED_CHECK,
     from: "    Array.isArray(theirPasses) && theirPasses.length >= 2 ? null : 'theirs',",
@@ -331,7 +361,8 @@ const MUTANTS = [
     name: 'a modified tree stops being a refusal',
     defect:
       'the one field whose honest value is a refusal turned into a field that is merely present',
-    caughtBy: 'reproducibility: a record from a modified tree is refused, and the reason says why the sha is not enough',
+    caughtBy:
+      'reproducibility: a record from a modified tree is refused, and the reason says why the sha is not enough',
     file: REPRO,
     check: REPRO_CHECK,
     from: '  if (prov.dirty === true) {',
@@ -341,7 +372,8 @@ const MUTANTS = [
     name: 'one pass clears the reproduction bar',
     defect:
       'the bar that makes a speed verdict decidable lowered to a single pass, which is the capture that shipped',
-    caughtBy: 'reproducibility: one pass on their side is refused, and the refusal names their side',
+    caughtBy:
+      'reproducibility: one pass on their side is refused, and the refusal names their side',
     file: REPRO,
     check: REPRO_CHECK,
     from: '      if (!Number.isInteger(n) || n < MIN_PASSES) {',
@@ -351,17 +383,32 @@ const MUTANTS = [
     name: 'only the first problem is reported',
     defect:
       'eight deficiencies reported one at a time, at one capture run each, while the count says eight',
-    caughtBy: 'reproducibility: five problems are reported as five, not as the first one',
+    caughtBy:
+      'reproducibility: five problems are reported as five, not as the first one',
     file: REPRO,
     check: REPRO_CHECK,
-    from: "  return `${problems.length} thing(s) stop this record being re-runnable: ` + problems.join('; ');",
-    to: '  return `${problems.length} thing(s) stop this record being re-runnable: ` + problems[0];',
+    // THE ANCHOR IS THE PRETTIER-FORMATTED SOURCE, not the one-liner it was
+    // written against. Prettier split this return across three lines and the
+    // single-line anchor then matched 0 times, so the mutant mutated nothing and
+    // scored STALE -- a mutation that cannot be applied is not a mutation that
+    // was caught, which is why the scorer counts it apart from both.
+    from:
+      '  return (\n' +
+      '    `${problems.length} thing(s) stop this record being re-runnable: ` +\n' +
+      "    problems.join(\'; \')\n" +
+      '  );',
+    to:
+      '  return (\n' +
+      '    `${problems.length} thing(s) stop this record being re-runnable: ` +\n' +
+      '    problems[0]\n' +
+      '  );',
   },
   {
     name: 'their digest drops out of the required set',
     defect:
       'the field that catches a stale out-dir quietly stops being required, and the per-field loop stops asking for it too',
-    caughtBy: 'reproducibility: the required set is exactly the 8 fields a re-run needs',
+    caughtBy:
+      'reproducibility: the required set is exactly the 8 fields a re-run needs',
     file: REPRO,
     check: REPRO_CHECK,
     from: "  theirsDigest: { look: HEX16, says: 'sha256 of their output, first 16' },",
@@ -382,7 +429,8 @@ const MUTANTS = [
     name: 'a stub run is held to the real-capture rule',
     defect:
       'the stub arm removed, so a known-answer capture is refused for lacking a version it must not carry -- the shape that sends a reader off to install a package the run never calls',
-    caughtBy: 'reproducibility: and the same stubbed capture with no version is accepted',
+    caughtBy:
+      'reproducibility: and the same stubbed capture with no version is accepted',
     file: REPRO,
     check: REPRO_CHECK,
     from: "  const stubbed = typeof prov.stubArms === 'string' && prov.stubArms !== '';",
@@ -402,7 +450,8 @@ const MUTANTS = [
     name: 'a capture that never recorded warnings reads as whole',
     defect:
       'the check for whether degradation was recorded at all removed, so every capture taken before the recording existed passes as a clean comparison',
-    caughtBy: 'competitor-health: a provenance with no competitorWarnings key is refused as not having said',
+    caughtBy:
+      'competitor-health: a provenance with no competitorWarnings key is refused as not having said',
     file: HEALTH,
     check: HEALTH_CHECK,
     from: "  if (!('competitorWarnings' in provenance)) {",
@@ -412,7 +461,8 @@ const MUTANTS = [
     name: 'the capture certifies its own allow-list',
     defect:
       'the gate stops recognising advisory messages independently, so widening the list in run-theirs.py would wave any degradation through',
-    caughtBy: 'competitor-health: an advisory this gate does not recognise is refused',
+    caughtBy:
+      'competitor-health: an advisory this gate does not recognise is refused',
     file: HEALTH,
     check: HEALTH_CHECK,
     from: '    } else if (!ADVISORY_SIGNATURES.some((signature) => entry.message.includes(signature))) {',
@@ -422,7 +472,8 @@ const MUTANTS = [
     name: 'a zero-count warning reads as a real entry',
     defect:
       'an entry whose count is 0 or fractional accepted as readable, which is a degradation that can be written down and not counted',
-    caughtBy: 'competitor-health: an entry with count 0 is refused as unreadable',
+    caughtBy:
+      'competitor-health: an entry with count 0 is refused as unreadable',
     file: HEALTH,
     check: HEALTH_CHECK,
     from: '  entry.count >= 1;',
@@ -432,7 +483,8 @@ const MUTANTS = [
     name: 'recorded degradations are not read',
     defect:
       'the degraded list walked as empty, so a Kompress model that never loaded is recorded and then ignored',
-    caughtBy: 'competitor-health: a recorded degradation is refused, named and counted',
+    caughtBy:
+      'competitor-health: a recorded degradation is refused, named and counted',
     file: HEALTH,
     check: HEALTH_CHECK,
     from: '  for (const entry of seen.degraded) {',
@@ -442,7 +494,8 @@ const MUTANTS = [
     name: 'an unreadable warnings block reads as empty',
     defect:
       'the shape check dropped, so competitorWarnings of {} passes and nothing is ever refused again',
-    caughtBy: 'competitor-health: a block that is not two arrays is refused as unreadable',
+    caughtBy:
+      'competitor-health: a block that is not two arrays is refused as unreadable',
     file: HEALTH,
     check: HEALTH_CHECK,
     from: '    !Array.isArray(seen.degraded) ||',
@@ -462,7 +515,8 @@ const MUTANTS = [
     name: 'units that are not in their own payload are admitted',
     defect:
       '283 of 14,067 units were not substrings of the payload they came from, so no arm could be credited with keeping them and every loss column carried them',
-    caughtBy: 'identifiers: every admitted unit is a literal substring of the payload',
+    caughtBy:
+      'identifiers: every admitted unit is a literal substring of the payload',
     file: IDS,
     check: IDS_CHECK,
     from: '    if (!text.includes(unit)) {',
@@ -512,7 +566,8 @@ const MUTANTS = [
     name: 'the story bar is not capped at the denominator',
     defect:
       'nine rows reported a retention regression while holding every unit available to them',
-    caughtBy: 'retention floor: the wider denominator passes, the story bar capped',
+    caughtBy:
+      'retention floor: the wider denominator passes, the story bar capped',
     file: FLOOR,
     check: FLOOR_CHECK,
     from: "  const bar = story === 'ceiling' ? ids : Math.min(story, ids);",
@@ -532,7 +587,8 @@ const MUTANTS = [
     name: 'a floor with no denominator is compared anyway',
     defect:
       'a bar in units the instrument no longer uses, read as a fact about the engine',
-    caughtBy: 'retention floor: a floor with no denominator is refused, not compared',
+    caughtBy:
+      'retention floor: a floor with no denominator is refused, not compared',
     file: FLOOR,
     check: FLOOR_CHECK,
     from: "  if (typeof floor === 'number')",
@@ -552,7 +608,8 @@ const MUTANTS = [
     name: 'the ceiling label is not checked against their column',
     defect:
       'a bar named for their ceiling still called that after their column fell below it',
-    caughtBy: 'retention floor: a bar named for their ceiling is refused once their column leaves it',
+    caughtBy:
+      'retention floor: a bar named for their ceiling is refused once their column leaves it',
     file: FLOOR,
     check: FLOOR_CHECK,
     from: "  if (story === 'ceiling' && theirs !== ids)",
@@ -582,7 +639,8 @@ const MUTANTS = [
     name: 'the recorded flag outranks the digests it was written beside',
     defect:
       'one bug in the recorder, and every row vouches for its own comparability',
-    caughtBy: 'input parity: a flag that claims agreement cannot override the digests',
+    caughtBy:
+      'input parity: a flag that claims agreement cannot override the digests',
     file: PARITY,
     check: PARITY_CHECK,
     from: '  const agree = ours === theirs;',
@@ -612,7 +670,8 @@ const MUTANTS = [
     name: 'a record that contradicts itself is resolved rather than refused',
     defect:
       'the flag and the digests disagree, and the gate picks the flattering one',
-    caughtBy: 'input parity: digests that agree under a flag that says they do not',
+    caughtBy:
+      'input parity: digests that agree under a flag that says they do not',
     file: PARITY,
     check: PARITY_CHECK,
     from: '  if (typeof input.same === ',
@@ -627,7 +686,8 @@ const MUTANTS = [
     name: 'comparable means strictly more retained, not at least as much',
     defect:
       'an arm that kept exactly what we kept is the tightest honest bar and was skipped',
-    caughtBy: 'ties break by name and input order does not change the selection',
+    caughtBy:
+      'ties break by name and input order does not change the selection',
     file: ARM,
     check: ARM_CHECK,
     from: 'ordered.filter((c) => c.retained >= ourRetained)',
@@ -707,7 +767,8 @@ const MUTANTS = [
     name: 'the arms are taken in capture order instead of ranked',
     defect:
       'the opponent becomes whichever arm their sweep happened to try first, so two runs of the same capture can pick different bars',
-    caughtBy: 'ties break by name and input order does not change the selection',
+    caughtBy:
+      'ties break by name and input order does not change the selection',
     file: ARM,
     check: ARM_CHECK,
     from: 'const ordered = [...scored].sort(rank);',
@@ -727,7 +788,8 @@ const MUTANTS = [
     name: 'an untimed arm counts as instantaneous in a tie',
     defect:
       'an arm the capture never timed wins every ratio tie, so the speed bar becomes an arm with no measurement behind it',
-    caughtBy: 'the timed arm wins the tie even though the untimed one sorts first by name',
+    caughtBy:
+      'the timed arm wins the tie even though the untimed one sorts first by name',
     file: ARM,
     check: ARM_CHECK,
     from: 'const am = Number.isFinite(a.ms) ? a.ms : Number.POSITIVE_INFINITY;',
@@ -768,7 +830,8 @@ const MUTANTS = [
     name: 'zero of many redeemed counts as their loss',
     defect:
       'a resolution taken after their store TTL expired scores every elided identifier as unrecoverable for them, so six workloads report a retention win that is really our own sequencing',
-    caughtBy: 'a store that served none of many markers is unmeasured, not lost',
+    caughtBy:
+      'a store that served none of many markers is unmeasured, not lost',
     file: RES,
     check: RES_CHECK,
     from: '  if (unresolved === markers)',
@@ -788,7 +851,8 @@ const MUTANTS = [
     name: 'a partial miss is excused as unmeasured',
     defect:
       'the refusal is widened to any unresolved marker at all, so their genuine losses are excused and THEIR retention column is flattered -- the same bug pointed the other way',
-    caughtBy: 'some redeemed and some not is a measurement and keeps their misses',
+    caughtBy:
+      'some redeemed and some not is a measurement and keeps their misses',
     file: RES,
     check: RES_CHECK,
     from: '  if (unresolved === markers)',
@@ -808,7 +872,8 @@ const MUTANTS = [
     name: 'a missing witness on one side counts as agreement',
     defect:
       'a recording taken before the witness existed, or one whose witness failed to run, scores as load-controlled and every speed verdict is decided on uncontrolled timings',
-    caughtBy: 'a null, undefined, zero or NaN reading on either side is refused',
+    caughtBy:
+      'a null, undefined, zero or NaN reading on either side is refused',
     file: WIT,
     check: WIT_CHECK,
     from: "    return { ok: false, detail: [o.detail, t.detail].filter(Boolean).join('; ') };",
@@ -866,14 +931,24 @@ const LOCK = join(HERE, '.mutants.lock');
 let lockFd = null;
 try {
   lockFd = openSync(LOCK, 'wx');
-  writeFileSync(LOCK, `pid ${process.pid} started ${new Date().toISOString()}`, 'utf8');
+  writeFileSync(
+    LOCK,
+    `pid ${process.pid} started ${new Date().toISOString()}`,
+    'utf8'
+  );
 } catch (err) {
   if (err && err.code === 'EEXIST') {
-    console.log('another mutation battery holds the lock, so this run refuses:');
+    console.log(
+      'another mutation battery holds the lock, so this run refuses:'
+    );
     console.log('  ' + LOCK);
     console.log(readFileSync(LOCK, 'utf8').trim());
-    console.log('two batteries at once leave a mutant in the working tree and still');
-    console.log('report a perfect score; wait for it, or delete that file if it is stale.');
+    console.log(
+      'two batteries at once leave a mutant in the working tree and still'
+    );
+    console.log(
+      'report a perfect score; wait for it, or delete that file if it is stale.'
+    );
     process.exit(3);
   }
   throw err;
@@ -887,7 +962,9 @@ const releaseLock = () => {
 };
 process.on('exit', releaseLock);
 const originals = new Map();
-for (const m of MUTANTS) if (!originals.has(m.file)) originals.set(m.file, readFileSync(m.file, 'utf8'));
+for (const m of MUTANTS)
+  if (!originals.has(m.file))
+    originals.set(m.file, readFileSync(m.file, 'utf8'));
 const before = new Map([...originals.keys()].map((f) => [f, digest(f)]));
 
 // THE CONTROL ARM. A mutant is scored as caught when its check exits non-zero,
@@ -897,14 +974,29 @@ const before = new Map([...originals.keys()].map((f) => [f, digest(f)]));
 const checks = [...new Set(MUTANTS.map((m) => m.check))];
 const red = [];
 for (const c of checks) {
-  const run = spawnSync('node', [c], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
-  if (run.status !== 0) red.push(c.slice(REPO.length + 1).split(sep).join('/'));
+  const run = spawnSync('node', [c], {
+    encoding: 'utf8',
+    maxBuffer: 64 * 1024 * 1024,
+  });
+  if (run.status !== 0)
+    red.push(
+      c
+        .slice(REPO.length + 1)
+        .split(sep)
+        .join('/')
+    );
 }
 if (red.length) {
-  console.log('NO SCORE: these checks are red before anything was mutated, so every');
-  console.log('mutant against them would be counted as caught without being tested:');
+  console.log(
+    'NO SCORE: these checks are red before anything was mutated, so every'
+  );
+  console.log(
+    'mutant against them would be counted as caught without being tested:'
+  );
   for (const c of red) console.log('  ' + c);
-  console.log('restore the instruments (git status, then git checkout --) and re-run.');
+  console.log(
+    'restore the instruments (git status, then git checkout --) and re-run.'
+  );
   process.exit(4);
 }
 console.log(`control arm: ${checks.length} check(s) pass unmutated`);
@@ -918,14 +1010,22 @@ try {
     if (m.check !== lastCheck) {
       lastCheck = m.check;
       console.log('');
-      console.log('against ' + m.check.slice(REPO.length + 1).split(sep).join('/'));
+      console.log(
+        'against ' +
+          m.check
+            .slice(REPO.length + 1)
+            .split(sep)
+            .join('/')
+      );
     }
     const src = originals.get(m.file);
     const hits = src.split(m.from).length - 1;
     if (hits !== 1) {
       stale++;
       console.log(`  STALE   ${m.name}`);
-      console.log(`          its anchor matches ${hits} times, so it mutated nothing`);
+      console.log(
+        `          its anchor matches ${hits} times, so it mutated nothing`
+      );
       continue;
     }
     writeFileSync(m.file, src.replace(m.from, m.to), 'utf8');
@@ -950,13 +1050,18 @@ try {
 
 for (const [f, d] of before) {
   if (digest(f) !== d) {
-    console.log(`\nFAILED TO RESTORE ${f} -- check it out before running anything else`);
+    console.log(
+      `\nFAILED TO RESTORE ${f} -- check it out before running anything else`
+    );
     process.exit(2);
   }
 }
 
 const total = caught + survived + stale;
-console.log(`\nmutation score ${caught}/${total} caught` + (stale ? `, ${stale} stale` : ''));
+console.log(
+  `\nmutation score ${caught}/${total} caught` +
+    (stale ? `, ${stale} stale` : '')
+);
 if (survived || stale) {
   console.log(
     survived
