@@ -19,6 +19,23 @@
  * earlier message that liveness says is dead with a stub naming what was there
  * -- a stub rather than a hole, so a wrong decision costs a turn of latency
  * when the model asks again rather than costing the answer.
+ *
+ * MEASURED WITH RECORDED COUNTS: 2,868,124 -> 2,639,288, which is 0.920x and an
+ * 8% saving. Run in census mode, where an unrecorded string is answered with
+ * chars/4, the same arms read 0.815x -- so the estimate flattered eviction by
+ * more than a factor of two, and the 18.5% this file reported before the
+ * payloads were recorded was not a measurement.
+ *
+ * 8% IS NOT ENOUGH TO WIN. Our recorded p=0 is 3,088,040 and theirs is
+ * 2,746,640; eight percent off ours is about 2,841,000, which still loses. So
+ * batched eviction of unreferenced messages, gated per conversation and priced
+ * properly, does not close the gap on its own -- and the synthetic 0.808x from
+ * assembly.mjs agreed with the census figure rather than with the truth, which
+ * means the agreement reported earlier was two estimates matching each other.
+ *
+ * The gate still earns its place: it declines on 2 of 18 conversations and the
+ * assertion below makes a policy that costs more than its baseline impossible.
+ * It just is not where a win comes from.
  */
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
