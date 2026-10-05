@@ -160,6 +160,22 @@ export interface CompressionFacts {
    * an `Omit<ProxySummary, 'path'>`, not this. The next attempt starts on
    * CompressionFacts, carrying the per-request spill delta, and arrives here for
    * free.
+   *
+   * AND IT MUST NOT BE DONE BY SPREADING THE RESULT. I tried exactly that --
+   * wrap compressBody's sink to tally the calls, then return
+   * `{ ...result, summary: { ...result.summary, withheldUnits } }` -- and the
+   * proxy's own `spilledBlocks` figure went from 75 to 845 over the same 1,323
+   * requests, close to the 854 elisions. Wrapping a sink only delegates, so
+   * that change should have been count-neutral and was not. It is reverted, and
+   * the cause is not established: either `spill` is invoked per elided block
+   * rather than per whole-unit move, or copying the result object changes
+   * something downstream that depends on its identity.
+   *
+   * So the next attempt starts by establishing what each counter counts -- a
+   * test that spills a known number of known units and asserts both figures --
+   * before adding a field to either. An 11x move in a measurement from a
+   * refactor that cannot affect it means the measurement was not understood,
+   * and shipping a report built on it would publish that misunderstanding.
    */
   /**
    * Characters of cached knowledge added to the request.
