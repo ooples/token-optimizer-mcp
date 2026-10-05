@@ -71,6 +71,12 @@ const TARGETS = [
   // capture is on disk -- which is why the decomposition check fails loudly on
   // the encoding instead of trusting a census to have caught it.
   ['bench/compression/head-to-head.mjs', 'hr30/merged/warm'],
+  // THE REPLICATE'S CAPTURE, which is a different sweep and therefore different
+  // payloads. A speed verdict needs two independent recordings that agree, and
+  // the replicate could not be re-taken at all until its strings were counted:
+  // the currency refuses a digest it has never seen rather than estimating, so
+  // a capture absent from the fixture is a capture the comparator cannot price.
+  ['bench/compression/head-to-head.mjs', 'hr31/warm'],
   // The prefix-survival measurement, which counts the shared run between turns
   // as text rather than scaling a character share.
   'bench/compression/prefix-survival.mjs',
