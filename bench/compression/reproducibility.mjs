@@ -61,7 +61,20 @@ const HEX16 = /^[0-9a-f]{16}$/;
 /** A version, permissively: leading major.minor.patch, anything after. */
 const SEMVER = /^[0-9]+[.][0-9]+[.][0-9]+/;
 const SHA40 = /^[0-9a-f]{40}$/;
-const NAME = /^[a-z0-9_]+$/;
+/**
+ * A tokenizer name, which may now be provider-qualified.
+ *
+ * `cl100k_base` is a bare word; `anthropic:claude-sonnet-4-5-20250929` is not,
+ * and the bare-word pattern rejected it -- so moving the comparison onto
+ * Anthropic's own counter made every record unreproducible by this check. The
+ * currency change was the point, and the validator had not been told.
+ *
+ * It still refuses what it was built to refuse: an empty string, the literal
+ * `unknown` and a truncated digest are all handled above or fail here, because
+ * a field that is present and unusable reads as recorded and is worse than an
+ * absent one.
+ */
+const NAME = /^[a-z0-9_]+(?::[a-z0-9][a-z0-9._-]*)?$/;
 /**
  * The instrument fingerprint `instrumentFingerprint` builds, REQUIRED TO END IN A
  * STORE STATE. `store=unrecorded` is not a state, it is the admission that the
@@ -77,10 +90,16 @@ const INSTRUMENT = /^v[0-9]+:.* store=(?:empty|warm)$/;
  * needs it. Order is the order the refusal reports them in.
  */
 export const FIELDS = {
-  commit: { look: SHA40, says: 'the 40-character sha of the tree that produced it' },
+  commit: {
+    look: SHA40,
+    says: 'the 40-character sha of the tree that produced it',
+  },
   node: { look: SEMVER, says: 'the node version the scorer ran on' },
   tiktoken: { look: SEMVER, says: 'the tokeniser package version' },
-  encoding: { look: NAME, says: 'the encoding the token column was measured in' },
+  encoding: {
+    look: NAME,
+    says: 'the encoding the token column was measured in',
+  },
   payloadsDigest: { look: HEX16, says: 'sha256 of payloads.json, first 16' },
   theirsDigest: { look: HEX16, says: 'sha256 of their output, first 16' },
   python: { look: SEMVER, says: 'the python their capture ran under' },
@@ -106,14 +125,21 @@ export function reproducibilityRefusal(prov) {
   const problems = [];
   for (const [field, { look, says }] of Object.entries(FIELDS)) {
     const value = prov[field];
-    if (value === undefined || value === null || value === '' || value === 'unknown') {
+    if (
+      value === undefined ||
+      value === null ||
+      value === '' ||
+      value === 'unknown'
+    ) {
       problems.push(`${field} is missing (${says})`);
     } else if (typeof value !== 'string' || !look.test(value)) {
       // A FIELD THAT IS PRESENT AND UNUSABLE IS WORSE THAN AN ABSENT ONE,
       // because it reads as recorded. An empty digest, a truncated sha and the
       // literal string 'unknown' all arrived here from real code paths that
       // swallowed a failure and carried on.
-      problems.push(`${field} is not usable: ${JSON.stringify(value)} (${says})`);
+      problems.push(
+        `${field} is not usable: ${JSON.stringify(value)} (${says})`
+      );
     }
   }
   // THEIR VERSION IS REQUIRED OR FORBIDDEN, AND WHICH ONE IS NOT OUR CHOICE.
@@ -127,7 +153,10 @@ export function reproducibilityRefusal(prov) {
   const stubbed = typeof prov.stubArms === 'string' && prov.stubArms !== '';
   const version = prov.headroomVersion;
   const absent =
-    version === undefined || version === null || version === '' || version === 'unknown';
+    version === undefined ||
+    version === null ||
+    version === '' ||
+    version === 'unknown';
   if (stubbed) {
     if (!absent) {
       problems.push(
@@ -154,13 +183,19 @@ export function reproducibilityRefusal(prov) {
   // A DIRTY TREE IS THE ONE FIELD WHOSE HONEST VALUE IS A REFUSAL. The sha is
   // well formed and the code it names is not the code that ran.
   if (prov.dirty === true) {
-    problems.push('the working tree was modified, so the commit names code that did not run');
+    problems.push(
+      'the working tree was modified, so the commit names code that did not run'
+    );
   } else if (prov.dirty !== false) {
-    problems.push('dirty is missing, so nothing says whether the tree was clean');
+    problems.push(
+      'dirty is missing, so nothing says whether the tree was clean'
+    );
   }
   const passes = prov.speedPasses;
   if (passes === null || typeof passes !== 'object') {
-    problems.push('speedPasses is missing (how many separated passes each side was timed over)');
+    problems.push(
+      'speedPasses is missing (how many separated passes each side was timed over)'
+    );
   } else {
     for (const side of ['ours', 'theirs']) {
       const n = passes[side];
@@ -173,5 +208,8 @@ export function reproducibilityRefusal(prov) {
     }
   }
   if (problems.length === 0) return null;
-  return `${problems.length} thing(s) stop this record being re-runnable: ` + problems.join('; ');
+  return (
+    `${problems.length} thing(s) stop this record being re-runnable: ` +
+    problems.join('; ')
+  );
 }
