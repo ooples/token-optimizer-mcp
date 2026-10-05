@@ -76,14 +76,21 @@ const TARGETS = [
   // the replicate could not be re-taken at all until its strings were counted:
   // the currency refuses a digest it has never seen rather than estimating, so
   // a capture absent from the fixture is a capture the comparator cannot price.
-  // hr31/warm WAS THE OBVIOUS CHOICE AND IT IS NOT USABLE. Its capture reports
-  // their engine running with a capability missing -- Kompress gave up with its
-  // time budget exhausted and kept the remainder verbatim, four times -- so
-  // their column there is a floor on their engine rather than a measurement of
-  // it, and the comparator refuses to let any row from it be quoted as a win.
-  // That is a property of the capture, taken on a machine that was not quiet,
-  // not of the currency work.
-  ['bench/compression/head-to-head.mjs', 'hr30/warm'],
+  // NO SECOND CAPTURE IS USABLE, SO THE REPLICATE IS NOT REGISTERED HERE.
+  // A speed verdict needs two independent recordings that agree, and neither
+  // candidate on disk can produce one:
+  //
+  //   hr31/warm      complete, but their engine ran with a capability missing --
+  //                  Kompress gave up with its time budget exhausted four times
+  //                  and kept the remainder verbatim, so their column is a floor
+  //                  on their engine rather than a measurement of it
+  //   hr30/warm      no payloads.json: the sweep was never resolved, so there is
+  //                  nothing for the comparator to read
+  //
+  // hr30/merged/warm is the only complete, healthy capture and it is the main
+  // record. So the speed pair stays NOT ENFORCEABLE, and that is a fact about
+  // the captures rather than about the instrument: closing it needs their engine
+  // re-captured on a quiesced machine, which this one is not.
   // The prefix-survival measurement, which counts the shared run between turns
   // as text rather than scaling a character share.
   'bench/compression/prefix-survival.mjs',
