@@ -1762,14 +1762,77 @@ export async function startProxy(options: ProxyOptions = {}): Promise<{
   // synchronous, so nothing else can increment this between the two reads
   // either side of the call.
   let spilledBlocks = 0;
+  /**
+   * A DIGEST PER WITHHELD UNIT, SO A REINSTATEMENT CAN BE COUNTED.
+   *
+   * Withholding a unit saves its residency for every remaining turn and costs
+   * nothing unless it is wanted back, so the arm's whole value is the rate at
+   * which that happens -- and that rate has only ever been estimated, at 0.23,
+   * from textual recurrence on a borrowed corpus, with no second signal.
+   * `spilledBlocks` is the denominator and has been recorded all along; this is
+   * the numerator.
+   *
+   * Digests, not content: the set holds a sha256 of each unit that left and
+   * nothing else, so a reinstatement is observable without the proxy keeping a
+   * copy of anything it sent away.
+   *
+   * Bounded, because a proxy lives as long as the session does. Past the cap the
+   * oldest digests are forgotten, which can only UNDERcount reinstatements --
+   * the safe direction, since an undercount makes the arm look worse rather
+   * than better.
+   */
+  const spilledDigests = new Set<string>();
+  const MAX_TRACKED_SPILLS = 4096;
   const sink = options.spill === true ? spillTo(spillRoot) : undefined;
   const spill: SpillSink =
     sink === undefined
       ? undefined
       : (content, hint) => {
           spilledBlocks += 1;
+          if (spilledDigests.size >= MAX_TRACKED_SPILLS) {
+            const oldest = spilledDigests.values().next().value;
+            if (oldest !== undefined) spilledDigests.delete(oldest);
+          }
+          spilledDigests.add(
+            createHash('sha256').update(content).digest('hex')
+          );
           return sink(content, hint);
         };
+
+  /**
+   * How many withheld units this request has brought back.
+   *
+   * A unit comes back as the text of a block, so every block is hashed and
+   * looked up. It counts a unit once however many times it appears, because the
+   * question is whether it was wanted, not how often it was pasted.
+   */
+  const countReinstated = (text: string): number => {
+    if (spilledDigests.size === 0) return 0;
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      return 0;
+    }
+    const messages = (parsed as { messages?: unknown[] })?.messages;
+    if (!Array.isArray(messages)) return 0;
+    const seen = new Set<string>();
+    for (const message of messages) {
+      const content = (message as { content?: unknown })?.content;
+      const blocks = Array.isArray(content)
+        ? content
+        : typeof content === 'string'
+          ? [{ text: content }]
+          : [];
+      for (const block of blocks) {
+        const body = (block as { text?: unknown })?.text;
+        if (typeof body !== 'string' || body.length === 0) continue;
+        const digest = createHash('sha256').update(body).digest('hex');
+        if (spilledDigests.has(digest)) seen.add(digest);
+      }
+    }
+    return seen.size;
+  };
   // One store per proxy, holding a hash and a boolean per conversation.
   // Per-conversation, never per-request, and passed in explicitly rather
   // than reached for -- HeadRoom's #3486 is a shared router keeping request
@@ -1936,6 +1999,12 @@ export async function startProxy(options: ProxyOptions = {}): Promise<{
         injectedChars: summary.injectedChars,
         elisions: summary.elisions,
         spilledBlocks: spilledBlocks - spilledBefore,
+        // COUNTED ON THE WAY IN, BEFORE THIS REQUEST IS REWRITTEN. A unit the
+        // client has brought back arrives as the text of a block, so it is
+        // matched against the digests of what left -- the numerator of the one
+        // rate the eviction case turns on, where `spilledBlocks` is the
+        // denominator and has been recorded all along.
+        reinstatedUnits: countReinstated(body.toString('utf8')),
         losslessMode: options.spill !== true,
       });
       // SPREAD, NOT RE-LISTED. This was seventeen fields copied across by hand,
