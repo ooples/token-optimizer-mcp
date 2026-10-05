@@ -21,6 +21,25 @@
  * share a `requestId` and none share a `parentUuid`, which is what gives the
  * split away. Grouped properly the figure is 1.15.
  *
+ * THE 31% BELOW IS RETRACTED, and what replaced it is bigger. Reasoning does
+ * not live in `text` blocks, it lives in `thinking` blocks, and the run-length
+ * walk broke a run on any assistant turn without a tool call -- so it broke on
+ * every thinking turn and the runs came out short by construction.
+ *
+ * Counted properly across 114,715 assistant entries: 37,543 carry thinking,
+ * 52,800 carry a tool call and no prose, and exactly TWO carry thinking and a
+ * tool call together. The model almost never thinks and acts in the same turn,
+ * so a thinking turn and the tool turn that follows it are two requests, each
+ * paying a full context re-read.
+ *
+ * That is the headroom on N: merging them would remove on the order of 37,500
+ * requests from roughly 90,000, about 42% -- larger than batching consecutive
+ * tool calls and cleaner, because it does not ask the model to decide more per
+ * turn, only to say what it has decided in the same turn it acts on it.
+ *
+ * The numbers under the old heading are left for the record and are not a
+ * ceiling on anything.
+ *
  * AND THE BATCHABLE HEADROOM IS BOUNDED, measured the same way. Of 36,301 runs
  * of consecutive tool-only turns holding 52,785 turns between them, 69.5% are a
  * run of ONE -- a single tool call sitting between two pieces of reasoning,
