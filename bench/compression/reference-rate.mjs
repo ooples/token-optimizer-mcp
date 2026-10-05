@@ -146,11 +146,13 @@ let last = {};
 // defaults to 0 -- never move a block out -- so a spilling proxy still spills
 // nothing until a threshold is set. 0.9 is the preset the bench's winning arm
 // uses: move a block only where the engine could not take 90% off it in place.
-const proxy = await startProxy({
-  upstream: upstreamUrl,
-  spill: true,
-  compression: { spillWholeBlockBelow: 0.9 },
-});
+// NO EXPLICIT THRESHOLD: THE PRESET HAS TO CARRY IT. Passing
+// `compression: { spillWholeBlockBelow: 0.9 }` here proves the engine works and
+// proves nothing about whether a user can reach it -- and it could not, because
+// the value was 0 in all four presets. `aggressive` now sets it, so this drives
+// the arm the way an operator would and fails if that wiring breaks.
+process.env.TOKEN_OPTIMIZER_COMPRESSION = 'aggressive';
+const proxy = await startProxy({ upstream: upstreamUrl, spill: true });
 let sent = 0;
 try {
   for (const { turns } of rows) {
