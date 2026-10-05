@@ -139,9 +139,15 @@ describe.each(['head-to-head.json', 'head-to-head.store-empty.json'])(
           'grep-output': 'above 85%',
           'raw-build-log': 'above 95%',
         },
+        // RE-RECORDED, SO THESE MOVED WITH THE WARM HALF. They were 81% and
+        // 93% in the old currency and the comment above said that gap was a
+        // real one, pinned rather than hidden -- it is closed now: both halves
+        // of the pair are recorded from one commit in Anthropic's count_tokens,
+        // which is what store-pair.check.mjs requires of a pair meant to be one
+        // variable apart.
         'head-to-head.store-empty.json': {
-          'grep-output': 'above 81%',
-          'raw-build-log': 'above 93%',
+          'grep-output': 'above 85%',
+          'raw-build-log': 'above 95%',
         },
       }[file];
       expect(expected).toBeDefined();
