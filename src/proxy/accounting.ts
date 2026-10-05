@@ -134,6 +134,29 @@ export interface CompressionFacts {
 
   readonly deferredTools?: number;
   readonly deferredToolChars?: number;
+
+  /**
+   * How many units this request withheld, and how many a later one put back.
+   *
+   * THE RATE THESE TWO MAKE IS THE ONE NUMBER THE WHOLE EVICTION CASE RESTS ON.
+   * Withholding a unit saves its residency for every remaining turn and costs
+   * nothing unless the unit is wanted again, so the arm's value is almost
+   * entirely a function of how often that happens. It has been estimated from
+   * textual recurrence on a borrowed corpus at 0.23, and that estimate cannot
+   * see a unit the model read and reasoned about without quoting -- so it is
+   * biased low, in the direction that flatters the arm.
+   *
+   * There was no second signal to check it against. The event log carries tool
+   * names but no withheld count, so no rate could be formed from it at all, and
+   * every call in it came from the benchmark rather than from a session.
+   *
+   * These are counts and nothing else, which is what lets them exist here: an
+   * AccountingRecord carries counts, durations, statuses, fixed-vocabulary
+   * reasons and tool names, never content. A unit's identity, path or bytes are
+   * none of the ledger's business.
+   */
+  readonly withheldUnits?: number;
+  readonly reinstatedUnits?: number;
   /**
    * Characters of cached knowledge added to the request.
    *
