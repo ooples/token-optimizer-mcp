@@ -336,6 +336,48 @@ console.log(
 WHAT IS STILL UNMEASURED: whether an instruction moves the calls-per-turn figure at all. The headroom is real and the break-even is low; obedience is not a number this file has.`
 );
 
+// ---------------------------------------------------------------------------
+// DO EVICTION AND BATCHING OVERLAP? They were approved as two items and the
+// honest question is whether building both buys both.
+//
+// THEY DO NOT OVERLAP, and it is an identity rather than a measurement: the
+// cost line for an arm that fetches nothing is `handed * (W + R*N)`. Eviction
+// scales `handed`; batching scales the per-token factor through N. A product
+// of two independent factors, so the savings multiply and neither eats the
+// other. Asserted on a grid rather than argued, because "they compose" is the
+// kind of claim that is true of the model and false of the code.
+// ---------------------------------------------------------------------------
+const composes = [];
+for (const evictScale of [1, 0.92, 0.75, 0.5])
+  for (const batchRate of [0, 0.2, batchB, 0.9]) {
+    const n = RECORDED.turnsAfter * (1 - batchRate);
+    const perToken = DEFAULTS.cacheWrite + DEFAULTS.cacheRead * n;
+    const both = RECORDED.handedOurs * evictScale * perToken;
+    const batchOnly = RECORDED.handedOurs * perToken;
+    composes.push(Math.abs(both - evictScale * batchOnly) < 1e-6);
+  }
+check(
+  composes.every(Boolean),
+  `eviction and batching compose exactly, on all ${composes.length} grid point(s): one scales handed, the other the per-token factor`
+);
+
+// THE COMBINED FIGURE IS NOT CLAIMED HERE. `bench/compression/evict.mjs`
+// refuses to run without a re-record -- its payloads changed and the currency
+// throws on a miss rather than estimating -- so the 0.920x eviction ratio is a
+// figure from an earlier recording and not one this run can substantiate. The
+// composition above is what is asserted; the product is printed as an
+// illustration and labelled as one.
+const EVICT_FROM_EARLIER_RECORDING = 0.92;
+const combinedN = RECORDED.turnsAfter * (1 - batchB);
+const combined =
+  RECORDED.handedOurs *
+  EVICT_FROM_EARLIER_RECORDING *
+  (DEFAULTS.cacheWrite + DEFAULTS.cacheRead * combinedN);
+console.log(
+  `
+ILLUSTRATION, not a result: at the earlier recording's ${EVICT_FROM_EARLIER_RECORDING}x eviction and arm B batching, ${combined.toFixed(0)} and ${capMultiple(combined, combinedN).toFixed(2)}x -- re-record evict.mjs before quoting it`
+);
+
 if (failures.length > 0) {
   console.log(`\n${failures.length} check(s) failed`);
   process.exit(1);
