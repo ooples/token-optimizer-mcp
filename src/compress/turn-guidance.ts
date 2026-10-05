@@ -45,6 +45,25 @@
  * pay a full cache write on everything after it for the privilege of arriving
  * late. It belongs where the proxy rewrites every request, unconditionally when
  * enabled.
+ *
+ * AND THAT COSTS THE CLIENT'S PREFIX, CONSISTENTLY, WHICH IS THE TRADE.
+ * Injecting on every request means parsing and re-serialising every request,
+ * and cached-prefix.ts exists precisely to avoid that: a re-serialised body
+ * agrees with the client's bytes for 57 characters, so the provider sees a
+ * miss and charges a write.
+ *
+ * But the provider caches OUR outgoing bytes, not the client's. Inject the same
+ * block the same way every turn and our own prefix is stable turn to turn, so
+ * the loss is one-time against what the client sent rather than recurring. That
+ * is the acceptable shape, and it is the opposite of the conditional injection
+ * tried in strategy.ts, where the block arrived mid-session and moved the
+ * prefix for every turn after it.
+ *
+ * So the implementation is: parse once, inject when enabled, serialise the same
+ * way every time -- and `serialiseKeepingPrefix` is deliberately defeated for
+ * the life of the session rather than intermittently. That is a real cost and
+ * has to be measured against the turn reduction before the feature is claimed,
+ * not assumed smaller.
  */
 
 /** The env var an operator sets to turn this on. */
