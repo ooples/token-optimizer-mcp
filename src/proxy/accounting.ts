@@ -132,6 +132,28 @@ export interface CompressionFacts {
   /** References actually forwarded by the Responses deduplicator. */
   readonly dedupReferences?: number;
 
+  /**
+   * Whole units this request moved out of the body.
+   *
+   * HERE, AND NOT ON AccountingRecord, which is the lesson of three wrong
+   * turns. The record extends this interface, so a field declared here arrives
+   * there; declared there it is populated by nothing, because the proxy builds
+   * a CompressionFacts and the record is assembled from it.
+   *
+   * The value is the proxy's per-request spill delta, taken from the wrapper
+   * built beside the sink at startup. It must NOT be obtained by wrapping the
+   * sink again: compress/types.ts:229 memoises what each sink has spilled in a
+   * WeakMap keyed on the sink function, so a per-call wrapper presents a fresh
+   * key, empties the memo and re-spills the same blocks every turn. Measured,
+   * that read 845 against a true 75 -- a plausible figure rather than an error,
+   * which is the dangerous kind.
+   *
+   * It exists so an operator running the withholding arm can see how much it
+   * held back. Without it `src/savings/` reports nothing about the arm that
+   * measures 2.81x against their 1.69x on what a subscription cap buys.
+   */
+  readonly withheldUnits?: number;
+
   readonly deferredTools?: number;
   readonly deferredToolChars?: number;
 

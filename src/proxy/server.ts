@@ -280,6 +280,9 @@ export interface ProxySummary {
    */
   readonly anchorReason?: string;
   readonly elisions?: number;
+  /** Whole units moved out of the body. See CompressionFacts for why it
+   * lives there too and must not be counted by wrapping the sink. */
+  readonly withheldUnits?: number;
   /** Section sizes, for locating where a request's bytes live. No content. */
   readonly deferredTools?: number;
   /** Probe: thinking blocks removed from older assistant turns. */
@@ -2008,7 +2011,9 @@ export async function startProxy(options: ProxyOptions = {}): Promise<{
         req,
         res,
         next,
-        summary,
+        // The per-request delta, not the proxy's running total: a ledger row
+        // describes one request.
+        { ...summary, withheldUnits: spilledBlocks - spilledBefore },
         performance.now() - transformStarted,
         observe,
         counted
