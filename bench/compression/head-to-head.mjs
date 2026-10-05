@@ -95,7 +95,7 @@ import { readBaseContext } from '../subscription/base-context.mjs';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { join } from 'node:path';
-import { MODEL, tokens as countText } from './currency.mjs';
+import { FIXTURE, MODEL, tokens as countText } from './currency.mjs';
 import { createRequire } from 'node:module';
 import { dirname } from 'node:path';
 import { reproducibilityRefusal } from './reproducibility.mjs';
@@ -312,6 +312,23 @@ const resolved = existsSync(resolvedPath)
 // cannot be priced at all -- which is the property that makes the figures
 // reproducible rather than merely repeatable.
 const ENCODING_NAME = `anthropic:${MODEL}`;
+
+/**
+ * The recorded counts this run was priced against, read for provenance only.
+ *
+ * A figure is only as good as the fixture behind it, and nothing in the record
+ * said which fixture that was: a reader could see the encoding had changed and
+ * had no way to tell whether two records had been priced against the same
+ * counts. Read defensively -- a missing fixture is a problem for `tokens`, not
+ * for the provenance block, and it must not turn into a second failure here.
+ */
+const COUNTS = (() => {
+  try {
+    return JSON.parse(readFileSync(FIXTURE, 'utf8'));
+  } catch {
+    return {};
+  }
+})();
 
 /**
  * A FIXED MARKER STAMP, so this harness's payloads have the same bytes twice.
@@ -2341,8 +2358,26 @@ if (process.argv[3] === '--record') {
     commit,
     dirty,
     node: process.versions.node,
+    // THE TOKENISER PACKAGE, WHICH NO LONGER GOVERNS ANY NUMBER HERE. The
+    // column was counted by tiktoken for the life of this file and the version
+    // was recorded because a different version tokenises differently. It is now
+    // counted by Anthropic's `count_tokens`, served from a recorded fixture, so
+    // this version is kept for the history of older records and is no longer
+    // what a reader should check.
     tiktoken: tiktokenVersion,
     encoding: ENCODING_NAME,
+    // WHAT A READER SHOULD CHECK INSTEAD. A recorded count is only as good as
+    // the fixture it came from, and two records priced against different
+    // fixtures are not comparable however alike their columns look -- the same
+    // reason the payload digest below exists. `envelope` is the per-request
+    // overhead the counts were derived with, re-measured on every recording and
+    // refused if it is not linear, so a change in it changes every figure.
+    counts: {
+      model: COUNTS.model ?? 'unknown',
+      recordedAt: COUNTS.recordedAt ?? 'unknown',
+      envelope: COUNTS.envelope ?? null,
+      strings: Object.keys(COUNTS.counts ?? {}).length,
+    },
     // THE INPUT THE RATIOS ARE A FUNCTION OF. The payload set is generated, so
     // it drifts, and two records taken over different payloads are not
     // comparable however alike their columns look.
