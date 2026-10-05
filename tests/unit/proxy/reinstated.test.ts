@@ -6,7 +6,11 @@
  * known answer through the counter rather than checking the proxy still runs.
  */
 import { describe, expect, it } from '@jest/globals';
-import { digestOf, reinstatedIn } from '../../../src/proxy/reinstated.js';
+import {
+  digestOf,
+  referenceRate,
+  reinstatedIn,
+} from '../../../src/proxy/reinstated.js';
 
 const WITHHELD =
   'a build log, four hundred lines of it, withheld from the body';
@@ -73,5 +77,35 @@ describe('counting reinstated units', () => {
     // what stops a stub naming the unit from counting as the unit returning.
     const withheld = new Set([digestOf(WITHHELD)]);
     expect(reinstatedIn(bodyWith(WITHHELD.slice(0, 20)), withheld)).toBe(0);
+  });
+});
+
+describe('the reference rate', () => {
+  it('is the share of withheld units that came back', () => {
+    expect(referenceRate({ spilled: 100, reinstated: 23 })).toBeCloseTo(0.23);
+  });
+
+  it('is null when nothing was withheld, not zero', () => {
+    // Zero says every unit was dropped for free, which is the most flattering
+    // reading available -- and it is what 0/0 produces when the arm never ran.
+    expect(referenceRate({ spilled: 0, reinstated: 0 })).toBeNull();
+    expect(referenceRate({})).toBeNull();
+  });
+
+  it('reads zero when units were withheld and none came back', () => {
+    // THE CONTROL for the test above: a real zero is a real reading, and has to
+    // be distinguishable from no data.
+    expect(referenceRate({ spilled: 40, reinstated: 0 })).toBe(0);
+  });
+
+  it('refuses a rate above one rather than reporting it', () => {
+    // More returned than left means the counters are measuring different
+    // populations, which is a defect and not a catastrophic arm.
+    expect(referenceRate({ spilled: 5, reinstated: 6 })).toBeNull();
+  });
+
+  it('refuses figures that are not numbers', () => {
+    expect(referenceRate({ spilled: Number.NaN, reinstated: 1 })).toBeNull();
+    expect(referenceRate({ spilled: 5, reinstated: -1 })).toBeNull();
   });
 });

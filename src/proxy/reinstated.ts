@@ -56,3 +56,35 @@ export function reinstatedIn(
   }
   return seen.size;
 }
+
+/**
+ * The reference rate: how often a withheld unit was wanted back.
+ *
+ * NULL WHEN NOTHING WAS WITHHELD, NEVER ZERO. Zero is the reading that makes
+ * the withholding arm look best -- it says every unit was dropped for free --
+ * and it is also what `0/0` produces when the arm never ran. Those two have to
+ * be distinguishable, or a session with the arm switched off reports the most
+ * flattering number available.
+ *
+ * The rate this returns is the whole subscription case: a withheld unit saves
+ * its residency for every remaining turn and costs nothing unless it is wanted
+ * again, so the arm's value is almost entirely a function of this one figure.
+ * It has been estimated once, at 0.23, from textual recurrence on a corpus
+ * belonging to the engine we are measuring against -- a method blind to a unit
+ * the model read and reasoned about without quoting, so biased low, in the
+ * direction that flatters us.
+ */
+export function referenceRate(counts: {
+  readonly spilled?: number;
+  readonly reinstated?: number;
+}): number | null {
+  const spilled = counts.spilled ?? 0;
+  if (!Number.isFinite(spilled) || spilled <= 0) return null;
+  const reinstated = counts.reinstated ?? 0;
+  if (!Number.isFinite(reinstated) || reinstated < 0) return null;
+  // A unit cannot come back more often than it left. If it reads that way the
+  // two counters are measuring different populations, and a rate over 1 would
+  // be reported as a catastrophic arm rather than as the defect it is.
+  if (reinstated > spilled) return null;
+  return reinstated / spilled;
+}
