@@ -101,6 +101,57 @@ function isDead(turns, index) {
   return true;
 }
 
+/**
+ * The units of a message, at the grain liveness.mjs measures.
+ *
+ * MESSAGE GRAIN LEAVES MOST OF IT BEHIND. liveness.mjs finds 77% of UNITS
+ * unreferenced, but stubbing whole messages only fires where every probe into a
+ * message misses -- which on this corpus is 2 messages in some conversations
+ * and none at all in api-responses and database-rows. A message that is mostly
+ * dead but partly live is kept entire.
+ */
+function unitsOf(text) {
+  const body = text.trim();
+  if (body.startsWith('{') || body.startsWith('[')) {
+    try {
+      const parsed = JSON.parse(body);
+      const parts = Array.isArray(parsed)
+        ? parsed
+        : Object.values(parsed).flatMap((v) => (Array.isArray(v) ? v : [v]));
+      if (parts.length > 1)
+        return parts.map((x) =>
+          typeof x === 'string' ? x : JSON.stringify(x)
+        );
+    } catch {
+      // Not JSON; fall through to lines.
+    }
+  }
+  return text.split('\n');
+}
+
+/** Drop the units of a message that never recur later, keep the rest. */
+function thinned(turns, index) {
+  const later = turns
+    .slice(index + 1)
+    .map((t) => t.text)
+    .join('\n');
+  const kept = [];
+  let dropped = 0;
+  for (const unit of unitsOf(turns[index].text)) {
+    const words = unit.trim().split(/\s+/).filter(Boolean);
+    const probe =
+      words.length >= SHINGLE_WORDS
+        ? words.slice(0, SHINGLE_WORDS).join(' ')
+        : null;
+    if (probe !== null && !later.includes(probe)) {
+      dropped += unit.length;
+      continue;
+    }
+    kept.push(unit);
+  }
+  return { text: kept.join('\n'), dropped };
+}
+
 /** What a dropped message leaves behind: enough to ask for it again. */
 const stubFor = (turn, index) =>
   `[message ${index}, ${turn.role}, ${turn.text.length} characters withheld as unreferenced]`;
@@ -112,8 +163,17 @@ function replay(turns, { evictAt = null, dead = [] } = {}) {
   let cost = 0;
   for (let t = 0; t < turns.length; t += 1) {
     const messages = turns.slice(0, t + 1).map((turn, i) => {
-      const drop = evictAt !== null && t >= evictAt && i < t && dead[i];
-      const text = drop ? stubFor(turn, i) : turn.text;
+      const whole = evictAt !== null && t >= evictAt && i < t && dead[i];
+      let text = turn.text;
+      if (whole) text = stubFor(turn, i);
+      else if (evictAt !== null && t >= evictAt && i < t) {
+        // UNIT GRAIN. A message that is partly live keeps its live units and
+        // loses the rest, with one stub standing for everything removed, so the
+        // model can still ask for it.
+        const thin = thinned(turns, i);
+        if (thin.dropped > 0)
+          text = `${thin.text}\n[${thin.dropped} characters withheld as unreferenced]`;
+      }
       return {
         role: turn.role,
         content: [
