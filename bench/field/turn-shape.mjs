@@ -76,6 +76,19 @@
  * transcript as it ran. Searching a transcript for a phrase while writing that
  * phrase into it measures nothing.
  *
+ * AND THE CACHE-TTL LEVER CANNOT HELP US BEAT THEM, which is worth knowing
+ * before anyone builds it. W is 2.0 at the one-hour write rate and 1.25 at five
+ * minutes, and the observed markers in the corpus carry no `ttl` at all -- which
+ * means the five-minute default, so 1.25 is arguably the right parameter and the
+ * cost model's 2.0 is the deliberately conservative choice its own comment says
+ * it is.
+ *
+ * But W multiplies BOTH arms. At W=2.0 ours is 3,088,040 against their
+ * 2,746,640; at W=1.25 it is 2,783,299 against 2,475,590. The ratio is 1.1243
+ * either way, to four figures. Choosing a cheaper TTL takes about 10% off the
+ * bill and moves the comparison not at all, so it is a real saving for a user
+ * and worth nothing against a competitor. Lever closed.
+ *
  * AND THE BATCHABLE HEADROOM IS BOUNDED, measured the same way. Of 36,301 runs
  * of consecutive tool-only turns holding 52,785 turns between them, 69.5% are a
  * run of ONE -- a single tool call sitting between two pieces of reasoning,
