@@ -68,11 +68,18 @@ describe('the one sanctioned way to report a saving', () => {
     expect(s.compressionRatio).toBeCloseTo(0.25);
   });
 
-  it('never reports a negative saving', () => {
-    // A baseline smaller than the response means there was nothing to save.
+  it('reports a loss as a loss, without moving the baseline', () => {
+    // A baseline smaller than the response means the tool cost MORE than doing
+    // without it. This used to answer tokensSaved: 0 and originalTokenCount:
+    // 400 -- a baseline of 400 that nothing had measured, substituted for the
+    // 100 that had been, purely to keep the saving non-negative. Inventing a
+    // number to avoid printing an unflattering one is the fabrication this
+    // whole file exists to catch, so the loss is reported instead.
     const s = measured(100, 400);
-    expect(s.tokensSaved).toBe(0);
-    expect(s.originalTokenCount).toBe(400);
+    expect(s.originalTokenCount).toBe(100);
+    expect(s.tokenCount).toBe(400);
+    expect(s.tokensSaved).toBe(-300);
+    expect(s.compressionRatio).toBeCloseTo(4);
   });
 
   it('claims nothing when nothing was measured', () => {

@@ -135,32 +135,55 @@ describe('security scanner finds real credential formats', () => {
     });
   }
 
-  it('reports savings measured from both sides, not from a per-finding guess', async () => {
-    // originalTokens was `findings.length * 300` and compactedTokens a sum of
-    // hand-written per-section constants -- two invented numbers whose
-    // difference was published as a percentage saved.
+  it('states no saving of its own anywhere in the reply', async () => {
+    /*
+     * THIS TEST USED TO REQUIRE THE OPPOSITE, and both versions were asking
+     * the same question: can this tool stand behind the figure it publishes?
+     * It once published `findings.length * 300` against a sum of per-section
+     * constants. That was replaced by two real counts -- and the counts were
+     * of the full internal result and three of its arrays, neither of which is
+     * the text a caller is sent, which is how one flat 85% came to be printed
+     * for three fixtures whose real figures were 98.0%, 97.1% and 92.3%.
+     *
+     * The after cannot be counted in here at all: the reply is serialised from
+     * this object after the tool returns. So the tool states nothing, the wire
+     * counts the after once, and the before -- the files named in the
+     * arguments -- is read by the recorder. What is asserted is the absence.
+     */
     writeFileSync(
       join(root, 'src', 'leak.ts'),
       `const apiKey = '${CREDENTIALS[0][1]}';\n`
     );
 
     const result = await scan();
-    const { originalTokens, compactedTokens, reductionPercentage } =
-      result.metrics;
+    expect(result).not.toHaveProperty('metrics');
 
-    expect(originalTokens).toBeGreaterThan(0);
-    expect(compactedTokens).toBeGreaterThan(0);
-
-    // The published percentage must be derivable from the two published numbers.
-    const derived = Math.round(
-      ((originalTokens - compactedTokens) / originalTokens) * 100
-    );
-    expect(reductionPercentage).toBe(derived);
-
-    // A guess of 300 chars per finding gives 1 finding -> (300 + 50*n + 1000)/4.
-    // Whatever the real measurement is, it must not be that arithmetic.
-    expect(originalTokens).not.toBe(
-      Math.ceil((300 + 50 * result.summary.filesScanned + 1000) / 4)
-    );
+    // AND NOT UNDER ANOTHER NAME. A reply is a tree, so the check is over
+    // every key in it, not just the one the deleted block happened to use.
+    const SAVINGS_KEYS = [
+      'originalTokens',
+      'compactedTokens',
+      'reductionPercentage',
+      'tokensSaved',
+      'savedTokens',
+      'tokensBefore',
+      'tokensAfter',
+      'savingsPercent',
+      'compressionRatio',
+    ];
+    const seen: string[] = [];
+    const walk = (node: unknown): void => {
+      if (!node || typeof node !== 'object') return;
+      for (const [key, value] of Object.entries(node)) {
+        if (SAVINGS_KEYS.includes(key)) seen.push(key);
+        walk(value);
+      }
+    };
+    walk(result);
+    expect(seen).toEqual([]);
+    // THE POSITIVE CONTROL: the walk does reach into the reply, so an empty
+    // result above is an absence of savings keys and not a dead traversal.
+    walk({ findings: [{ nested: { tokensSaved: 1 } }] });
+    expect(seen).toEqual(['tokensSaved']);
   });
 });

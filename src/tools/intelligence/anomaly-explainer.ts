@@ -350,7 +350,7 @@ export class AnomalyExplainer {
     // Calculate tokens and cache result
     const tokensUsed = this.tokenCounter.count(JSON.stringify(data)).tokens;
     const dataStr = JSON.stringify(data);
-    this.cache.set(cacheKey, dataStr, dataStr.length, tokensUsed);
+    this.cache.set(cacheKey, dataStr, dataStr.length, dataStr.length);
 
     // Record metrics
     this.metricsCollector.record({
@@ -1643,7 +1643,7 @@ function percentile(values: number[], p: number): number {
 // ============================================================================
 
 export const ANOMALYEXPLAINERTOOL = {
-  name: 'anomalyexplainer',
+  name: 'anomaly_explainer',
   description:
     'Explain anomalies with root cause analysis, hypothesis generation, and remediation suggestions',
   inputSchema: {
@@ -1695,6 +1695,27 @@ export const ANOMALYEXPLAINERTOOL = {
       hypothesis: {
         type: 'string',
         description: 'Hypothesis to test',
+      },
+      testData: {
+        type: 'array',
+        description: 'Samples to test a hypothesis against',
+        items: {
+          type: 'object',
+          properties: {
+            timestamp: { type: 'number' },
+            values: { type: 'object', additionalProperties: true },
+          },
+          required: ['timestamp', 'values'],
+        },
+      },
+      confidenceThreshold: {
+        type: 'number',
+        description:
+          'Minimum confidence a hypothesis must reach to be reported (0-1)',
+      },
+      maxHypotheses: {
+        type: 'number',
+        description: 'Maximum hypotheses to generate (default 5)',
       },
       events: {
         type: 'array',

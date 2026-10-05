@@ -34,8 +34,14 @@
 
 import { createHash } from 'node:crypto';
 import {
-  readFileSync, writeFileSync, mkdirSync, existsSync, chmodSync,
-  readdirSync, statSync, unlinkSync,
+  readFileSync,
+  writeFileSync,
+  mkdirSync,
+  existsSync,
+  chmodSync,
+  readdirSync,
+  statSync,
+  unlinkSync,
 } from 'node:fs';
 import { join } from 'node:path';
 import { record, readMetrics } from './metrics.mjs';
@@ -62,7 +68,8 @@ export const HEALTHY_HOLD_RATE = 0.85;
  */
 export const ARTIFACT_TTL_MS = 30 * 86_400_000;
 
-const digest = (text) => createHash('sha256').update(String(text)).digest('hex').slice(0, 16);
+const digest = (text) =>
+  createHash('sha256').update(String(text)).digest('hex').slice(0, 16);
 
 /** Removes artifacts past the TTL. A sweep must never break a capture. */
 function sweepArtifacts(path) {
@@ -73,16 +80,24 @@ function sweepArtifacts(path) {
       const file = join(path, name);
       try {
         if (statSync(file).mtimeMs < cutoff) unlinkSync(file);
-      } catch { /* raced with another sweep or a reader */ }
+      } catch {
+        /* raced with another sweep or a reader */
+      }
     }
-  } catch { /* no store yet, or unreadable -- neither is worth failing a capture over */ }
+  } catch {
+    /* no store yet, or unreadable -- neither is worth failing a capture over */
+  }
 }
 
 function artifactDir(dir) {
   const path = join(dir, 'artifacts');
   if (!existsSync(path)) {
     mkdirSync(path, { recursive: true, mode: 0o700 });
-    try { chmodSync(path, 0o700); } catch { /* best effort on filesystems without modes */ }
+    try {
+      chmodSync(path, 0o700);
+    } catch {
+      /* best effort on filesystems without modes */
+    }
   }
   return path;
 }
@@ -182,11 +197,21 @@ export function freshness(dir, ref) {
   const changed = [];
   for (const { anchor, hash } of cap.anchorHashes || []) {
     let now = null;
-    try { now = digest(readFileSync(anchor, 'utf8')); } catch { now = null; }
+    try {
+      now = digest(readFileSync(anchor, 'utf8'));
+    } catch {
+      now = null;
+    }
     if (hash !== now) changed.push(anchor);
   }
 
-  return { known: true, stale: changed.length > 0, changed, costMs: cap.costMs, command: cap.command };
+  return {
+    known: true,
+    stale: changed.length > 0,
+    changed,
+    costMs: cap.costMs,
+    command: cap.command,
+  };
 }
 
 /**
@@ -200,10 +225,19 @@ export function freshness(dir, ref) {
  * confident answer about code that no longer exists.
  */
 export function refreshDecision(state) {
-  if (!state.known) return { action: 'unknown', reason: 'no capture record for this reference' };
-  if (!state.stale) return { action: 'serve', reason: 'unchanged since capture' };
+  if (!state.known)
+    return {
+      action: 'unknown',
+      reason: 'no capture record for this reference',
+    };
+  if (!state.stale)
+    return { action: 'serve', reason: 'unchanged since capture' };
 
-  if (state.command && Number.isFinite(state.costMs) && state.costMs <= CHEAP_REGEN_MS) {
+  if (
+    state.command &&
+    Number.isFinite(state.costMs) &&
+    state.costMs <= CHEAP_REGEN_MS
+  ) {
     return {
       action: 'refresh',
       reason: `changed since capture and cheap to reproduce (${state.costMs}ms)`,
@@ -213,9 +247,10 @@ export function refreshDecision(state) {
 
   return {
     action: 'serve-stale',
-    reason: state.costMs != null
-      ? `changed since capture, and reproducing it costs ${Math.round(state.costMs / 1000)}s`
-      : 'changed since capture, and there is no recorded way to reproduce it cheaply',
+    reason:
+      state.costMs != null
+        ? `changed since capture, and reproducing it costs ${Math.round(state.costMs / 1000)}s`
+        : 'changed since capture, and there is no recorded way to reproduce it cheaply',
     changed: state.changed,
   };
 }
@@ -227,6 +262,40 @@ export function refreshDecision(state) {
  * cheap enough to be worth it, and even then the caller is handed the command
  * rather than having it executed underneath them.
  */
+/**
+ * The sections of a stored artifact whose labels match a caller's name.
+ *
+ * The labels are the ones `disclose` printed, so this splits on the same
+ * `--- label ---` header it writes. Matching is a case-insensitive substring in
+ * either direction: a preview says `content > output`, and a caller who asks
+ * for `output` means that one.
+ *
+ * @returns the matching sections joined, or null when none matched -- null
+ *   means "serve the whole artifact", never "serve nothing".
+ */
+export function sectionsNamed(text, section) {
+  const want = String(section).trim().toLowerCase();
+  if (!want) return null;
+  const lines = String(text).split('\n');
+  const picked = [];
+  let keeping = false;
+  let any = false;
+  for (const line of lines) {
+    const header = line.match(/^--- (.+?)(?: [(]partial[)])? ---$/);
+    if (header) {
+      const label = header[1].toLowerCase();
+      keeping = label.includes(want) || want.includes(label);
+      if (keeping) {
+        any = true;
+        picked.push(line);
+      }
+      continue;
+    }
+    if (keeping) picked.push(line);
+  }
+  return any ? picked.join('\n') : null;
+}
+
 export function resolve(dir, ref, { section } = {}) {
   // The ref reaches this function straight from a model-supplied tool argument -- index.ts
   // dispatches `expand` with request.params.arguments unvalidated, and the tool schema declares
@@ -243,6 +312,22 @@ export function resolve(dir, ref, { section } = {}) {
     return null;
   }
 
+  // THE SECTION WAS ADVERTISED AND IGNORED.
+  //
+  // EXPAND_TOOL tells the caller "pass `section` to say which named part of the
+  // preview you needed", this function took the argument, and it reached only
+  // recordExpansion as a learning signal -- the body served was always the
+  // whole artifact. So a caller who named the one section it was missing paid
+  // for every section there was, which is the opposite of what the parameter
+  // promises. It selects now, and a name that matches nothing serves the whole
+  // artifact rather than nothing, because an empty expansion is the one answer
+  // that cannot be recovered from.
+  const whole = body;
+  if (typeof section === 'string' && section.trim() !== '') {
+    const picked = sectionsNamed(body, section);
+    if (picked) body = picked;
+  }
+
   const state = freshness(dir, ref);
   const decision = refreshDecision(state);
   const notes = [];
@@ -252,11 +337,15 @@ export function resolve(dir, ref, { section } = {}) {
     // case. Staleness is then unanswerable -- and unanswerable must not render as fresh. Serving
     // a month-old build log about a file that has since been rewritten, unmarked, is what the
     // module header calls worse than serving nothing.
-    notes.push('! UNVERIFIED -- no capture record survives for this reference, so whether the '
-      + 'code it describes has changed since cannot be determined. Treat it as historical.');
+    notes.push(
+      '! UNVERIFIED -- no capture record survives for this reference, so whether the ' +
+        'code it describes has changed since cannot be determined. Treat it as historical.'
+    );
   } else if (decision.action === 'serve-stale') {
-    notes.push(`! STALE -- ${decision.changed.join(', ')} changed after this was captured. ` +
-      'Treat it as historical.');
+    notes.push(
+      `! STALE -- ${decision.changed.join(', ')} changed after this was captured. ` +
+        'Treat it as historical.'
+    );
   } else if (decision.action === 'refresh') {
     notes.push(`! STALE -- cheap to reproduce; re-run: ${decision.command}`);
   }
@@ -269,6 +358,10 @@ export function resolve(dir, ref, { section } = {}) {
     known: state.known !== false,
     decision: decision.action,
     section: section || null,
+    // Whether the selection actually narrowed anything, so a caller -- and the
+    // bench harness -- can tell "served your section" from "named a section
+    // this artifact does not have, so here is all of it".
+    narrowed: body !== whole,
     // Nothing was spent producing this a second time. That is the number the
     // panel reports, and it is the one a re-running pointer can never report.
     reEarnedTokens: 0,
@@ -282,7 +375,10 @@ export function resolve(dir, ref, { section } = {}) {
  * is what makes the refit possible: not "previews are 8% wrong" but "previews of
  * xunit output are wrong specifically by dropping the first failing trace".
  */
-export function recordExpansion(dir, { ref, tool, shape, asked, sessionId } = {}) {
+export function recordExpansion(
+  dir,
+  { ref, tool, shape, asked, sessionId } = {}
+) {
   // BACKFILLED FROM THE CAPTURE, because the caller of `expand` holds a ref and nothing else.
   // Written without tool and shape, every expand event filed as null/null -- and previewPolicy's
   // per-(tool, shape) filter then matched none of them, pinning holdRate at 1, strength at 0 and
@@ -309,12 +405,21 @@ export function recordExpansion(dir, { ref, tool, shape, asked, sessionId } = {}
  */
 export function previewPolicy(dir, { tool, shape } = {}) {
   const events = readMetrics(dir);
-  const captures = events.filter((e) => e.kind === 'capture'
-    && (!shape || e.shape === shape) && (!tool || e.tool === tool));
-  const expansions = events.filter((e) => e.kind === 'expand'
-    && (!shape || e.shape === shape) && (!tool || e.tool === tool));
+  const captures = events.filter(
+    (e) =>
+      e.kind === 'capture' &&
+      (!shape || e.shape === shape) &&
+      (!tool || e.tool === tool)
+  );
+  const expansions = events.filter(
+    (e) =>
+      e.kind === 'expand' &&
+      (!shape || e.shape === shape) &&
+      (!tool || e.tool === tool)
+  );
 
-  if (!captures.length) return { boosts: {}, holdRate: null, served: 0, expanded: 0 };
+  if (!captures.length)
+    return { boosts: {}, holdRate: null, served: 0, expanded: 0 };
 
   const holdRate = Math.max(0, 1 - expansions.length / captures.length);
   const boosts = {};
@@ -328,9 +433,15 @@ export function previewPolicy(dir, { tool, shape } = {}) {
     counts.set(e.asked, (counts.get(e.asked) || 0) + 1);
   }
   const most = Math.max(1, ...counts.values());
-  for (const [label, count] of counts) boosts[label] = (count / most) * strength;
+  for (const [label, count] of counts)
+    boosts[label] = (count / most) * strength;
 
-  return { boosts, holdRate, served: captures.length, expanded: expansions.length };
+  return {
+    boosts,
+    holdRate,
+    served: captures.length,
+    expanded: expansions.length,
+  };
 }
 
 /**
@@ -341,7 +452,10 @@ export function previewPolicy(dir, { tool, shape } = {}) {
  * anchored to the file it concerns and is surfaced on the next touch of that
  * file, without anybody asking at all.
  */
-export function promote(dir, { ref, claim, anchor, section, derivedCost, confidence = 0.7 } = {}) {
+export function promote(
+  dir,
+  { ref, claim, anchor, section, derivedCost, confidence = 0.7 } = {}
+) {
   if (!claim || !anchor) return null;
 
   const key = `expand:${ref || digest(claim)}${section ? `#${section}` : ''}`;
@@ -396,7 +510,8 @@ export function previewQuality(dir) {
   for (const [shape, counts] of shapes) {
     if (counts.served < 3) continue;
     const rate = Math.max(0, 1 - counts.expanded / counts.served);
-    if (!worst || rate < worst.holdRate) worst = { shape, holdRate: rate, ...counts };
+    if (!worst || rate < worst.holdRate)
+      worst = { shape, holdRate: rate, ...counts };
   }
 
   const holdRate = Math.max(0, 1 - expansions.length / captures.length);
@@ -407,7 +522,8 @@ export function previewQuality(dir) {
     expanded: expansions.length,
     worst,
     healthy: holdRate >= HEALTHY_HOLD_RATE,
-    text: `previews held ${Math.round(holdRate * 100)}% of the time ` +
+    text:
+      `previews held ${Math.round(holdRate * 100)}% of the time ` +
       `(${captures.length} served, ${expansions.length} expanded)` +
       (worst && worst.holdRate < HEALTHY_HOLD_RATE
         ? `; worst shape: ${worst.shape} at ${Math.round(worst.holdRate * 100)}%`

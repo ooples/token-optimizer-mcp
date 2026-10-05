@@ -21,6 +21,7 @@
 import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { dirname } from 'path';
+import { liftTextPart } from './text-part.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -93,6 +94,30 @@ function questionOf(
 }
 
 /** Every text part of a tool result, joined. */
+/**
+ * The reply as it leaves here when disclosure declines.
+ *
+ * A DECLINED DISCLOSURE IS NOT A FINISHED REPLY. Everything under the threshold
+ * leaves with its largest string field still escaped inside a JSON string, and
+ * measured on three thousand characters of this repository's own source read
+ * through smart_read that escape is a sixth to a quarter of the whole reply --
+ * 255 tokens of 1,089 on tool-profile.ts. Lifting it into its own text part
+ * withholds nothing (see restoreTextPart) and is the only step that recovers it,
+ * because the preview path recovers it already: parseShape renders a long
+ * string field through a nested shape pass, which de-escapes it on the way.
+ *
+ * So this runs on every path that returns the tool's own payload, and never on
+ * the preview path, where the body must stay one JSON document for parseShape
+ * to read.
+ */
+function asSentParts(result: ToolResult): ToolResult {
+  const { content, lifted } = liftTextPart(
+    (result?.content || []) as Array<{ type: string; text: string }>
+  );
+  if (!lifted) return result;
+  return { ...result, content };
+}
+
 function textOf(result: ToolResult): string {
   return (result?.content || [])
     .filter((part) => part?.type === 'text' && typeof part.text === 'string')
@@ -118,7 +143,7 @@ export async function discloseResult(
   if (!body) return result;
 
   const mods = await modules();
-  if (!mods) return result;
+  if (!mods) return asSentParts(result);
 
   try {
     const dir = mods.wiki.wikiDir(process.cwd());
@@ -128,6 +153,21 @@ export async function discloseResult(
     // Nothing is disclosed until it has been stored, or the pointer in the
     // preview would name something unreachable.
     const shape = mods.disclose.parseShape(body).shape;
+    // The refit from this tool and shape's own expansion history, so previews
+    // that keep getting expanded stop being the same previews.
+    //
+    // READ BEFORE THE CAPTURE BELOW, not after. `previewPolicy` counts served
+    // previews from the capture log and scales its corrections by how often the
+    // shape gets expanded, so capturing this reply first put it in its own
+    // evidence -- as a preview that had been served and not expanded, which it
+    // cannot have been yet. One reply is the whole sample on a fresh store,
+    // where it read as a perfect hold record and so cancelled the very
+    // correction the policy exists to apply.
+    const { boosts } = mods.expand.previewPolicy(dir, {
+      tool: toolName,
+      shape,
+    });
+
     const ref = mods.expand.capture(dir, body, {
       tool: toolName,
       shape,
@@ -141,13 +181,6 @@ export async function discloseResult(
       costMs: Number.isFinite(costMs) ? costMs : null,
     });
 
-    // The refit from this tool and shape's own expansion history, so previews
-    // that keep getting expanded stop being the same previews.
-    const { boosts } = mods.expand.previewPolicy(dir, {
-      tool: toolName,
-      shape,
-    });
-
     const graph = anchors.length ? mods.wiki.load(dir) : null;
     const out = mods.disclose.disclose(dir, body, {
       graph,
@@ -156,8 +189,41 @@ export async function discloseResult(
       tool: toolName,
       boosts,
       ref,
+      /*
+       * THE REPLY THIS ONE IS COMPETING WITH, measured rather than assumed.
+       *
+       * `body` is the dispatch's serialised payload. If disclosure declines,
+       * what ships is `asSentParts(result)` -- the same payload with its longest
+       * string field lifted out of JSON -- and that reply is cheaper than
+       * `body` by the whole escape tax of that field, 6.4% of a TypeScript
+       * fixture. Handing `body` to the preview gate as the thing to beat let the
+       * preview spend a saving it was not making.
+       */
+      sent: textOf(asSentParts(result)),
+      /**
+       * Stores what the preview is about to withhold, and returns the pointer
+       * the preview will print.
+       *
+       * THE HANDLE USED TO NAME THE WHOLE BODY, so following it paid for the
+       * preview a second time. Measured on a 1,270-token file read through
+       * smart_read: a 1,192-token preview and then 1,778 tokens to expand it,
+       * 2,970 for 1,270 of content, with the duplicated preview the biggest
+       * term in the bill. A caller holding a preview needs the remainder.
+       *
+       * Captured with the SAME anchors and tool as the body, so staleness stays
+       * answerable for the remainder exactly as it is for the whole: the
+       * artifact store is keyed on content, and these two differ.
+       */
+      captureWithheld: (withheld: string) =>
+        mods.expand.capture(dir, withheld, {
+          tool: toolName,
+          shape,
+          anchors,
+          sessionId: SESSION_ID,
+          costMs: Number.isFinite(costMs) ? costMs : null,
+        }),
     });
-    if (!out) return result;
+    if (!out) return asSentParts(result);
 
     return {
       ...result,
@@ -165,14 +231,24 @@ export async function discloseResult(
       _meta: {
         ...(result._meta || {}),
         tokenOptimizer: {
-          disclosureRef: ref,
+          // SPREAD, NOT REPLACED. A tool's declared baseline arrives on this
+          // same key, and overwriting the object dropped it for exactly the
+          // tools whose reply disclosure chose to trim -- the ones with the
+          // largest before to declare.
+          ...(result._meta?.tokenOptimizer || {}),
+          // THE REFERENCE THE PREVIEW ACTUALLY PRINTED, which is now the
+          // remainder rather than the body. record-tool-analytics debits an
+          // expansion against the entry whose disclosureRef matches the ref the
+          // caller passed to `expand`, so recording a reference the preview
+          // never advertised would silently stop every debit from matching.
+          disclosureRef: typeof out.handle === 'string' ? out.handle : ref,
           disclosureMode: out.mode,
         },
       },
     };
   } catch {
     // Disclosure is an optimisation. It must never be the reason a tool fails.
-    return result;
+    return asSentParts(result);
   }
 }
 

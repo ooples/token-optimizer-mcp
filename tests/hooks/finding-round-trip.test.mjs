@@ -16,7 +16,14 @@
 
 import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, rmSync } from 'node:fs';
+import {
+  mkdtempSync,
+  mkdirSync,
+  writeFileSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -59,7 +66,16 @@ beforeEach(() => {
       {
         type: 'assistant',
         timestamp: iso(now),
-        message: { content: [{ type: 'tool_use', id: 'tu_1', name: 'Bash', input: { command: FAILED } }] },
+        message: {
+          content: [
+            {
+              type: 'tool_use',
+              id: 'tu_1',
+              name: 'Bash',
+              input: { command: FAILED },
+            },
+          ],
+        },
       },
       {
         type: 'user',
@@ -70,7 +86,8 @@ beforeEach(() => {
               type: 'tool_result',
               tool_use_id: 'tu_1',
               is_error: true,
-              content: 'Exit code 1\nSyntaxError: Cannot use import statement outside a module',
+              content:
+                'Exit code 1\nSyntaxError: Cannot use import statement outside a module',
             },
           ],
         },
@@ -100,7 +117,9 @@ afterEach(() => rmSync(root, { recursive: true, force: true }));
  * which is precisely the case stdout cannot show.
  */
 const completion = () => {
-  const files = readdirSync(logs).filter((name) => /^hook-events-.*\.jsonl$/.test(name));
+  const files = readdirSync(logs).filter((name) =>
+    /^hook-events-.*\.jsonl$/.test(name)
+  );
   const events = files.flatMap((name) =>
     readFileSync(join(logs, name), 'utf8')
       .split('\n')
@@ -122,7 +141,7 @@ const completion = () => {
 };
 
 /** A LATER, DIFFERENT session about to run the command that failed before. */
-const askRouter = (command, mode) => {
+const askRouter = (command, mode, { holdout = '0' } = {}) => {
   const result = spawnSync(process.execPath, [ROUTER], {
     input: JSON.stringify({
       session_id: `later-${Math.random()}`,
@@ -138,6 +157,16 @@ const askRouter = (command, mode) => {
       TOKEN_OPTIMIZER_SHARED_DIR: wiki,
       TOKEN_OPTIMIZER_MCP_CAPABILITIES: 'smart_read,smart_grep',
       TOKEN_OPTIMIZER_LOG_DIR: logs,
+      // THE ARM IS PINNED, BECAUSE OTHERWISE THE CALENDAR DECIDES. Injection
+      // withholds a tenth of commands to keep an untreated arm to compare
+      // against, stratified on a hash of (command, day), so a fixed command
+      // lands in the holdout on about one day in ten and `forCommand` returns
+      // null -- a correct withholding that reads here as a product that
+      // learned nothing. This file ran green for weeks and then failed four
+      // ways at once on 2026-10-03, which is epoch 20729: byte 8 of
+      // sha256('npx jest tests/foo.test.mjs:20729'), 0.031 against a 0.1
+      // fraction. Every other injection suite pins this for the same reason.
+      TOKEN_OPTIMIZER_HOLDOUT: holdout,
     },
   });
   // A CRASH MUST NOT BE READABLE AS SILENCE. The catch below used to swallow
@@ -176,13 +205,19 @@ ${result.stderr}`
 
 describe('a lesson learned in one session reaches the next', () => {
   it('derives and STORES the finding from a transcript failure', () => {
-    const result = derive(wiki, { sessionId: 'first', projectRoot: proj, transcriptPath: transcript });
+    const result = derive(wiki, {
+      sessionId: 'first',
+      projectRoot: proj,
+      transcriptPath: transcript,
+    });
     expect(result.candidates.length).toBeGreaterThan(0);
     // Storing is the half that was silently failing: 937 real derive runs
     // produced 8 candidates and wrote zero.
     expect(result.written.length).toBeGreaterThan(0);
 
-    const findings = [...load(wiki).nodes.values()].filter((n) => n.kind === 'finding' && !n.retired);
+    const findings = [...load(wiki).nodes.values()].filter(
+      (n) => n.kind === 'finding' && !n.retired
+    );
     expect(findings).toHaveLength(1);
     expect(findings[0].claim).toContain(WORKED);
     expect(findings[0].trigger).toBeTruthy();
@@ -191,20 +226,50 @@ describe('a lesson learned in one session reaches the next', () => {
   it.each(['assist', 'advise', 'enforce'])(
     'warns a later session under %s, before the command runs',
     (mode) => {
-      derive(wiki, { sessionId: 'first', projectRoot: proj, transcriptPath: transcript });
+      derive(wiki, {
+        sessionId: 'first',
+        projectRoot: proj,
+        transcriptPath: transcript,
+      });
       const said = askRouter(FAILED, mode);
       expect(said).toContain('known from previous sessions');
       expect(said).toContain(WORKED);
     }
   );
 
+  it('is withheld in the holdout arm, which is why the pin above is needed', () => {
+    // THE PIN'S OWN CONTROL ARM. Every other case here forces the treated arm,
+    // so a router that had lost the ability to withhold would satisfy all of
+    // them -- and the holdout is the only thing that can ever show this feature
+    // helps or hurts. Same graph, same command, same mode: only the arm moves.
+    derive(wiki, {
+      sessionId: 'first',
+      projectRoot: proj,
+      transcriptPath: transcript,
+    });
+    expect(askRouter(FAILED, 'assist', { holdout: '1' })).not.toContain(
+      'known from previous sessions'
+    );
+    expect(askRouter(FAILED, 'assist')).toContain(
+      'known from previous sessions'
+    );
+  });
+
   it('says nothing about an unrelated command', () => {
     // The cost of speaking is paid on every call; a finding that fires on
     // everything is worse than one that fires on nothing.
-    derive(wiki, { sessionId: 'first', projectRoot: proj, transcriptPath: transcript });
+    derive(wiki, {
+      sessionId: 'first',
+      projectRoot: proj,
+      transcriptPath: transcript,
+    });
     // The same router, same graph, same mode DOES speak for the command the
     // finding is about -- so the silence below is selectivity, not a dead path.
-    expect(askRouter(FAILED, 'assist')).toContain('known from previous sessions');
-    expect(askRouter('ls -la', 'assist')).not.toContain('known from previous sessions');
+    expect(askRouter(FAILED, 'assist')).toContain(
+      'known from previous sessions'
+    );
+    expect(askRouter('ls -la', 'assist')).not.toContain(
+      'known from previous sessions'
+    );
   });
 });

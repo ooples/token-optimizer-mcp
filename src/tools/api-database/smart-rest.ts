@@ -12,7 +12,7 @@
 import { createHash } from 'crypto';
 
 // Core imports
-import { CacheEngine } from '../../core/cache-engine.js';
+import { CacheEngine, resolveCacheLocation } from '../../core/cache-engine.js';
 import { measured } from '../shared/savings.js';
 import type { TokenCounter } from '../../core/token-counter.js';
 import type { MetricsCollector } from '../../core/metrics.js';
@@ -775,7 +775,7 @@ export async function runSmartREST(options: SmartRESTOptions): Promise<string> {
   const { MetricsCollector } = await import('../../core/metrics.js');
 
   const cache = new CacheEngineClass(
-    join(homedir(), '.hypercontext', 'cache'),
+    resolveCacheLocation(join(homedir(), '.hypercontext', 'cache')),
     100
   );
   const tokenCounter = new TokenCounter();
@@ -783,13 +783,13 @@ export async function runSmartREST(options: SmartRESTOptions): Promise<string> {
   const rest = getSmartRest(cache, tokenCounter, metrics);
   const result = await rest.run(options);
 
-  return JSON.stringify(result, null, 2);
+  return JSON.stringify(result);
 }
 
 export const SMART_REST_TOOL_DEFINITION = {
   name: 'smart_rest',
   description:
-    'REST API analyzer with endpoint discovery and health scoring (83% token reduction)',
+    'REST API analyzer with endpoint discovery and health scoring (unmeasured design target: 83% token reduction)',
   inputSchema: {
     type: 'object',
     properties: {

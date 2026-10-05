@@ -1,7 +1,7 @@
 import { test, expect } from '@jest/globals';
 import { compressTap, looksLikeTap } from '../../../src/compress/tap.js';
 import { compressResponses } from '../../../src/proxy/responses.js';
-import { rehydrate } from '../../support/rehydrate.js';
+import { rehydrate } from '../../../src/compress/rehydrate.js';
 
 function pass(i: number, nl = '\n', name = `case ${i}`): string {
   return `# Subtest: ${name}${nl}ok ${i} - ${name}${nl}  ---${nl}  duration_ms: ${i}.001${nl}  type: 'test'${nl}  ...${nl}`;
@@ -31,7 +31,10 @@ test('actual Responses JSON envelope reaches TAP compression and preserves failu
   const decoded = JSON.parse(result.body.toString());
   const out = JSON.parse(decoded.input[0].output[0].text);
   expect(out.exit_code).toBe(0);
-  expect(rehydrate(out.output)).toBe(tap);
+  // THE KEY THAT CALL MINTED, which is why `compressResponses` returns one per
+  // compressed field: the body travels as bytes and the markers in it verify
+  // against nothing else.
+  expect(rehydrate(out.output, result.stamps[0] ?? null)).toBe(tap);
 });
 test.each(['\n', '\r\n'])(
   'TAP table reconstructs all bytes including wrapper and newline style %j',
@@ -46,7 +49,7 @@ test.each(['\n', '\r\n'])(
     const result = compressTap(input);
     expect(result.lossless).toBe(true);
     expect(result.text.length).toBeLessThan(input.length * 0.6);
-    expect(rehydrate(result.text)).toBe(input);
+    expect(rehydrate(result.text, result.stamp)).toBe(input);
   }
 );
 test('failure diagnostics, nested tests and skipped tests survive between passing groups', () => {
@@ -58,7 +61,7 @@ test('failure diagnostics, nested tests and skipped tests survive between passin
   const input = group + failure + unusual + group;
   const result = compressTap(input);
   expect(result.text).toContain(failure + unusual);
-  expect(rehydrate(result.text)).toBe(input);
+  expect(rehydrate(result.text, result.stamp)).toBe(input);
 });
 test('short, truncated or unfamiliar records do not grow or change', () => {
   for (const input of [
@@ -68,8 +71,13 @@ test('short, truncated or unfamiliar records do not grow or change', () => {
     Array.from({ length: 5 }, (_, i) => pass(i))
       .join('')
       .trimEnd(),
-  ])
-    expect(rehydrate(compressTap(input).text)).toBe(input);
+  ]) {
+    // DECODED WITH ITS OWN KEY even where nothing was compressed: a declined
+    // input has no marker to verify, and threading the stamp keeps the claim
+    // the same one the compressing cases make.
+    const result = compressTap(input);
+    expect(rehydrate(result.text, result.stamp)).toBe(input);
+  }
 });
 
 test('repeated failures retain every identity and exact diagnostic; changed failures stay distinct', () => {
@@ -85,5 +93,5 @@ test('repeated failures retain every identity and exact diagnostic; changed fail
   const result = compressTap(input);
   expect(result.text).toContain('TAP failing records');
   expect(result.text).toContain('actual: 500');
-  expect(rehydrate(result.text)).toBe(input);
+  expect(rehydrate(result.text, result.stamp)).toBe(input);
 });

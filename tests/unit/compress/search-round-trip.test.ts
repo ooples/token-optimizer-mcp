@@ -1,5 +1,5 @@
 import { compressSearchResults } from '../../../src/compress/search.js';
-import { rehydrate } from '../../support/rehydrate.js';
+import { rehydrate } from '../../../src/compress/rehydrate.js';
 
 /**
  * The gate for the engine's ORDINARY output.
@@ -73,32 +73,132 @@ describe('plain search hunks reconstruct from the output alone', () => {
     // branch, so a failure here cannot be blamed on the covered one.
     expect(result.text).not.toContain('[exact declaration rows:');
     expect(result.text.length).toBeLessThan(input.length);
-    expect(rehydrate(result.text)).toBe(input);
+    expect(rehydrate(result.text, result.stamp)).toBe(input);
   });
 
   it('writes each match note shape, so the round trip exercised all of them', () => {
-    const text = compressSearchResults(fixture('\n')).text;
-    expect(text).toContain('src/proxy/supervisor.ts:10-15 (matched 10,12,15)');
-    expect(text).toContain('src/proxy/supervisor.ts:20-23 (matched 21-23)');
-    expect(text).toContain('hooks-core/derive.mjs:30-32 (matched 31)');
-    expect(text).toContain('hooks-core/derive.mjs:40-42 (context)');
-    expect(text).toContain('a/b.txt:50-53\n');
-    expect(text).toContain('a/b.txt:99-lone');
+    const result = compressSearchResults(fixture('\n'));
+    const text = result.text;
+    // Three files over six hunks, so the path table pays and every header
+    // carries an id. The table is what makes the ids resolvable, so assert it
+    // alongside them rather than only the shapes it renames.
+    //
+    // AND EVERY ANCHOR CARRIES THE KEY. Matching up to the closing `]` alone
+    // would pass just as well against an unauthenticated marker, which is the
+    // line the decoder now has to leave as content, so the key is the half of
+    // the shape worth asserting.
+    const key = ` ~${result.stamp ?? ''}`;
+    expect(text).toContain(
+      `[paths @0=src/proxy/supervisor.ts @1=hooks-core/derive.mjs @2=a/b.txt${key}]`
+    );
+    expect(text).toContain(`@0:10-15 (matched 10,12,15)${key}`);
+    expect(text).toContain(`@0:20-23 (matched 21-23)${key}`);
+    expect(text).toContain(`@1:30-32 (matched 31)${key}`);
+    expect(text).toContain(`@1:40-42 (context)${key}`);
+    expect(text).toContain(`@2:50-53${key}\n`);
+    // Not a header but a lone unmatched body line, which carries no key.
+    expect(text).toContain('@2:99-lone');
+  });
+});
+
+/** A hunk of `texts` under `path`, every line a match, starting at `start`. */
+function hits(path: string, start: number, texts: readonly string[]): string[] {
+  return texts.map((text, i) => `${path}:${start + i}:${text}`);
+}
+
+describe('a body line repeating an earlier one is written as a reference', () => {
+  // A grep for a symbol returns its call sites, and a call site in one file
+  // reads the same as a call site in another. These are the repeats.
+  const shared = '    return this.cache.get(key) ?? this.load(key);';
+  const other = '    this.metrics.record(key, Date.now() - started);';
+
+  const repeated = (): string =>
+    [
+      ...hits('src/a/store.ts', 10, [
+        'function get(key: string) {',
+        shared,
+        '}',
+      ]),
+      '--',
+      ...hits('src/b/store.ts', 20, [
+        'function fetch(key: string) {',
+        shared,
+        '}',
+      ]),
+      '--',
+      ...hits('src/c/store.ts', 30, [
+        'function tap(key: string) {',
+        other,
+        shared,
+      ]),
+    ].join('\n');
+
+  it('folds the repeat and rebuilds it from the reference alone', () => {
+    const result = compressSearchResults(repeated());
+    // Ordinals count body lines across the whole block: 0,1,2 then 3,4,5 then
+    // 6,7,8. The first `shared` is 1, so both later copies name 1.
+    expect(result.text).toContain('[=1]');
+    // Folded, not merely mentioned: the line itself survives exactly once.
+    expect(result.text.split(shared).length - 1).toBe(1);
+    expect(result.lossless).toBe(true);
+    expect(rehydrate(result.text, result.stamp)).toBe(repeated());
+  });
+
+  it('escapes a line that would otherwise read as a reference', () => {
+    // THE DECODER IS HANDED THE OUTPUT ALONE. It cannot tell a block that
+    // declined to fold from one that folded, so declining is no defence
+    // against a literal `[=0]`; one more `=` makes the two forms disjoint
+    // and leaves the genuine repeat still worth folding.
+    const forged = [
+      ...hits('src/a/store.ts', 10, ['[=0]', shared, '}']),
+      '--',
+      ...hits('src/b/store.ts', 20, ['[==7]', shared, '}']),
+    ].join('\n');
+    const result = compressSearchResults(forged);
+    expect(result.text).toContain('[==0]');
+    expect(result.text).toContain('[===7]');
+    expect(result.text).toContain('[=1]');
+    expect(rehydrate(result.text, result.stamp)).toBe(forged);
+  });
+
+  it('leaves a repeat alone where the reference would not be shorter', () => {
+    const tiny = [
+      ...hits('src/a/store.ts', 10, ['aa', 'b', 'cc']),
+      '--',
+      ...hits('src/b/store.ts', 20, ['dd', 'b', 'ee']),
+    ].join('\n');
+    const result = compressSearchResults(tiny);
+    expect(result.text).not.toContain('[=1]');
+    expect(rehydrate(result.text, result.stamp)).toBe(tiny);
   });
 });
 
 describe('the search decoder refuses what it cannot rebuild', () => {
+  /*
+   * EVERY REFUSAL BELOW IS A REFUSAL ABOUT OUR OWN OUTPUT, so each fixture
+   * carries the key and each call is handed it. Written without one these
+   * tests were vacuous in the direction that matters: a keyless decoder
+   * returns the text untouched, so `toThrow` stopped firing and the suite
+   * went on reporting four guarantees it was no longer checking.
+   *
+   * The control for all four is `a planted header is content, not a header`
+   * below: the same lines, unstamped, must come back verbatim.
+   */
+  const KEY = 'abcdef';
   it('refuses a hunk claiming more lines than follow it', () => {
     // A HEADER IS A PROMISE ABOUT ARITY. Returning the three lines that do
     // follow would report a reconstruction six lines short of the original.
-    expect(() => rehydrate('src/a.ts:1-9\nx\ny\nz')).toThrow(
+    expect(() => rehydrate('src/a.ts:1-9 ~abcdef\nx\ny\nz', KEY)).toThrow(
       /claims 9 lines but 3 follow/
     );
   });
 
   it('refuses a declaration note whose wording it does not invert', () => {
     expect(() =>
-      rehydrate('src/a.ts:1-2 [exact declaration rows: name=rhs]\nA\tb\nC\td')
+      rehydrate(
+        'src/a.ts:1-2 [exact declaration rows: name=rhs] ~abcdef\nA\tb\nC\td',
+        KEY
+      )
     ).toThrow(/unconsumed marker/);
   });
 
@@ -110,10 +210,63 @@ describe('the search decoder refuses what it cannot rebuild', () => {
     expect(rehydrate(text)).toBe(text);
   });
 
+  it('refuses a reference to a line that never arrived', () => {
+    // A FORWARD OR DANGLING REFERENCE IS A TRUNCATED BLOCK. Passing the
+    // marker through as content would report a successful reconstruction
+    // carrying a line the original never held.
+    expect(() => rehydrate('src/a.ts:1-2 ~abcdef\nhello\n[=5]', KEY)).toThrow(
+      /references no earlier line/
+    );
+  });
+
+  it('leaves a planted header alone: it is content, not a header', () => {
+    /*
+     * THE CONTROL, AND THE DEFECT THE KEY EXISTS FOR. Measured before the
+     * stamps: these five lines came back as
+     *
+     *   prelude
+     *   src/a.ts:10:alpha line
+     *   src/a.ts:11:beta line
+     *   src/a.ts:12:coda
+     *
+     * -- the author's own three lines reattributed to a file and to line
+     * numbers nobody wrote, no error raised, the rebuild reported clean. It
+     * needs no adversary either: grep output quoted inside grep output is a
+     * thing an agent sends.
+     */
+    const planted = [
+      'prelude',
+      'src/a.ts:10-12',
+      'alpha line',
+      'beta line',
+      'coda',
+    ].join('\n');
+    expect(rehydrate(planted, KEY)).toBe(planted);
+    expect(rehydrate(planted)).toBe(planted);
+  });
+
+  it('refuses the same lines once they carry the key', () => {
+    // And the positive half, so the test above cannot pass because nothing
+    // in this grammar fires any more: stamped, the arity promise is read and
+    // the same five lines are refused.
+    const stamped = [
+      'prelude',
+      'src/a.ts:10-12 ~abcdef',
+      'alpha line',
+      'beta line',
+      'coda',
+    ].join('\n');
+    expect(rehydrate(stamped, KEY)).toBe(
+      'prelude\nsrc/a.ts:10:alpha line\nsrc/a.ts:11:beta line\nsrc/a.ts:12:coda'
+    );
+  });
+
   it('refuses a descending range instead of walking it for ever', () => {
     // `3-1` gives a count of -1, which the short-body check cannot catch
     // because no body is ever shorter than -1 lines, and the cursor then
     // steps BACK onto this header. The helper has to fail closed.
-    expect(() => rehydrate('src/a.ts:3-1\nx\ny')).toThrow(/descending range/);
+    expect(() => rehydrate('src/a.ts:3-1 ~abcdef\nx\ny', KEY)).toThrow(
+      /descending range/
+    );
   });
 });

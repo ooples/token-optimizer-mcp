@@ -65,16 +65,67 @@ if (rows.length < 3) {
 // Header row contributes no figures; drop it.
 const dataRows = rows.slice(1);
 
+/**
+ * The table's columns, in the order the README writes them.
+ *
+ * MATCHING A NUMBER TO ITS SECTION IS NOT ENOUGH, which cost a published
+ * figure. A workload's block holds six arms with five metrics each, so "this
+ * number appears somewhere under this workload" is satisfied by thirty other
+ * figures -- and it was: our column read 53.6% on codebase-exploration while
+ * every one of our arms scored 53.7%, and the check passed because `ccr`, the
+ * CONTROL, scored 53.6% two lines further down. The published claim was being
+ * certified by the number it claims to beat.
+ *
+ * So each column names where in the harness's output its figure has to come
+ * from, and `ours` is drawn only from arms that are ours.
+ */
+const COLUMNS = ['workload', 'payload', 'theirs', 'ours', 'verdict'];
+
+/** The control. Its figures may never satisfy a column of ours. */
+const CONTROL_ARM = 'ccr';
+
+const ARM_LINE = /^\s*(\S+)\s+gross\b.*touchable \(\s*([\d.]+%)\)/;
+const BASELINE = /theirs:\s*(\d+)\s*->[^)]*?,\s*([\d.]+%)\)/;
+
+/**
+ * What the harness says, per workload, for each column the README publishes.
+ *
+ * `ours` is a SET because the table publishes one figure while the harness
+ * runs several of our arms; which one a given shape answers with is the
+ * harness's business -- it prints a NOTE when that is not the headline arm --
+ * and not something this check should pin. What it does pin is that the
+ * published figure is one of OURS.
+ */
+function harnessFigures(body) {
+  const base = body.join(String.fromCharCode(10)).match(BASELINE);
+  const ours = new Set();
+  for (const line of body) {
+    const m = line.match(ARM_LINE);
+    if (m && m[1] !== CONTROL_ARM) ours.add(m[2]);
+  }
+  return {
+    payload: base ? new Set([base[1]]) : new Set(),
+    theirs: base ? new Set([base[2]]) : new Set(),
+    ours,
+  };
+}
+
 const figures = [];
 for (const row of dataRows) {
-  const workload = (row.split('|')[1] || '').trim();
-  for (const m of row.matchAll(/\d+(?:\.\d+)?%?/g)) {
-    figures.push({ workload, figure: m[0] });
+  const cells = row.split('|').slice(1);
+  const workload = (cells[0] || '').trim();
+  for (let i = 1; i < COLUMNS.length; i += 1) {
+    const column = COLUMNS[i];
+    for (const m of (cells[i] || '').matchAll(/\d+(?:\.\d+)?%?/g)) {
+      figures.push({ workload, column, figure: m[0] });
+    }
   }
 }
 
 if (!figures.length) {
-  console.error('readme-table.check: no figures in the table. Refusing to pass vacuously.');
+  console.error(
+    'readme-table.check: no figures in the table. Refusing to pass vacuously.'
+  );
   process.exit(1);
 }
 
@@ -99,7 +150,9 @@ try {
       'below for diagnosis, but this check fails regardless of agreement.'
   );
   if (!out.trim()) {
-    console.error('readme-table.check: ...and it produced nothing. Cannot check.');
+    console.error(
+      'readme-table.check: ...and it produced nothing. Cannot check.'
+    );
     process.exit(1);
   }
 }
@@ -128,12 +181,18 @@ const sections = new Map();
   }
 }
 
-const missing = figures.filter(({ workload, figure }) => {
+const missing = figures.filter(({ workload, column, figure }) => {
   const body = sections.get(workload);
   // No section at all is a miss, not a pass: a row naming a workload the
   // harness does not run is exactly the drift this exists to catch.
   if (!body) return true;
-  return !body.join('\n').includes(figure);
+  const where = harnessFigures(body)[column];
+  // A column with no binding still has to appear somewhere in its own
+  // workload -- weaker than a bound column, but never weaker than before.
+  if (!where) return !body.join('\n').includes(figure);
+  // AN EMPTY BINDING IS A MISS. A pattern that stopped matching the harness's
+  // output would otherwise turn every row into a pass.
+  return !where.has(figure);
 });
 
 console.log(
@@ -149,10 +208,13 @@ if (proofFailed) {
 
 if (missing.length) {
   console.error(
-    'README TABLE DRIFT -- these figures are absent from their own workload:'
+    'README TABLE DRIFT -- these are not what the harness puts in that column:'
   );
-  for (const { workload, figure } of missing) {
-    console.error(`  ${workload}: ${figure}`);
+  for (const { workload, column, figure } of missing) {
+    const body = sections.get(workload);
+    const where = body ? harnessFigures(body)[column] : undefined;
+    const saw = where ? [...where].join(' or ') || '(nothing)' : '(unbound)';
+    console.error(`  ${workload} ${column}: README ${figure}, harness ${saw}`);
   }
   console.error(
     '\nRegenerate the table from `node bench/compression/proof.mjs` rather than\n' +

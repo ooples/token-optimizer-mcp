@@ -8,14 +8,22 @@ import type { CompressionFacts } from './accounting.js';
 // too: discovering a finding later must not rewrite an existing cached prefix.
 const blocks = new WeakMap<AnchorStore, Map<string, string | null>>();
 
-export function withResponsesKnowledge(
-  result: { body: Buffer; summary: CompressionFacts },
+/*
+ * GENERIC IN THE RESULT, so a field this helper knows nothing about survives it.
+ * Declared as a fixed shape, `typeof result` silently dropped the marker keys
+ * `compressResponses` had just minted, and the body reached the caller with no
+ * way to decode it.
+ */
+export function withResponsesKnowledge<
+  T extends { body: Buffer; summary: CompressionFacts },
+>(
+  result: T,
   request: Record<string, unknown>,
   anchors?: AnchorStore,
   findings: readonly Finding[] = [],
   tuning?: Tuning,
   sharedGraph?: boolean
-): typeof result {
+): T {
   if (!anchors || request.previous_response_id) return result;
   if (
     request.instructions !== undefined &&
@@ -72,6 +80,7 @@ export function withResponsesKnowledge(
   next.instructions = `${request.instructions ?? ''}${addition}`;
   const body = Buffer.from(JSON.stringify(next));
   return {
+    ...result,
     body,
     summary: {
       ...result.summary,

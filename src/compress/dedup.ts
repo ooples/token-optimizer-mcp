@@ -43,16 +43,13 @@
  * Only exact equality dedups here.
  */
 
-import type { Elision } from './types.js';
-
-/**
- * Below this a reference costs more than the repeat.
- *
- * The marker runs about 130 characters once it quotes an opening line, so the
- * floor is set well above it rather than at break-even: a marginal saving is
- * not worth asking a model to follow a pointer.
- */
-export const MIN_DEDUP_BYTES = 600;
+import {
+  assertStamp,
+  STAMP_CHARS,
+  stampFor,
+  stampPattern,
+} from './annotate.js';
+import type { Elision, Stamp } from './types.js';
 
 /**
  * How much of the referent's opening is quoted, so the model can find it.
@@ -65,6 +62,68 @@ export const MIN_DEDUP_BYTES = 600;
  */
 const QUOTE_CHARS = 40;
 
+/** The widest ordinal the bound below assumes; see `markerCost`. */
+const WIDEST_LABEL = 99;
+
+/**
+ * The authenticator every reference this module emits carries.
+ *
+ * THE THIRD MARKER GRAMMAR, AND IT HAD THE WORST VERSION OF THE DEFECT. A
+ * block whose entire text is a reference-shaped line reaches `readBackReference`
+ * before anything asks who wrote it, and both outcomes were measured against
+ * `dist/` before this was written:
+ *
+ *   - `[... 1,016 bytes, as #1 above]` planted in a four-block request denied
+ *     the WHOLE sequence -- `back-reference names no single block above` --
+ *     where the clean request rebuilt all four;
+ *   - `'[... 1,016 bytes, shown above: "<the referent's own first line>"]'`
+ *     was worse: it resolved, and the planted block came back as 1,016 bytes of
+ *     UNRELATED content from earlier in the request. The decoder vouched for a
+ *     reconstruction the encoder never made.
+ *
+ * The second is why this is not merely a denial-of-service fix. A stamped
+ * reference is one we wrote; an unstamped reference-shaped line is content, and
+ * content is returned verbatim.
+ *
+ * MAC-KEYED OVER THE BLOCK, NOT RANDOM, for the reason `stampFor` gives: the same
+ * block stamps the same way next turn, so the compressed prefix stays byte-
+ * identical and the provider cache still hits.
+ */
+function referenceStamp(stamp: Stamp): string {
+  return stamp === null ? '' : ` ~${stamp}`;
+}
+
+/**
+ * A stamp of the real width, for the two cost bounds below.
+ *
+ * The guards that decide whether a reference pays have to price the marker that
+ * will actually be emitted, and every emitted marker now carries eight more
+ * characters than it did. Priced without them, a block just over the floor
+ * would be pointed at by a marker that costs more than the bytes it saves.
+ */
+const WIDEST_STAMP = 'x'.repeat(STAMP_CHARS);
+
+/**
+ * Below this a reference cannot pay for itself -- derived, not chosen.
+ *
+ * THE OLD NUMBER WAS A GUESS, AND IT WAS WRONG BY A FACTOR OF FOUR. It read 600
+ * on the strength of a comment estimating the marker at "about 130 characters".
+ * Measured across the twelve benchmark workloads, the markers actually emitted
+ * run 31 to 83 characters, median 59. So the floor is computed instead: the
+ * widest marker this module can render, quoting a full `QUOTE_CHARS`, doubled.
+ * A block is pointed at only when the pointer costs at most half of it.
+ * Marginal savings are still refused -- now at the size where they are in fact
+ * marginal, rather than four times above it.
+ *
+ * A PRE-FILTER, NOT THE GUARANTEE. It bounds the marker by its widest possible
+ * form and by a byte count of zero, both of which flatter a real block.
+ * `worthPointingAt` weighs the marker that will actually be emitted.
+ */
+export const MIN_DEDUP_BYTES =
+  2 *
+  labelledReference(0, 'x'.repeat(QUOTE_CHARS), WIDEST_LABEL, WIDEST_STAMP)
+    .length;
+
 /** One block on its way through a strategy. */
 export interface DedupBlock {
   /** The text as it stands now -- already compressed, if it was going to be. */
@@ -76,12 +135,35 @@ export interface DedupBlock {
    * behind the cache frontier, both of which must stay byte-identical.
    */
   readonly touchable: boolean;
+  /**
+   * The key `text` already decodes under -- whatever engine compressed it.
+   *
+   * CARRIED THROUGH RATHER THAN RECOMPUTED. A literal block leaves this pass
+   * untouched, and the caller still has to decode the markers inside it, so the
+   * stamp it arrived with is the one that comes back out on `stamps`. Omitted
+   * means the text carries no marker of ours -- an untouchable block, which is
+   * the original bytes.
+   */
+  readonly stamp?: Stamp;
 }
 
 export interface DedupResult {
   /** One text per input block, in order. */
   readonly texts: readonly string[];
   readonly elisions: readonly Elision[];
+  /**
+   * One key per output text, aligned index for index with `texts`.
+   *
+   * ALIGNED, NOT A LIST OF THE ONES THAT EXIST, because the decoder consumes it
+   * positionally: `rehydrateSequence` is handed one block at a time with the
+   * stamp for that block, and a reference resolves by rebuilding a block from
+   * further up the array with ITS stamp. A compacted list would silently shift
+   * every key one position left of the text it belongs to.
+   *
+   * At a literal this is the stamp the block arrived with; at a reference it is
+   * the one this pass minted for the marker it wrote.
+   */
+  readonly stamps: readonly Stamp[];
 }
 
 /**
@@ -178,9 +260,10 @@ function quoteFor(referent: string, above: ReadonlySet<string>): string | null {
 function labelledReference(
   bytes: number,
   quote: string,
-  label: number
+  label: number,
+  stamp: Stamp
 ): string {
-  return `[... ${bytes.toLocaleString('en-US')} bytes, shown above: "${quote}" (#${label})]`;
+  return `[... ${bytes.toLocaleString('en-US')} bytes, shown above: "${quote}" (#${label})${referenceStamp(stamp)}]`;
 }
 
 /**
@@ -198,12 +281,165 @@ function labelledReference(
  * per repeat keeps the legibility where a reader needs it -- the first time --
  * and charges roughly their price for every repeat after.
  */
-function repeatReference(bytes: number, label: number): string {
-  return `[... ${bytes.toLocaleString('en-US')} bytes, as #${label} above]`;
+function repeatReference(bytes: number, label: number, stamp: Stamp): string {
+  return `[... ${bytes.toLocaleString('en-US')} bytes, as #${label} above${referenceStamp(stamp)}]`;
 }
 
-function backReference(bytes: number, quote: string): string {
-  return `[... ${bytes.toLocaleString('en-US')} bytes, shown above: "${quote}"]`;
+/**
+ * The block after the one the previous reference named: the run form.
+ *
+ * A MIRRORED REGION IS THE COMMON SHAPE, and quoting every block of it pays for
+ * the same information over and over. When an agent re-sends its message list a
+ * turn later, a stretch of blocks reappears in the order it first appeared in,
+ * so after the first reference has been spelled out with a quote, each block
+ * after it is fully determined by ORDER alone -- and order is free.
+ *
+ * STILL NOT A HASH, AND STILL NOT A POINTER INTO A TABLE. A reader follows this
+ * by scrolling one block further than the reference above it just sent them,
+ * which is the same motion the quoted form asks for and needs no lookup. It is
+ * only ever emitted directly after another reference whose referent sits
+ * immediately before this one, so the walk it describes is the walk that exists.
+ *
+ * Measured on the mirrored-payload workload: fourteen quoted references at 1,016
+ * characters became one quoted reference and thirteen of these, at 388.
+ */
+function nextReference(bytes: number, stamp: Stamp): string {
+  return `[... ${bytes.toLocaleString('en-US')} bytes, next above${referenceStamp(stamp)}]`;
+}
+
+function backReference(bytes: number, quote: string, stamp: Stamp): string {
+  return `[... ${bytes.toLocaleString('en-US')} bytes, shown above: "${quote}"${referenceStamp(stamp)}]`;
+}
+
+/**
+ * The widest marker this block could be rendered as, in characters.
+ *
+ * A label is not handed out until every slot is known, so the bound assumes the
+ * labelled form with a two-digit ordinal -- the widest of the three shapes. A
+ * reference approved on this figure can only come out shorter than it was
+ * judged on, never longer, which is the direction a guard has to err in.
+ */
+function markerCost(bytes: number, quote: string): number {
+  return labelledReference(bytes, quote, 99, WIDEST_STAMP).length;
+}
+
+/**
+ * Is a pointer worth what it replaces?
+ *
+ * THE FLOOR ALONE CANNOT ANSWER THIS, because a quote widens. `quoteFor` pushes
+ * one out towards MAX_QUOTE_CHARS to separate a referent from its rivals, so a
+ * block that cleared the floor on the assumption of a forty-character quote can
+ * still meet a marker five times that. Here the quote exists, so the question is
+ * answered rather than assumed.
+ *
+ * AND THE MARKER REPLACES THE EMITTED TEXT, NOT THE SOURCE. The two drift a long
+ * way apart: a block whose original ran to five thousand bytes may have been
+ * compressed to eighty before it reached this module, and pointing at that costs
+ * more than sending it. The count the marker DISPLAYS is the original -- that is
+ * what the reader lost, and what makes the marker wide -- so the cost is
+ * measured against the original and the saving against the text.
+ */
+function worthPointingAt(block: DedupBlock, quote: string): boolean {
+  return markerCost(block.original.length, quote) * 2 <= block.text.length;
+}
+
+/**
+ * The referent a back-reference names, or null when the line is not one.
+ *
+ * THE INVERSE LIVES BESIDE THE ENCODER, for the reason `rehydrate` gives for
+ * centralising the envelope: a hand-written inverse in another file drifts from
+ * the grammar it is supposed to invert, and one that has drifted into being too
+ * forgiving passes everything. The three markers above are the whole grammar,
+ * and this is where they are read back.
+ *
+ * NOT A LOSSY MARKER, WHICH IS THE WHOLE POINT OF READING IT BACK. The content
+ * is in the same request, above -- that is exactly the claim made below when
+ * these elisions are recorded `lossless: true` with `recoverAt: null`. A
+ * decoder shown one block in isolation cannot check that claim, so it refused,
+ * and three by-design references sat on a list of suspected data loss.
+ */
+export interface BackReference {
+  /**
+   * The quoted opening with its ellipsis stripped, so it is a prefix of the
+   * referent's reader head. Null on the cheap repeat form, which carries a
+   * label and nothing else.
+   */
+  readonly needle: string | null;
+  /** The ordinal in `(#n)` or `as #n above`, or null where there is none. */
+  readonly label: number | null;
+  /**
+   * True on the run form, which names its referent by ORDER rather than by
+   * quote: the block after the one the preceding reference resolved to. It
+   * carries neither a needle nor a label, so a reader with no preceding
+   * reference cannot resolve it -- and must refuse rather than guess.
+   */
+  readonly follows: boolean;
+}
+
+/*
+ * EACH SPLIT EITHER SIDE OF ITS STAMP, and assembled from `.source` rather than
+ * rewritten as a string: a rebuilt string needs every backslash doubled, and the
+ * one that is missed turns `\[` into `[` or `\d` into a literal `d`, silently.
+ *
+ * Handed no stamp, `stampPattern` contributes `(?!)` and none of the three
+ * matches anything at all. That is the whole fix: a decoder without the key
+ * honours no reference, so a reference-shaped line is just a line.
+ */
+const SPELLED_OUT_HEAD =
+  /^\s*\[\.\.\. [\d,]+ bytes, shown above: "([\s\S]*)"(?: \(#(\d+)\))?/;
+const REPEAT_HEAD = /^\s*\[\.\.\. [\d,]+ bytes, as #(\d+) above/;
+const NEXT_HEAD = /^\s*\[\.\.\. [\d,]+ bytes, next above/;
+const CLOSE = /\]\s*$/;
+
+/** One of the three heads above, closed off and gated on the stamp. */
+function reader(head: RegExp, stamp: Stamp): RegExp {
+  return new RegExp(head.source + stampPattern(stamp) + CLOSE.source);
+}
+
+export function readBackReference(
+  line: string,
+  stamp: Stamp = null
+): BackReference | null {
+  assertStamp(stamp);
+  const spelled = reader(SPELLED_OUT_HEAD, stamp).exec(line);
+  if (spelled) {
+    const quote = spelled[1];
+    return {
+      // `quoteFor` strips the same three characters before it tests rivals, so
+      // stripping them here asks the identical question it answered.
+      needle: quote.endsWith('...') ? quote.slice(0, -3) : quote,
+      label: spelled[2] === undefined ? null : Number(spelled[2]),
+      follows: false,
+    };
+  }
+  const repeat = reader(REPEAT_HEAD, stamp).exec(line);
+  if (repeat) return { needle: null, label: Number(repeat[1]), follows: false };
+  return reader(NEXT_HEAD, stamp).test(line)
+    ? { needle: null, label: null, follows: true }
+    : null;
+}
+
+/**
+ * The one block above whose head this quote names, or null when it names no
+ * single one.
+ *
+ * FAILING CLOSED IS THE POINT. `quoteFor` widens a quote until exactly one
+ * block above answers to it, so zero matches or two mean the output and this
+ * reader disagree about what is above -- and a decoder that picked one anyway
+ * would be vouching for a reconstruction it did not make.
+ *
+ * Duplicates collapse first because the encoder compared against a Set: two
+ * byte-identical untouchable blocks are one rival to it, and counting them as
+ * two here would refuse a reference that is perfectly well defined.
+ */
+export function findReferent(
+  needle: string,
+  above: readonly string[]
+): string | null {
+  const hits = [...new Set(above)].filter((text) =>
+    readerHead(text).startsWith(needle)
+  );
+  return hits.length === 1 ? hits[0] : null;
 }
 
 /**
@@ -243,9 +479,44 @@ type Slot =
       readonly referent: string;
       /** Widened past `opening` only where a rival above shares it. */
       readonly quote: string;
+      /**
+       * Where the referent sits in this same array. Two references whose
+       * referents are one apart describe a mirrored stretch, and the second of
+       * them can be worded by order instead of by quote -- see `nextReference`.
+       */
+      readonly at: number;
+      /**
+       * The key this reference's marker will carry.
+       *
+       * OVER THE BYTES THE REFERENCE REPLACED, so it is stable turn over turn:
+       * the same block in the same conversation stamps the same way next turn,
+       * the marker comes out byte-identical and the provider's cached prefix
+       * still matches. Minted here rather than in the wording pass below
+       * because the three shapes a reference can take must all carry the same
+       * key -- which of them is chosen depends on how many other slots share
+       * the referent, and must not change what the marker authenticates as.
+       */
+      readonly stamp: Stamp;
     };
 
-export function dedupBlocks(blocks: readonly DedupBlock[]): DedupResult {
+/**
+ * The key a reference marker written by this pass will carry.
+ *
+ * MINTED HERE ONLY WHEN THE CALLER DID NOT CHOOSE. `withStamp` promises that
+ * every engine entry point honours a stamp the caller pinned, and that `null`
+ * means `do not stamp`; this pass is reached from the strategies rather than
+ * from the router, so it has to keep that promise itself. It minted
+ * unconditionally until the comparator needed a reproducible run and found that
+ * the stamp it had pinned was being ignored on exactly this path.
+ *
+ * `undefined` means the caller did not think about it, and gets a key over the
+ * bytes the reference replaced -- stable turn over turn for the same block in
+ * the same conversation, which is what keeps a cached prefix matching.
+ */
+export function dedupBlocks(
+  blocks: readonly DedupBlock[],
+  stamp?: Stamp
+): DedupResult {
   // COLLECTED BEFORE THEY ARE WORDED. How a reference should be phrased depends
   // on how many OTHER references share its referent, which is not known until
   // every block has been matched. Collecting slots first keeps that decision in
@@ -267,6 +538,12 @@ export function dedupBlocks(blocks: readonly DedupBlock[]): DedupResult {
   // screen that a quote can land on, so it counts as a rival.
   const emitted = new Set<string>();
 
+  // WHERE each literal landed, on the same first-wins rule `byOutput` uses, so
+  // the position recorded here is the position of the block a reference will
+  // actually resolve to. Only literals are recorded: a reference is not a block
+  // a later reference can point at.
+  const positionOf = new Map<string, number>();
+
   const remember = (block: DedupBlock): void => {
     if (
       !block.touchable &&
@@ -284,6 +561,7 @@ export function dedupBlocks(blocks: readonly DedupBlock[]): DedupResult {
     if (!block.touchable) {
       remember(block);
       emitted.add(block.text);
+      if (!positionOf.has(block.text)) positionOf.set(block.text, slots.length);
       slots.push({ kind: 'text', text: block.text });
       continue;
     }
@@ -318,12 +596,18 @@ export function dedupBlocks(blocks: readonly DedupBlock[]): DedupResult {
     // at two places and call the elision lossless.
     const quote = earlier === undefined ? null : quoteFor(earlier, emitted);
 
-    if (earlier !== undefined && quote !== null) {
+    if (
+      earlier !== undefined &&
+      quote !== null &&
+      worthPointingAt(block, quote)
+    ) {
       slots.push({
         kind: 'ref',
         bytes: block.original.length,
         referent: earlier,
         quote,
+        at: positionOf.get(earlier) ?? -1,
+        stamp: stamp === undefined ? stampFor(block.original) : stamp,
       });
       elisions.push({
         removed: `${block.original.length.toLocaleString('en-US')} bytes already shown earlier in this conversation`,
@@ -337,6 +621,7 @@ export function dedupBlocks(blocks: readonly DedupBlock[]): DedupResult {
 
     remember(block);
     emitted.add(block.text);
+    if (!positionOf.has(block.text)) positionOf.set(block.text, slots.length);
     slots.push({ kind: 'text', text: block.text });
   }
 
@@ -360,16 +645,59 @@ export function dedupBlocks(blocks: readonly DedupBlock[]): DedupResult {
     if (!labels.has(slot.referent)) labels.set(slot.referent, labels.size + 1);
   }
 
-  const spelledOut = new Set<string>();
-  const texts = slots.map((slot) => {
-    if (slot.kind === 'text') return slot.text;
-    const label = labels.get(slot.referent);
-    if (label === undefined) return backReference(slot.bytes, slot.quote);
-    if (spelledOut.has(slot.referent))
-      return repeatReference(slot.bytes, label);
-    spelledOut.add(slot.referent);
-    return labelledReference(slot.bytes, slot.quote, label);
+  // A MIRRORED STRETCH IS WORDED ONCE. Where consecutive references name
+  // consecutive blocks above, every one after the first is already determined by
+  // its position, and quoting it charges again for what the reference before it
+  // has just established. `nextReference` says only how many bytes went and that
+  // the walk carries on, which on the mirrored workload turned 1,016 characters
+  // of marker into 388.
+  //
+  // THE CHAIN IS WHAT MAKES IT RESOLVABLE, so it must not be broken anywhere in
+  // the middle. A run form is emitted only directly after another reference, and
+  // only when its referent is the very next block after that one's -- which is
+  // exactly the walk a reader performs. The first of any stretch stays spelled
+  // out with its quote, so the chain always starts somewhere a reader can find.
+  //
+  // LABELLED REFERENTS ARE LEFT ALONE. A label is handed to a referent that is
+  // pointed at more than once, and the cheap `as #n above` form already prices
+  // those repeats; folding one into a run would have to decide which of the two
+  // cheap forms wins and would put a label's introduction behind a marker that
+  // does not carry it. Runs are built only from referents named exactly once.
+  const runnable = slots.map((slot, i) => {
+    if (slot.kind !== 'ref' || labels.has(slot.referent)) return false;
+    const prev = slots[i - 1];
+    if (prev === undefined || prev.kind !== 'ref') return false;
+    if (labels.has(prev.referent) || slot.at !== prev.at + 1) return false;
+    // AND ONLY WHERE IT PAYS, measured on the markers themselves rather than
+    // assumed. A very short quote can make the spelled-out form the cheaper of
+    // the two, and emitting the terser wording would then cost bytes to say
+    // less.
+    return (
+      nextReference(slot.bytes, slot.stamp).length <
+      backReference(slot.bytes, slot.quote, slot.stamp).length
+    );
   });
 
-  return { texts, elisions };
+  const spelledOut = new Set<string>();
+  const texts = slots.map((slot, i) => {
+    if (slot.kind === 'text') return slot.text;
+    if (runnable[i]) return nextReference(slot.bytes, slot.stamp);
+    const label = labels.get(slot.referent);
+    if (label === undefined)
+      return backReference(slot.bytes, slot.quote, slot.stamp);
+    if (spelledOut.has(slot.referent))
+      return repeatReference(slot.bytes, label, slot.stamp);
+    spelledOut.add(slot.referent);
+    return labelledReference(slot.bytes, slot.quote, label, slot.stamp);
+  });
+
+  // THE KEYS, IN THE SAME ORDER AS THE TEXTS. A reference's is the one minted
+  // for it above; a literal's is the one the block arrived under, because this
+  // pass did not touch its text and whatever markers are inside it still verify
+  // against that. Output handed over without these is output nobody can invert.
+  const stamps = slots.map((slot, i) =>
+    slot.kind === 'ref' ? slot.stamp : (blocks[i]?.stamp ?? null)
+  );
+
+  return { texts, elisions, stamps };
 }

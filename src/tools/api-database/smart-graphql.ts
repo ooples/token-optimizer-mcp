@@ -11,7 +11,7 @@
  * - Token-optimized output
  */
 
-import { CacheEngine } from '../../core/cache-engine.js';
+import { CacheEngine, resolveCacheLocation } from '../../core/cache-engine.js';
 import { measured } from '../shared/savings.js';
 import { TokenCounter } from '../../core/token-counter.js';
 import { MetricsCollector } from '../../core/metrics.js';
@@ -786,7 +786,14 @@ export class SmartGraphQL {
     };
 
     // Cache for 1 hour
-    await this.cache.set(cacheKey, JSON.stringify(schemaInfo), 0, 3600);
+    const serialized = JSON.stringify(schemaInfo);
+    await this.cache.set(
+      cacheKey,
+      serialized,
+      serialized.length,
+      serialized.length,
+      { ttlSeconds: 3600 }
+    );
 
     return schemaInfo;
   }
@@ -915,12 +922,10 @@ export class SmartGraphQL {
       timestamp: Date.now(),
     };
 
-    const tokensSavedResult = this.tokenCounter.count(
-      JSON.stringify(cacheData)
-    );
-    const tokensSaved = tokensSavedResult.tokens;
-
-    this.cache.set(key, JSON.stringify(cacheData), tokensSaved, ttl);
+    const serialized = JSON.stringify(cacheData);
+    this.cache.set(key, serialized, serialized.length, serialized.length, {
+      ttlSeconds: ttl,
+    });
   }
 }
 
@@ -946,21 +951,24 @@ export async function runSmartGraphQL(
   const { homedir } = await import('os');
   const { join } = await import('path');
 
-  const cache = new CacheEngine(join(homedir(), '.hypercontext', 'cache'), 100);
+  const cache = new CacheEngine(
+    resolveCacheLocation(join(homedir(), '.hypercontext', 'cache')),
+    100
+  );
   const tokenCounter = new TokenCounter();
   const metrics = new MetricsCollector();
   const graphql = getSmartGraphQL(cache, tokenCounter, metrics);
 
   const result = await graphql.run(options);
 
-  return JSON.stringify(result, null, 2);
+  return JSON.stringify(result);
 }
 
 // MCP tool definition
 export const SMART_GRAPHQL_TOOL_DEFINITION = {
   name: 'smart_graphql',
   description:
-    'GraphQL query optimizer with complexity analysis and caching (83% token reduction)',
+    'GraphQL query optimizer with complexity analysis and caching (unmeasured design target: 83% token reduction)',
   inputSchema: {
     type: 'object' as const,
     properties: {

@@ -14,7 +14,7 @@
 import { execFileSafeSync, assertSafeGitRef } from '../../utils/safe-exec.js';
 import { join } from 'path';
 import { homedir } from 'os';
-import { CacheEngine } from '../../core/cache-engine.js';
+import { CacheEngine, resolveCacheLocation } from '../../core/cache-engine.js';
 import { TokenCounter } from '../../core/token-counter.js';
 import { MetricsCollector } from '../../core/metrics.js';
 import { generateCacheKey } from '../shared/hash-utils.js';
@@ -588,7 +588,10 @@ export function getSmartBranchTool(
 export async function runSmartBranch(
   options: SmartBranchOptions = {}
 ): Promise<SmartBranchResult> {
-  const cache = new CacheEngine(join(homedir(), '.hypercontext', 'cache'), 100);
+  const cache = new CacheEngine(
+    resolveCacheLocation(join(homedir(), '.hypercontext', 'cache')),
+    100
+  );
   const tokenCounter = new TokenCounter();
   const metrics = new MetricsCollector();
 
@@ -602,7 +605,7 @@ export async function runSmartBranch(
 export const SMART_BRANCH_TOOL_DEFINITION = {
   name: 'smart_branch',
   description:
-    'List and manage git branches with 60% token reduction through structured JSON output and smart filtering',
+    'List and manage git branches with an unmeasured design target of 60% token reduction through structured JSON output and smart filtering',
   inputSchema: {
     type: 'object',
     properties: {
@@ -622,6 +625,8 @@ export const SMART_BRANCH_TOOL_DEFINITION = {
       },
       pattern: {
         type: 'string',
+        maxLength: 1024,
+        pattern: '^[^\\u0000\\n\\r]*$',
         description: 'Filter branches by pattern (e.g., "feature/*")',
       },
       merged: {
@@ -669,6 +674,9 @@ export const SMART_BRANCH_TOOL_DEFINITION = {
       },
       mergedInto: {
         type: 'string',
+        minLength: 1,
+        maxLength: 256,
+        pattern: '^(?!-)[A-Za-z0-9._/+@~^{}-]+$',
         description: 'Only branches already merged into this ref',
       },
       sortOrder: {

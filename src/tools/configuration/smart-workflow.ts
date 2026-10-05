@@ -111,11 +111,40 @@ export interface SmartWorkflowResult {
     tokenCount: number;
     originalTokenCount: number;
     compressionRatio: number;
-    parseTime: number;
   };
   validationErrors?: WorkflowValidationError[];
   securityIssues?: WorkflowSecurityIssue[];
   optimizations?: WorkflowOptimization[];
+}
+
+export type SmartWorkflowOperation =
+  | 'analyze'
+  | 'list-workflows'
+  | 'get-jobs'
+  | 'get-triggers'
+  | 'validate'
+  | 'optimize'
+  | 'visualize'
+  | 'get-secrets';
+
+export interface SmartWorkflowRequest {
+  operation: SmartWorkflowOperation;
+  filePath?: string;
+  projectRoot?: string;
+  parsedWorkflow?: ParsedWorkflow;
+  options?: SmartWorkflowOptions;
+}
+
+export interface SmartWorkflowRunResult {
+  operation: SmartWorkflowOperation;
+  analysis?: SmartWorkflowResult;
+  workflows?: string[];
+  jobs?: WorkflowJob[];
+  triggers?: WorkflowTrigger[];
+  validationErrors?: WorkflowValidationError[];
+  optimizations?: WorkflowOptimization[];
+  dependencyGraph?: Record<string, string[]>;
+  secrets?: string[];
 }
 
 export class SmartWorkflowTool {
@@ -131,6 +160,82 @@ export class SmartWorkflowTool {
     this.cache = cache;
     this.tokenCounter = tokenCounter;
     this.metrics = metrics;
+  }
+
+  /**
+   * THE ADVERTISED OPERATION HAS TO REACH A METHOD. This tool's schema has
+   * always offered eight operations while the class offered eight separate
+   * methods and no entry point, which is why it could be listed nowhere: the
+   * server dispatches every tool through one call. This maps each advertised
+   * operation onto the method that already implements it.
+   *
+   * Six of the eight need a ParsedWorkflow, which a caller cannot write by
+   * hand. It may pass one back from an earlier `analyze` -- that is what
+   * `parsedWorkflow` is for -- but when it holds only a path, the path is
+   * parsed here through `analyze`, so the parse and its cache entry are
+   * shared with a direct analyze of the same file.
+   */
+  async run(request: SmartWorkflowRequest): Promise<SmartWorkflowRunResult> {
+    const { operation } = request;
+    const options = request.options ?? {};
+
+    if (operation === 'analyze') {
+      const filePath = this.requireFilePath(request);
+      return { operation, analysis: await this.analyze(filePath, options) };
+    }
+
+    if (operation === 'list-workflows') {
+      const projectRoot = request.projectRoot ?? process.cwd();
+      return { operation, workflows: this.listWorkflows(projectRoot) };
+    }
+
+    const workflow = await this.resolveWorkflow(request, options);
+
+    switch (operation) {
+      case 'get-jobs':
+        return { operation, jobs: this.getJobs(workflow) };
+      case 'get-triggers':
+        return { operation, triggers: this.getTriggers(workflow) };
+      case 'validate':
+        return { operation, validationErrors: this.validate(workflow) };
+      case 'optimize':
+        return { operation, optimizations: this.optimize(workflow) };
+      case 'visualize':
+        return { operation, dependencyGraph: this.visualize(workflow) };
+      case 'get-secrets':
+        return { operation, secrets: this.getSecrets(workflow) };
+      default: {
+        // The switch is exhaustive over the type, so this arm is unreachable
+        // through it -- but the schema and this union can drift apart, and an
+        // operation that only the schema knows about must still get an answer
+        // rather than an undefined result that reads as an empty workflow.
+        const unhandled: string = operation;
+        throw new Error(`Unknown smart_workflow operation: ${unhandled}`);
+      }
+    }
+  }
+
+  private async resolveWorkflow(
+    request: SmartWorkflowRequest,
+    options: SmartWorkflowOptions
+  ): Promise<ParsedWorkflow> {
+    if (request.parsedWorkflow) {
+      return request.parsedWorkflow;
+    }
+    return (await this.analyze(this.requireFilePath(request), options))
+      .workflow;
+  }
+
+  private requireFilePath(request: SmartWorkflowRequest): string {
+    const filePath = request.filePath;
+    if (filePath !== undefined && filePath.trim().length > 0) {
+      return filePath;
+    }
+    const alternative =
+      request.operation === 'analyze' ? '' : ' or a parsedWorkflow';
+    throw new Error(
+      `smart_workflow ${request.operation} needs a filePath${alternative}`
+    );
   }
 
   async analyze(
@@ -226,7 +331,6 @@ export class SmartWorkflowTool {
         tokenCount: originalTokens,
         originalTokenCount: originalTokens,
         compressionRatio: 1.0,
-        parseTime,
       },
       validationErrors:
         validationErrors.length > 0 ? validationErrors : undefined,
@@ -615,7 +719,7 @@ export function getSmartWorkflowTool(
 export const SMART_WORKFLOW_TOOL_DEFINITION = {
   name: 'smart_workflow',
   description:
-    'Intelligent CI/CD workflow file analysis with 83% token reduction. Analyzes GitHub Actions, GitLab CI, CircleCI, and Azure Pipelines workflows with syntax validation, security analysis, and performance recommendations.',
+    'Parse a CI/CD workflow file and answer questions about it without reading the file into the conversation: GitHub Actions, GitLab CI, CircleCI and Azure Pipelines. Returns jobs, triggers, the dependency graph, syntax validation, hardcoded-secret and unsafe-action findings, and caching or parallelization suggestions. Parses are cached against the file hash for 24 hours.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -635,15 +739,18 @@ export const SMART_WORKFLOW_TOOL_DEFINITION = {
       },
       filePath: {
         type: 'string',
-        description: 'Path to workflow file (for analyze)',
+        description:
+          'Path to the workflow file. Required by every operation except list-workflows, unless parsedWorkflow is supplied instead.',
       },
       projectRoot: {
         type: 'string',
-        description: 'Project root (for list-workflows)',
+        description:
+          'Directory to search for workflow files (list-workflows only). Defaults to the working directory.',
       },
       parsedWorkflow: {
         type: 'object',
-        description: 'Parsed workflow (for other operations)',
+        description:
+          'A workflow returned by a previous analyze call, reused to skip re-parsing. Optional: pass filePath instead.',
       },
       options: {
         type: 'object',

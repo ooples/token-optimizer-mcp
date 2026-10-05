@@ -95,6 +95,11 @@ try {
 
   console.log('');
   console.log('Verify it actually works with: npx token-optimizer-doctor');
+  // THE MONEY QUESTION, NAMED AT THE ONE MOMENT SOMEONE IS LOOKING AT THIS.
+  // Everything the installer just wired up exists to reduce a bill, and until
+  // now nothing it printed said which command adds that reduction up -- so the
+  // bin shipped in package.json and was reachable only by already knowing it.
+  console.log('See what it has saved with: npx token-optimizer-savings');
 } catch (error) {
   console.error(
     `[token-optimizer-mcp] installation failed: ${error?.message || error}`

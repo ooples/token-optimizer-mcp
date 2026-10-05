@@ -16,7 +16,7 @@
  * - Compressed ACL trees (88% reduction)
  */
 
-import { CacheEngine } from '../../core/cache-engine.js';
+import { CacheEngine, resolveCacheLocation } from '../../core/cache-engine.js';
 import { TokenCounter } from '../../core/token-counter.js';
 import { MetricsCollector } from '../../core/metrics.js';
 import { readFileSync } from 'fs';
@@ -535,7 +535,7 @@ export class SmartUser {
 
     // Cache permission info (shorter TTL as permissions can change)
     if (useCache) {
-      await this.cache.set(cacheKey, dataStr, tokensUsed, tokensUsed);
+      await this.cache.set(cacheKey, dataStr, dataStr.length, dataStr.length);
     }
 
     return {
@@ -591,7 +591,7 @@ export class SmartUser {
 
     // Cache ACL info
     if (useCache) {
-      await this.cache.set(cacheKey, dataStr, tokensUsed, tokensUsed);
+      await this.cache.set(cacheKey, dataStr, dataStr.length, dataStr.length);
     }
 
     return {
@@ -644,7 +644,7 @@ export class SmartUser {
 
     // Cache sudo status
     if (useCache) {
-      await this.cache.set(cacheKey, dataStr, tokensUsed, tokensUsed);
+      await this.cache.set(cacheKey, dataStr, dataStr.length, dataStr.length);
     }
 
     return {
@@ -698,7 +698,7 @@ export class SmartUser {
 
     // Cache audit report (short TTL as security state should be monitored frequently)
     if (useCache) {
-      await this.cache.set(cacheKey, dataStr, tokensUsed, tokensUsed);
+      await this.cache.set(cacheKey, dataStr, dataStr.length, dataStr.length);
     }
 
     return {
@@ -1568,7 +1568,11 @@ export async function runSmartUser(
   const { join } = await import('path');
 
   const cacheInstance =
-    cache || new CacheEngine(join(homedir(), '.hypercontext', 'cache'), 100);
+    cache ||
+    new CacheEngine(
+      resolveCacheLocation(join(homedir(), '.hypercontext', 'cache')),
+      100
+    );
   const tokenCounterInstance = tokenCounter || new TokenCounter();
   const metricsInstance = metricsCollector || new MetricsCollector();
 
@@ -1587,7 +1591,7 @@ export async function runSmartUser(
 export const SMART_USER_TOOL_DEFINITION = {
   name: 'smart_user',
   description:
-    'Intelligent user and permission management with smart caching (86%+ token reduction). Manage users, groups, permissions, ACLs, and perform security audits across Windows, Linux, and macOS.',
+    'Intelligent user and permission management with smart caching (unmeasured design target: 86%+ token reduction). Manage users, groups, permissions, ACLs, and perform security audits across Windows, Linux, and macOS.',
   inputSchema: {
     type: 'object' as const,
     properties: {
@@ -1607,14 +1611,23 @@ export const SMART_USER_TOOL_DEFINITION = {
       },
       username: {
         type: 'string' as const,
+        minLength: 1,
+        maxLength: 4096,
+        pattern: '^(?!-)[^\\u0000\\n\\r]+$',
         description: 'Username for user-specific operations',
       },
       groupname: {
         type: 'string' as const,
+        minLength: 1,
+        maxLength: 4096,
+        pattern: '^(?!-)[^\\u0000\\n\\r]+$',
         description: 'Group name for group-specific operations',
       },
       path: {
         type: 'string' as const,
+        minLength: 1,
+        maxLength: 4096,
+        pattern: '^(?!-)[^\\u0000\\n\\r]+$',
         description:
           'File/directory path for permission checks and ACL operations',
       },

@@ -12,7 +12,7 @@
  */
 
 import { createHash } from 'crypto';
-import { CacheEngine } from '../../core/cache-engine.js';
+import { CacheEngine, resolveCacheLocation } from '../../core/cache-engine.js';
 import { measured } from '../shared/savings.js';
 import { TokenCounter } from '../../core/token-counter.js';
 import { MetricsCollector } from '../../core/metrics.js';
@@ -717,11 +717,13 @@ export class SmartWebSocket {
     ttl?: number
   ): Promise<void> {
     const cacheData = { ...result, timestamp: Date.now() };
+    const serialized = JSON.stringify(cacheData);
     await this.cache.set(
       key,
-      JSON.stringify(cacheData),
-      8 /* originalSize */,
-      ttl || 60
+      serialized,
+      serialized.length,
+      serialized.length,
+      { ttlSeconds: ttl || 60 }
     );
   }
 
@@ -785,7 +787,10 @@ export async function runSmartWebSocket(
   const { homedir } = await import('os');
   const { join } = await import('path');
 
-  const cache = new CacheEngine(join(homedir(), '.hypercontext', 'cache'), 100);
+  const cache = new CacheEngine(
+    resolveCacheLocation(join(homedir(), '.hypercontext', 'cache')),
+    100
+  );
   const websocket = getSmartWebSocket(
     cache,
     new TokenCounter(),
@@ -794,13 +799,13 @@ export async function runSmartWebSocket(
 
   const result = await websocket.run(options);
 
-  return JSON.stringify(result, null, 2);
+  return JSON.stringify(result);
 }
 
 export const SMART_WEBSOCKET_TOOL_DEFINITION = {
   name: 'smart_websocket',
   description:
-    'WebSocket connection manager with message tracking (83% token reduction)',
+    'WebSocket connection manager with message tracking (unmeasured design target: 83% token reduction)',
   inputSchema: {
     type: 'object',
     properties: {

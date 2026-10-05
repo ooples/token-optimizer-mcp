@@ -43,18 +43,22 @@ test('hostile keys and escaped values remain typed data with exact counts', () =
 });
 
 test('shared retention budget never admits a partial group or unbounded fields', () => {
-  const rows = Array.from({ length: 100 }, (_, i) => Object.fromEntries(
-    Array.from({ length: 20 }, (_, field) => [
-      `field-${field}`,
-      i >= field * 3 && i < field * 3 + 3 ? 'rare' : 'common',
-    ])
-  ));
+  const rows = Array.from({ length: 100 }, (_, i) =>
+    Object.fromEntries(
+      Array.from({ length: 20 }, (_, field) => [
+        `field-${field}`,
+        i >= field * 3 && i < field * 3 + 3 ? 'rare' : 'common',
+      ])
+    )
+  );
   const result = rareStringGroups(rows);
   expect(result.keep.size).toBeLessThanOrEqual(10);
   const facts = JSON.parse(result.facts.slice(result.facts.indexOf('[')));
   expect(facts.length).toBeLessThanOrEqual(8);
   for (const fact of facts) {
-    const indices = rows.flatMap((r, i) => r[fact.field] === fact.value ? [i] : []);
+    const indices = rows.flatMap((r, i) =>
+      r[fact.field] === fact.value ? [i] : []
+    );
     expect(indices).toHaveLength(fact.count);
     for (const i of indices) expect(result.keep.has(i)).toBe(true);
   }

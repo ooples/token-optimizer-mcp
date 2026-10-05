@@ -8,7 +8,9 @@ import {
 import { compressBlock } from '../../../src/compress/router.js';
 import { compressJson } from '../../../src/compress/json.js';
 import { compressProse } from '../../../src/compress/prose.js';
+import { rehydrate } from '../../../src/compress/rehydrate.js';
 import { compressCode } from '../../../src/compress/code.js';
+import { variedRows } from './varied-rows.js';
 
 /**
  * Expert presets, and the two claims that make them worth having.
@@ -104,7 +106,11 @@ describe('the dials actually move something', () => {
   });
 
   it('conservative keeps more rows than balanced', () => {
-    const payload = rows(60);
+    // VARIED ROWS, because how many rows a preset KEEPS is only observable
+    // where rows are dropped. `rows(60)` is folded losslessly by the array
+    // templater at every preset -- all 60 records preserved, identical output,
+    // and this assertion read 728 against 728.
+    const payload = JSON.stringify(variedRows(60));
     const balanced = compressJson(payload, {
       spill,
       tuning: resolveTuning({}, 'balanced'),
@@ -137,8 +143,17 @@ describe('lossless is lossless, not merely smaller', () => {
   it('removes no rows from an array', () => {
     const payload = rows(60);
     const out = compressJson(payload, { spill, tuning });
-    // Every id still present: nothing was dropped.
-    for (let i = 0; i < 60; i += 1) expect(out.text).toContain(`doc_${i}`);
+    // EVERY ID STILL RECOVERABLE: nothing was dropped. Checked through the
+    // decoder rather than by looking for `doc_0` in the encoded text, because
+    // the encoder now factors `doc_0..doc_59` into one arithmetic run and the
+    // literals are legitimately gone -- the substring was only ever a stand-in
+    // for this, and it stopped being a valid one when the run encoding reached
+    // this shape (9171 bytes to 728, decoding byte for byte). Decoding first is
+    // the stricter check: it fails if a row is dropped OR mis-encoded.
+    expect(out.lossless).toBe(true);
+    const restored = rehydrate(out.text, out.stamp);
+    expect(restored).toBe(payload);
+    for (let i = 0; i < 60; i += 1) expect(restored).toContain(`doc_${i}`);
   });
 
   it('leaves prose whole', () => {

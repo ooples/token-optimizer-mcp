@@ -1,3 +1,4 @@
+import { FeatureName, featureEnabled } from '../rollout/resolve.js';
 import { spawn } from 'node:child_process';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -6,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 export function startManagedInstallRepair(): void {
   if (
     process.env.TOKEN_OPTIMIZER_VERSION ||
-    /^(0|false|no|off)$/i.test(process.env.TOKEN_OPTIMIZER_AUTO_REPAIR || '') ||
+    !featureEnabled(FeatureName.AutoRepair) ||
     process.env.TOKEN_OPTIMIZER_MODE?.trim().toLowerCase() === 'off'
   )
     return;

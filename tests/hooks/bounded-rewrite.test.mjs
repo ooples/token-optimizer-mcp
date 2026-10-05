@@ -23,18 +23,29 @@ import {
 
 const BASH = process.env.TOKEN_OPTIMIZER_TEST_BASH || 'bash';
 
-/** Runs a command through bash exactly as the client's Bash tool would. */
+/**
+ * Runs a command through bash exactly as the client's Bash tool would.
+ *
+ * STDERR IS CAPTURED, NOT INHERITED. Several fixtures below are commands the
+ * shell is meant to refuse, and `execFileSync` sends a child's stderr to the
+ * parent unless `stdio` says otherwise -- so a fully passing run printed
+ * `bash: -c: line 1: syntax error near unexpected token ')'` into the CI log,
+ * where it reads as a broken job and costs someone the triage. Capturing it
+ * also makes the refusal assertable, which is what `stderr` below is for.
+ */
 function run(command, shellFlags = [], env = {}) {
   try {
     const stdout = execFileSync(BASH, [...shellFlags, '-c', command], {
       encoding: 'utf8',
       timeout: 30_000,
       env: { ...process.env, ...env },
+      stdio: ['ignore', 'pipe', 'pipe'],
     });
-    return { stdout, status: 0 };
+    return { stdout, stderr: '', status: 0 };
   } catch (error) {
     return {
       stdout: String(error.stdout ?? ''),
+      stderr: String(error.stderr ?? ''),
       status: typeof error.status === 'number' ? error.status : -1,
     };
   }
@@ -657,6 +668,18 @@ describe('the command cannot restructure the wrapper', () => {
     expect(bounded.status).toBe(2);
     expect(ran(bare)).toBe(false);
     expect(ran(bounded)).toBe(false);
+    // WHY IT EXITED 2 MATTERS. Status 2 is also what a command that ran and
+    // failed could return, so the bounded form could stop meaning what the
+    // bare one means and still satisfy the two checks above. The shell saying
+    // it could not parse the line is the thing being preserved.
+    //
+    // THE TWO STREAMS DIFFER BY DESIGN, which is why this reads both: the bare
+    // shell writes the refusal to stderr, while the wrapper folds stderr into
+    // the output it bounds, so the bounded form's refusal arrives on stdout.
+    const refused = (result) =>
+      `${result.stderr}${result.stdout}`.includes('syntax error');
+    expect(refused(bare)).toBe(true);
+    expect(refused(bounded)).toBe(true);
   });
 
   // Parens are why the character could not simply be banned: these all contain

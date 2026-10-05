@@ -53,9 +53,24 @@ import {
   accountingPath,
   appendRecord,
   tapUsage,
+  type AccountingRecord,
   type CompressionFacts,
+  type TokenAccountingFacts,
 } from './accounting.js';
+import {
+  createTokenAccounting,
+  trackCount,
+  type PendingCount,
+} from './token-accounting.js';
+import {
+  createTransformationLog,
+  type TransformationLog,
+} from './transformations.js';
 import { anchorStore, type AnchorStore } from '../compress/anchor.js';
+import { serialiseKeepingPrefix } from './cached-prefix.js';
+import { record, libraryVersion } from '../telemetry/recorder.js';
+import { noteRequest, flushRollup } from '../telemetry/rollup.js';
+import type { SpillSink, Stamp } from '../compress/types.js';
 import { captureDir, captureRequest } from './capture.js';
 import { compressResponses } from './responses.js';
 import { compressChatCompletions } from './chat-completions.js';
@@ -65,6 +80,8 @@ import {
   holdoutFraction,
   type WireFormat,
 } from './output-shaper.js';
+import { assignArm, OUTPUT_ARM, type OutputArm } from './output-savings.js';
+import { createEchoScanner, echoEnabled, extractTextValues } from './echo.js';
 import { withResponsesKnowledge } from './responses-knowledge.js';
 import type { Finding } from '../compress/knowledge.js';
 import { loadFindingsFrom } from './findings.js';
@@ -76,6 +93,13 @@ import {
   type Tuning,
 } from '../compress/options.js';
 import type { ProviderRequest } from '../compress/frontier.js';
+import { FeatureName, featureEnabled } from '../rollout/resolve.js';
+import {
+  type AppliedPosture,
+  type PostureName,
+  applyPosture,
+  postureFromEnv,
+} from './posture.js';
 
 /** Upstream, overridable for a gateway. */
 const UPSTREAM = (): string =>
@@ -169,6 +193,14 @@ export interface ProxyOptions {
   readonly knowledge?: boolean;
   /** Named starting point for the dials. Defaults to the environment's. */
   readonly preset?: PresetName | string;
+  /**
+   * Named full-proxy posture: a preset, a set of features, and the dials.
+   *
+   * Defaults to the environment's. A posture SEEDS variables rather than setting
+   * them, so `preset` and `compression` above, and any variable already exported,
+   * all still win -- see proxy/posture.ts.
+   */
+  readonly posture?: PostureName | string;
   /** Expert overrides, layered over the preset. */
   readonly compression?: CompressionOptions;
   /**
@@ -178,13 +210,52 @@ export interface ProxyOptions {
    * would opt back into the unbounded buffering the ceiling exists to prevent.
    */
   readonly maxBodyBytes?: number;
+  /**
+   * Whether content the engines cannot describe losslessly may leave the
+   * request and be recovered from a file.
+   *
+   * OFF BY DEFAULT, which is a measurement and not caution. An elided body is
+   * a `Read` the agent has to spend a turn on, and a turn is not paid back by
+   * any compression ratio: over the twelve head-to-head workloads, turning
+   * this on wins the cheapest-at-the-first-request column and loses the column
+   * that counts what the agent can answer without going back for anything.
+   * `repeated-reads` is the clearest case -- one file quoted three times costs
+   * 47,613 effective input tokens with this off and nothing to fetch, against
+   * 121,137 for the comparator, and the lossless fold that collapses the
+   * copies is what makes the spill unnecessary rather than merely optional.
+   *
+   * On, it is the right trade on log-and-table shapes where eliding removes
+   * 90% of a block and nothing in the request repeats. That is a caller's call
+   * about its own context pressure, so it is a flag rather than a default.
+   */
+  readonly spill?: boolean;
 }
 
 export interface ProxySummary {
   readonly path: string;
+  /**
+   * The model the request names, when it names one.
+   *
+   * See `CompressionFacts.model` in `accounting.ts` for why a size-only record
+   * cannot be turned into money without it, and why an identifier from the
+   * provider's catalog is not request content.
+   */
+  readonly model?: string;
   readonly beforeBytes: number;
   readonly afterBytes: number;
   readonly compressed: boolean;
+  /** The shaper holdout arm, when one ran. See `CompressionFacts.outputArm`. */
+  readonly outputArm?: OutputArm;
+  /**
+   * The tool-deferral holdout arm, when one ran. See
+   * `CompressionFacts.deferralArm`.
+   *
+   * DECLARED HERE AND NOT ONLY ON THE FACTS, because the summary is spread into
+   * the ledger record rather than copied field by field -- so a field the
+   * summary type does not admit is one the compiler will never check reached
+   * the ledger, even while it travels there at runtime.
+   */
+  readonly deferralArm?: OutputArm;
   readonly reason?: string;
   /**
    * Characters of knowledge deliberately ADDED to the request.
@@ -381,19 +452,91 @@ function conversationKeyFor(
     .digest('hex');
 }
 
-export function compressBody(
+/**
+ * A rewritten body, with the keys its markers verify against.
+ *
+ * DELIBERATELY NOT ON `summary`. That object is `ProxySummary` and flows into
+ * the accounting ledger, which carries counts, durations and fixed vocabulary
+ * and nothing derived from the content. A stamp is derived from the content.
+ */
+interface CompressedBody {
+  readonly body: Buffer;
+  readonly summary: Omit<ProxySummary, 'path'>;
+  readonly stamps: readonly Stamp[];
+}
+
+function compressBodyOnce(
   body: Buffer,
-  spill: (content: string, hint: string) => string,
+  spill: SpillSink,
   anchors?: AnchorStore,
   findings?: readonly Finding[],
   tuning?: Tuning,
   /** True when `findings` came from a graph shared across projects. */
   sharedGraph?: boolean,
-  wireFormat?: 'chat-completions'
-): { body: Buffer; summary: Omit<ProxySummary, 'path'> } {
+  wireFormat?: 'chat-completions',
+  suppressKnowledge?: boolean
+): CompressedBody {
+  // THE MODEL, LEARNED AS SOON AS THE BODY PARSES AND CARRIED BY EVERY RETURN
+  // BELOW IT. `unchanged` closes over this variable rather than taking it as an
+  // argument, so a refusal reached after the parse still names the model it
+  // refused to compress -- which is what lets a row be priced even when nothing
+  // was saved on it.
+  let model: string | undefined;
+  /**
+   * Which arm of the shaper's holdout this request ended up in.
+   *
+   * SET ONLY WHEN AN EXPERIMENT IS ACTUALLY RUNNING, and left absent otherwise.
+   * With no holdout configured every request is treated, and stamping
+   * "treatment" on all of them would fill the ledger with an arm that has
+   * nothing to be compared against -- a column of labels that looks like a
+   * randomized trial and is one arm short of being one.
+   *
+   * ASSIGNED AFTER THE SHAPER HAS RUN, from what it actually did. The early
+   * refusals above return before the shaper is reached, so they carry no arm,
+   * which is the truth about them: nothing was shaped and nothing withheld.
+   */
+  let outputArm: OutputArm | undefined;
+  /**
+   * Which arm of the DEFERRAL holdout this request ended up in.
+   *
+   * A SECOND EXPERIMENT, ON THE OTHER SIDE OF THE BILL. The shaper's arms are
+   * about what the model writes; these are about what the provider charges for
+   * the prompt. They are assigned from the same hashed key and are independent
+   * of one another, so a conversation can be in the control arm of one and the
+   * treatment arm of the other.
+   *
+   * CARRIED BY EVERY RETURN, INCLUDING THE REFUSALS, because the control arm is
+   * made of requests nothing was done to. An arm recorded only when the feature
+   * acted would be a trial with one arm in it.
+   */
+  let deferralArm: OutputArm | undefined;
+  const named = () => ({
+    ...(model === undefined ? {} : { model }),
+    ...(outputArm === undefined ? {} : { outputArm }),
+    ...(deferralArm === undefined ? {} : { deferralArm }),
+  });
+  // THE SAME FACT FOR THE TWO DIALECTS THAT BUILD THEIR OWN SUMMARIES. Chat
+  // Completions and Responses return out of helpers that never saw the parse,
+  // so the model is folded onto their result here rather than threaded through
+  // two more signatures -- one place to keep in step instead of three.
+  const withModel = (result: {
+    body: Buffer;
+    summary: Omit<ProxySummary, 'path'>;
+    stamps: readonly Stamp[];
+  }): CompressedBody =>
+    model === undefined
+      ? result
+      : {
+          body: result.body,
+          stamps: result.stamps,
+          summary: { ...result.summary, model },
+        };
   const before = body.length;
+  // NOTHING WAS COMPRESSED, SO THERE IS NO KEY -- and an empty list says that,
+  // where a stamp would claim markers this body does not carry.
   const unchanged = (reason: string) => ({
     body,
+    stamps: [] as readonly Stamp[],
     summary: {
       beforeBytes: before,
       // NOT `before`: shaping may have replaced the buffer further down, and
@@ -402,6 +545,7 @@ export function compressBody(
       afterBytes: body.length,
       compressed: false,
       reason,
+      ...named(),
     },
   });
 
@@ -466,21 +610,24 @@ export function compressBody(
     }
     return {
       body,
+      stamps: [] as readonly Stamp[],
       summary: {
         beforeBytes: before,
         afterBytes: before,
         compressed: false,
         reason: 'null proxy',
         ...(shape ?? {}),
+        ...named(),
       },
     };
   }
   if (before < MIN_BYTES && !anchors && !findings?.length)
     return unchanged('below the size floor');
 
+  const text = body.toString('utf8');
   let parsed: ProviderRequest;
   try {
-    parsed = JSON.parse(body.toString('utf8')) as ProviderRequest;
+    parsed = JSON.parse(text) as ProviderRequest;
   } catch {
     // Not a JSON provider request -- a streaming upload, a form, something
     // else entirely. Forward it untouched.
@@ -496,17 +643,55 @@ export function compressBody(
   // Note it can only ADD a little input -- the terse note -- to remove more
   // output, and `before` was captured above so the input figure stays honest.
   const asRecord = parsed as unknown as Record<string, unknown>;
+  if (typeof asRecord.model === 'string' && asRecord.model !== '')
+    model = asRecord.model;
   const shapeFormat: WireFormat =
     wireFormat === 'chat-completions'
       ? 'chat-completions'
       : Array.isArray(parsed.input)
         ? 'responses'
         : 'messages';
+  const conversationKey = conversationKeyFor(asRecord);
+  const holdout = holdoutFraction();
   const shaped = shapeOutput(asRecord, {
     wireFormat: shapeFormat,
     enabled: shaperEnabled(),
-    holdout: holdoutFraction(),
-    conversationKey: conversationKeyFor(asRecord),
+    holdout,
+    conversationKey,
+  });
+  // THE ARM INTO THE LEDGER, WHICH IS WHERE THE MEASUREMENT IS MADE. The
+  // anonymous telemetry below counts arms in aggregate and cannot answer the
+  // question the arms exist for -- what the two arms EMITTED -- because it
+  // never sees a token count. The per-request row does, so the label has to
+  // travel with it; without this field the measured tier has no data and
+  // reports, correctly but uselessly, that no holdout ever ran.
+  //
+  // READ FROM THE SHAPER'S OWN DECISION, not re-derived here. `assignArm` is a
+  // reading of `inHoldout`, so a request the shaper left alone is labelled a
+  // control and one it rewrote is labelled treated -- and the two can never
+  // disagree about a request that has already been sent.
+  if (shaperEnabled() && holdout > 0)
+    outputArm = assignArm(conversationKey, holdout);
+  // THE HOLDOUT ARM'S OUTCOME, WHICH IS THE ONE NUMBER WE CANNOT GET ANY OTHER
+  // WAY. The shaper leaves a fraction of conversations alone so that the shaped
+  // arm has something to be compared against, and whether shaping actually pays
+  // is a question about the DIFFERENCE between the two arms -- which no single
+  // machine sees enough of to answer. Today we learn it one machine at a time,
+  // by asking.
+  //
+  // RECORDED HERE, NOT INSIDE shapeOutput, so the shaper stays a pure function
+  // of its inputs. A pure function is what makes the arm assignment testable,
+  // and testable arm assignment is what makes the comparison mean anything.
+  //
+  // NOTHING IS WRITTEN UNLESS THE USER OPTED IN: `record` checks the policy
+  // itself rather than trusting each call site to remember, and it returns null
+  // and swallows on any failure, so this line cannot fail a request. The
+  // properties are a flag and two counts; a string could not be written even if
+  // one were passed.
+  record('output_shaper_arm', libraryVersion(), {
+    holdout: shaped.skipped === 'holdout arm',
+    shaped: shaped.body !== asRecord,
+    labels: shaped.labels.length,
   });
   if (shaped.body !== asRecord) {
     parsed = shaped.body as unknown as ProviderRequest;
@@ -514,14 +699,16 @@ export function compressBody(
   }
   if (wireFormat === 'chat-completions' && Array.isArray(parsed.messages)) {
     try {
-      return compressChatCompletions(
-        body,
-        parsed as Record<string, unknown>,
-        spill,
-        anchors,
-        findings,
-        tuning,
-        sharedGraph
+      return withModel(
+        compressChatCompletions(
+          body,
+          parsed as Record<string, unknown>,
+          spill,
+          anchors,
+          findings,
+          tuning,
+          sharedGraph
+        )
       );
     } catch {
       return unchanged('Chat Completions compression failed');
@@ -535,13 +722,15 @@ export function compressBody(
         spill,
         tuning
       );
-      return withResponsesKnowledge(
-        result,
-        parsed as unknown as Record<string, unknown>,
-        anchors,
-        findings,
-        tuning,
-        sharedGraph
+      return withModel(
+        withResponsesKnowledge(
+          result,
+          parsed as unknown as Record<string, unknown>,
+          anchors,
+          findings,
+          tuning,
+          sharedGraph
+        )
       );
     } catch {
       return unchanged('Responses compression failed');
@@ -572,24 +761,49 @@ export function compressBody(
   let deferred = 0;
   let deferredChars = 0;
   if (deferToolsEnabled()) {
-    try {
-      // The task text steers which non-core tools stay loaded, so the model
-      // never has to search for one -- and a search costs a round trip plus a
-      // second cold prefix write.
-      const out = deferTools(parsed, {
-        // taskIn, NOT questionIn: the tools array is part of the cached
-        // prefix, so steering it with text that changes every turn changes
-        // the prefix every turn. See taskIn for the measurement.
-        query: taskIn(parsed),
-        keepRelevant: keepToolsFromEnv(),
-        smallToolChars: smallToolCharsFromEnv(),
-      });
-      parsed = out.request;
-      deferred = out.deferredCount;
-      deferredChars = out.deferredChars;
-    } catch {
-      // Fails open like everything else here: a tools array we cannot rewrite
-      // is forwarded as it arrived.
+    // THE HOLDOUT, WHICH IS THE ONLY EVIDENCE THE BETA IS HONOURED. Everything
+    // the prompt-level count claims rests on the provider actually declining to
+    // place a marked schema in context. We cannot see the prompt it assembled;
+    // we can only see what it billed for one. So a fraction of conversations is
+    // deferred by nobody, and the difference between the two arms' billed
+    // prompt tokens is the saving measured from the provider's own figures --
+    // net of the search schema it expands server-side, which is the one part of
+    // the computed figure we are not able to count.
+    //
+    // THE SAME ASSIGNMENT FUNCTION THE SHAPER USES, read rather than copied, and
+    // hashed on the conversation so a conversation cannot change arms mid-flight
+    // -- tools live in the cached prefix, and a conversation deferred on turn 3
+    // and not on turn 4 would pay for a fresh prefix and pollute both arms.
+    //
+    // ABSENT WHEN NO EXPERIMENT IS RUNNING. With no holdout configured every
+    // request is deferred, and stamping "treatment" on all of them would fill
+    // the ledger with an arm that has nothing to be compared against.
+    const fraction = deferHoldoutFraction();
+    if (fraction > 0)
+      deferralArm = assignArm(
+        conversationKeyFor(parsed as unknown as Record<string, unknown>),
+        fraction
+      );
+    if (deferralArm !== OUTPUT_ARM.Control) {
+      try {
+        // The task text steers which non-core tools stay loaded, so the model
+        // never has to search for one -- and a search costs a round trip plus a
+        // second cold prefix write.
+        const out = deferTools(parsed, {
+          // taskIn, NOT questionIn: the tools array is part of the cached
+          // prefix, so steering it with text that changes every turn changes
+          // the prefix every turn. See taskIn for the measurement.
+          query: taskIn(parsed),
+          keepRelevant: keepToolsFromEnv(),
+          smallToolChars: smallToolCharsFromEnv(),
+        });
+        parsed = out.request;
+        deferred = out.deferredCount;
+        deferredChars = out.deferredChars;
+      } catch {
+        // Fails open like everything else here: a tools array we cannot rewrite
+        // is forwarded as it arrived.
+      }
     }
   }
 
@@ -645,7 +859,10 @@ export function compressBody(
   ).toLowerCase();
   const keepNewestThinking = dropMode !== 'all';
   let droppedThinking = 0;
-  if (/^(1|true|yes|on|all)$/.test(dropMode)) {
+  // The rollout decides WHETHER; `all` above decides HOW FAR. Splitting them this
+  // way is what lets the inspector report the state without having to know that
+  // this one switch carries a mode as well.
+  if (featureEnabled(FeatureName.DropThinking)) {
     try {
       const msgs = parsed.messages ?? [];
       let lastAssistant = -1;
@@ -685,9 +902,7 @@ export function compressBody(
   // Off unless asked. Substitution removes model reasoning from history, and
   // whether that costs the model something it needed is the one question no
   // offline instrument can answer.
-  const substitute = /^(1|true|yes|on)$/i.test(
-    (process.env.TOKEN_OPTIMIZER_PROXY_SUBSTITUTE || '').trim()
-  );
+  const substitute = featureEnabled(FeatureName.Substitution);
   let result: StrategyResult;
   try {
     result = (substitute ? v4Substitute : v1Frontier)(parsed, {
@@ -696,12 +911,28 @@ export function compressBody(
       findings,
       sharedGraph,
       tuning,
+      suppressKnowledge,
     });
   } catch {
     return unchanged('compression threw');
   }
 
-  const next = Buffer.from(JSON.stringify(result.request), 'utf8');
+  // HANDING BACK THE PROVIDER'S OWN BYTES FOR THE PART WE DID NOT TOUCH.
+  // The cache is matched on bytes, so re-serialising a prefix the strategy
+  // deliberately left alone destroys the hit it was protecting and pays a
+  // 1.25x write for a 1.0x read. Whatever leading run of messages came back
+  // unchanged is therefore copied out of the request we were handed, at its
+  // original offsets. See cached-prefix.ts; it fails open, and then this is
+  // the plain stringify it has always been.
+  const compact = JSON.stringify(result.request);
+  const spliced = serialiseKeepingPrefix(
+    text,
+    result.request as unknown as { messages?: unknown[] } & Record<
+      string,
+      unknown
+    >
+  );
+  const next = Buffer.from(spliced ?? compact, 'utf8');
   // Never send more than we were given -- UNLESS a knowledge block was
   // deliberately added, which is the one case where growing the request is
   // the point. It is charged in the summary either way, and it only
@@ -710,7 +941,13 @@ export function compressBody(
   // WORTH THE RISK, not merely smaller. See MIN_SAVING_SHARE: a rewrite that
   // shaves a couple of percent still plants elisions the agent may read back,
   // and one such turn costs more than the whole saving.
-  const saved = before - next.length;
+  // The gate below asks whether the rewrite removed enough CONTENT to be worth
+  // the elisions it plants, so it reads the COMPACT length. Bytes we hand back
+  // verbatim are the client's own formatting, and declining to re-indent them
+  // is not a saving anyone can spend -- crediting it would let whitespace alone
+  // carry a request over the floor. On a body that arrived compact, which is
+  // every real one, the two lengths are the same number.
+  const saved = before - Buffer.byteLength(compact, 'utf8');
   if (!added && saved < before * MIN_SAVING_SHARE) {
     // REMEMBERED EVEN THOUGH WE SENT THE CLIENT'S BYTES, and forgetting here was
     // a deadlock rather than a missed optimisation.
@@ -740,6 +977,9 @@ export function compressBody(
     // every request of two campaigns and the byte counts alone could not say why.
     return {
       body,
+      // DECLINED, SO THE CLIENT'S OWN BYTES GO ON THE WIRE. There is no marker
+      // in them and therefore no key.
+      stamps: [] as readonly Stamp[],
       summary: {
         beforeBytes: before,
         // Shaped bytes, if shaping ran -- see the note in `unchanged`.
@@ -751,6 +991,7 @@ export function compressBody(
             : 'compression did not pay',
         anchorReason: result.anchor?.reason,
         elisions: result.elisions.length,
+        ...named(),
       },
     };
   }
@@ -765,6 +1006,7 @@ export function compressBody(
 
   return {
     body: next,
+    stamps: result.stamps,
     summary: {
       beforeBytes: before,
       afterBytes: next.length,
@@ -775,8 +1017,80 @@ export function compressBody(
       anchorReason: result.anchor?.reason,
       elisions: result.elisions.length,
       ...(added ? { injectedChars: result.injectedChars } : {}),
+      ...named(),
     },
   };
+}
+
+/**
+ * Is the proxy required to hand upstream no more bytes than it was given?
+ *
+ * OFF BY DEFAULT, because the cached-knowledge block is a deliberate purchase:
+ * it costs bytes on this request to save tool calls on the next few, and the
+ * trade is usually worth making. But it is a trade, and on a payload that
+ * compresses badly it can leave the wire carrying MORE than the client sent --
+ * which is a surprising thing for something called a compressing proxy to do,
+ * and a thing anyone measuring us should be able to turn off and compare.
+ */
+export function netSavingEnabled(
+  env: NodeJS.ProcessEnv = process.env
+): boolean {
+  return featureEnabled(FeatureName.NetSavingGuard, env);
+}
+
+/**
+ * Compress a request body, optionally refusing to grow it.
+ *
+ * THE GUARD IS HERE AND NOT AT EACH INJECTION SITE. Knowledge reaches the wire
+ * through three different formats (messages, Responses, Chat Completions), and a
+ * check per site is three places to keep in step; a check on the finished body is
+ * one, and it cannot be bypassed by a fourth format added later.
+ *
+ * The second pass only happens when the first one grew the body, so the ordinary
+ * path pays nothing for this. Dropping `findings` is what makes the retry
+ * smaller -- everything else about the two passes is identical.
+ */
+export function compressBody(
+  body: Buffer,
+  spill: SpillSink,
+  anchors?: AnchorStore,
+  findings?: readonly Finding[],
+  tuning?: Tuning,
+  sharedGraph?: boolean,
+  wireFormat?: 'chat-completions'
+): CompressedBody {
+  const first = compressBodyOnce(
+    body,
+    spill,
+    anchors,
+    findings,
+    tuning,
+    sharedGraph,
+    wireFormat
+  );
+  if (!netSavingEnabled() || first.body.length <= body.length) return first;
+  if (!findings?.length) return first;
+  // SUPPRESSED, NOT MERELY OMITTED. Dropping `findings` does not drop the block:
+  // it was remembered on the turn it was composed and is replayed from the anchor
+  // record on every turn after, so this retry came back byte-for-byte identical to
+  // the first pass -- 4506 bytes against 2760 given -- and the guard had nothing
+  // smaller to choose. The flag is what makes this pass genuinely block-free.
+  const withoutKnowledge = compressBodyOnce(
+    body,
+    spill,
+    anchors,
+    undefined,
+    tuning,
+    sharedGraph,
+    wireFormat,
+    true
+  );
+  // STILL THE SMALLER OF THE TWO, not unconditionally the second. Dropping the
+  // block is meant to remove the overshoot, and if it somehow does not, the
+  // first result was the better one and the guard should not make things worse.
+  return withoutKnowledge.body.length <= first.body.length
+    ? withoutKnowledge
+    : first;
 }
 
 /**
@@ -817,11 +1131,11 @@ const HOP_BY_HOP = new Set([
 const FINDINGS_REFRESH_MS = 60_000;
 
 export function knowledgeEnabled(env: NodeJS.ProcessEnv): boolean {
+  // The proxy gate stays out of the rollout registry on purpose: whether the
+  // proxy is running at all is not a feature flag, and a channel that could
+  // turn it on would be a channel that starts a listener nobody asked for.
   return (
-    proxyEnabled(env) &&
-    !/^(0|false|no|off)$/i.test(
-      env.TOKEN_OPTIMIZER_PROXY_KNOWLEDGE?.trim() || ''
-    )
+    proxyEnabled(env) && featureEnabled(FeatureName.KnowledgeInjection, env)
   );
 }
 
@@ -872,13 +1186,29 @@ export function keepToolsFromEnv(env: NodeJS.ProcessEnv = process.env): number {
   return n;
 }
 
+/**
+ * The fraction of conversations deferral is withheld from. None by default.
+ *
+ * A HOLDOUT COSTS REAL MONEY: every conversation in the control arm pays for
+ * tool schemas the treatment arm does not, which is why it is off unless an
+ * operator asks for it and why the computed tier has to stand on its own
+ * without it.
+ */
+export function deferHoldoutFraction(
+  env: NodeJS.ProcessEnv = process.env
+): number {
+  const raw = Number.parseFloat(
+    (env.TOKEN_OPTIMIZER_PROXY_DEFER_HOLDOUT ?? '').trim()
+  );
+  if (!Number.isFinite(raw) || raw <= 0) return 0;
+  return raw >= 1 ? 1 : raw;
+}
+
 /** Deferral defaults on unless the environment explicitly disables it. */
 export function deferToolsEnabled(
   env: NodeJS.ProcessEnv = process.env
 ): boolean {
-  return !/^(0|false|no|off)$/i.test(
-    env.TOKEN_OPTIMIZER_PROXY_DEFER_TOOLS || ''
-  );
+  return featureEnabled(FeatureName.DeferTools, env);
 }
 
 /**
@@ -961,13 +1291,118 @@ export function requestPath(url: string | undefined): string | null {
 }
 
 /** Forwards one request upstream and pipes the response back verbatim. */
+/**
+ * An echo scanner over the text of a forwarded body, or null if there is none.
+ *
+ * THE SAME EXTRACTOR ON BOTH SIDES, which is what makes the two comparable: a
+ * context scanned by one rule and a reply scanned by another would disagree
+ * about where a word begins, and the ratio would be a comparison of two
+ * different tokenisations rather than of two texts.
+ */
+function scannerFor(body: Buffer): ReturnType<typeof createEchoScanner> {
+  try {
+    const text = extractTextValues(body.toString('utf8')).values.join(' ');
+    return createEchoScanner(text);
+  } catch {
+    // A body that will not decode as text yields no figure, and costs the
+    // request nothing.
+    return null;
+  }
+}
+
+/** The echo field, or nothing at all when there is no figure to stand behind. */
+function echoFacts(echo: ReturnType<typeof createEchoScanner>): {
+  readonly echoRatio?: number;
+} {
+  if (echo === null) return {};
+  const ratio = echo.ratio();
+  return ratio === null ? {} : { echoRatio: ratio };
+}
+
+/** The marker tool deferral sets: the one byte sequence worth scanning for. */
+const DEFER_MARKER = 'defer_loading';
+
+/**
+ * The bytes the provider will bill as prompt, which are not the bytes we send.
+ *
+ * DEFERRAL DOES NOT REMOVE A SCHEMA FROM THE REQUEST. It marks the schema
+ * `defer_loading: true` and prepends a search tool, and the PROVIDER is what
+ * declines to place a marked schema in context. So the request on the wire is
+ * LARGER than the one we were given while the prompt it becomes is far smaller:
+ * measured on one 40-tool request, 7228 tokens in, 7422 out, 944 in the prompt.
+ * Counting the wire therefore reported -194 where the truth is +6284 -- not an
+ * imprecision but the wrong SIGN, on a feature that is on by default, and the
+ * row was classified an expansion debit and charged against the headline.
+ *
+ * ONE CORRECTION REACHES FOUR SURFACES. `proxyTransportDelta`,
+ * `classifyProxySavings`, `proxyCalibration` and `priceProxyDelta` each read
+ * `afterTokens` and nothing else, so making the prompt the unit of account at
+ * the point of measurement makes the delta, the class, the calibration and the
+ * price prompt-level together, with no fifth place left reading the wire.
+ *
+ * COUNTED, NOT ESTIMATED. We hold the schemas we marked, so the prompt-side
+ * body is constructed exactly rather than modelled. One thing in it is not ours
+ * to count: the search tool we prepend is a two-field stub the provider expands
+ * into a real schema, so our prompt-side count omits bytes the provider bills
+ * and the delta is an UPPER bound, high by that one schema. The deferral
+ * holdout is what measures the net from the provider's own usage.
+ *
+ * BOTH SIDES, because a client may mark its own tools and `deferTools` passes
+ * those through untouched and uncounted. They were never in the client's prompt
+ * either, so leaving them in the before side would credit us with a saving the
+ * provider was already making.
+ *
+ * NULL MEANS DO NOT COUNT THIS ROW. A body that will not parse, or one carrying
+ * no marker although the summary claims a deferral, leaves the two sides
+ * incomparable -- and the wire delta is not a safe fallback, because the wire
+ * delta is exactly the wrong-signed number this exists to replace. An absent
+ * count classifies the row `uncounted`, which is the truth about it.
+ */
+export function promptSideBody(
+  sent: Buffer,
+  deferredTools?: number
+): Buffer | null {
+  // A BYTE SCAN BEFORE A PARSE. The marker is absent from almost every request
+  // and this runs on all of them, so the cost of being right is one memmem.
+  if (!sent.includes(DEFER_MARKER)) return deferredTools ? null : sent;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(sent.toString('utf8'));
+  } catch {
+    return null;
+  }
+  if (parsed === null || typeof parsed !== 'object')
+    return deferredTools ? null : sent;
+  const tools = (parsed as { tools?: unknown }).tools;
+  if (!Array.isArray(tools)) return deferredTools ? null : sent;
+  const kept = tools.filter(
+    (tool) =>
+      (tool as { defer_loading?: unknown } | null)?.defer_loading !== true
+  );
+  if (kept.length === tools.length) return deferredTools ? null : sent;
+  try {
+    return Buffer.from(JSON.stringify({ ...parsed, tools: kept }), 'utf8');
+  } catch {
+    return null;
+  }
+}
+
 function forward(
   upstream: string,
   req: IncomingMessage,
   res: ServerResponse,
   body: Buffer,
   facts?: CompressionFacts,
-  transformMs = 0
+  transformMs = 0,
+  observe?: (entry: AccountingRecord, tokens?: PendingCount) => void,
+  /**
+   * A token count for both bodies, ALREADY RUNNING. It is started at the call
+   * site rather than here so it overlaps the upstream round trip: the count is
+   * CPU work on another thread and the round trip is always the longer of the
+   * two, which is what makes the measurement cost no wall-clock time at all.
+   * Awaiting it inside the usage tap is therefore free in the common case.
+   */
+  tokens?: PendingCount
 ): void {
   const path = requestPath(req.url);
   if (path === null) {
@@ -1074,30 +1509,60 @@ function forward(
       // listener does not consume a stream in flowing mode, so every byte still
       // reaches `pipe` unchanged. Registered first so no chunk can be missed by
       // a listener attached after delivery has already begun.
-      const ledger = facts ? accountingPath() : null;
-      if (ledger && facts) {
+      //
+      // THE TAP IS NO LONGER CONDITIONAL ON A LEDGER PATH, and that costs one
+      // decompress of the RESPONSE per request where it used to cost none. It
+      // is the cheap side of the exchange -- a response carries output tokens,
+      // a request carries the whole conversation, so this decodes the small
+      // half of what the process is already streaming -- and it buys the one
+      // column an operator actually wants: what the provider billed for the
+      // request we had just rewritten. Recording the rewrite without the bill
+      // would have been the half-feature, measurable only by whoever had
+      // thought to set an environment variable before the interesting request.
+      if (facts && observe) {
         // THE ENCODING HAS TO BE HANDED OVER, and forgetting to was why the
         // ledger still recorded no usage after the decoder was written: the
         // parameter existed, the call site never passed it, and every test fed
         // the tap plaintext so nothing caught it.
         const encoding = upstreamRes.headers['content-encoding'];
+        // BUILT FROM THE BODY WE FORWARDED, not from the one the client sent.
+        // The model can only repeat what reached it, so a passage compression
+        // had already removed must not be counted as something it copied --
+        // measuring against the original would credit our own removal as the
+        // model's waste, which is the opposite of true.
+        //
+        // NULL UNLESS ASKED FOR. The scan holds hashes of the context while the
+        // response streams, which is the one instrument here with a real memory
+        // cost, so an operator who has not asked for an output-waste figure
+        // pays nothing. A null scanner records no field at all, which the ledger
+        // reads as "not scanned" rather than as "nothing was echoed".
+        const echo = echoEnabled() ? scannerFor(body) : null;
         tapUsage(
           upstreamRes,
           (usage) => {
-            appendRecord(ledger, {
-              ts: new Date().toISOString(),
-              path: requestPath(req.url) ?? '/',
-              status: upstreamRes.statusCode || 0,
-              ...facts,
-              timing: {
-                transformMs,
-                upstreamHeadersMs,
-                upstreamMs: performance.now() - upstreamStarted,
+            // BUILT AT THE MOMENT USAGE SETTLES, attached to later. The timings
+            // are read here because they are durations of the request that has
+            // just finished; waiting for the token count first would fold the
+            // cost of the measurement into the thing being measured.
+            observe(
+              {
+                ts: new Date().toISOString(),
+                path: requestPath(req.url) ?? '/',
+                status: upstreamRes.statusCode || 0,
+                ...facts,
+                timing: {
+                  transformMs,
+                  upstreamHeadersMs,
+                  upstreamMs: performance.now() - upstreamStarted,
+                },
+                usage,
+                ...echoFacts(echo),
               },
-              usage,
-            });
+              tokens
+            );
           },
-          typeof encoding === 'string' ? encoding : undefined
+          typeof encoding === 'string' ? encoding : undefined,
+          echo === null ? undefined : (text) => echo.push(text)
         );
       }
       // Codex closes after its terminal SSE event, even if the provider keeps
@@ -1115,10 +1580,9 @@ function forward(
   upstreamReq.on('error', (error) => {
     // A connection failure has no response stream for tapUsage to observe.
     // Keep the attempted request in the ledger with unknown usage, never zero.
-    const ledger = facts ? accountingPath() : null;
-    if (!receivedResponse && ledger && facts) {
+    if (!receivedResponse && facts && observe) {
       receivedResponse = true;
-      appendRecord(ledger, {
+      observe({
         ts: new Date().toISOString(),
         path: requestPath(req.url) ?? '/',
         status: 0,
@@ -1140,10 +1604,39 @@ function forward(
   upstreamReq.end(body);
 }
 
-/** Starts the proxy. Resolves once it is listening. */
-export async function startProxy(
-  options: ProxyOptions = {}
-): Promise<{ server: Server; port: number }> {
+/**
+ * Starts the proxy. Resolves once it is listening.
+ *
+ * The returned `transformations` log is this listener's own window on what it
+ * has done -- see `transformations.ts` for why it is per listener and why it
+ * holds no payload. A caller that throws the handle away loses only the
+ * ability to answer questions about itself.
+ */
+export async function startProxy(options: ProxyOptions = {}): Promise<{
+  server: Server;
+  port: number;
+  transformations: TransformationLog;
+  ledgerSettled: () => Promise<void>;
+  /**
+   * What a named posture did to the environment, or null when none was named.
+   *
+   * RETURNED RATHER THAN PRINTED HERE. The disclosure belongs on the one stream
+   * an operator is watching when they start the proxy, and this function is also
+   * called by the supervisor and by tests, where writing to stderr would be noise
+   * that proves nothing. `proxy/cli.ts` prints it beside the capture notice.
+   */
+  posture: AppliedPosture | null;
+}> {
+  /*
+   * SEEDED FIRST, BEFORE ANYTHING IN THIS FUNCTION READS THE ENVIRONMENT.
+   *
+   * Every dial below -- the preset at the bottom of this function, keepTools and
+   * smallToolChars per request, the feature resolver -- reads `process.env` on its
+   * own. That is what makes a posture work without touching a single one of them,
+   * and it is also what makes the ORDER load-bearing: a variable seeded after its
+   * reader ran would be a posture that did nothing while reporting that it did.
+   */
+  const posture = applyPosture(options.posture ?? postureFromEnv());
   const upstream = options.upstream || UPSTREAM();
   if (!upstreamIsSafe(upstream)) {
     // FAIL LOUDLY HERE, uniquely in this file. Everything else in the proxy
@@ -1156,6 +1649,98 @@ export async function startProxy(
         'an upstream must be https, or http on loopback'
     );
   }
+  /*
+   * THE RING IS ALWAYS ON; THE LEDGER IS STILL OPT-IN. These are two different
+   * promises and they keep their own shapes: the ring is bounded, in memory,
+   * payload-free and dies with the process, so it needs no consent; the ledger
+   * writes to a path the operator chose, so it still needs one.
+   *
+   * `accountingPath()` is read per record rather than once here, which is what
+   * the code it replaced did too. A supervised proxy outlives the shell that
+   * started it, and re-reading means an operator who exports the variable and
+   * restarts nothing is not told, wrongly, that the ledger is on.
+   */
+  const transformations = createTransformationLog();
+  /*
+   * ALWAYS ON, FOR THE SAME REASON THE TAP IS. The ring is read by
+   * `token-optimizer-inspect` on every proxy, ledger or not, and a rewrite
+   * recorded in bytes while the bill is denominated in tokens is the
+   * half-feature this already refused once. The cost is one lazily-started
+   * thread per proxy -- nothing until the first request -- and CPU that runs
+   * inside the upstream round trip, so it is not on the request's critical
+   * path; see proxy/token-accounting.ts.
+   */
+  const tokenAccounting = createTokenAccounting();
+  // The thread and the encoder come up now rather than on the first request,
+  // which would otherwise pay ~190ms of one-time cost on its measurement path.
+  tokenAccounting.warmUp();
+  /** Ledger lines owed but not yet written; see `ledgerSettled` below. */
+  const pendingLedgerWrites = new Set<Promise<void>>();
+  const observe = (entry: AccountingRecord, tokens?: PendingCount): void => {
+    /*
+     * THE RING TAKES IT NOW; THE LEDGER WAITS FOR THE COUNT. These are two
+     * different promises about the same record. `token-optimizer-inspect` must
+     * answer "what did the proxy just do" without lagging behind the proxy by
+     * the cost of a measurement, so the ring gets the record immediately and
+     * the token count is written into it in place when it lands. An appended
+     * ledger line is final and cannot be amended, so that one is written once,
+     * complete -- which is the right trade for a file nothing reads until
+     * later.
+     */
+    const attach = transformations.record(entry);
+    const commit = (counted?: TokenAccountingFacts): void => {
+      if (counted) attach(counted);
+      const ledger = accountingPath();
+      if (ledger)
+        appendRecord(ledger, counted ? { ...entry, tokens: counted } : entry);
+    };
+    if (!tokens) {
+      commit();
+      return;
+    }
+    // Synchronous whenever the count is already in, which is the normal case:
+    // it runs inside the upstream round trip and a real provider's round trip
+    // is the longer of the two. A loopback upstream is what defers.
+    const ready = tokens.settled();
+    if (ready) {
+      commit(ready);
+      return;
+    }
+    // A REFUSAL IS NAMED, NEVER A ZERO, and a rejection here is the counter
+    // breaking its own no-throw contract -- so it gets a word of its own
+    // rather than being folded into one of the counter's own reasons.
+    //
+    // HELD, NOT FIRED AND FORGOTTEN. This is the branch where the ledger line
+    // does not exist yet, so anything that ends the process or the counting
+    // thread before the count lands loses the line outright -- and loses it
+    // silently, because a short ledger looks exactly like a quiet period.
+    const settling = tokens.done
+      .then(commit, () => commit({ measured: false, reason: 'count-rejected' }))
+      .finally(() => {
+        pendingLedgerWrites.delete(settling);
+      });
+    pendingLedgerWrites.add(settling);
+  };
+
+  /**
+   * Resolves once every record that has been observed is in the ledger.
+   *
+   * A reader needs this and so does shutdown. The count for a request runs
+   * beside the upstream round trip, so against a real provider it is in hand
+   * before the response ends and the line is written synchronously -- but
+   * against a fast upstream it is not, and then the line is owed rather than
+   * written. "Owed" is indistinguishable from "did not happen" to anything
+   * reading the file, which is why this is part of the handle rather than an
+   * internal detail.
+   */
+  const ledgerSettled = async (): Promise<void> => {
+    // A commit can only remove from the set, never add, so one drain suffices;
+    // the loop is there because `await` yields and a response that ended while
+    // we were waiting may have enqueued its own.
+    while (pendingLedgerWrites.size > 0) {
+      await Promise.all([...pendingLedgerWrites]);
+    }
+  };
   // ONE DIRECTORY PER PROXY, because shutdown deletes it. A shared root would mean the
   // first proxy to stop wiping the spills of every other one still running -- and a
   // spill path is a live reference the agent may still follow with `Read`. The random
@@ -1166,7 +1751,25 @@ export async function startProxy(
     'token-optimizer-spill',
     randomBytes(12).toString('hex')
   );
-  const spill = spillTo(spillRoot);
+  // NO SINK UNLESS ASKED. `undefined` reaches every engine as "keep it in the
+  // request", which is the zero-round-trip arm -- see SpillSink in
+  // compress/types.ts for why that is the default rather than the fallback.
+  // COUNTED AT THE SINK BECAUSE THE SUMMARY DOES NOT CARRY IT. How many blocks
+  // a request elided is the one usage figure no field of ProxySummary reports,
+  // and adding it there would mean threading a count back out of every engine.
+  // Wrapping the sink counts the same event at the only place all of them go
+  // through. Exact per request, not approximately: `compressBody` is
+  // synchronous, so nothing else can increment this between the two reads
+  // either side of the call.
+  let spilledBlocks = 0;
+  const sink = options.spill === true ? spillTo(spillRoot) : undefined;
+  const spill: SpillSink =
+    sink === undefined
+      ? undefined
+      : (content, hint) => {
+          spilledBlocks += 1;
+          return sink(content, hint);
+        };
   // One store per proxy, holding a hash and a boolean per conversation.
   // Per-conversation, never per-request, and passed in explicitly rather
   // than reached for -- HeadRoom's #3486 is a shared router keeping request
@@ -1305,6 +1908,7 @@ export async function startProxy(
         });
 
       const transformStarted = performance.now();
+      const spilledBefore = spilledBlocks;
       const { body: next, summary } = compressBody(
         body,
         spill,
@@ -1320,6 +1924,20 @@ export async function startProxy(
       );
       refreshFindings();
       options.onSummary?.({ path: req.url || '/', ...summary });
+      // OPT-IN USAGE COUNTERS. Accumulated in memory and written as one rolled-up
+      // event per window -- see telemetry/rollup.ts for why not one per request.
+      // `noteRequest` counts unconditionally and `record` decides whether any of
+      // it is ever written, so this line is not a consent decision; it also
+      // cannot throw, because a failed instrument must not fail a request.
+      noteRequest({
+        beforeBytes: summary.beforeBytes,
+        afterBytes: summary.afterBytes,
+        compressed: summary.compressed,
+        injectedChars: summary.injectedChars,
+        elisions: summary.elisions,
+        spilledBlocks: spilledBlocks - spilledBefore,
+        losslessMode: options.spill !== true,
+      });
       // SPREAD, NOT RE-LISTED. This was seventeen fields copied across by hand,
       // and the ledger is only as good as that list is complete: injectedChars
       // was missing from it, so the proxy printed `+1927 injected` to its log
@@ -1327,13 +1945,32 @@ export async function startProxy(
       // knowledge block read its own effect as zero. The summary IS the
       // compression facts -- every field of it belongs in the ledger, and a
       // field added to one should never need remembering in the other.
+      // STARTED BEFORE THE REQUEST GOES OUT, awaited after it comes back. Both
+      // bodies exist here and only here -- `body` is the request we were given
+      // and `next` the one we are about to send, and nobody will ever bill us
+      // for the first of them, which is why it has to be counted locally.
+      // THE PROMPT IS THE UNIT, NOT THE WIRE. `promptSideBody` explains why in
+      // full; the short of it is that deferral moves tool schemas out of the
+      // PROMPT while leaving them on the wire, so a wire count of a deferred
+      // request reports the wrong sign. Null from either side means the two are
+      // not comparable, and the row goes out uncounted rather than wrong: every
+      // surface downstream treats an absent count as `uncounted` and names it,
+      // whereas a wrong count is indistinguishable from a right one.
+      const beforePrompt = promptSideBody(body);
+      const afterPrompt = promptSideBody(next, summary.deferredTools);
+      const counted =
+        beforePrompt === null || afterPrompt === null
+          ? undefined
+          : trackCount(tokenAccounting.countPair(beforePrompt, afterPrompt));
       forward(
         upstream,
         req,
         res,
         next,
         summary,
-        performance.now() - transformStarted
+        performance.now() - transformStarted,
+        observe,
+        counted
       );
     })();
   });
@@ -1343,6 +1980,29 @@ export async function startProxy(
   // temp directory that nothing ever removes. Cleared when the proxy stops, which is
   // also when the last agent that could still `Read` one of those paths has gone.
   server.on('close', () => {
+    // THE OWED LEDGER LINES GO FIRST, and the order is the whole point: the
+    // thread these counts are still waiting on is the thread the line below
+    // used to kill immediately, so a clean stop dropped the tail of the ledger
+    // and the tail of the rollup window together. Both now wait for the counts
+    // they are about.
+    void ledgerSettled().then(
+      () => {
+        // The counting thread goes with the proxy. It is unref'd so it could
+        // not hold the process open anyway, but leaving it running past the
+        // last request it will ever be asked about is a leak on any host that
+        // keeps the process alive for something else.
+        void tokenAccounting.shutdown();
+        // WHAT WAS COUNTED SINCE THE LAST ROLLUP GOES NOW. A clean stop is the
+        // only chance to record the tail of the window; a kill loses it, which
+        // is the reason the rollups are periodic rather than one per session.
+        flushRollup();
+      },
+      () => {
+        // A drain that rejects must still release the thread and the window.
+        void tokenAccounting.shutdown();
+        flushRollup();
+      }
+    );
     try {
       // eslint-disable-next-line n/no-sync
       rmSync(spillRoot, { recursive: true, force: true });
@@ -1357,7 +2017,7 @@ export async function startProxy(
     server.listen(options.port ?? 0, HOST, () => {
       const address = server.address();
       const port = typeof address === 'object' && address ? address.port : 0;
-      resolve({ server, port });
+      resolve({ server, port, transformations, ledgerSettled, posture });
     });
   });
 }

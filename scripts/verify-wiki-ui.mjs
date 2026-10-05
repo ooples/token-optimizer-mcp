@@ -47,6 +47,17 @@ const expectedArtifactCount = evidenceIndex.artifacts.length;
  */
 const PORT = 3100 + Math.floor(Math.random() * 400) + 1;
 const BASE = `http://localhost:${PORT}`;
+
+/**
+ * How many cards the overview accounting panel defines.
+ *
+ * `renderOptimizerAccounting` in dashboard.js builds them from one literal
+ * list, so this number is that list's length and moves when a card is added.
+ * It is here, and asserted on its own below, because it used to sit inside a
+ * two-second `waitForFunction`: adding the ninth card turned a correct
+ * dashboard into a bare timeout with no figure in it.
+ */
+const OVERVIEW_ACCOUNTING_CARDS = 9;
 /**
  * A THROWAWAY graph, never the repository's own.
  *
@@ -352,6 +363,47 @@ async function main() {
   }
 
   const browser = await chromium.launch();
+
+  /**
+   * A page with the two outbound-catalog endpoints answered locally.
+   *
+   * The dashboard asks the server for the model catalogue and for provider
+   * usage, and both of those reach the network. Nothing in this file or in
+   * verify-wiki-interactions asserts a single thing about either one -- grep
+   * them -- but every page that loads `/` waits on them, so an unreachable or
+   * slow catalogue is indistinguishable here from a dashboard that will not
+   * paint. On a machine with no outbound access the two requests sit unresolved
+   * for longer than any timeout in this file and the overview checks fail with
+   * `#constellation canvas` never appearing, which says nothing true about the
+   * dashboard. On a runner that does have access they are merely a latency the
+   * delayed-API budget below cannot account for.
+   *
+   * So they are answered from here. This removes a dependency the gate never
+   * meant to have; it does not remove an assertion, because there was none.
+   */
+  const openPage = async (options) => {
+    const page = await browser.newPage(options);
+    await page.route('**/api/orcarouter/models*', (route) =>
+      route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({
+          status: 'ok',
+          degradedReason: null,
+          sourceUrl: null,
+          capability: 'chat',
+          requiresInputModality: null,
+          models: [],
+        }),
+      })
+    );
+    await page.route('**/api/analytics/provider-usage*', (route) =>
+      route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({ available: false, providers: [] }),
+      })
+    );
+    return page;
+  };
   const consoleErrors = [];
 
   try {
@@ -359,7 +411,7 @@ async function main() {
       ['desktop', 1440, 900],
       ['narrow', 700, 900],
     ]) {
-      const page = await browser.newPage({ viewport: { width, height } });
+      const page = await openPage({ viewport: { width, height } });
       page.on('console', (m) => {
         if (m.type() === 'error') consoleErrors.push(`${label}: ${m.text()}`);
       });
@@ -870,7 +922,7 @@ async function main() {
     // object/event shapes returned by the session API. This catches regressions
     // where `toolName` became the useless fallback "action" and an object-shaped
     // toolBreakdown silently rendered as an empty table.
-    const overview = await browser.newPage({
+    const overview = await openPage({
       viewport: { width: 1440, height: 900 },
     });
     overview.on('console', (message) => {
@@ -938,7 +990,13 @@ async function main() {
         }),
       })
     );
-    await overview.goto(`${BASE}/`, { waitUntil: 'networkidle' });
+    // NOT `networkidle` ON THIS PAGE. The overview keeps requesting after it
+    // has painted, so idleness here is a property of the box rather than of
+    // the page, and waiting for it times out on a loaded machine while passing
+    // on a quiet runner. The real signal is the next line, which is what every
+    // check below reads. The delayed-API case at the bottom of this file
+    // already waits this way for the same URL, for the same reason.
+    await overview.goto(`${BASE}/`, { waitUntil: 'domcontentloaded' });
     await overview.waitForSelector('#constellation canvas');
     const overviewText = await overview.textContent('body');
     check(
@@ -988,7 +1046,7 @@ async function main() {
     // context, while only rows with a real before-state claim savings. Native
     // graph substitutions join the same presentation without being confused
     // with the separately gated causal graph-effect estimate.
-    const measuredOverview = await browser.newPage({
+    const measuredOverview = await openPage({
       viewport: { width: 1440, height: 1000 },
     });
     measuredOverview.on('console', (message) => {
@@ -1177,6 +1235,17 @@ async function main() {
     }
     const overviewStartedAt = Date.now();
     await measuredOverview.goto(`${BASE}/`, { waitUntil: 'domcontentloaded' });
+    // THE WAIT IS FOR THE PAINT, NOT FOR A CARD COUNT.
+    //
+    // This pinned the accounting grid at seven cards inside the condition, and
+    // when the panel grew to nine the gate failed as a two-second timeout: no
+    // number, no label, nothing to say which half of the claim had moved. It
+    // had painted in well under 200ms the whole time. The count belongs in a
+    // check of its own, below, where a drift reports the figure it saw.
+    //
+    // Nothing is given up by moving it: the renderer fills the grid and only
+    // then sets `data-state`, so a `measured` state already means the cards
+    // are in the DOM, and the budget this measures is still the budget.
     await measuredOverview.waitForFunction(
       () =>
         document.querySelector('#saved-tokens')?.dataset.state === 'measured' &&
@@ -1185,8 +1254,6 @@ async function main() {
             .querySelector('#saved-tokens')
             ?.textContent?.replaceAll(',', '')
         ) === 1050 &&
-        document.querySelectorAll('#accounting-grid .accounting-card')
-          .length === 7 &&
         document.querySelectorAll('#client-ledger .client-ledger-row').length >
           0,
       undefined,
@@ -1202,6 +1269,14 @@ async function main() {
           await measuredOverview.locator('#saved-card').ariaSnapshot()
         ),
       `${optimizerPaintMs} ms`
+    );
+    const accountingCards = await measuredOverview
+      .locator('#accounting-grid .accounting-card')
+      .count();
+    check(
+      'the overview accounting panel renders every card it defines',
+      accountingCards === OVERVIEW_ACCOUNTING_CARDS,
+      `${accountingCards} card(s)`
     );
     await measuredOverview.waitForFunction(
       () =>

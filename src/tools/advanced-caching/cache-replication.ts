@@ -469,7 +469,13 @@ export class CacheReplicationTool extends EventEmitter {
       // Cache result if applicable
       if (cacheKey && useCache) {
         const serialized = JSON.stringify(data);
-        this.cache.set(cacheKey, serialized, serialized.length, cacheTTL);
+        this.cache.set(
+          cacheKey,
+          serialized,
+          serialized.length,
+          serialized.length,
+          { ttlSeconds: cacheTTL }
+        );
       }
 
       // Record metrics
@@ -1424,7 +1430,7 @@ export function getCacheReplicationTool(
 export const CACHE_REPLICATION_TOOL_DEFINITION = {
   name: 'cache_replication',
   description:
-    'Distributed cache replication with 88%+ token reduction. Supports primary-replica and multi-primary modes, strong/eventual consistency, automatic conflict resolution, failover, incremental sync, and health monitoring.',
+    'Distributed cache replication with an unmeasured design target of 88%+ token reduction. Supports primary-replica and multi-primary modes, strong/eventual consistency, automatic conflict resolution, failover, incremental sync, and health monitoring.',
   inputSchema: {
     type: 'object',
     properties: {

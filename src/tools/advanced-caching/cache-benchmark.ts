@@ -320,7 +320,10 @@ class BenchmarkExecutor {
     for (let i = 0; i < warmupOps; i++) {
       const key = `warmup-key-${i}`;
       const value = this.generateValue(workload.valueSize);
-      this.cache.set(key, value.toString('utf-8'), 0, config.ttl || 3600);
+      const stored = value.toString('utf-8');
+      this.cache.set(key, stored, stored.length, stored.length, {
+        ttlSeconds: config.ttl || 3600,
+      });
     }
   }
 
@@ -1491,11 +1494,13 @@ export async function runCacheBenchmark(
   cache: CacheEngine,
   tokenCounter: TokenCounter,
   metrics: MetricsCollector
-): Promise<string> {
+): Promise<CacheBenchmarkResult> {
   const tool = new CacheBenchmark(cache, tokenCounter, metrics);
   const result = await tool.run(options);
 
-  return JSON.stringify(result, null, 2);
+  // The object, not its text: see runSmartEnv. Serialising here would hide this
+  // reply from the envelope pruning in src/server/restated.ts.
+  return result;
 }
 
 /**

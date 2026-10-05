@@ -12,7 +12,7 @@
  * test-frameworks.ts.
  */
 
-import { CacheEngine } from '../../core/cache-engine.js';
+import { CacheEngine, resolveCacheLocation } from '../../core/cache-engine.js';
 import { TokenCounter } from '../../core/token-counter.js';
 import { MetricsCollector } from '../../core/metrics.js';
 import { createHash } from 'crypto';
@@ -474,8 +474,10 @@ export class SmartTest {
     }
 
     try {
-      const result = JSON.parse(cached) as TestResult & { cachedAt: number };
-      const age = (Date.now() - result.cachedAt) / 1000;
+      const { cachedAt, ...result } = JSON.parse(cached) as TestResult & {
+        cachedAt: number;
+      };
+      const age = (Date.now() - cachedAt) / 1000;
 
       if (age <= maxAge) {
         return result;
@@ -766,7 +768,7 @@ export async function runSmartTest(
 ): Promise<string> {
   // Create standalone resources for CLI usage
   const cache = new CacheEngine(
-    join(homedir(), '.token-optimizer-cache', 'cache.db')
+    resolveCacheLocation(join(homedir(), '.token-optimizer-cache', 'cache.db'))
   );
   const tokenCounter = new TokenCounter();
   const metrics = new MetricsCollector();

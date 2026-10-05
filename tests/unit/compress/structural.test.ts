@@ -91,13 +91,20 @@ describe('structuralRanges', () => {
   });
 
   it('protects vendor-prefixed keys, git hashes and JWTs', () => {
-    for (const secret of [KEY, SHA, JWT, 'ghp_abcdefghijklmnopqrstuvwxyz0123']) {
+    for (const secret of [
+      KEY,
+      SHA,
+      JWT,
+      'ghp_abcdefghijklmnopqrstuvwxyz0123',
+    ]) {
       expect(containsStructural(`value ${secret} here`)).toBe(true);
     }
   });
 
   it('finds nothing in ordinary prose', () => {
-    expect(containsStructural('The retry budget is 5 attempts before giving up.')).toBe(false);
+    expect(
+      containsStructural('The retry budget is 5 attempts before giving up.')
+    ).toBe(false);
   });
 
   it('returns merged, sorted, non-overlapping ranges', () => {
@@ -131,7 +138,8 @@ describe('the engines honour it', () => {
   it('templates the timestamp and leaves the identifiers whole', () => {
     const lines = Array.from(
       { length: 10 },
-      (_, i) => `2026-09-09T18:0${i}:00Z INFO request ${UUID} authorised with ${KEY} attempt ${i}`
+      (_, i) =>
+        `2026-09-09T18:0${i}:00Z INFO request ${UUID} authorised with ${KEY} attempt ${i}`
     );
     const out = compressLog(lines.join('\n'));
 
@@ -154,7 +162,8 @@ describe('the engines honour it', () => {
     // replace, so the engine correctly declines and the substitution path is
     // never exercised. A test that assumed otherwise would be asserting
     // nothing.
-    const prefix = 'INFO scheduler dispatched the queued request to the worker pool';
+    const prefix =
+      'INFO scheduler dispatched the queued request to the worker pool';
     const lines = Array.from(
       { length: 8 },
       (_, i) => `2026-09-09T18:0${i}:00Z ${prefix} id ${UUID} n=${i}`

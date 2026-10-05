@@ -40,44 +40,226 @@ Providers cache the prompt prefix: cached tokens re-read at **0.1x**, rewritten
 ones bill at **1.25x**. Most compressors optimise bytes removed and ignore that
 multiplier. This one optimises the bill.
 
-**It wins both columns.** Against a faithful reimplementation of the leading
-open compressor's published design, `node bench/compression/proof.mjs`:
+**It wins both columns, against their real implementation, on their own
+fixtures.** Not a reimplementation and not our fixtures: their harness compresses
+the payload, dumps it, their resolver redeems their own markers, and ours is
+handed the identical bytes.
+
+<!-- HEADROOM-TABLE:START -- every figure below must appear in
+     `bench/compression/headroom/results/head-to-head.json`. Guarded by
+     `node bench/compression/readme-headroom.check.mjs`; do not hand-edit.
+     The first three cells are `characters / tokens`, tokens from cl100k_base
+     over both arms' real output. `zero-turn ids` is `ours / theirs / preset`: of the
+     identifiers planted in that workload, how many the agent can have without
+     spending a turn -- in the text, or rebuilt from the text alone.
+     -->
+
+| workload             | payload |        theirs |          ours |    ours, preset | ours, dial on   |  zero-turn ids |
+| -------------------- | ------: | ------------: | ------------: | --------------: | --------------- | -------------: |
+| agent-loop           | 172,110 | 41.9% / 46.7% | 93.8% / 94.7% |   93.8% / 94.7% | 100.0% / 100.0% |  69 / 254 / 69 |
+| agent-loop-logs      | 328,490 | 51.3% / 45.8% | 96.3% / 97.1% |   96.3% / 97.1% | 100.0% / 100.0% | 87 / 2042 / 87 |
+| browser-session      | 782,294 | 21.8% / 13.6% | 93.7% / 28.9% |  100.0% / 99.9% | 100.0% / 99.9%  |  336 / 336 / 0 |
+| code-search          | 131,444 | 47.5% / 53.5% | 95.8% / 96.5% |   95.8% / 96.5% | 99.9% / 99.9%   |  65 / 470 / 65 |
+| codebase-exploration | 136,113 | 99.7% / 99.6% | 65.1% / 58.0% |  100.0% / 99.9% | 100.0% / 99.9%  |    509 / 5 / 0 |
+| grep-output          |  75,399 | 99.6% / 99.6% | 57.4% / 52.8% |   99.9% / 99.9% | 99.9% / 99.9%   |   1046 / 4 / 0 |
+| human-authored-json  |  38,645 | 32.8% / 31.3% | 96.9% / 97.2% |   96.9% / 97.2% | 99.8% / 99.9%   |  18 / 174 / 18 |
+| issue-triage         | 109,534 | 53.1% / 54.4% | 95.3% / 95.9% |   95.3% / 95.9% | 99.9% / 99.9%   |  34 / 504 / 34 |
+| raw-build-log        | 158,237 | 99.8% / 99.8% | 70.7% / 47.7% | 100.0% / 100.0% | 100.0% / 100.0% |    430 / 3 / 0 |
+| relevance-probe      |  49,367 | 64.3% / 65.4% | 96.1% / 97.0% |   96.1% / 97.0% | 99.9% / 99.9%   |  24 / 527 / 24 |
+| repeated-reads       | 152,321 | 22.8% / 20.5% | 74.3% / 69.7% | 100.0% / 100.0% | 100.0% / 100.0% |  361 / 405 / 0 |
+| sre-debugging        | 312,456 | 88.4% / 90.5% | 97.1% / 97.7% |   97.1% / 97.7% | 100.0% / 100.0% |  89 / 514 / 89 |
+
+Recorded 2026-09-25 at `18a2d085`, by the command in the
+record's `regenerate` field. That second arm runs HeadRoom itself, so CI does not
+re-derive it the way it re-derives the table below -- it checks this provenance and
+these figures against `bench/compression/headroom/results/head-to-head.json` instead.
+
+<!-- HEADROOM-TABLE:END -->
+
+<!-- HEADROOM-CORPUS:START -- every figure between a CORPUS:START and its CORPUS:END
+     must appear in `totals` of
+     `bench/compression/headroom/results/head-to-head.json`. Guarded by
+     `node bench/compression/readme-headroom.check.mjs`; do not hand-edit. -->
+
+Over the corpus the shipped default takes **89.4%** of the characters and
+**80.9%** of the tokens; theirs takes 51.3% and 62.8%. Of the 9,919 identifiers
+planted in the corpus, 45 end up unrecoverable on our side and 8 on theirs.
+
+<!-- HEADROOM-CORPUS:END -->
+
+**Read the rows, though, because the ones we lose are not compression
+results.** On `grep-output`, `codebase-exploration` and `raw-build-log` they
+report ~99.7% and we report 57-71%. Their number there is a **content-cache
+reference**: the block is not made smaller, it is taken out of the request, put
+in a store, and replaced by a 24-character `<<ccr:...>>` marker. The same is true
+of the four rows where they edge us out in the nineties.
+
+**So the last column is the one that decides a turn.** A marker is not the
+content: to read what it stands for, the agent spends a request. `zero-turn ids`
+counts the identifiers planted in each workload that need no such request --
+still in the text, or rebuildable from the text alone. On the three rows we
+lose on reduction we take that column outright, 509-5, 1046-4 and 430-3: their
+marker leaves almost none of it behind, our skeleton leaves all of it. **We lose it on
+eight rows** -- `agent-loop`, `agent-loop-logs`, `code-search`,
+`human-authored-json`, `issue-triage`, `relevance-probe`, `repeated-reads` and
+`sre-debugging` -- because our reduction there comes from spilling too, and a
+spill costs the same turn theirs does; `browser-session` ties at 336-336. <!-- HEADROOM-CORPUS:START -->Over
+the corpus it is 3,068 of 9,919 for us against 5,238 for them:<!-- HEADROOM-CORPUS:END --> **this column
+goes to them**, and the two columns have to be read together or each one
+flatters somebody.
+
+The unit count moved with the instrument, not with the product. Every rule that
+found a retention unit keyed on a digit-bearing token, a markdown heading or a
+declaration, so `issue-triage` (`"number": 3000`) and `relevance-probe`
+(`"id": "evt_0"`, the needle that workload exists to find) each scored ZERO
+units and reported a tie on an empty set. Counting a string value under an
+object key and a quoted substring inside a longer string -- on both arms, and
+excluding multi-line values, which are not literal substrings of the block they
+came from -- takes the corpus from 6,098 units to 9,919 and reverses this
+column, which read 2,717 against 2,278 before the fix.
+
+`browser-session` used to be the one genuine engine loss on this corpus, at 6.0%
+against their 21.8%. It is now 93.7%, from folding exact long repeats inside a
+block rather than at a boundary someone else drew — a serialised message
+list with inline images is a single 780,000-character line, which every other
+pass here reads as one unit.
+
+**Most of that 93.7% is the fixture, and the honest number is lower.** This
+payload holds four images, two of them distinct, and the base64 in them is
+generated rather than photographic: one distinct image alone folds from 160,032
+characters to 5,572, which no real PNG would do. What carries over to a real
+session is the duplication — half the image bytes here are a second copy of
+an image already in the request, which is 44.3% of the whole payload, and an
+agent re-sending a screenshot it has already sent is ordinary. Folding only that
+is a ~44% reduction, still ahead of their 21.8% on the same row, and the
+generated base64 is worth about 49 points on top that we would not claim twice.
+
+The run the marker names is still in the output above it, so the reader rebuilds
+it without asking for anything, which is why the characters fall much further
+than the tokens (28.9%) — the image tokens are counted from pixels on both
+arms either way.
+
+**`ours, dial on` is that like-for-like, and it is substitution, not reduction.**
+Set `spillWholeBlockBelow` and a block our engines could not compress is moved
+out of the request whole, leaving `[... n bytes, moved whole -> path]`. It wins
+all twelve rows on both denominators, but nothing there was compressed: the bytes
+are on disk, at **1.00x** the input, and the ratio is a measurement of a move.
+Any quote of that column that omits this sentence is a misquote.
+
+Two things make it the better version of their trade, which is the only reason
+it exists. It is **gated on the saving our engines actually reached**, not on
+block size, so a block we compressed well stays in the request where the reader
+still has it — a content cache moves it regardless. And the marker carries a
+**path the agent already has**, so following it is a `Read` it issues itself,
+where a cache reference costs a retrieval round trip and degrades to
+`[unresolved: entry not found]` once the store has moved on.
+
+It is **off by default**, because the trade is real: every one of the **2,334**
+identifiers a reader can rebuild from our output with no extra turn sits in
+exactly the blocks it would move -- the five rows where the dial fires are the
+five rows that reconstructible column lives on, and nowhere else. On by default, this would be their product
+with a better marker.
+
+**`ours, preset` is the same dial at the setting a caller would actually run**
+-- `spillWholeBlockBelow: 0.9`, so a block is moved only where the engines could
+not take 90% off it. On seven of the twelve rows it changes nothing at all: the
+figure is the shipped one, the block stays in the request, and the zero-turn
+count is untouched. On the other five it matches their headline -- 100.0% on
+`codebase-exploration`, 99.9% on `grep-output`, 100.0% on `raw-build-log` -- and
+it buys that the same way they do. **Those five rows are exactly where our
+zero-turn wins live**, and the column takes all of them: 509, 1046, 430, 361
+and 336 go to 0. <!-- HEADROOM-CORPUS:START -->Over the corpus it is 98.1% of the characters against 89.4%, and
+386 zero-turn identifiers against 3,068. It also puts 46 identifiers beyond
+anything in the output, against 45 shipped<!-- HEADROOM-CORPUS:END --> -- but a moved block is a turn, and the preset
+column is published so that trade is visible rather than folded into a
+headline. It is off by default for the same reason.
+
+Reproduce the whole table:
+
+```bash
+python bench/compression/headroom/run-theirs.py <headroom-clone> <out-dir>
+python bench/compression/headroom/resolve-theirs.py <headroom-clone> <out-dir>
+node bench/compression/head-to-head.mjs <out-dir>
+```
+
+### Against their published design
+
+A second arm reimplements their published design from their own benchmark
+generator's definitions — opaque hash markers, history compressed, a retrieval
+tool and system message injected — so the four workloads with a published
+comparator can be checked without their clone. `node bench/compression/proof.mjs`:
 
 <!-- PROOF-TABLE:START -- every figure below must appear in the output of
      `node bench/compression/proof.mjs`. Guarded by
      `node bench/compression/readme-table.check.mjs`; do not hand-edit. -->
 
-| workload             | payload | theirs | ours   | verdict |
-| -------------------- | ------: | -----: | -----: | ------- |
-| code-search          |  17765 |  92.1% |  97.6% | ours    |
-| sre-debugging        |  65694 |  92.2% |  98.4% | ours    |
-| issue-triage         |  54174 |  72.8% |  97.3% | ours    |
-| codebase-exploration |  78502 |  47.4% |  46.0% | theirs  |
+| workload             | payload | theirs |  ours | verdict |
+| -------------------- | ------: | -----: | ----: | ------- |
+| code-search          |   17765 |  92.1% | 97.8% | ours    |
+| sre-debugging        |   65694 |  92.2% | 98.6% | ours    |
+| issue-triage         |   54174 |  72.8% | 97.5% | ours    |
+| codebase-exploration |   78502 |  47.4% | 53.7% | ours    |
 
 <!-- PROOF-TABLE:END -->
 
-Four workloads, because those are the four with a published comparator. The
-harness reports twelve; the other eight are ours alone and are not a
-head-to-head.
+Four workloads, because those are the four this arm has a published comparator
+for. The harness reports twelve; the other eight are ours alone here, and are
+scored head-to-head in the table above instead.
 
-**`codebase-exploration` is theirs, by 1.4 points.** An earlier version of this
-table claimed 61.3% for us on that row, and a later one claimed parity; both
-were figures from a branch rather than from here. Measured on this tree it is
-46.0% against their 47.4%, and it is published as a loss because that is what
-it is. A number in prose is a fact about the tree it was measured on, which is
-why `bench/compression/readme-table.check.mjs` re-derives every figure in the
-block above from the harness rather than trusting it.
+**`codebase-exploration` was theirs and is now ours, by 16.8 points.** An earlier
+version of this table claimed 61.3% for us on that row, then parity, then a
+published loss at 46.0% against their 47.4%. The first two were figures from a
+branch rather than from here; the third was true on this tree when it was
+written; four `log` engine commits then moved it to 54.2%, masking an interior
+hashbang so a concatenated block still parses moved it to 64.9%, and
+authenticating every marker with a six-character stamp took 0.2 of a point
+back, and naming a spilled file by a digest of its contents, the way the proxy
+sink really names it, instead of by its position in a counter, took another
+half point, to reach 64.2%. Then the currency stopped being an estimate: every
+figure in the table above is now the count Anthropic's own tokenizer returns
+for the text, recorded into a committed fixture so this stays offline, and
+under it the row reads **53.7%**. That is the largest move in this history and
+the only one that is not about the engine at all. Dividing characters by four
+had been charging the control's hex markers too much and our own stamp far too
+little -- the stamp was six characters of a vowelless base-31 alphabet then,
+and a random string over a large alphabet is close to the worst case a BPE
+tokenizer has, so it cost a measured 5.52 tokens where chars/4 billed 2. Those
+three are the only figures here that moved the wrong way, and none of them is a
+regression: each is the harness charging us for something it had been leaving
+out. Being able to see that cost is what paid for the next move: the stamp is
+now nine decimal digits, which carry slightly more entropy than those six
+characters did and cost 4 tokens on every draw rather than a mean of 5.52 that
+ranged from four to seven. Measured against the old stamp on this row -- the
+same tree, the same fixture, only the stamp pinned back to its base-31 form --
+that bought **a tenth of a point**, and a tenth is the honest size of it: a
+marker got better than a quarter cheaper, but markers are a small part of what
+the engine emits, so the headline moves far less than the per-marker saving
+suggests. A
+number in prose is a fact about the tree it was measured on, which is why
+`bench/compression/readme-table.check.mjs` re-derives every figure in the block
+above from the harness rather than trusting it.
+
+<!-- HEADROOM-CORPUS:START -->
 
 **Reduction is not the only column, and the other one goes to them.** Scored
-symmetrically on their own fixtures, of 3,793 retention units they keep **1,890**
-directly visible in the text they send and we keep **345** — we reach a higher
-reduction partly by eliding harder, into a spill about 0.94x the size of the
-input. Nothing is unrecoverably lost on our side, and a retrieval costs a turn.
-Both numbers belong in any quote of either.
+symmetrically on their own fixtures, of 9,919 retention units they keep
+**5,238** directly visible in the text they send and we keep **734** — we reach
+a higher reduction partly by eliding harder, into a spill about 0.44x the size
+of the input. A further **2,334** of ours are reconstructible from the output
+alone with no extra turn, and **6,806** are behind a path in the output, one
+`Read` away; theirs redeems **4,673** through its store, one retrieval call away.
+**45 are unrecoverable on our side and 8 on theirs.** All of those numbers belong in any
+quote of any of them.
 
-Against the four published comparators: **ours on 3, theirs on 1.**
-The tally is over comparators, not over workloads -- the harness runs twelve
-and eight of them have nothing to compare against.
+<!-- HEADROOM-CORPUS:END -->
+
+Against the four comparators in this reimplemented arm: **ours on all four.**
+Against their real implementation on all twelve workloads, the table at the top
+of this section: **ours on 9 of 12 by default, 12 of 12 with the dial on**, and
+ours on the corpus total in both denominators either way. Their column is the
+best of the nine configurations that capture holds, and on the seven rows they
+take it is the content-cache reference described above rather than a smaller
+block — which is why the dial, doing the same kind of thing, takes all twelve.
 
 The two columns come from different arms of the same engine, and that is the
 point. `v3-history` compresses history too and matches them byte for byte;
@@ -151,7 +333,38 @@ Gemini, and any other connected client get separate rows. Old records without
 identity remain explicitly unattributed instead of being assigned to whichever
 agent happens to be open now.
 
-No account, no telemetry, no hosted service. MIT, so it is usable at work.
+No account and no hosted service. MIT, so it is usable at work.
+
+Nothing is measured about you unless you ask for it. Anonymous usage data is
+off by default and takes two separate opt-ins: `TOKEN_OPTIMIZER_TELEMETRY=1`
+aggregates counts into a file on your own disk, and `TOKEN_OPTIMIZER_BEACON=1`
+is what uploads any of it. Setting the first opens no socket. With both set,
+the events already on disk are sent once per session at start-up -- in a batch,
+never on the hot path -- and the file is cleared only after the receiver has
+accepted them. `install_doctor` prints which of the two is on, how many events
+are waiting and where they would go; it reports without sending. A package
+built without the upload key cannot transmit at all, and the doctor says so
+rather than letting an opt-in look like it is working.
+`DO_NOT_TRACK=1` overrides both, whatever else is set. The version check
+`npm run doctor` and `install_doctor` make is a plain GET to the registry npm
+installs from, carries nothing about you, and runs only when you ask for a
+diagnosis -- never during a session. `DO_NOT_TRACK=1` or
+`TOKEN_OPTIMIZER_UPDATE_CHECK=0` suppresses it before a socket is opened. An event may only
+contain numbers and flags -- a string is dropped before it is written, so a
+path, a prompt or an error message cannot travel even by mistake -- and the
+machine identifier is a salted hash, never your hostname. What the counts are
+about is the hook ledger your own project already keeps: how often the graph
+answered instead of a tool, what each arm of the holdout was delivered and
+withheld, and whether the saving exceeded the cost -- reduced to integers once
+every six hours, never the ledger itself, which names your files. Usage is
+counted as a rollup rather than a row per request: one event per 200 requests,
+holding the request count, bytes in and out, how often compression paid, how
+often knowledge was injected, and how many blocks were elided, plus one final
+event when the proxy stops. That keeps the totals exact -- a row per request
+would overflow the batch on a busy session and leave you reporting its first
+five hundred -- at the cost of the per-request distribution, which is not
+something anyone downstream needs. `npm run doctor`
+prints exactly which of these is on and what has been recorded.
 
 ### What the dashboard proves on a real machine
 
@@ -439,6 +652,11 @@ removes more raw tokens on every workload and costs more money on every
 workload. Compression stops at the frontier, and cache-weighted tokens are
 reported beside raw ones so the trap is visible rather than inferred.
 
+<!-- PROSE-CLAIMS:START -- every percentage in the prose between this marker and
+     its END must also appear inside a guarded block above, or be declared in the
+     registry in bench/compression/readme-prose.check.mjs saying where it comes
+     from. Run `node bench/compression/readme-prose.check.mjs`. -->
+
 **It keeps the rows that matter.** Eliding a long array after the first few rows
 scored 95.7% on a search payload here and destroyed both the UUID record and the
 error record planted in it -- the only two rows anyone would have searched for.
@@ -448,15 +666,13 @@ planted needle disappears, because a size metric alone cannot tell compression
 from truncation.
 
 Reduction over the content each strategy is permitted to rewrite, on fixtures
-matching the four workloads HeadRoom publishes (their figures from their
-README; ours from `bench/compression`, which anyone can run):
+matching the four workloads HeadRoom publishes, is the guarded table earlier in
+this section -- 97.5%, 97.8%, 98.6% and 53.7% against their 72.8%, 92.1%, 92.2%
+and 47.4%. It is stated once and checked there rather than restated here, which
+is how this copy came to claim 98.9%, 98.2%, 92.8% and 61.3% long after the
+tree had moved.
 
-| workload             | ours  | theirs |
-| -------------------- | ----- | ------ |
-| issue triage         | 98.9% | 72.8%  |
-| code search          | 98.2% | 92.1%  |
-| SRE debugging        | 92.8% | 92.2%  |
-| codebase exploration | 61.3% | 47.4%  |
+<!-- PROSE-CLAIMS:END -->
 
 These are not their corpora, which are unpublished; the code workloads read real
 files out of this repository and the rest are generated to the shape and scale
@@ -471,12 +687,12 @@ cache-weighted effective tokens on all of them:
 
 | workload        | raw reduction, ours / theirs | effective tokens, ours / theirs |
 | --------------- | ---------------------------- | ------------------------------- |
-| code search     | 85.0% / **96.8%**            | **859** / 1,068                 |
-| SRE debugging   | 86.2% / **97.2%**            | **1,783** / 2,141               |
-| issue triage    | 90.7% / **98.0%**            | **439** / 557                   |
-| grep output     | 47.1% / **53.4%**            | **6,896** / 8,971               |
-| raw build log   | 50.1% / **55.0%**            | **15,937** / 17,943             |
-| browser session | 20.3% / 20.3%                | **18,407** / 18,539             |
+| code search     | 84.6% / **95.8%**            | **999** / 1,383                 |
+| SRE debugging   | 86.2% / **97.1%**            | **1,833** / 2,261               |
+| issue triage    | 89.2% / **95.3%**            | **812** / 1,277                 |
+| grep output     | 45.9% / **51.9%**            | **7,146** / 9,514               |
+| raw build log   | 54.7% / **59.4%**            | **14,448** / 16,769             |
+| browser session | 45.7% / **49.4%**            | **11,398** / 14,685             |
 
 The competitor arm is this repository's own reimplementation of their published
 design -- opaque hash markers, history compressed, a retrieval tool and system
@@ -785,17 +1001,85 @@ signal, a power cut -- the directory is left behind in your OS temp directory
 and is safe to delete by hand. Running with the proxy off writes no spills at
 all.
 
-### Three switches, and what each one trades
+### Four switches, and what each one trades
 
-| variable                          | default    | what it does                                               |
-| --------------------------------- | ---------- | ---------------------------------------------------------- |
-| `TOKEN_OPTIMIZER_PROXY`           | on         | the compression proxy itself; set `0` to opt out           |
-| `TOKEN_OPTIMIZER_COMPRESSION`     | `balanced` | `balanced`, `aggressive`, `conservative`, `lossless`       |
-| `TOKEN_OPTIMIZER_PROXY_KNOWLEDGE` | on         | put what this project already learned in the cached prefix |
+| variable                           | default    | what it does                                               |
+| ---------------------------------- | ---------- | ---------------------------------------------------------- |
+| `TOKEN_OPTIMIZER_PROXY`            | on         | the compression proxy itself; set `0` to opt out           |
+| `TOKEN_OPTIMIZER_COMPRESSION`      | `balanced` | `balanced`, `aggressive`, `conservative`, `lossless`       |
+| `TOKEN_OPTIMIZER_PROXY_KNOWLEDGE`  | on         | put what this project already learned in the cached prefix |
+| `TOKEN_OPTIMIZER_PROXY_NET_SAVING` | off        | never send upstream more bytes than the client gave        |
 
 Both of the `on` rows said `off` here until 7.1.0, which was wrong about the
 shipped code rather than a change of default: an unset value has always meant
 enabled, and `0`, `false`, `no` and `off` are what turn either one off.
+
+`TOKEN_OPTIMIZER_PROXY_NET_SAVING` is off because the knowledge block is supposed
+to grow the request: it is charged once as a cache write and then read at 0.1x for
+the rest of the session, which pays on a long conversation and does not on a short
+one. Turn it on and the block is dropped on any turn where sending it would hand
+upstream more bytes than the client handed us -- the wire never inflates, and the
+prefix knowledge is what you give up for that.
+
+### Rollout channels
+
+Each switch above is its own decision, which is fine until there are ten of them.
+A channel is one decision instead: `stable` is what is on by default today, and
+each wider channel carries everything the narrower ones do plus the features still
+being measured.
+
+| variable                           | default  | what it does                                                |
+| ---------------------------------- | -------- | ----------------------------------------------------------- |
+| `TOKEN_OPTIMIZER_ROLLOUT_CHANNEL`  | `stable` | `stable`, `beta`, `canary`, `dev`                           |
+| `TOKEN_OPTIMIZER_FEATURES`         | unset    | a comma list of feature names to turn on within the channel |
+| `TOKEN_OPTIMIZER_DISABLE_FEATURES` | unset    | a comma list to turn off, whatever else is set              |
+
+`beta` turns on install self-repair; `canary` adds compact tool definitions. Those
+two are staged: the channel is what enables them.
+
+Everything else a wider channel reaches is request-only, and a channel never turns
+one on for you -- it only lets you ask. `beta` makes the output shaper and the
+shared knowledge graph askable, `canary` adds identifier substitution and
+thinking-block dropping, and `dev` holds nothing back. Each of those either changes
+what the model writes or forces an answer the code otherwise works out from the
+directory it is running in, which is a decision worth naming rather than inheriting:
+
+```
+TOKEN_OPTIMIZER_ROLLOUT_CHANNEL=canary TOKEN_OPTIMIZER_FEATURES=substitution
+```
+
+A variable you already set still wins over the channel. If
+`TOKEN_OPTIMIZER_PROXY_SUBSTITUTE=1` is in your settings, substitution is on even
+on `stable`, because that switch shipped before channels existed and moving you to
+a channel is not supposed to quietly turn your own configuration off.
+`TOKEN_OPTIMIZER_DISABLE_FEATURES` is the one thing nothing overrides.
+
+A name this does not recognise turns nothing on, and a value it cannot read is not
+treated as yes. Both are reported rather than guessed at:
+
+```
+npm run doctor           # the channel and what it turned on
+npm run doctor -- --features   # every feature and the reason for each
+```
+
+### The telemetry switches
+
+| variable                       | default            | what it does                                           |
+| ------------------------------ | ------------------ | ------------------------------------------------------ |
+| `TOKEN_OPTIMIZER_TELEMETRY`    | off                | aggregate counts into a file in your home directory    |
+| `TOKEN_OPTIMIZER_BEACON`       | off                | upload that file; requires the one above as well       |
+| `DO_NOT_TRACK`                 | unset              | overrides both, whatever else is set                   |
+| `TOKEN_OPTIMIZER_BEACON_URL`   | project            | send somewhere else, for a fork or a self-hosted table |
+| `TOKEN_OPTIMIZER_BEACON_KEY`   | packed             | the key to send with; empty in a build without one     |
+| `TOKEN_OPTIMIZER_BEACON_TABLE` | `telemetry_events` | the table to insert into                               |
+| `TOKEN_OPTIMIZER_UPDATE_CHECK` | on                 | ask npm for the latest version, in `doctor` only       |
+
+The key is not in this repository. It is public and the package is published, so
+a committed key would be handed to everyone who runs `npm view` and could not be
+rotated out of the copies already installed; the release workflow stamps it into
+the tarball instead. A build without it still works and still aggregates locally
+-- it just cannot upload, and `install_doctor` prints `packed without a key`
+rather than letting an opt-in look like it is working.
 
 `lossless` is worth knowing about: it forbids every transform that removes
 something the output cannot reconstruct -- function bodies, array tails,
@@ -960,6 +1244,43 @@ measured. Matching is by content hash, never by filename.
 It also runs the natural experiment nobody else can — enforcing clients versus
 directive ones — and reports it whichever way it falls, with the confound
 stated.
+
+### It learns from what already went wrong, offline
+
+Every failed tool call you have already paid for is sitting in your agent's own
+transcripts. `npx token-optimizer-learn` reads them locally, groups the failures
+that keep repeating, and writes the ones worth remembering into the instructions
+file that agent already reads -- `CLAUDE.md` for Claude Code, `AGENTS.md` for
+Codex.
+
+```bash
+npx token-optimizer-learn                  # what it found, printed, nothing written
+npx token-optimizer-learn --projects       # which projects have transcripts
+npx token-optimizer-learn --since 14 --write
+```
+
+`--agent <claude|codex|auto>`, `--project <path>`, `--since <days>`,
+`--max-sessions <n>`, `--json`. **Nothing is written without `--write`**, and a
+block it writes is delimited, so running it again replaces its own advice instead
+of appending another copy -- nothing outside those markers is ever touched.
+
+Three things it refuses to do, because each one produced a confidently wrong rule
+on a real corpus:
+
+- **It does not blame a chained command line.** A transcript records the line and
+  the exit code, not which of `cd X && git grep a && ls b` failed, so those are
+  counted as unattributable and reported as a number rather than pinned on the
+  first command.
+- **It does not turn your failing build into advice.** A failing test or compile
+  is the work going wrong, not a habit to avoid.
+- **It says what it could not read.** Transcripts it could not parse and failures
+  it could not categorise are printed as counts, because they bound how much of
+  the result to believe.
+
+It reads local files only -- no network, no upload -- and reduces your home
+directory to `~` before any recommendation text is written. `TOKEN_OPTIMIZER_LEARN_PLUGINS`
+takes a comma-separated list of module specifiers to add another agent's format;
+nothing is discovered or imported unless you name it.
 
 ---
 

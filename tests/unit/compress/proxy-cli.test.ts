@@ -4,6 +4,8 @@ import { createServer, request as httpRequest, type Server } from 'node:http';
 import { once } from 'node:events';
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 
 /**
  * The proxy's command-line entrypoint, run as a real process.
@@ -141,6 +143,22 @@ const stop = async (child: ChildProcessWithoutNullStreams): Promise<void> => {
   await once(child, 'exit');
 };
 
+/**
+ * Waits for the banner, because `start` resolves on the first STDOUT line and the
+ * banner goes to the other pipe -- so asserting straight away races two streams
+ * and reads an empty string, which `not.toContain` would happily accept.
+ */
+const settled = async (stderr: () => string): Promise<string> => {
+  for (
+    let waited = 0;
+    waited < 60 && !stderr().includes('listening on');
+    waited++
+  ) {
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  return stderr();
+};
+
 describe('the proxy command-line entrypoint', () => {
   const running: ChildProcessWithoutNullStreams[] = [];
   const servers: Server[] = [];
@@ -241,6 +259,61 @@ describe('the proxy command-line entrypoint', () => {
     expect(stderr()).toMatch(/\/v1\/messages \d+B -> \d+B/);
   });
 
+  it('names the command that answers what it did', async () => {
+    // THE ONE READER WHO NEEDS IT. Every number `token-optimizer-inspect` prints
+    // was already being computed per request; without a pointer here, finding
+    // the command requires knowing it exists, which is the whole problem the
+    // command was built to fix.
+    const target = await upstream();
+    const { child, url, stderr } = await start(['--upstream', target.url]);
+    running.push(child);
+
+    expect(url).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/);
+    // `start` resolves on the first stdout line, and the banner goes to the
+    // OTHER pipe -- so wait for it rather than racing two streams.
+    for (let waited = 0; waited < 40 && stderr() === ''; waited++) {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    expect(stderr()).toContain('token-optimizer-inspect');
+    // Positive control on the line it was appended to: a botched concatenation
+    // could swallow the upstream the operator actually asked about.
+    expect(stderr()).toContain(target.url);
+  });
+
+  it('names the command that totals the money, and what to set without it', async () => {
+    // TWO QUESTIONS, NOT ONE. `inspect` answers what happened to the last few
+    // requests; `savings` answers what that traffic was worth -- and it can
+    // only answer it from a ledger, so with no ledger configured the line asks
+    // for one instead of naming a command that would find nothing.
+    const banner = async (read: () => string): Promise<string> => {
+      for (let waited = 0; waited < 40 && read() === ''; waited++) {
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+      return read();
+    };
+    const target = await upstream();
+
+    const configured = await start(['--upstream', target.url], {
+      TOKEN_OPTIMIZER_PROXY_ACCOUNTING: join(tmpdir(), 'banner-ledger.jsonl'),
+    });
+    running.push(configured.child);
+    expect(await banner(configured.stderr)).toContain(
+      'what it saved: token-optimizer-savings'
+    );
+
+    // EMPTY, NOT INHERITED: the host running the suite may well have a ledger
+    // configured, and the branch under test is the one where it has none.
+    const bare = await start(['--upstream', target.url], {
+      TOKEN_OPTIMIZER_PROXY_ACCOUNTING: '',
+    });
+    running.push(bare.child);
+    const without = await banner(bare.stderr);
+    expect(without).toContain('set TOKEN_OPTIMIZER_PROXY_ACCOUNTING to a path');
+    // Positive control on the same banner: a missing line has to be a missing
+    // line, not a stderr pipe that never delivered anything at all.
+    expect(without).toContain('token-optimizer-inspect');
+  });
+
   it('exits on SIGTERM rather than outliving the launcher', async () => {
     const target = await upstream();
     const { child } = await start(['--upstream', target.url, '--quiet']);
@@ -323,6 +396,72 @@ describe('the proxy command-line entrypoint', () => {
     running.push(child);
 
     expect(url).toBe(`http://127.0.0.1:${wanted}`);
+  });
+  /*
+   * THE POSTURE DISCLOSURE, SPAWNED, because the promise it makes is about a
+   * stream an operator is watching. `postureNotice` can be unit-tested into a
+   * string all day; what matters is that the string reaches stderr of the process
+   * a user actually starts, every time, and never stdout -- a launcher reads
+   * stdout for the URL and a second line there would break it.
+   */
+  it('discloses on stderr what a posture turned on, and keeps stdout to the URL', async () => {
+    const started = await start([], {
+      TOKEN_OPTIMIZER_POSTURE: 'max-lossy',
+      TOKEN_OPTIMIZER_ROLLOUT_CHANNEL: 'canary',
+    });
+    running.push(started.child);
+
+    const banner = await settled(started.stderr);
+    expect(banner).toContain('POSTURE max-lossy');
+    // Every feature named by its own switch, so the line answers "how do I turn
+    // this off" without sending anyone to the docs.
+    expect(banner).toContain('ON: drop_thinking');
+    expect(banner).toContain('TOKEN_OPTIMIZER_PROXY_DROP_THINKING=0');
+    expect(banner).toContain('Unset TOKEN_OPTIMIZER_POSTURE');
+    // Exactly one line on stdout, still. The disclosure must not have leaked
+    // into the stream a launcher parses.
+    expect(started.stdout().trim()).toBe(started.url);
+  });
+
+  it('takes the posture as a flag too, and names it in --help', async () => {
+    // THE FLAG PATH IS ITS OWN WIRE. The environment reaches `postureFromEnv`
+    // inside `startProxy`; a flag has to travel through `parseArgs` and the
+    // options object, and nothing above would notice if that argument were
+    // dropped on the way.
+    const started = await start(['--posture', 'lean']);
+    running.push(started.child);
+    expect(await settled(started.stderr)).toContain('POSTURE lean');
+
+    // ON STDERR, like the rest of the usage text: stdout is the URL and nothing
+    // else, which is the contract a launcher parses.
+    const help = await runToExit(['--help']);
+    expect(help.stderr).toContain('--posture NAME');
+    // Every shipped name listed, so --help is where an operator learns them.
+    expect(help.stderr).toContain('max-lossy');
+    expect(help.stdout).toBe('');
+  });
+
+  it('says a posture name it does not know rather than running defaults quietly', async () => {
+    const started = await start([], { TOKEN_OPTIMIZER_POSTURE: 'maximum' });
+    running.push(started.child);
+
+    const banner = await settled(started.stderr);
+    expect(banner).toContain('UNKNOWN POSTURE "maximum"');
+    expect(banner).toContain('max-lossy');
+    // POSITIVE CONTROL: the proxy still came up, because the only thing this
+    // file fails loudly on is a cleartext upstream.
+    expect(started.url).toContain('http://127.0.0.1:');
+  });
+
+  it('prints no posture line at all when none was named', async () => {
+    const started = await start([], { TOKEN_OPTIMIZER_POSTURE: '' });
+    running.push(started.child);
+
+    const banner = await settled(started.stderr);
+    expect(banner).not.toContain('POSTURE');
+    // The control: the banner did print, so the absence above is the posture's
+    // and not an empty stderr.
+    expect(banner).toContain('token-optimizer proxy listening on');
   });
 });
 

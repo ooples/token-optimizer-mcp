@@ -1,10 +1,8 @@
-﻿/**
+/**
  * Smart Exports Tool
  *
  * Analyzes TypeScript/JavaScript export statements with intelligent caching.
  * Provides export tracking, unused export detection, and optimization suggestions.
- *
- * Token Reduction: 75-85% through summarization of export analysis
  */
 
 import * as ts from 'typescript';
@@ -12,7 +10,7 @@ import { createHash } from 'crypto';
 import { join, relative, dirname } from 'path';
 import { homedir } from 'os';
 import { existsSync, readFileSync } from 'fs';
-import { CacheEngine } from '../../core/cache-engine.js';
+import { CacheEngine, resolveCacheLocation } from '../../core/cache-engine.js';
 import { MetricsCollector } from '../../core/metrics.js';
 import { TokenCounter } from '../../core/token-counter.js';
 import {
@@ -163,18 +161,20 @@ export interface SmartExportsOptions {
 export class SmartExportsTool {
   private cache: CacheEngine;
   private metrics: MetricsCollector;
-  private tokenCounter: TokenCounter;
   private cacheNamespace = 'smart_exports';
   private projectRoot: string;
 
   constructor(
     cache: CacheEngine,
-    tokenCounter: TokenCounter,
+    // ACCEPTED AND NOT USED, which is the point: this tool no longer counts
+    // tokens, because the only thing it counted them for was a saving it was
+    // not in a position to measure. The parameter stays so that every analysis
+    // tool is still built by the same three-argument factory call.
+    _tokenCounter: TokenCounter,
     metrics: MetricsCollector,
     projectRoot?: string
   ) {
     this.cache = cache;
-    this.tokenCounter = tokenCounter;
     this.metrics = metrics;
     this.projectRoot = projectRoot || process.cwd();
   }
@@ -224,11 +224,15 @@ export class SmartExportsTool {
       const cached = this.getCachedResult(cacheKey, maxCacheAge);
       if (cached) {
         const duration = Date.now() - startTime;
+        // NO TOKEN FIGURES ON THIS RECORD. Both halves used to be counted
+        // here and summed by cache_analytics into a second savings total, and
+        // the counted "after" was this object serialised compactly rather than
+        // the text a caller is billed for, which is built from it afterwards
+        // and can only be counted at the wire.
         this.metrics.record({
           operation: 'smart_exports',
           duration,
           cacheHit: true,
-          savedTokens: cached.originalTokens || 0,
           success: true,
         });
         return {
@@ -292,18 +296,12 @@ export class SmartExportsTool {
       cached: false,
     };
 
-    // Calculate token metrics
-    const fullOutput = JSON.stringify(result, null, 2);
-    const compactOutput = this.compactResult(result);
-    const originalTokens = this.tokenCounter.count(fullOutput).tokens;
-    const compactedTokens = this.tokenCounter.count(compactOutput).tokens;
-
     // A PARTIAL USAGE SCAN IS NEVER CACHED. The key is derived from the file's
     // content and the scan settings, NOT from which files were reached, so a
     // truncated "nothing imports this" would be replayed for the whole cache
     // window -- and it is the exact answer someone acts on by deleting code.
     if (!usage.truncatedBy) {
-      this.cacheResult(cacheKey, result, originalTokens, compactedTokens);
+      this.cacheResult(cacheKey, result);
     }
 
     // Record metrics
@@ -312,9 +310,6 @@ export class SmartExportsTool {
       operation: 'smart_exports',
       duration,
       cacheHit: false,
-      inputTokens: originalTokens,
-      cachedTokens: compactedTokens,
-      savedTokens: originalTokens - compactedTokens,
       success: true,
     });
 
@@ -848,7 +843,6 @@ export class SmartExportsTool {
   ): {
     result: SmartExportsResult;
     timestamp: number;
-    originalTokens?: number;
   } | null {
     const cached = this.cache.get(cacheKey);
     if (!cached) return null;
@@ -856,7 +850,6 @@ export class SmartExportsTool {
     const data = JSON.parse(cached) as {
       result: SmartExportsResult;
       timestamp: number;
-      originalTokens?: number;
     };
 
     const age = (Date.now() - data.timestamp) / 1000;
@@ -870,52 +863,15 @@ export class SmartExportsTool {
   /**
    * Cache result
    */
-  private cacheResult(
-    cacheKey: string,
-    result: SmartExportsResult,
-    originalTokens?: number,
-    compactedTokens?: number
-  ): void {
+  private cacheResult(cacheKey: string, result: SmartExportsResult): void {
     const toCache = {
       result,
       timestamp: Date.now(),
-      originalTokens,
-      compactedTokens,
     };
     const buffer = JSON.stringify(toCache);
-    const tokensSaved =
-      originalTokens && compactedTokens ? originalTokens - compactedTokens : 0;
-    this.cache.set(cacheKey, buffer, 300, tokensSaved);
-  }
-
-  /**
-   * Compact result for token efficiency
-   */
-  private compactResult(result: SmartExportsResult): string {
-    const compact = {
-      exp: result.exports.map((e) => ({
-        t: e.type[0], // First letter: n/d/r
-        n: e.name,
-        k: e.kind,
-        l: e.location.line,
-        u: e.used,
-      })),
-      unu: result.unusedExports.map((e) => ({
-        n: e.name,
-        k: e.kind,
-      })),
-      dep: result.dependencies.map((d) => ({
-        f: d.importingFile.split('/').pop(), // Just filename
-        s: d.symbol,
-      })),
-      opt: result.optimizations.map((o) => ({
-        t: o.type,
-        m: o.message,
-      })),
-      sum: result.summary,
-    };
-
-    return JSON.stringify(compact);
+    this.cache.set(cacheKey, buffer, buffer.length, buffer.length, {
+      ttlSeconds: 300,
+    });
   }
 }
 
@@ -937,7 +893,9 @@ export function getSmartExportsTool(
 export async function runSmartExports(
   options: SmartExportsOptions
 ): Promise<SmartExportsResult> {
-  const cache = new CacheEngine(join(homedir(), '.hypercontext', 'cache'));
+  const cache = new CacheEngine(
+    resolveCacheLocation(join(homedir(), '.hypercontext', 'cache'))
+  );
   const tokenCounter = new TokenCounter();
   const metrics = new MetricsCollector();
   const tool = getSmartExportsTool(

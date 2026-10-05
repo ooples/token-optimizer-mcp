@@ -1,7 +1,7 @@
 import { describe, it, expect, afterEach } from '@jest/globals';
 import { Readable } from 'node:stream';
 import { gzipSync } from 'node:zlib';
-import { readFileSync, rmSync, existsSync } from 'node:fs';
+import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import {
@@ -11,6 +11,8 @@ import {
   appendRecord,
   type RequestUsage,
 } from '../../../src/proxy/accounting.js';
+import { readProxySavings } from '../../../src/savings/proxy.js';
+import { rollupPath } from '../../../src/savings/retention.js';
 
 /**
  * The token ledger, which exists to explain a cost the benchmark could not.
@@ -36,6 +38,9 @@ const ledger = (): string => {
 afterEach(() => {
   for (const path of LEDGERS.splice(0)) {
     if (existsSync(path)) rmSync(path, { force: true });
+    // THE WRITER NOW PRUNES, so a ledger can leave folded totals beside it.
+    const folded = rollupPath(path);
+    if (existsSync(folded)) rmSync(folded, { force: true });
   }
 });
 
@@ -282,6 +287,57 @@ describe('the ledger itself', () => {
       input_tokens: 10,
       cache_read_input_tokens: 900,
     });
+  });
+
+  it('bounds the file it writes without changing what it reports', async () => {
+    const path = ledger();
+    const line = (over: Record<string, unknown> = {}) => ({
+      ts: new Date(Date.now() - 40 * 86_400_000).toISOString(),
+      path: '/v1/messages',
+      status: 200,
+      compressed: true,
+      beforeBytes: 4000,
+      afterBytes: 1200,
+      usage: { input_tokens: 10 },
+      ...over,
+    });
+    // A LEDGER THAT IS ALREADY TOO OLD, which is the state the policy exists
+    // for: these rows were written by earlier runs of the proxy.
+    writeFileSync(
+      path,
+      [line(), line({ beforeBytes: 9000 })]
+        .map((one) => JSON.stringify(one))
+        .join(String.fromCharCode(10)) + String.fromCharCode(10),
+      'utf8'
+    );
+    const fresh = () => line({ ts: new Date().toISOString() });
+
+    appendRecord(path, fresh());
+
+    // THE WRITER IS WHERE IT RUNS, because the prune rewrites the file and only
+    // the single writer knows that no append is in flight.
+    expect(existsSync(rollupPath(path))).toBe(true);
+    const afterFirst = readFileSync(path, 'utf8')
+      .trim()
+      .split(String.fromCharCode(10));
+    expect(afterFirst).toHaveLength(1);
+
+    appendRecord(path, fresh());
+    appendRecord(path, fresh());
+
+    // AND IT DOES NOT RUN AGAIN IMMEDIATELY. A prune per append would turn a
+    // per-request constant into a per-request pass over the whole ledger, and
+    // these rows are inside the window anyway, so they stay rows.
+    const rows = readFileSync(path, 'utf8')
+      .trim()
+      .split(String.fromCharCode(10));
+    expect(rows).toHaveLength(3);
+
+    // The figures are what has to survive all of that: five requests, two of
+    // them now only as a stored total.
+    const report = await readProxySavings(path);
+    expect(report.totalRecords).toBe(5);
+    expect(report.rolledUpRecords).toBe(2);
   });
 
   it('never throws when the ledger cannot be written', () => {

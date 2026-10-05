@@ -42,7 +42,9 @@ const assistantTurn = (n: number): Message => ({
 
 const userTurn = (n: number): Message => ({
   role: 'user',
-  content: [{ type: 'tool_result', tool_use_id: `tu_Edit`, content: `ok ${n}` }],
+  content: [
+    { type: 'tool_result', tool_use_id: `tu_Edit`, content: `ok ${n}` },
+  ],
 });
 
 /** A conversation of `turns` assistant/user pairs. */
@@ -167,7 +169,10 @@ describe('the digest says nothing the message already says', () => {
     const out = substituteHistory([
       {
         role: 'assistant',
-        content: [thinking('...'), { type: 'text', text: 'The bug is in parse().' }],
+        content: [
+          thinking('...'),
+          { type: 'text', text: 'The bug is in parse().' },
+        ],
       },
     ]).messages;
 
@@ -196,7 +201,9 @@ describe('the digest says nothing the message already says', () => {
     const out = substituteHistory([
       { role: 'assistant', content: [thinking('x')] },
     ]).messages;
-    expect((out[0].content as { text?: string }[])[0].text).toBe('[reasoning elided]');
+    expect((out[0].content as { text?: string }[])[0].text).toBe(
+      '[reasoning elided]'
+    );
   });
 
   test('two reasoning blocks in one message still leave one block, not two', () => {
@@ -310,7 +317,10 @@ describe('tool results are the other region, and only with a pure compressor', (
     // The default must stay conservative: this module cannot verify that a
     // compressor is pure, so it does nothing unless the caller provides one.
     const input: Message[] = [
-      { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'a', content: big(50) }] },
+      {
+        role: 'user',
+        content: [{ type: 'tool_result', tool_use_id: 'a', content: big(50) }],
+      },
     ];
     const result = substituteHistory(input);
     expect(result.toolResultChars).toBe(0);
@@ -319,20 +329,30 @@ describe('tool results are the other region, and only with a pure compressor', (
 
   test('compressed in place when one is', () => {
     const input: Message[] = [
-      { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'a', content: big(50) }] },
+      {
+        role: 'user',
+        content: [{ type: 'tool_result', tool_use_id: 'a', content: big(50) }],
+      },
     ];
     const result = substituteHistory(input, {
       compressToolResult: (text) => text.slice(0, 20),
     });
     expect(result.toolResultChars).toBeGreaterThan(0);
-    expect((result.messages[0].content as { content?: string }[])[0].content).toHaveLength(20);
+    expect(
+      (result.messages[0].content as { content?: string }[])[0].content
+    ).toHaveLength(20);
   });
 
   test('message count and role are preserved', () => {
     const input: Message[] = [
-      { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'a', content: big(50) }] },
+      {
+        role: 'user',
+        content: [{ type: 'tool_result', tool_use_id: 'a', content: big(50) }],
+      },
     ];
-    const out = substituteHistory(input, { compressToolResult: (t) => t.slice(0, 5) }).messages;
+    const out = substituteHistory(input, {
+      compressToolResult: (t) => t.slice(0, 5),
+    }).messages;
     expect(out).toHaveLength(1);
     expect(out[0].role).toBe('user');
   });
@@ -341,9 +361,14 @@ describe('tool results are the other region, and only with a pure compressor', (
     // Not merely "equal": the same object, so an unchanged message keeps its
     // identity for the replay's serialisation memo and for the cache.
     const input: Message[] = [
-      { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'a', content: 'short' }] },
+      {
+        role: 'user',
+        content: [{ type: 'tool_result', tool_use_id: 'a', content: 'short' }],
+      },
     ];
-    const out = substituteHistory(input, { compressToolResult: (t) => t }).messages;
+    const out = substituteHistory(input, {
+      compressToolResult: (t) => t,
+    }).messages;
     expect(out[0]).toBe(input[0]);
   });
 
@@ -354,11 +379,17 @@ describe('tool results are the other region, and only with a pure compressor', (
       {
         role: 'user',
         content: [
-          { type: 'tool_result', tool_use_id: 'a', content: [{ type: 'text', text: big(20) }] },
+          {
+            type: 'tool_result',
+            tool_use_id: 'a',
+            content: [{ type: 'text', text: big(20) }],
+          },
         ],
       },
     ];
-    const result = substituteHistory(input, { compressToolResult: (t) => t.slice(0, 3) });
+    const result = substituteHistory(input, {
+      compressToolResult: (t) => t.slice(0, 3),
+    });
     expect(result.toolResultChars).toBe(0);
     expect(result.messages[0]).toBe(input[0]);
   });
@@ -368,6 +399,8 @@ describe('tool results are the other region, and only with a pure compressor', (
     const opts = { compressToolResult: (t: string) => t.slice(0, 30) };
     const short = substituteHistory(conversation(4), opts).messages;
     const long = substituteHistory(conversation(9), opts).messages;
-    expect(JSON.stringify(long.slice(0, short.length))).toBe(JSON.stringify(short));
+    expect(JSON.stringify(long.slice(0, short.length))).toBe(
+      JSON.stringify(short)
+    );
   });
 });

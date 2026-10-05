@@ -12,6 +12,7 @@ import type {
   HookPhase,
 } from './analytics-types.js';
 import { SqliteAnalyticsStorage } from './analytics-storage.js';
+import type { AnalyticsRollup } from './analytics-rollup.js';
 import {
   hasObservedReturnedContext,
   isVerifiedSavingsEntry,
@@ -112,6 +113,18 @@ export class AnalyticsManager {
     }
 
     return this.aggregateByServer(entries);
+  }
+
+  /**
+   * Days already folded into totals by the retention pass.
+   *
+   * NOT FILTERABLE, AND THAT IS THE POINT OF HAVING IT SEPARATE. A folded day
+   * is one row per dimension group, so it can answer "how much did this tool
+   * save" but not "what happened in session X" -- the caller that needs the
+   * second has to see that the day is folded rather than read it as empty.
+   */
+  async getRollups(): Promise<readonly AnalyticsRollup[]> {
+    return this.storage.getRollups();
   }
 
   /**

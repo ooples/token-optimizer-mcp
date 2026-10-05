@@ -400,7 +400,12 @@ export class CacheOptimizerTool extends EventEmitter {
 
       if (cacheKey && useCache) {
         const serialized = JSON.stringify(data);
-        this.cache.set(cacheKey, serialized, serialized.length, tokensUsed);
+        this.cache.set(
+          cacheKey,
+          serialized,
+          serialized.length,
+          serialized.length
+        );
       }
 
       this.metrics.record({
@@ -2161,7 +2166,7 @@ export function getCacheOptimizerTool(
 export const CACHE_OPTIMIZER_TOOL_DEFINITION = {
   name: 'cache_optimizer',
   description:
-    'Advanced cache optimization with 89%+ token reduction. Analyzes performance, benchmarks strategies, provides ML-based recommendations, detects bottlenecks, and performs cost-benefit analysis.',
+    'Advanced cache optimization with an unmeasured design target of 89%+ token reduction. Analyzes performance, benchmarks strategies, provides ML-based recommendations, detects bottlenecks, and performs cost-benefit analysis.',
   inputSchema: {
     type: 'object',
     properties: {

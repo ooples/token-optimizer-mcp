@@ -22,11 +22,13 @@ export const EXPORT_ANALYTICS_TOOL_DEFINITION = {
       },
       startDate: {
         type: 'string',
+        pattern: '^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{3})?Z$',
         description:
           'Optional start date filter in ISO 8601 format (e.g., 2025-01-01T00:00:00Z)',
       },
       endDate: {
         type: 'string',
+        pattern: '^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{3})?Z$',
         description:
           'Optional end date filter in ISO 8601 format (e.g., 2025-12-31T23:59:59Z)',
       },

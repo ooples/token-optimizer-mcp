@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Smart Network Tool - Network Diagnostics and Monitoring
  *
  * Provides intelligent network analysis with:
@@ -11,7 +11,7 @@
 
 import { spawn } from 'child_process';
 import { assertSafeArg } from '../../utils/safe-exec.js';
-import { CacheEngine } from '../../core/cache-engine.js';
+import { CacheEngine, resolveCacheLocation } from '../../core/cache-engine.js';
 import { createHash } from 'crypto';
 import { homedir } from 'os';
 import { join } from 'path';
@@ -657,10 +657,10 @@ export class SmartNetwork {
     if (!cached) return null;
 
     try {
-      const result = JSON.parse(cached) as NetworkResult & {
+      const { cachedAt, ...result } = JSON.parse(cached) as NetworkResult & {
         cachedAt: number;
       };
-      const age = (Date.now() - result.cachedAt) / 1000;
+      const age = (Date.now() - cachedAt) / 1000;
 
       if (age <= maxAge) {
         return result;
@@ -837,7 +837,10 @@ export function getSmartNetwork(
 export async function runSmartNetwork(
   options: SmartNetworkOptions
 ): Promise<string> {
-  const cache = new CacheEngine(join(homedir(), '.hypercontext', 'cache'), 100);
+  const cache = new CacheEngine(
+    resolveCacheLocation(join(homedir(), '.hypercontext', 'cache')),
+    100
+  );
   const smartNetwork = getSmartNetwork(cache, options.projectRoot);
   try {
     const result = await smartNetwork.run(options);

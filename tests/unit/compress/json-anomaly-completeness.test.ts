@@ -1,3 +1,4 @@
+import { reassemble } from './spill-reassembly.js';
 import { expect, test } from '@jest/globals';
 import { compressJson } from '../../../src/compress/json.js';
 test('unsafe integer lexemes survive with no parsed extrema', () => {
@@ -24,10 +25,17 @@ test('unsafe integer lexemes survive with no parsed extrema', () => {
 });
 
 test('capped shape representatives do not claim the whole population survives', () => {
+  // THE DEVIATING ROWS ARE INTERLEAVED, so that this still reaches the capped
+  // path. They used to be one contiguous block (`i >= 140`), which the array
+  // templater now encodes whole and losslessly -- 74811 bytes to 2624, decoding
+  // byte for byte -- so that fixture stopped exercising capping at all and the
+  // `lossless` assertion below was passing for the wrong reason. Alternating the
+  // shape leaves no run of three alike for the templater to group, which is what
+  // sends the array down the anomaly path this test is about.
   const rows = Array.from({ length: 200 }, (_, i) => ({
     id: i,
     description: 'ordinary payload '.repeat(20),
-    ...(i >= 140 ? { relationships: [i] } : {}),
+    ...(i % 2 ? { relationships: [i] } : {}),
   }));
   let recovery = '';
   const result = compressJson(JSON.stringify(rows), {
@@ -39,7 +47,11 @@ test('capped shape representatives do not claim the whole population survives', 
   expect(result.lossless).toBe(false);
   expect(result.text).not.toContain('that differ are kept above');
   expect(result.text).not.toContain('"id":170,');
-  expect(JSON.parse(recovery)).toEqual(rows);
+  // THE WHOLE POPULATION, ACROSS BOTH HALVES. The claim under test is that the
+  // capped representatives do not silently stand in for the rows they capped,
+  // so what has to survive is every row -- not every row in the spill, which is
+  // only where the ones that left now live.
+  expect(reassemble(result.text, recovery)).toEqual(rows);
 });
 
 test('complete exceptional shapes still report the actual retained population', () => {

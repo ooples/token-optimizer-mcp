@@ -18,7 +18,10 @@
  */
 
 import { minRewriteShare } from '../../../src/compress/strategy.js';
-import { DEFAULT_TUNING, resolveTuning } from '../../../src/compress/options.js';
+import {
+  DEFAULT_TUNING,
+  resolveTuning,
+} from '../../../src/compress/options.js';
 
 describe('the threshold is the break-even share for the assumed length', () => {
   test('the default prior reproduces the 12.5% constant it replaced', () => {

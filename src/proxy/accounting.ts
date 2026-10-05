@@ -25,11 +25,13 @@
  */
 
 import { appendFileSync } from 'node:fs';
+import type { OutputArm } from './output-savings.js';
 import type { Readable, Writable } from 'node:stream';
 import { createGunzip, createInflate, createBrotliDecompress } from 'node:zlib';
 import * as zlib from 'node:zlib';
 import { StringDecoder } from 'node:string_decoder';
 import { UsageParser } from './usage-parser.js';
+import { pruneProxyLedger } from '../savings/retention.js';
 
 /** The token classes a provider bills separately. */
 export interface RequestUsage {
@@ -91,6 +93,39 @@ function mergeUsage(usage: Record<string, unknown>, into: RequestUsage): void {
 /** What compression did to one request, as the summary already reports it. */
 export interface CompressionFacts {
   readonly compressed: boolean;
+  /**
+   * Which arm of the output-shaper holdout the request was in, when one ran.
+   *
+   * THE ONLY FIELD HERE THAT IS NOT A FACT ABOUT THE INPUT, and it is here
+   * because the question it answers cannot be answered anywhere else. The
+   * shaper withholds itself from a fraction of conversations so its effect on
+   * what the model WRITES can be measured rather than estimated, and that
+   * measurement is a difference between the two arms' output token counts --
+   * which only this row holds. A label recorded without the count, or a count
+   * recorded without the label, each make the experiment unreadable.
+   *
+   * ABSENT WHEN NO EXPERIMENT RAN, never defaulted to an arm. Every request
+   * being labelled "treatment" would read as a trial whose control arm came
+   * back empty, rather than as a trial that was never started.
+   *
+   * NOT REQUEST CONTENT. It is one of two fixed words, derived from a hash of
+   * a conversation key that is itself never recorded.
+   */
+  readonly outputArm?: OutputArm;
+  /**
+   * Which arm of the TOOL-DEFERRAL holdout the request was in, when one ran.
+   *
+   * THE OTHER SIDE OF THE BILL FROM `outputArm`, and here for the same reason.
+   * Deferral's saving lands in the prompt the PROVIDER assembles, which we
+   * never see; all we see is what it billed for one. So the only proof the
+   * saving is real is the difference between the billed prompt tokens of
+   * conversations whose tools were deferred and those whose were not -- and
+   * that difference needs the label and the usage on one row, which is this one.
+   *
+   * ABSENT WHEN NO EXPERIMENT RAN, never defaulted to an arm, and NOT request
+   * content: one of two fixed words from a hash of a key that is never recorded.
+   */
+  readonly deferralArm?: OutputArm;
   readonly reason?: string;
   readonly anchorReason?: string;
   readonly elisions?: number;
@@ -118,9 +153,68 @@ export interface CompressionFacts {
   readonly topTools?: string;
   readonly messagesChars?: number;
   readonly messageCount?: number;
+  /**
+   * The model the request names, when it names one.
+   *
+   * THE ONE FIELD THAT MAKES A ROW PRICEABLE. Every other number here is a
+   * size, and a size cannot be turned into money: the provider's catalog is
+   * keyed by model, so a ledger row without one can report tokens avoided and
+   * never a dollar figure. The MCP path already carries a model for exactly
+   * this reason and the proxy path -- the component responsible for the larger
+   * saving -- carried none, so its rows could only ever have been reported
+   * unpriced.
+   *
+   * AN IDENTIFIER, NOT CONTENT. It is a value chosen from the provider's own
+   * published catalog, in the same class as the tool names already recorded
+   * here, and it is read from the PARSED request rather than matched out of
+   * the raw bytes. No part of the conversation, system prompt or tool schema
+   * is retained with it -- which is what keeps the always-on ring and the
+   * loopback `/__token-optimizer/transformations` endpoint as safe as they
+   * were before this field existed.
+   */
+  readonly model?: string;
   readonly beforeBytes: number;
   readonly afterBytes: number;
 }
+
+/**
+ * What the request cost in tokens on each side, or why that is not known.
+ *
+ * BYTES ARE NOT THE UNIT A BILL IS DENOMINATED IN. `beforeBytes` and
+ * `afterBytes` are exact and free, and they are the wrong unit: a provider
+ * charges per token, and the ratio between the two is not constant across
+ * JSON structure, prose and code. A savings figure computed from bytes is a
+ * proxy for the thing the user actually pays, and this field is the thing
+ * itself.
+ *
+ * COUNTS ONLY. No body, no fragment of one, and no text of any kind appears
+ * here -- that constraint is what lets the transformations ring and the ledger
+ * stay always-on rather than opt-in like capture.
+ *
+ * THE PROVIDER'S OWN COUNT STAYS WHERE IT IS, in `usage`. Keeping our estimate
+ * of the after-body separate from the provider's billed count for that same
+ * body is what makes every single request a free calibration of this
+ * instrument; merging them would throw that away.
+ */
+export type TokenAccountingFacts =
+  | {
+      readonly measured: true;
+      /** Our estimate for the body we would have sent. Nobody billed for it. */
+      readonly beforeTokens: number;
+      /** Our estimate for the body we did send; compare with `usage`. */
+      readonly afterTokens: number;
+      /** The encoder, so this figure can be compared with any other. */
+      readonly method: string;
+    }
+  | {
+      readonly measured: false;
+      /**
+       * Why there is no figure. A NAMED REASON, NEVER A ZERO: a zero in a
+       * savings column reads as a request the proxy did not improve, which
+       * would be a false measurement rather than a missing one.
+       */
+      readonly reason: string;
+    };
 
 /** One line of the ledger: what we sent, and what it was billed as. */
 export interface AccountingRecord extends CompressionFacts {
@@ -136,6 +230,29 @@ export interface AccountingRecord extends CompressionFacts {
   /** No HTTP response was received; usage remains unknown, not zero. */
   readonly transportError?: string;
   readonly usage: RequestUsage;
+  /**
+   * Tokens before and after, under our own encoder -- absent entirely on a
+   * proxy built without token accounting, so an old ledger line stays valid.
+   */
+  readonly tokens?: TokenAccountingFacts;
+  /**
+   * The share of this reply's word n-grams that were already in the context.
+   *
+   * OUTPUT WASTE, WHICH IS NOT A SAVING. The other output figures in this
+   * feature are differences between two populations. This one has no
+   * counterfactual at all -- it is a property of a single response, and it says
+   * how much of the reply the model had already been shown. A high ratio is an
+   * opportunity to attack, never a token anyone saved, and nothing may add it to
+   * one.
+   *
+   * ABSENT WHEN NOT SCANNED, which is a different fact from zero. The scan is
+   * opt-in, refuses a context too short or too large to stand behind, and
+   * refuses a body it could not finish reading -- so a missing field means "no
+   * figure", while a `0` means "measured, and nothing was echoed".
+   *
+   * A RATIO, NEVER THE TEXT IT CAME FROM. See `./echo.ts`.
+   */
+  readonly echoRatio?: number;
 }
 
 /** The ledger path, or null when accounting was not asked for. */
@@ -169,6 +286,57 @@ export function appendRecord(path: string, record: AccountingRecord): void {
   } catch {
     // An unwritable ledger must not cost the agent its response.
   }
+  maybePrune(path);
+}
+
+/**
+ * How many appends pass between two prunes of the same ledger.
+ *
+ * AMORTISED, BECAUSE A PRUNE READS THE WHOLE FILE. Checking on every append
+ * would turn a per-request constant into a per-request pass over the ledger,
+ * which is exactly the cost the append above was written to avoid. At this
+ * interval the read is spread thin enough to disappear, and the file can still
+ * only overshoot its ceiling by the few hundred lines written in between --
+ * which is why the ceiling is set well under any real limit rather than at it.
+ */
+const PRUNE_EVERY_APPENDS = 512;
+
+/**
+ * Appends since each ledger was last pruned. Keyed by path because one process
+ * can be told to write more than one.
+ */
+const sinceLastPrune = new Map<string, number>();
+
+/**
+ * Folds whatever has aged out of the ledger, occasionally.
+ *
+ * IT RUNS HERE, IN THE WRITER, ON PURPOSE. The prune rewrites the file, so it
+ * cannot run beside an append without the risk of losing the line that lands
+ * mid-rewrite. The single writer is the one place where "no append is in
+ * flight" is known rather than hoped for, and both are synchronous, so the
+ * rewrite cannot interleave with the append that triggered it.
+ *
+ * THE FIRST APPEND ALWAYS CHECKS. A ledger that grew under an older build, or
+ * under a proxy that only ever handled a handful of requests before exiting,
+ * would otherwise never reach a counter-driven prune at all -- it would just
+ * stay as big as it already was, forever.
+ */
+function maybePrune(path: string): void {
+  const seen = sinceLastPrune.get(path);
+  const next = (seen ?? 0) + 1;
+  if (seen !== undefined && next < PRUNE_EVERY_APPENDS) {
+    sinceLastPrune.set(path, next);
+    return;
+  }
+  sinceLastPrune.set(path, 0);
+  try {
+    pruneProxyLedger(path);
+  } catch {
+    // A ledger that cannot be pruned is a ledger that grows, which is worth a
+    // disk; it is not worth the agent's response, and it is not worth losing
+    // the line we just wrote either. Swallowed for the same reason the append
+    // above is -- see the file header.
+  }
 }
 
 /**
@@ -185,7 +353,19 @@ export function appendRecord(path: string, record: AccountingRecord): void {
 export function tapUsage(
   stream: Readable,
   done: (usage: RequestUsage) => void,
-  contentEncoding?: string
+  contentEncoding?: string,
+  /**
+   * An extra reader of the decoded response text, for an instrument that needs
+   * the words rather than the usage numbers.
+   *
+   * SHARES THE ONE DECODE. The tap already decompresses the response to find
+   * the usage object, and a second consumer attaching its own decoder would
+   * double that cost on the one stream the proxy must not slow down. It is
+   * handed the same decoded text, in order, and whatever it throws is swallowed
+   * for the same reason everything else here is -- the response has already
+   * been delivered.
+   */
+  watch?: (text: string) => void
 ): void {
   const usage: RequestUsage = {};
   const parser = new UsageParser((value) => mergeUsage(value, usage));
@@ -217,6 +397,13 @@ export function tapUsage(
 
   const absorb = (text: string): void => {
     parser.write(text);
+    if (watch === undefined) return;
+    try {
+      watch(text);
+    } catch {
+      // An instrument that fails is an instrument that reports nothing. It is
+      // never the response's problem.
+    }
   };
 
   if (decoder) {

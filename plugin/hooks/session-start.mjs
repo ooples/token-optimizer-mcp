@@ -42,7 +42,12 @@ import { wikiDir, load, projectRootFor } from './lib/wiki.mjs';
 import { seedProject, alreadySeeded, seedDisabled } from './lib/seed.mjs';
 import { episodeMeta, featuresForArm } from './lib/experiment.mjs';
 import { join } from 'node:path';
-import { beginHookInvocation, noteHookOutput } from './lib/observability.mjs';
+import {
+  beginHookInvocation,
+  errorFields,
+  noteHookOutput,
+  writeHookEvent,
+} from './lib/observability.mjs';
 
 // THE BUNDLED INVENTORY IS ASSERTED ONLY FOR AN ACTUAL PLUGIN INSTALL.
 //
@@ -195,9 +200,36 @@ try {
       const existing = load(dir);
       // Walk the ROOT the store is keyed on, not the subdirectory this session
       // happens to have started in.
-      if (!alreadySeeded(existing)) seedProject(dir, projectRoot);
-    } catch {
+      if (!alreadySeeded(existing)) {
+        const seeded = seedProject(dir, projectRoot);
+        // COUNTS ONLY, and that is what makes it recordable here: files,
+        // symbols and appends are numbers about this machine's work, not about
+        // the user's code, so none of the privacy rules this log exists under
+        // are in play. `stopped` is one of a fixed set of reasons.
+        //
+        // `writes` is the one that was unobservable. Seeding buffers every
+        // record into a single append; when that batching regressed the only
+        // symptom was a seed that ran out of budget partway down the tree,
+        // which looks exactly like a slow machine. Recorded, the two separate.
+        writeHookEvent({
+          level: 'info',
+          event: 'seed.completed',
+          seedFiles: seeded.files,
+          seedSymbols: seeded.symbols,
+          seedWrites: seeded.writes,
+          seedStopped: seeded.stopped,
+        });
+      }
+    } catch (error) {
       // A project we cannot walk simply has no index; the session is unaffected.
+      // FAIL-OPEN IS NOT FAIL-SILENT: swallowed, a seed that threw on every
+      // session was indistinguishable from one the gate above never ran.
+      writeHookEvent({
+        level: 'warn',
+        event: 'seed.failed',
+        // Never the raw message: an ENOENT names the path it could not open.
+        error: errorFields(error),
+      });
     }
   }
 

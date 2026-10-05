@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Smart TypeScript Tool - 83% Token Reduction
  *
  * Incremental TypeScript compilation with intelligent caching:
@@ -9,12 +9,12 @@
  * - Provides actionable type error summaries
  */
 
-import { CacheEngine } from '../../core/cache-engine.js';
+import { CacheEngine, resolveCacheLocation } from '../../core/cache-engine.js';
 import { MetricsCollector } from '../../core/metrics.js';
 import { TokenCounter } from '../../core/token-counter.js';
 import { createHash } from 'crypto';
 import { readFileSync, existsSync, statSync } from 'fs';
-import { join, relative, dirname } from 'path';
+import { join, relative, dirname, isAbsolute, normalize } from 'path';
 import { homedir } from 'os';
 import * as ts from 'typescript';
 
@@ -29,9 +29,23 @@ interface TypeScriptFile {
 interface CompilationResult {
   success: boolean;
   diagnostics: ts.Diagnostic[];
+  /**
+   * The files this really type-checked -- not the files it was asked about.
+   *
+   * It used to be the request, echoed. A name the program does not contain is
+   * skipped, so asking about one file and being told `Files Compiled: 1` with
+   * `Errors: 0` was a verdict on nothing; see notInProgram.
+   */
   filesCompiled: string[];
-  duration: number;
-  timestamp: number;
+  /**
+   * The files that were asked about and are not in the program.
+   *
+   * A tsconfig defines the program. A file it does not include has no
+   * diagnostics to report, and `0 errors` about it is not a true answer in a
+   * smaller font -- it is the opposite of one. These are named so a caller can
+   * see which of their paths the tsconfig does not reach.
+   */
+  notInProgram: string[];
   typeInfo?: Map<string, TypeInfo>;
 }
 
@@ -90,7 +104,6 @@ interface SmartTypeScriptOutput {
     warningCount: number;
     filesCompiled: number;
     filesFromCache: number;
-    duration: number;
     fromCache: boolean;
     incrementalMode: boolean;
   };
@@ -133,6 +146,15 @@ interface SmartTypeScriptOutput {
   }>;
 
   /**
+   * Of the files the caller named, the ones the program does not contain.
+   *
+   * Absent when every named file was checked. Present and non-empty means this
+   * report is about fewer files than were asked about, which a caller cannot
+   * work out from a count that only ever named successes.
+   */
+  notTypeChecked?: string[];
+
+  /**
    * Optimization suggestions
    */
   suggestions: Array<{
@@ -142,14 +164,15 @@ interface SmartTypeScriptOutput {
     impact: string;
   }>;
 
-  /**
-   * Token reduction metrics
-   */
-  metrics: {
-    originalTokens: number;
-    compactedTokens: number;
-    reductionPercentage: number;
-  };
+  // NO metrics FIELD, DELIBERATELY. Neither half was ever measured. The
+  // "original" was arithmetic over constants -- 200 chars assumed per
+  // diagnostic, 100 per dependency-graph node, 150 per type, plus a flat 500
+  // of overhead, all divided by four to be called tokens -- so it described a
+  // tsc output this tool never produced and nobody was ever charged for. The
+  // "compacted" measured a summary object that is not the report a caller
+  // reads either. There is no before here for the tool to declare: the files
+  // are named in the arguments, which is where the recorder reads them, and
+  // the after is counted once at the wire.
 }
 
 export class SmartTypeScript {
@@ -171,6 +194,27 @@ export class SmartTypeScript {
     this.cache = cache;
     this.metrics = metrics;
     this.projectRoot = projectRoot || process.cwd();
+  }
+
+  /**
+   * A path the CALLER wrote, resolved against the project root.
+   *
+   * `join(this.projectRoot, file)` was used directly, and on an absolute
+   * argument that produces a path which exists nowhere: joining the root
+   * `C:/p/fixtures` to `C:/p/fixtures/a.ts` appends the second whole path to
+   * the first, drive letter included. Every consequence of it was silent. The
+   * program had no source file under that name, so compile() skipped it and
+   * reported zero diagnostics as `Status: Success`; getAffectedFiles joined
+   * the root on a second time, so the report named a path doubled twice; and
+   * generateCacheKey's existsSync failed, so the file's content never entered
+   * the cache key and two different versions of a file shared one entry.
+   *
+   * `files` is documented as taking paths, not names, and the MCP dispatch
+   * hands over whatever the caller sent. So absolute is the ordinary case
+   * here, not the exception.
+   */
+  private resolveFromRoot(file: string): string {
+    return isAbsolute(file) ? normalize(file) : join(this.projectRoot, file);
   }
 
   /**
@@ -201,9 +245,8 @@ export class SmartTypeScript {
           duration: Date.now() - startTime,
           success: true,
           cacheHit: true,
-          inputTokens: cached.metrics.originalTokens,
-          savedTokens:
-            cached.metrics.originalTokens - cached.metrics.compactedTokens,
+          // NO TOKEN FIGURES. Both were read back off the estimate the cached
+          // result was written with, so this record republished a guess.
         });
 
         return cached;
@@ -211,7 +254,7 @@ export class SmartTypeScript {
     }
 
     // Initialize TypeScript program
-    const tsconfigPath = join(this.projectRoot, tsconfig);
+    const tsconfigPath = this.resolveFromRoot(tsconfig);
     const configFile = ts.readConfigFile(tsconfigPath, ts.sys.readFile);
     const parsedConfig = ts.parseJsonConfigFileContent(
       configFile.config,
@@ -233,13 +276,34 @@ export class SmartTypeScript {
 
     // Run compilation
     const result = await this.compile(filesToCompile, includeTypeInfo);
+
+    // NOTHING WAS TYPE-CHECKED, SO THERE IS NO VERDICT TO REPORT.
+    //
+    // The caller named files; the program defined by this tsconfig contains
+    // none of them. `success` is computed as "no diagnostic of category
+    // Error", which is vacuously true when no file was looked at, so this path
+    // used to answer `Status: Success / Errors: 0 / Files Compiled: 1`. That is
+    // not a weaker answer than the truth, it is the reverse of it: a caller
+    // reads it as their file being clean.
+    //
+    // It is a throw rather than a quiet report because the one thing a caller
+    // asked for -- a verdict on these files -- cannot be given at all, and the
+    // repair is in the arguments. The message names the tsconfig that defines
+    // the program and the paths it does not reach; those are the caller's own
+    // strings and this tool's own fixture paths, returned to them, and nothing
+    // here is logged or transmitted.
+    if (files.length > 0 && result.filesCompiled.length === 0) {
+      throw new Error(
+        `No file named here is part of the program that ${tsconfigPath} defines, so there is nothing to type-check and no verdict to report. Not in the program: ${result.notInProgram.join(', ')}. The program holds ${parsedConfig.fileNames.length} file(s); check the projectRoot, the tsconfig and its include/exclude patterns.`
+      );
+    }
+
     const duration = Date.now() - startTime;
-    result.duration = duration;
 
     // Cache the result
     const output = this.transformOutput(
       result,
-      filesToCompile,
+      result.filesCompiled,
       files.length > 0
     );
     this.cacheResult(cacheKey, output);
@@ -250,9 +314,6 @@ export class SmartTypeScript {
       duration,
       success: result.success,
       cacheHit: false,
-      inputTokens: output.metrics.originalTokens,
-      savedTokens:
-        output.metrics.originalTokens - output.metrics.compactedTokens,
     });
 
     return output;
@@ -403,8 +464,7 @@ export class SmartTypeScript {
 
     // Add changed files and their transitive dependents
     changedFiles.forEach((file) => {
-      const absolutePath = join(this.projectRoot, file);
-      addDependents(absolutePath);
+      addDependents(this.resolveFromRoot(file));
     });
 
     return Array.from(affected);
@@ -425,11 +485,20 @@ export class SmartTypeScript {
     const typeInfoMap = includeTypeInfo
       ? new Map<string, TypeInfo>()
       : undefined;
+    const checked: string[] = [];
+    const notInProgram: string[] = [];
 
     // Get diagnostics for specified files
     for (const fileName of filesToCompile) {
       const sourceFile = this.program.getSourceFile(fileName);
-      if (!sourceFile) continue;
+      // NOT A CONTINUE ANY MORE. This skipped the file in silence and left
+      // `filesCompiled` claiming it, so a program that contained none of the
+      // requested files answered `Status: Success, Errors: 0`.
+      if (!sourceFile) {
+        notInProgram.push(fileName);
+        continue;
+      }
+      checked.push(fileName);
 
       // Get semantic diagnostics (type errors)
       const fileDiagnostics = [
@@ -453,9 +522,8 @@ export class SmartTypeScript {
         diagnostics.filter((d) => d.category === ts.DiagnosticCategory.Error)
           .length === 0,
       diagnostics,
-      filesCompiled: filesToCompile,
-      duration: 0, // Set by caller
-      timestamp: Date.now(),
+      filesCompiled: checked,
+      notInProgram,
       typeInfo: typeInfoMap,
     };
   }
@@ -636,12 +704,6 @@ export class SmartTypeScript {
       );
     }
 
-    // Calculate token metrics
-    const originalSize = this.estimateOriginalOutputSize(result);
-    const compactSize = this.estimateCompactSize(result, diagnosticsByCategory);
-    const originalTokens = Math.ceil(originalSize / 4);
-    const compactedTokens = Math.ceil(compactSize / 4);
-
     // Extract type information
     const typeInfo = result.typeInfo
       ? Array.from(result.typeInfo.entries()).map(([file, info]) => ({
@@ -664,7 +726,6 @@ export class SmartTypeScript {
         warningCount,
         filesCompiled: filesCompiled.length,
         filesFromCache: 0,
-        duration: result.duration,
         fromCache: false,
         incrementalMode,
       },
@@ -682,14 +743,16 @@ export class SmartTypeScript {
           }
         : undefined,
       typeInfo,
+      // Omitted entirely when every named file was checked, so the common
+      // reply does not carry an empty array saying nothing went wrong.
+      ...(result.notInProgram.length > 0
+        ? {
+            notTypeChecked: result.notInProgram.map((f) =>
+              relative(this.projectRoot, f)
+            ),
+          }
+        : {}),
       suggestions,
-      metrics: {
-        originalTokens,
-        compactedTokens,
-        reductionPercentage: Math.round(
-          ((originalTokens - compactedTokens) / originalTokens) * 100
-        ),
-      },
     };
   }
 
@@ -843,7 +906,7 @@ export class SmartTypeScript {
     hash.update(this.cacheNamespace);
 
     // Hash tsconfig
-    const tsconfigPath = join(this.projectRoot, tsconfig);
+    const tsconfigPath = this.resolveFromRoot(tsconfig);
     if (existsSync(tsconfigPath)) {
       const content = readFileSync(tsconfigPath, 'utf-8');
       hash.update(content);
@@ -852,7 +915,7 @@ export class SmartTypeScript {
     // Hash specific files if provided (incremental mode)
     if (files.length > 0) {
       for (const file of files) {
-        const filePath = join(this.projectRoot, file);
+        const filePath = this.resolveFromRoot(file);
         if (existsSync(filePath)) {
           const fileHash = this.generateFileHash(filePath);
           hash.update(fileHash);
@@ -889,10 +952,12 @@ export class SmartTypeScript {
     }
 
     try {
-      const result = JSON.parse(cached) as SmartTypeScriptOutput & {
+      const { cachedAt, ...result } = JSON.parse(
+        cached
+      ) as SmartTypeScriptOutput & {
         cachedAt: number;
       };
-      const age = (Date.now() - result.cachedAt) / 1000;
+      const age = (Date.now() - cachedAt) / 1000;
 
       if (age <= maxAge) {
         result.summary.fromCache = true;
@@ -915,55 +980,15 @@ export class SmartTypeScript {
     };
 
     const buffer = JSON.stringify(toCache);
-    const tokensSaved =
-      output.metrics.originalTokens - output.metrics.compactedTokens;
 
-    this.cache.set(key, buffer, 300, tokensSaved); // 5 minute TTL
+    this.cache.set(key, buffer, buffer.length, buffer.length, {
+      ttlSeconds: 300,
+    }); // 5 minute TTL
   }
 
   /**
    * Estimate original output size (full diagnostic messages)
    */
-  private estimateOriginalOutputSize(result: CompilationResult): number {
-    // Each diagnostic is ~200 chars in full TSC output
-    let size = result.diagnostics.length * 200;
-
-    // Add dependency graph size
-    size += this.dependencyGraph.size * 100;
-
-    // Add type info size if available
-    if (result.typeInfo) {
-      size += result.typeInfo.size * 150;
-    }
-
-    return size + 500; // Base overhead
-  }
-
-  /**
-   * Estimate compact output size
-   */
-  private estimateCompactSize(
-    result: CompilationResult,
-    categories: Array<{ category: string; count: number }>
-  ): number {
-    const summary = {
-      success: result.success,
-      errorCount: result.diagnostics.filter(
-        (d) => d.category === ts.DiagnosticCategory.Error
-      ).length,
-      filesCompiled: result.filesCompiled.length,
-    };
-
-    // Top 3 categories with first 3 diagnostics each
-    const topCategories = categories.slice(0, 3).map((cat) => ({
-      category: cat.category,
-      count: cat.count,
-      samples: 3,
-    }));
-
-    return JSON.stringify({ summary, topCategories }).length;
-  }
-
   /**
    * Close cache and cleanup
    */
@@ -990,7 +1015,9 @@ export function getSmartTypeScriptTool(
 export async function runSmartTypescript(
   options: SmartTypeScriptOptions = {}
 ): Promise<string> {
-  const cache = new CacheEngine(join(homedir(), '.hypercontext', 'cache'));
+  const cache = new CacheEngine(
+    resolveCacheLocation(join(homedir(), '.hypercontext', 'cache'))
+  );
   const tokenCounter = new TokenCounter();
   const metrics = new MetricsCollector();
   const smartTS = new SmartTypeScript(
@@ -1014,7 +1041,7 @@ export async function runSmartTypescript(
     if (result.summary.incrementalMode) {
       output += `  Mode: Incremental (changed files only)\n`;
     }
-    output += `  Duration: ${(result.summary.duration / 1000).toFixed(2)}s\n\n`;
+    output += '\n';
 
     // Dependency information (incremental mode)
     if (result.dependencies) {
@@ -1035,6 +1062,20 @@ export async function runSmartTypescript(
         result.dependencies.affectedFiles.slice(0, 5).forEach((file) => {
           output += `    - ${file}\n`;
         });
+      }
+      output += '\n';
+    }
+
+    // NAMED, BECAUSE THE COUNTS ABOVE CANNOT SAY IT. `Files Compiled` counts
+    // what was checked; nothing in the report used to say that a file the
+    // caller asked about was not among them.
+    if (result.notTypeChecked && result.notTypeChecked.length > 0) {
+      output += `Not type-checked -- not part of the program this tsconfig defines:\n`;
+      result.notTypeChecked.slice(0, 5).forEach((file) => {
+        output += `  - ${file}\n`;
+      });
+      if (result.notTypeChecked.length > 5) {
+        output += `  ... and ${result.notTypeChecked.length - 5} more\n`;
       }
       output += '\n';
     }
@@ -1097,12 +1138,8 @@ export async function runSmartTypescript(
       output += '\n';
     }
 
-    // Token metrics
-    output += `Token Reduction:\n`;
-    output += `  Original: ${result.metrics.originalTokens} tokens\n`;
-    output += `  Compacted: ${result.metrics.compactedTokens} tokens\n`;
-    output += `  Reduction: ${result.metrics.reductionPercentage}%\n`;
-
+    // NO TOKEN REDUCTION FOOTER. It printed a percentage derived from two
+    // estimates, and the digits were themselves part of the bill.
     return output;
   } finally {
     smartTS.close();

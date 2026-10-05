@@ -309,7 +309,12 @@ export class CacheInvalidationTool extends EventEmitter {
       const tokensUsed = tokensUsedResult.tokens;
       if (cacheKey && useCache) {
         const serialized = JSON.stringify(data);
-        this.cache.set(cacheKey, serialized, serialized.length, tokensUsed);
+        this.cache.set(
+          cacheKey,
+          serialized,
+          serialized.length,
+          serialized.length
+        );
       }
 
       // Record metrics
@@ -1202,7 +1207,7 @@ export function getCacheInvalidationTool(
 export const CACHE_INVALIDATION_TOOL_DEFINITION = {
   name: 'cache_invalidation',
   description:
-    'Comprehensive cache invalidation with 88%+ token reduction, dependency tracking, pattern matching, scheduled invalidation, and distributed coordination',
+    'Comprehensive cache invalidation with an unmeasured design target of 88%+ token reduction, dependency tracking, pattern matching, scheduled invalidation, and distributed coordination',
   inputSchema: {
     type: 'object',
     properties: {

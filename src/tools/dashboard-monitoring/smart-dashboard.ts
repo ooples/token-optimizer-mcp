@@ -1196,7 +1196,7 @@ export class SmartDashboard {
     const cacheKey = `cache-${createHash('md5').update('health-dependencies:graph').digest('hex')}`;
     const graphData = JSON.stringify(graph);
     const tokensUsed = this.tokenCounter.count(graphData).tokens;
-    this.cache.set(cacheKey, graphData, tokensUsed, tokensUsed);
+    this.cache.set(cacheKey, graphData, graphData.length, graphData.length);
 
     return {
       success: true,

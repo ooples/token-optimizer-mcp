@@ -1,16 +1,61 @@
-import { inlineMarker } from './annotate.js';
-import type { CompressionResult, Elision } from './types.js';
+import { inlineMarker, isStamped, stampFor } from './annotate.js';
+import type { CompressionResult, Elision, Stamp } from './types.js';
 
 /** Exact repeated sequences preserve order, timestamps and whitespace inline. */
+/*
+ * `undefined` MINTS, `null` DECLINES.
+ *
+ * The stamp arrives as an argument here rather than on a context, so the two
+ * cases a context separates by key presence have to be separated by the value:
+ * a caller who wrote nothing did not think about decoding and gets a stamp back
+ * on the result, while a caller who wrote `null` means markers nothing honours.
+ */
 export function compressLogPeriods(
   text: string,
-  protectedLine: (line: string) => boolean
+  protectedLine: (line: string) => boolean,
+  stamp?: Stamp
+): CompressionResult | null {
+  const tag = stamp === undefined ? stampFor(text) : stamp;
+  const out = periodsOf(text, protectedLine, tag);
+  return out === null ? null : { ...out, stamp: tag };
+}
+
+function periodsOf(
+  text: string,
+  protectedLine: (line: string) => boolean,
+  stamp: Stamp
 ): CompressionResult | null {
   const lines = text.split('\n');
-  // Existing marker-looking input must not become ambiguous with our encoding.
-  if (lines.some((line) => line.trimStart().startsWith('[... '))) return null;
+  // OUR OWN MARKERS MUST NOT BECOME AMBIGUOUS WITH OUR ENCODING -- but a
+  // marker-SHAPED line in the input is not one of ours, and declining the whole
+  // block on its account is 20.0 points of reduction the author of the content
+  // takes off us by writing one line, measured in `bench/compression/
+  // adversarial.mjs`. A line carrying this stamp can only have come from this
+  // pass, which is the case the ambiguity was ever about.
+  if (lines.some((line) => isStamped(line, stamp))) return null;
   const out: string[] = [];
   const elisions: Elision[] = [];
+  // MEMOISED PER LINE. protectedLine is a regex scan, and the loop below tries
+  // eight periods at every position, so a line sits inside the candidate block
+  // of all eight periods at up to eight positions -- up to 36 scans of the same
+  // line. It is a pure test of one string, so one scan answers all of them.
+  // Measured on raw-build-log it was the single hottest frame in the compressor.
+  //
+  // THE BLANK TEST IS MEMOISED WITH IT, for the same reason and one more: it is
+  // `!line.trim()`, which allocates a whole trimmed copy of the line to ask a
+  // question with a one-character answer. Both operands are a pure test of one
+  // string and the caller only ever wants their disjunction, so caching the
+  // disjunction keeps the short-circuit -- protectedLine still never sees a
+  // blank line -- while running each side once per line rather than once per
+  // (position, period) pair.
+  const known = new Array<boolean | undefined>(lines.length);
+  const unusable = (i: number): boolean => {
+    const cached = known[i];
+    if (cached !== undefined) return cached;
+    const found = !lines[i].trim() || protectedLine(lines[i]);
+    known[i] = found;
+    return found;
+  };
   let at = 0;
   while (at < lines.length) {
     let best:
@@ -21,19 +66,35 @@ export function compressLogPeriods(
       period <= 8 && at + period * 3 <= lines.length;
       period++
     ) {
-      const block = lines.slice(at, at + period);
-      if (block.some((line) => !line.trim() || protectedLine(line))) continue;
+      // ONE NEW LINE PER PERIOD, AND BLOCKING IS FINAL. The candidate block for
+      // period p is the block for p - 1 with one more line on the end, so the
+      // lines before it were tested on the previous turn; and because each
+      // block contains every shorter one, a line that blocks period p blocks
+      // every longer period too. Re-testing the whole prefix each time turned
+      // eight tests per position into thirty-six.
+      if (unusable(at + period - 1)) break;
+      // Read through `lines` rather than slicing a block out of it: a slice
+      // per period is eight throwaway arrays per position, and the index it
+      // would be read at is the same arithmetic either way.
       let end = at + period;
-      while (end < lines.length && lines[end] === block[(end - at) % period])
+      while (
+        end < lines.length &&
+        lines[end] === lines[at + ((end - at) % period)]
+      )
         end++;
       const repeats = Math.floor((end - at) / period);
       if (repeats < 3) continue;
       const marker = inlineMarker(
         `previous ${period} log lines repeat ${repeats - 1} more times, verbatim and in order`,
-        null
+        null,
+        stamp
       );
-      const saved =
-        (block.join('\n').length + 1) * (repeats - 1) - marker.length - 1;
+      // The block joined on newlines plus a trailing one: every line's length,
+      // plus one separator each. Counted rather than built, for the same
+      // reason the slice went.
+      let span = period;
+      for (let i = at; i < at + period; i += 1) span += lines[i].length;
+      const saved = span * (repeats - 1) - marker.length - 1;
       if (saved > 0 && (!best || saved > best.saved))
         best = { period, repeats, marker, saved };
     }

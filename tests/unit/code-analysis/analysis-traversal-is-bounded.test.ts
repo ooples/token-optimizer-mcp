@@ -368,7 +368,7 @@ describe('smart_dependencies', () => {
     expect(result.metadata.searchTruncated).toBeUndefined();
     // No `+ PLANTED_IN_SCOPE`: glob does not match dotted paths unless asked,
     // so the planted `.hidden` importer is out of scope for this tool.
-    expect(result.metadata.totalFiles).toBe(SOURCE_FILES);
+    expect(result.graph.nodes.length).toBe(SOURCE_FILES);
   }, 120_000);
 
   it('stops at the deadline and reports the graph as partial', async () => {
@@ -413,7 +413,7 @@ describe('smart_dependencies', () => {
 
     const second = await tool.analyze({ cwd: root, useCache: true });
     expect(second.metadata.cacheHit).toBe(false);
-    expect(second.metadata.totalFiles).toBe(SOURCE_FILES);
+    expect(second.graph.nodes.length).toBe(SOURCE_FILES);
   }, 120_000);
 
   it('carries the truncation flag into a mode that rebuilds its own metadata', async () => {

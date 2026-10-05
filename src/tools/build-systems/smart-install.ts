@@ -9,7 +9,7 @@
  */
 
 import { assertAllowed } from '../../utils/safe-exec.js';
-import { CacheEngine } from '../../core/cache-engine.js';
+import { CacheEngine, resolveCacheLocation } from '../../core/cache-engine.js';
 import { createHash } from 'crypto';
 import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
@@ -490,8 +490,10 @@ export class SmartInstall {
     if (!cached) return null;
 
     try {
-      const result = JSON.parse(cached) as InstallResult & { cachedAt: number };
-      const age = (Date.now() - result.cachedAt) / 1000;
+      const { cachedAt, ...result } = JSON.parse(cached) as InstallResult & {
+        cachedAt: number;
+      };
+      const age = (Date.now() - cachedAt) / 1000;
 
       if (age <= maxAge) {
         return result;
@@ -631,7 +633,10 @@ export function getSmartInstall(
 export async function runSmartInstall(
   options: SmartInstallOptions = {}
 ): Promise<string> {
-  const cache = new CacheEngine(join(homedir(), '.hypercontext', 'cache'), 100);
+  const cache = new CacheEngine(
+    resolveCacheLocation(join(homedir(), '.hypercontext', 'cache')),
+    100
+  );
   const smartInstall = getSmartInstall(cache, options.projectRoot);
   try {
     const result = await smartInstall.run(options);
@@ -719,7 +724,12 @@ export const SMART_INSTALL_TOOL_DEFINITION = {
       },
       packages: {
         type: 'array',
-        items: { type: 'string' },
+        items: {
+          type: 'string',
+          minLength: 1,
+          maxLength: 214,
+          pattern: '^(?!-)[^\\u0000\\n\\r]+$',
+        },
         description:
           'Packages to install (if empty, installs all from package.json)',
       },

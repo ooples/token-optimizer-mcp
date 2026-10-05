@@ -1,14 +1,23 @@
 /** Compact consecutive Node TAP records without discarding a value.
  * Every failure keeps its own row; only byte-identical diagnostics share a template.
  */
-import type { CompressionResult, Elision } from './types.js';
+import type { CompressionResult, Elision, Stamp } from './types.js';
 import { unchanged } from './types.js';
+import { stampFor } from './annotate.js';
 
 export function looksLikeTap(text: string): boolean {
   return /^# Subtest: .+\r?\n(?:not )?ok \d+ - /m.test(text);
 }
 
-export function compressTap(text: string): CompressionResult {
+/**
+ * THE ENVELOPE CARRIES AN AUTHENTICATOR, for the reason the `[... ` families
+ * do: without one, a `[TAP ok records: ...]` line that arrived in the content
+ * reached `rehydrate` as an `unconsumed marker` and cost the caller the whole
+ * block. Handed nothing, this mints its own and returns it on the result.
+ */
+export function compressTap(text: string, stamp?: Stamp): CompressionResult {
+  const tag = stamp === undefined ? stampFor(text) : stamp;
+  const suffix = tag === null ? '' : ` ~${tag}`;
   // Match only the exact Node leaf-test grammar; names, IDs, duration text and
   // newline style all survive. Different diagnostics or status break the group.
   const record =
@@ -43,9 +52,9 @@ export function compressTap(text: string): CompressionResult {
     // untouched rather than silently adding a byte during reconstruction.
     if (group.length >= 2 && last[0].endsWith(nl)) {
       const compact =
-        `[TAP ${status} records: JSON rows [name,id,ms]; substitute into template ${JSON.stringify(template)}]${nl}` +
+        `[TAP ${status} records: JSON rows [name,id,ms]; substitute into template ${JSON.stringify(template)}${suffix}]${nl}` +
         group.map((m) => JSON.stringify([m[1], m[4], m[5]])).join(nl) +
-        `${nl}[/TAP ${status} records]${nl}`;
+        `${nl}[/TAP ${status} records${suffix}]${nl}`;
       if (compact.length < original.length) {
         result += text.slice(cursor, first.index) + compact;
         cursor = stop;
@@ -59,6 +68,11 @@ export function compressTap(text: string): CompressionResult {
     i = end;
   }
   return elisions.length
-    ? { text: result + text.slice(cursor), elisions, lossless: true }
+    ? {
+        text: result + text.slice(cursor),
+        elisions,
+        lossless: true,
+        stamp: tag,
+      }
     : unchanged(text);
 }

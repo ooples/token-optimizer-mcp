@@ -55,6 +55,87 @@ if (hookHealth.total === 0) {
     );
   }
 }
+// WHAT TELEMETRY IS DOING, SAID OUT LOUD.
+//
+// The two switches defaulted off and were documented nowhere the user reads, so
+// nobody could opt in even deliberately, and nobody opted in could tell whether
+// it was working. Both halves are a discoverability bug rather than a code one,
+// and `doctor` is where someone already goes to ask what this installation is up
+// to.
+//
+// READ FROM dist SO THERE IS ONE SOURCE OF TRUTH. The policy is compiled
+// TypeScript and re-implementing its three rules here is how a doctor ends up
+// reporting a policy the product does not follow. The tradeoff is that an
+// unbuilt tree cannot answer, which is said plainly rather than guessed at --
+// this command exists to diagnose broken installs, and a missing dist is one.
+// THE QUESTION A BROKEN INSTALL ASKS SECOND. Half the reports this command exists
+// to answer are a version that was fixed upstream weeks ago, and nothing else in
+// the output says which copy is running. The check is only made here, where a
+// person has asked, and never during a session; a lookup that fails says so
+// rather than claiming the copy is current.
+console.log('');
+console.log('Version:');
+try {
+  const { checkForUpdate, describeUpdate } = await import(
+    '../dist/update/check.js'
+  );
+  const report = await checkForUpdate();
+  for (const line of describeUpdate(report)) console.log(`  ${line}`);
+} catch {
+  console.log('  Cannot read the version: dist is missing or broken.');
+  console.log('  Run `npm run build`, then ask again.');
+}
+// WHICH BEHAVIOURS ARE ON, and why. Before this there were 129 TOKEN_OPTIMIZER_*
+// switches and no way to ask -- a user could only read the source to find out that
+// the flag they set does nothing, which is the one thing a diagnostic must not
+// leave them to do.
+try {
+  const { rolloutSection } = await import('../dist/rollout/describe.js');
+  for (const line of rolloutSection(process.env, {
+    verbose: process.argv.includes('--features'),
+  })) {
+    console.log(line);
+  }
+} catch {
+  console.log('');
+  console.log('Rollout');
+  console.log('  Cannot read the rollout state: dist is missing or broken.');
+}
+
+console.log('');
+console.log('Anonymous usage data:');
+try {
+  const { describePolicy } = await import('../dist/telemetry/policy.js');
+  console.log(`  ${describePolicy()}`);
+  try {
+    const { recordedBytes, recorderLastError, eventsFile } = await import(
+      '../dist/telemetry/recorder.js'
+    );
+    const bytes = recordedBytes();
+    const failure = recorderLastError();
+    console.log(
+      bytes === null
+        ? '  Nothing recorded on this machine yet.'
+        : `  ${bytes} bytes recorded locally, at ${eventsFile()}.`
+    );
+    if (failure !== null) {
+      // THE CASE WORTH PRINTING LOUDLY. The recorder swallows its own failures
+      // so a full disk cannot break a tool call, which means an opted-in user
+      // whose home directory is read-only sees a working switch and collects
+      // nothing. This is the only place that says so.
+      console.log(`  WARNING: recording is failing silently -- ${failure}`);
+    }
+  } catch {
+    console.log('  Recorder not built; run `npm run build` to check it.');
+  }
+  console.log('  Off by default. To opt in:  TOKEN_OPTIMIZER_TELEMETRY=1');
+  console.log('  Upload is a separate opt-in: TOKEN_OPTIMIZER_BEACON=1');
+  console.log('  DO_NOT_TRACK=1 overrides both.');
+} catch {
+  console.log('  Cannot read the telemetry policy: dist is missing or broken.');
+  console.log('  Run `npm run build`, then ask again.');
+}
+
 console.log('');
 console.log(
   'Verify the release itself with `npm audit signatures` (provenance attestation),'
@@ -68,4 +149,24 @@ console.log(
 );
 
 // A broken install should fail a script that asks whether it is broken.
-process.exit(result.healthy ? 0 : 1);
+//
+// SET, NOT CALLED. `process.exit()` here aborts the whole process with
+// STATUS_STACK_BUFFER_OVERRUN on Node 25.6.0 whenever an https fetch has been
+// made in the run -- which the version check above now does. It reproduces in
+// eleven lines with no project code (fetch a URL, then process.exit), so it is
+// the runtime's bug, not ours; what is ours is not tripping it. Setting the code
+// and letting the loop drain reports the same result without the crash, and if a
+// stray handle ever holds this open the watchdog below is what says so.
+process.exitCode = result.healthy ? 0 : 1;
+
+// THE COST OF NOT CALLING process.exit: a leaked handle now hangs the command
+// instead of being killed by the exit. Rather than hang silently, say which
+// handles are still up and then go, so the symptom names its own cause.
+const watchdog = setTimeout(() => {
+  const held = (process.getActiveResourcesInfo?.() ?? []).join(', ');
+  console.error(
+    `doctor: finished but something is holding the process open (${held || 'unknown'})`
+  );
+  process.exit(process.exitCode ?? 0);
+}, 5000);
+watchdog.unref();

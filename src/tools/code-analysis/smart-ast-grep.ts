@@ -865,9 +865,7 @@ export class SmartAstGrepTool {
       };
 
       const data = JSON.stringify(serializable);
-      const tokensSaved = this.estimateTokensSaved(index);
-
-      this.cache.set(key, data, ttl, tokensSaved);
+      this.cache.set(key, data, data.length, data.length, { ttlSeconds: ttl });
     } catch (error) {
       console.warn('Failed to cache AST index:', error);
     }
@@ -883,19 +881,10 @@ export class SmartAstGrepTool {
   ): void {
     try {
       const data = JSON.stringify(result);
-      this.cache.set(key, data, ttl, result.metadata.tokensSaved);
+      this.cache.set(key, data, data.length, data.length, { ttlSeconds: ttl });
     } catch (error) {
       console.warn('Failed to cache pattern result:', error);
     }
-  }
-
-  /**
-   * Estimate tokens saved by index
-   */
-  private estimateTokensSaved(index: AstIndex): number {
-    // Estimate based on number of files indexed
-    // Each file saves ~500 tokens on average by avoiding re-parsing
-    return index.files.size * 500;
   }
 
   /**
@@ -1017,7 +1006,7 @@ export async function runSmartAstGrep(
 export const SMART_AST_GREP_TOOL_DEFINITION = {
   name: 'smart_ast_grep',
   description:
-    'Perform structural code search with 83% token reduction through AST indexing and caching',
+    'Perform structural code search with an unmeasured design target of 83% token reduction through AST indexing and caching',
   inputSchema: {
     type: 'object',
     properties: {

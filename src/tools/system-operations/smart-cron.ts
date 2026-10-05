@@ -16,7 +16,7 @@
  * - Compressed schedule analysis (87% reduction)
  */
 
-import { CacheEngine } from '../../core/cache-engine.js';
+import { CacheEngine, resolveCacheLocation } from '../../core/cache-engine.js';
 import { TokenCounter } from '../../core/token-counter.js';
 import { MetricsCollector } from '../../core/metrics.js';
 import { generateCacheKey } from '../shared/hash-utils.js';
@@ -331,7 +331,7 @@ export class SmartCron {
 
     // Cache the result
     if (useCache) {
-      await this.cache.set(cacheKey, dataStr, tokensUsed, tokensUsed);
+      await this.cache.set(cacheKey, dataStr, dataStr.length, dataStr.length);
     }
 
     return {
@@ -974,7 +974,7 @@ export class SmartCron {
 
     // Cache the result (short TTL as history changes frequently)
     if (useCache) {
-      await this.cache.set(cacheKey, dataStr, tokensUsed, tokensUsed);
+      await this.cache.set(cacheKey, dataStr, dataStr.length, dataStr.length);
     }
 
     return {
@@ -1164,7 +1164,7 @@ export class SmartCron {
 
     // Cache the result (longer TTL as schedule doesn't change often)
     if (useCache) {
-      await this.cache.set(cacheKey, dataStr, tokensUsed, tokensUsed);
+      await this.cache.set(cacheKey, dataStr, dataStr.length, dataStr.length);
     }
 
     return {
@@ -1435,7 +1435,11 @@ export async function runSmartCron(
   const { join } = await import('path');
 
   const cacheInstance =
-    cache || new CacheEngine(join(homedir(), '.hypercontext', 'cache'), 100);
+    cache ||
+    new CacheEngine(
+      resolveCacheLocation(join(homedir(), '.hypercontext', 'cache')),
+      100
+    );
   const tokenCounterInstance = tokenCounter || new TokenCounter();
   const metricsInstance = metricsCollector || new MetricsCollector();
 
@@ -1454,7 +1458,7 @@ export async function runSmartCron(
 export const SMART_CRON_TOOL_DEFINITION = {
   name: 'smart_cron',
   description:
-    'Intelligent scheduled task management with smart caching (85%+ token reduction). Manage cron jobs (Linux/macOS) and Windows Task Scheduler with validation, history tracking, and next run predictions.',
+    'Intelligent scheduled task management with smart caching (unmeasured design target: 85%+ token reduction). Manage cron jobs (Linux/macOS) and Windows Task Scheduler with validation, history tracking, and next run predictions.',
   inputSchema: {
     type: 'object' as const,
     properties: {

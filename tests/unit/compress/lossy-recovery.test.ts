@@ -1,11 +1,14 @@
+import { reassemble } from './spill-reassembly.js';
+import { variedRows, variedRowsSource } from './varied-rows.js';
 import { describe, it, expect } from '@jest/globals';
 import { compressCode } from '../../../src/compress/code.js';
 import { compressProse } from '../../../src/compress/prose.js';
 import { compressJson } from '../../../src/compress/json.js';
 import { foldRepeatedSegments } from '../../../src/compress/segments.js';
 import { DEFAULT_TUNING } from '../../../src/compress/options.js';
-import { expandLog } from '../../helpers/expand-log.js';
-import { rehydrate } from '../../support/rehydrate.js';
+import { expandLog } from '../../../src/compress/expand-log.js';
+import { PathAddressedError } from '../../../src/compress/annotate.js';
+import { rehydrate } from '../../../src/compress/rehydrate.js';
 
 /**
  * THE LOSSY PATH, held to the promise its marker makes.
@@ -79,7 +82,11 @@ const PROSE = Array.from(
 const SOURCE = 'src/handlers.ts';
 
 /** `[... body, N lines -> path:A-B]`, or `path:A` when the span is one line. */
-const BODY = /^(\s*)\[\.\.\. body, (\d+) lines? -> (.+?):(\d+)(?:-(\d+))?\]$/;
+// THE STAMP IS MATCHED AND NOT CAPTURED, so the indices below still line up.
+// Required rather than optional: a marker without one is content, and a helper
+// that followed it anyway would be reconstructing from a line nobody wrote.
+const BODY =
+  /^(\s*)\[\.\.\. body, (\d+) lines? ~[0-9a-z]+ -> (.+?):(\d+)(?:-(\d+))?\]$/;
 
 /**
  * Rebuilds the input from the output plus the file the markers point into.
@@ -200,7 +207,17 @@ describe('a lossy elision delivers what its marker promises', () => {
     });
     expect(lossy.lossless).toBe(false);
     expect(lossy.text).toContain(`-> ${SOURCE}:`);
-    expect(() => expandLog(lossy.text)).toThrow(/unrecognised marker/);
+    // The refusal is unchanged; it now carries the path it refused in favour
+    // of, so a caller can score that content as one `Read` away, not lost.
+    let refusal: unknown = null;
+    try {
+      expandLog(lossy.text, lossy.stamp);
+    } catch (error) {
+      refusal = error;
+    }
+    expect(refusal instanceof PathAddressedError).toBe(true);
+    if (refusal instanceof PathAddressedError)
+      expect(refusal.recoverAt.startsWith(`${SOURCE}:`)).toBe(true);
 
     // The positive control: the same decoder on output it CAN rebuild.
     // Without this the assertion above passes on a decoder that throws on
@@ -228,20 +245,15 @@ const SECTIONS = [
  * Uniform rows carrying a number lexeme `JSON.stringify` cannot produce, so a
  * spill re-serialised from the parsed values is visibly not the source.
  */
-const LEXEMES = `[${Array.from(
-  { length: 60 },
-  (_, i) =>
-    `{"id":${i},"region":"us-east-1","status":"ok","ratio":1.0,"latencyMs":${20 + (i % 7)}}`
-).join(',')}]`;
+// ROWS THE TEMPLATER CANNOT FOLD, because the subject here is the spill. A
+// column of near-identical rows is encoded losslessly and entirely in place,
+// with no spill written and nothing to recover, so a fixture like that would
+// leave every assertion below asserting the absence of the better outcome.
+// `variedRows` carries independent text per field, the way a real search
+// result does.
+const LEXEMES = variedRowsSource(60);
 
-const ROWS = JSON.stringify(
-  Array.from({ length: 60 }, (_, i) => ({
-    id: i,
-    region: 'us-east-1',
-    status: 'ok',
-    latencyMs: 20 + (i % 7),
-  }))
-);
+const ROWS = JSON.stringify(variedRows(60));
 
 describe('the spill is the only way back, so it must hold what went', () => {
   it('segments spills the original, not the folded result', () => {
@@ -282,7 +294,7 @@ describe('the spill is the only way back, so it must hold what went', () => {
     expect(result.elisions).toHaveLength(0);
   });
 
-  it('the json tail spill holds every row, kept and dropped alike', () => {
+  it('the json tail spill and the kept rows reassemble the whole array', () => {
     const sink = recordingSpill();
     const result = compressJson(ROWS, {
       spill: sink.spill,
@@ -298,10 +310,15 @@ describe('the spill is the only way back, so it must hold what went', () => {
     expect(lossy).not.toHaveLength(0);
     for (const elision of lossy) expect(elision.recoverAt).toBe(path);
 
-    // EVERY ROW, not just the dropped ones. The marker says "N more rows" and
-    // names one path; an agent that reads it has no offset to apply, so a
-    // spill holding only the tail would answer a question nobody can ask.
-    expect(JSON.parse(content)).toEqual(JSON.parse(ROWS));
+    // NOT EVERY ROW ANY MORE, AND THAT IS THE POINT. The spill used to hold the
+    // kept rows too, so a reader who followed the pointer was handed rows that
+    // were sitting beside the marker already and paid for them twice. The
+    // marker now names where the kept rows sat, which is the offset an agent
+    // was missing, so the two halves reassemble in order -- asserted here
+    // rather than assumed, because the reassembly is the property that
+    // "the spill holds everything" was ever standing in for.
+    expect(JSON.parse(content).length).toBeLessThan(JSON.parse(ROWS).length);
+    expect(reassemble(result.text, content)).toEqual(JSON.parse(ROWS));
   });
 
   it('the json tail spill keeps the lexemes the source wrote', () => {
@@ -322,8 +339,13 @@ describe('the spill is the only way back, so it must hold what went', () => {
     // dropped rows still exist -- so an agent recovering from it would read a
     // number the document never spelled that way. Deep-equality is blind to
     // this, which is why the lexeme is named here.
+    // AND THE KEPT HALF IS HELD TO THE SAME RULE. It used to be re-serialised
+    // from the parsed values while only the spill kept the source's bytes,
+    // which was survivable exactly while the spill also held the kept rows.
+    // Now that it does not, both halves are sliced from the source, and
+    // reassembly is what proves it.
     expect(content).toContain('"ratio":1.0');
-    expect(JSON.parse(content)).toEqual(JSON.parse(LEXEMES));
+    expect(reassemble(result.text, content)).toEqual(JSON.parse(LEXEMES));
   });
 
   it('json keeps the minification and the rows when the sink fails', () => {
@@ -346,7 +368,9 @@ describe('the spill is the only way back, so it must hold what went', () => {
     expect(result.elisions.every((e) => e.lossless)).toBe(true);
     expect(result.lossless).toBe(true);
     expect(result.text.length).toBeLessThan(padded.length);
-    expect(JSON.parse(rehydrate(result.text))).toEqual(JSON.parse(ROWS));
+    expect(JSON.parse(rehydrate(result.text, result.stamp))).toEqual(
+      JSON.parse(ROWS)
+    );
   });
 
   it('code with no source path recovers through the block it spilled', () => {

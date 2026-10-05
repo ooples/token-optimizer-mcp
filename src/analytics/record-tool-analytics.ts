@@ -22,6 +22,11 @@ import {
   SAVINGS_MEASUREMENT_SCHEMA_VERSION,
 } from './savings-classification.js';
 import { createHash, randomUUID } from 'node:crypto';
+import { measureDisplacedInput } from './displaced-input.js';
+import {
+  asDeclaredBaseline,
+  asResolvedInputFiles,
+} from '../tools/shared/savings.js';
 
 /** MCP tool result shape (the parts we read). */
 interface McpToolResult {
@@ -183,9 +188,23 @@ export async function recordToolAnalytics(
     clientVersion?: string | null;
     model?: string | null;
     modelVersion?: string | null;
+    /**
+     * Where `model` came from -- declared by the operator, observed in the
+     * client's own session log, or nowhere. A priced saving is only as good as
+     * its model id, so the id and its provenance travel together: without this
+     * an unattributed row and a mis-attributed one read identically.
+     */
+    modelSource?: string | null;
     operationId?: string | null;
   } = {},
-  baselineResult: McpToolResult | null = null
+  baselineResult: McpToolResult | null = null,
+  /**
+   * The arguments the caller passed. They name the files this call read on the
+   * caller's behalf, which is the one baseline the recorder could never see:
+   * what reading them yourself would have cost. Absent, the row records only
+   * what it can measure, as before.
+   */
+  callArguments: unknown = null
 ): Promise<void> {
   try {
     if (!result || result.isError) return;
@@ -241,8 +260,78 @@ export async function recordToolAnalytics(
       baselineText !== text &&
       baselineTokens > returnedTokens &&
       baselineBytes > returnedBytes;
-    const originalTokens = savingsMeasured ? baselineTokens : returnedTokens;
-    const tokensSaved = savingsMeasured ? baselineTokens - returnedTokens : 0;
+    /*
+     * THE BASELINE ONLY THE CALLER'S ARGUMENTS KNOW, MEASURED HERE.
+     *
+     * The transport measurement above compares this reply against the same
+     * tool's own undisclosed payload, so it can only ever credit what the
+     * disclosure layer trimmed. It cannot express the claim the product is
+     * actually built on -- that a 300-token answer stood in for reading a
+     * 4,937-token file -- because that baseline lives on disk, not in a
+     * payload. So it is read and counted here, by the same counter that
+     * counted the reply, and the tool's own opinion of the ratio is not
+     * consulted at all.
+     */
+    const resultMeta = result._meta?.tokenOptimizer;
+    const transportMeta =
+      resultMeta && typeof resultMeta === 'object'
+        ? (resultMeta as Record<string, unknown>)
+        : {};
+
+    /*
+     * THE FILES THE ARGUMENTS DO NOT NAME, STILL MEASURED HERE.
+     *
+     * A tool with a private resolution rule -- a `package.json` found under a
+     * directory, an `extends` chain walked through several configs -- is the one
+     * party that knows which files it read. It reports the paths and nothing
+     * else: they go into the same read and the same count as the named ones, so
+     * the tool contributes knowledge and not arithmetic, and the row comes out
+     * with a byte figure and a digest exactly like any other measured one.
+     */
+    const resolvedInput = asResolvedInputFiles(
+      transportMeta.resolvedInputFiles
+    );
+    const displaced = await measureDisplacedInput(
+      callArguments,
+      resolvedInput ? resolvedInput.paths : []
+    );
+    const displacementMeasured =
+      !savingsMeasured &&
+      displaced !== null &&
+      displaced.sha256 !== sha256(text) &&
+      displaced.tokens > returnedTokens &&
+      displaced.bytes > returnedBytes;
+
+    /*
+     * THE ONE CASE THE ARGUMENTS CANNOT REACH, AND THE ONLY THING A TOOL IS
+     * STILL ALLOWED TO SAY ABOUT ITS OWN SAVING.
+     *
+     * `measureDisplacedInput` above counts the files the caller's own arguments
+     * name, which covers nearly the whole fleet. What it cannot do is apply a
+     * tool's private resolution rule -- a directory the tool finds a file under,
+     * an `extends` chain only the tool walks -- so for those the before is
+     * declared by the tool and the after is still measured here.
+     *
+     * TAKEN ONLY WHEN THE RECORDER HAS NOTHING OF ITS OWN. `displaced === null`
+     * rather than `!displacementMeasured`: if the named input WAS read and did
+     * not come out ahead, that is the answer, and a larger declared figure must
+     * not be allowed to overrule a measurement that disagrees with it.
+     */
+    const declaration = asDeclaredBaseline(transportMeta.displacedBaseline);
+    const declarationMeasured =
+      !savingsMeasured &&
+      displaced === null &&
+      declaration !== null &&
+      declaration.baselineTokens > returnedTokens;
+
+    const originalTokens = savingsMeasured
+      ? baselineTokens
+      : displacementMeasured && displaced
+        ? displaced.tokens
+        : declarationMeasured && declaration
+          ? declaration.baselineTokens
+          : returnedTokens;
+    const tokensSaved = originalTokens - returnedTokens;
 
     const sessionId =
       process.env.TOKEN_OPTIMIZER_SESSION_ID ||
@@ -250,11 +339,6 @@ export async function recordToolAnalytics(
         ? ((payload as Record<string, unknown>).sessionId as string | undefined)
         : undefined);
 
-    const resultMeta = result._meta?.tokenOptimizer;
-    const transportMeta =
-      resultMeta && typeof resultMeta === 'object'
-        ? (resultMeta as Record<string, unknown>)
-        : {};
     const measurementId = attribution.operationId || randomUUID();
     const expansionRef =
       typeof transportMeta.expansionRef === 'string'
@@ -279,7 +363,8 @@ export async function recordToolAnalytics(
       originalTokens,
       optimizedTokens: returnedTokens,
       tokensSaved,
-      savingsMeasured,
+      savingsMeasured:
+        savingsMeasured || displacementMeasured || declarationMeasured,
       measurementId,
       ...(sessionId ? { sessionId } : {}),
       ...(attribution.client ? { client: attribution.client } : {}),
@@ -295,21 +380,80 @@ export async function recordToolAnalytics(
         measurementSchemaVersion: SAVINGS_MEASUREMENT_SCHEMA_VERSION,
         measurement: savingsMeasured
           ? 'materialized-transport-before-after'
-          : expansionRef && creditedMeasurementId
-            ? 'actual-expansion-transport-debit'
-            : 'actual-return-context-only',
+          : displacementMeasured
+            ? 'measured-input-displacement'
+            : declarationMeasured
+              ? 'declared-input-displacement'
+              : expansionRef && creditedMeasurementId
+                ? 'actual-expansion-transport-debit'
+                : 'actual-return-context-only',
         measurementClass: savingsMeasured
           ? 'verified-transport-reduction'
-          : expansionRef && creditedMeasurementId
-            ? 'verified-transport-expansion-debit'
-            : 'observed-return-only',
+          : displacementMeasured
+            ? 'verified-input-displacement'
+            : declarationMeasured
+              ? 'declared-input-displacement'
+              : expansionRef && creditedMeasurementId
+                ? 'verified-transport-expansion-debit'
+                : 'observed-return-only',
         baselineKind: savingsMeasured
           ? 'materialized-undisclosed-mcp-result'
-          : null,
-        baselineBytes,
+          : displacementMeasured
+            ? 'measured-displaced-input'
+            : declarationMeasured
+              ? 'declared-displaced-input'
+              : null,
+        /*
+         * NULL ON A DECLARED ROW, NOT THE REPLY'S OWN SIZE. A tool declares a
+         * token count and nothing else, so there is no before in bytes to
+         * store -- and a byte figure copied off the after would read exactly
+         * like a measured one while meaning nothing. The classifier refuses a
+         * declared row that carries one.
+         */
+        baselineBytes: declarationMeasured
+          ? null
+          : displacementMeasured && displaced
+            ? displaced.bytes
+            : baselineBytes,
         returnedBytes,
-        bytesSaved: savingsMeasured ? baselineBytes - returnedBytes : 0,
+        bytesSaved: savingsMeasured
+          ? baselineBytes - returnedBytes
+          : displacementMeasured && displaced
+            ? displaced.bytes - returnedBytes
+            : 0,
+        /** What the tool said it stood in for, and what it counted to say so. */
+        declaredBaselineTokens:
+          declarationMeasured && declaration
+            ? declaration.baselineTokens
+            : null,
+        declaredBaselineSource:
+          declarationMeasured && declaration
+            ? declaration.baselineSource
+            : null,
         baselineSha256: baselineText ? sha256(baselineText) : null,
+        /*
+         * Recorded whenever it could be measured, including on rows the
+         * transport class won, so a later audit can see the displacement a row
+         * was NOT credited with. Only the class decides what gets summed; two
+         * befores for one after are not additive, and labelling both while
+         * crediting one is how that stays visible rather than tempting.
+         */
+        displacedInputTokens: displaced ? displaced.tokens : null,
+        displacedInputBytes: displaced ? displaced.bytes : null,
+        displacedInputSha256: displaced ? displaced.sha256 : null,
+        displacedInputFiles: displaced ? displaced.files : null,
+        /*
+         * How the tool reached the files the arguments did not name, on the
+         * rows where that widened the baseline. The count above already says
+         * how many files were read; this says which rule found the extra ones,
+         * so a reader can tell a plain named-file measurement from one that
+         * took a tool's word for WHERE to look -- while still never taking its
+         * word for how much.
+         */
+        resolvedInputSource:
+          displacementMeasured && resolvedInput && displaced?.widened === true
+            ? resolvedInput.baselineSource
+            : null,
         returnedSha256: sha256(text),
         disclosureRef:
           typeof transportMeta.disclosureRef === 'string'
@@ -319,11 +463,15 @@ export async function recordToolAnalytics(
         creditedMeasurementId,
         tokenCountMethod: 'tiktoken-gpt-4-compatible-local-estimate',
         tokenCounterModel: resultTokenCounter.model,
-        reportedToolSavings: savingsMeasured ? null : reported,
+        reportedToolSavings:
+          savingsMeasured || displacementMeasured || declarationMeasured
+            ? null
+            : reported,
         client: attribution.client || 'unattributed',
         clientVersion: attribution.clientVersion || null,
         model: attribution.model || null,
         modelVersion: attribution.modelVersion || null,
+        modelSource: attribution.modelSource || 'none',
       },
     });
   } catch {

@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Smart Edit Tool - 90% Token Reduction
  *
  * Achieves token reduction through:
@@ -15,7 +15,7 @@ import { readFileSync, existsSync } from 'fs';
 import { replaceFile } from '../../utils/replace-file.js';
 import { homedir } from 'os';
 import { join } from 'path';
-import { CacheEngine } from '../../core/cache-engine.js';
+import { CacheEngine, resolveCacheLocation } from '../../core/cache-engine.js';
 import { bumpFsGeneration } from '../../utils/fs-generation.js';
 import { writeBackup } from '../../utils/file-backup.js';
 import { TokenCounter } from '../../core/token-counter.js';
@@ -814,7 +814,10 @@ export async function runSmartEdit(
   operations: EditOperation | EditOperation[] | string,
   options: SmartEditOptions = {}
 ): Promise<SmartEditResult> {
-  const cache = new CacheEngine(join(homedir(), '.hypercontext', 'cache'), 100);
+  const cache = new CacheEngine(
+    resolveCacheLocation(join(homedir(), '.hypercontext', 'cache')),
+    100
+  );
   const tokenCounter = new TokenCounter();
   const metrics = new MetricsCollector();
 
@@ -828,7 +831,7 @@ export async function runSmartEdit(
 export const SMART_EDIT_TOOL_DEFINITION = {
   name: 'smart_edit',
   description:
-    'Edit files with 90% token reduction through line-based operations and diff-only output',
+    'Edit files with an unmeasured design target of 90% token reduction through line-based operations and diff-only output',
   inputSchema: {
     type: 'object',
     properties: {

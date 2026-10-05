@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Smart Glob Tool - 75% Token Reduction
  *
  * Achieves token reduction through:
@@ -19,7 +19,7 @@ import {
 } from '../shared/bounded-traversal.js';
 import { relative, basename, extname, join, isAbsolute } from 'path';
 import { homedir } from 'os';
-import { CacheEngine } from '../../core/cache-engine.js';
+import { CacheEngine, resolveCacheLocation } from '../../core/cache-engine.js';
 import { TokenCounter } from '../../core/token-counter.js';
 import { MetricsCollector } from '../../core/metrics.js';
 import { generateCacheKey } from '../shared/hash-utils.js';
@@ -736,7 +736,10 @@ export async function runSmartGlob(
   pattern: string,
   options: SmartGlobOptions = {}
 ): Promise<SmartGlobResult> {
-  const cache = new CacheEngine(join(homedir(), '.hypercontext', 'cache'), 100);
+  const cache = new CacheEngine(
+    resolveCacheLocation(join(homedir(), '.hypercontext', 'cache')),
+    100
+  );
   const tokenCounter = new TokenCounter();
   const metrics = new MetricsCollector();
 
@@ -750,7 +753,7 @@ export async function runSmartGlob(
 export const SMART_GLOB_TOOL_DEFINITION = {
   name: 'smart_glob',
   description:
-    'Search files with glob patterns and 75% token reduction through path-only results and smart filtering',
+    'Search files with glob patterns and an unmeasured design target of 75% token reduction through path-only results and smart filtering',
   annotations: {
     title: 'Find files efficiently',
     readOnlyHint: true,

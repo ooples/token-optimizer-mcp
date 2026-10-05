@@ -244,7 +244,12 @@ export class PredictiveCacheTool extends EventEmitter {
       const tokensUsed = tokensUsedResult.tokens;
       if (cacheKey && useCache) {
         const serialized = JSON.stringify(data);
-        this.cache.set(cacheKey, serialized, serialized.length, tokensUsed);
+        this.cache.set(
+          cacheKey,
+          serialized,
+          serialized.length,
+          serialized.length
+        );
       }
 
       // Record metrics
@@ -1153,7 +1158,7 @@ export function getPredictiveCacheTool(
 export const PREDICTIVE_CACHE_TOOL_DEFINITION = {
   name: 'predictive_cache',
   description:
-    'ML-based predictive caching with 91%+ token reduction using ARIMA, exponential smoothing, LSTM, and collaborative filtering',
+    'ML-based predictive caching with an unmeasured design target of 91%+ token reduction using ARIMA, exponential smoothing, LSTM, and collaborative filtering',
   inputSchema: {
     type: 'object',
     properties: {

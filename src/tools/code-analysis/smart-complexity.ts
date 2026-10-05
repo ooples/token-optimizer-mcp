@@ -3,7 +3,6 @@
  *
  * Analyzes code complexity metrics with intelligent caching
  * Calculates cyclomatic, cognitive, and Halstead metrics
- * Target: 70-80% token reduction through metric summarization
  */
 
 import * as ts from 'typescript';
@@ -11,9 +10,29 @@ import { existsSync, readFileSync } from 'fs';
 import { join, isAbsolute } from 'path';
 import { homedir } from 'os';
 import { createHash } from 'crypto';
-import { CacheEngine } from '../../core/cache-engine.js';
+import { CacheEngine, resolveCacheLocation } from '../../core/cache-engine.js';
 import { MetricsCollector } from '../../core/metrics.js';
 import { TokenCounter } from '../../core/token-counter.js';
+import { displayPath } from '../shared/report-shape.js';
+import { encodeTable, type Table } from '../shared/table.js';
+
+/**
+ * Places a reported complexity figure is rounded to.
+ *
+ * Halstead's derived quantities are irrational functions of four integer
+ * counts, and they were serialised at full double precision: a single
+ * function's block carried calculatedLength 88.71062275542812, volume
+ * 176.41891628622352, effort 464.26030601637774 and five more like them.
+ * Every digit past the second is a token spent stating a heuristic estimate
+ * to a precision its own inputs do not have; on a 13-function file the
+ * per-function complexity blocks cost 1692 tokens against a 1669-token
+ * source file, and the long tails were most of that.
+ */
+const METRIC_DECIMALS = 2;
+
+function round(value: number): number {
+  return Number(value.toFixed(METRIC_DECIMALS));
+}
 
 export interface SmartComplexityOptions {
   filePath?: string;
@@ -70,33 +89,52 @@ export interface SmartComplexityResult {
     totalFunctions: number;
     riskLevel: 'low' | 'medium' | 'high' | 'critical';
     fromCache: boolean;
-    duration: number;
   };
-  functions: FunctionComplexity[];
-  fileMetrics: ComplexityMetrics;
+  /**
+   * One row per function, field names sent once.
+   *
+   * Decode with `decodeTable<FunctionComplexity>(result.functions)` for the
+   * records. They were sent as an array of objects, which repeated all 24
+   * field names on every element -- about half of the 1639 tokens the block
+   * cost on a 13-function file, to re-label numbers the first element had
+   * already labelled.
+   */
+  functions: Table;
+  // NO fileMetrics FIELD, DELIBERATELY. It was the same object as
+  // summary.totalComplexity -- not a similar one, the identical reference --
+  // so every response serialised the whole file-level block twice, measured at
+  // 133 to 139 tokens a copy. summary.totalComplexity is the one that stays,
+  // because it sits with the rest of the file-level answer.
   recommendations: string[];
-  metrics: {
-    originalTokens: number;
-    compactedTokens: number;
-    reductionPercentage: number;
-  };
+  // NO metrics FIELD, DELIBERATELY, AND NO SAVING STATED ANYWHERE IN A REPLY.
+  // This tool used to publish originalTokens, compactedTokens and a reduction
+  // percentage computed from them. Both halves were guesses about a reply the
+  // tool cannot see: the text a caller is charged for is built after this
+  // object is returned, out of this object plus a report and its metadata, so
+  // no figure counted in here is the figure that was sent. The after is now
+  // counted once, at the wire, by the party that holds the bytes; the before
+  // is the file named in the arguments, which the recorder reads for itself.
+  // Nothing is left for the tool to say, so it says nothing -- and the three
+  // fields' own digits stop being part of what the caller pays for.
 }
 
 export class SmartComplexityTool {
   private cache: CacheEngine;
   private metrics: MetricsCollector;
-  private tokenCounter: TokenCounter;
   private cacheNamespace = 'smart_complexity';
   private projectRoot: string;
 
   constructor(
     cache: CacheEngine,
-    tokenCounter: TokenCounter,
+    // ACCEPTED AND NOT USED, which is the point: this tool no longer counts
+    // tokens, because the only thing it was counting them for was a saving it
+    // was not in a position to measure. The parameter stays so that every
+    // analysis tool is still built by the same three-argument factory call.
+    _tokenCounter: TokenCounter,
     metrics: MetricsCollector,
     projectRoot?: string
   ) {
     this.cache = cache;
-    this.tokenCounter = tokenCounter;
     this.metrics = metrics;
     this.projectRoot = projectRoot || process.cwd();
   }
@@ -158,8 +196,6 @@ export class SmartComplexityTool {
           operation: 'smart_complexity',
           duration: Date.now() - startTime,
           cacheHit: true,
-          inputTokens: cached.metrics.originalTokens,
-          cachedTokens: cached.metrics.compactedTokens,
           success: true,
         });
         return cached;
@@ -215,7 +251,10 @@ export class SmartComplexityTool {
     // Build result
     const result: SmartComplexityResult = {
       summary: {
-        file: filePath || 'anonymous',
+        // Relative to the working directory where that is shorter: JSON
+        // escapes every Windows separator to a doubled backslash and each
+        // escape is its own token.
+        file: filePath ? displayPath(absolutePath ?? filePath) : 'anonymous',
         totalComplexity: fileMetrics,
         averageComplexity: avgComplexity,
         maxComplexity,
@@ -223,40 +262,22 @@ export class SmartComplexityTool {
         totalFunctions,
         riskLevel,
         fromCache: false,
-        duration: Date.now() - startTime,
       },
-      functions,
-      fileMetrics,
+      functions: encodeTable(functions as unknown as Record<string, unknown>[]),
       recommendations,
-      metrics: {
-        originalTokens: 0,
-        compactedTokens: 0,
-        reductionPercentage: 0,
-      },
     };
-
-    // Calculate token metrics
-    const originalText = JSON.stringify(result, null, 2);
-    const compactText = this.compactResult(result);
-    result.metrics.originalTokens =
-      this.tokenCounter.count(originalText).tokens;
-    result.metrics.compactedTokens =
-      this.tokenCounter.count(compactText).tokens;
-    result.metrics.reductionPercentage =
-      ((result.metrics.originalTokens - result.metrics.compactedTokens) /
-        result.metrics.originalTokens) *
-      100;
 
     // Cache result
     this.cacheResult(cacheKey, result);
 
-    // Record metrics
+    // NO TOKEN FIGURES ON THIS RECORD EITHER. inputTokens and cachedTokens
+    // were the two halves of the deleted claim, and cache_analytics sums them
+    // into a second savings total that nothing measured. The duration, the
+    // cache outcome and the success are things this tool genuinely observed.
     this.metrics.record({
       operation: 'smart_complexity',
       duration: Date.now() - startTime,
       cacheHit: false,
-      inputTokens: result.metrics.originalTokens,
-      cachedTokens: result.metrics.compactedTokens,
       success: true,
     });
 
@@ -512,6 +533,8 @@ export class SmartComplexityTool {
     const time = effort / 18; // seconds
     const bugs = volume / 3000;
 
+    // The four counts are integers and stay exact. The rest are estimates
+    // derived from them, and are rounded on the way out: see METRIC_DECIMALS.
     return {
       distinctOperators: n1,
       distinctOperands: n2,
@@ -519,12 +542,12 @@ export class SmartComplexityTool {
       totalOperands: N2,
       vocabulary,
       length,
-      calculatedLength,
-      volume,
-      difficulty,
-      effort,
-      time,
-      bugs,
+      calculatedLength: round(calculatedLength),
+      volume: round(volume),
+      difficulty: round(difficulty),
+      effort: round(effort),
+      time: round(time),
+      bugs: round(bugs),
     };
   }
 
@@ -544,8 +567,10 @@ export class SmartComplexityTool {
       0.23 * cyclomatic -
       16.2 * Math.log(lloc || 1);
 
-    // Normalize to 0-100 scale
-    return Math.max(0, Math.min(100, mi));
+    // Normalize to 0-100 scale. Rounded like the Halstead figures it is
+    // derived from -- the volume it reads is already rounded, so the digits
+    // this used to carry past the second were not even self-consistent.
+    return round(Math.max(0, Math.min(100, mi)));
   }
 
   private countLines(
@@ -667,31 +692,6 @@ export class SmartComplexityTool {
     return 'low';
   }
 
-  private compactResult(result: SmartComplexityResult): string {
-    // Create a compact summary for token efficiency
-    const compact = {
-      file: result.summary.file,
-      risk: result.summary.riskLevel,
-      avg: Math.round(result.summary.averageComplexity * 10) / 10,
-      max: result.summary.maxComplexity,
-      above: result.summary.functionsAboveThreshold,
-      total: result.summary.totalFunctions,
-      mi: result.fileMetrics.maintainabilityIndex
-        ? Math.round(result.fileMetrics.maintainabilityIndex)
-        : undefined,
-      high: result.functions
-        .filter((f) => f.aboveThreshold)
-        .map((f) => ({
-          n: f.name,
-          c: f.complexity.cyclomatic,
-          cog: f.complexity.cognitive,
-        })),
-      recs: result.recommendations,
-    };
-
-    return JSON.stringify(compact);
-  }
-
   private async generateCacheKey(
     content: string,
     includeHalstead: boolean,
@@ -711,10 +711,12 @@ export class SmartComplexityTool {
     const cached = this.cache.get(key);
     if (!cached) return null;
 
-    const result = JSON.parse(cached) as SmartComplexityResult & {
+    const { cachedAt, ...result } = JSON.parse(
+      cached
+    ) as SmartComplexityResult & {
       cachedAt: number;
     };
-    const age = (Date.now() - result.cachedAt) / 1000;
+    const age = (Date.now() - cachedAt) / 1000;
 
     if (age <= maxAge) {
       result.summary.fromCache = true;
@@ -750,7 +752,11 @@ export async function runSmartComplexity(
   metrics?: MetricsCollector
 ): Promise<SmartComplexityResult> {
   const cacheInstance =
-    cache || new CacheEngine(join(homedir(), '.hypercontext', 'cache'), 100);
+    cache ||
+    new CacheEngine(
+      resolveCacheLocation(join(homedir(), '.hypercontext', 'cache')),
+      100
+    );
   const tokenCounterInstance = tokenCounter || new TokenCounter();
   const metricsInstance = metrics || new MetricsCollector();
 

@@ -9,7 +9,7 @@
  * - 75-85% token reduction through summarization
  */
 
-import { CacheEngine } from '../../core/cache-engine.js';
+import { CacheEngine, resolveCacheLocation } from '../../core/cache-engine.js';
 import { MetricsCollector } from '../../core/metrics.js';
 import { TokenCounter } from '../../core/token-counter.js';
 import { createHash } from 'crypto';
@@ -87,7 +87,6 @@ export interface SmartSymbolsResult {
     byKind: Record<string, number>;
     exportedCount: number;
     fromCache: boolean;
-    duration: number;
   };
 
   /**
@@ -103,14 +102,14 @@ export interface SmartSymbolsResult {
     symbols: string[];
   }>;
 
-  /**
-   * Token reduction metrics
-   */
-  metrics: {
-    originalTokens: number;
-    compactedTokens: number;
-    reductionPercentage: number;
-  };
+  // NO metrics FIELD, DELIBERATELY. The block that stood here was arithmetic
+  // over constants: a hundred bytes assumed per symbol for the "original", a
+  // flat two hundred for a "compacted" summary, both divided by four to call
+  // themselves tokens. No file was read for either figure and no response was
+  // measured, so the percentage it published was a property of the symbol
+  // count alone. Both halves are now the business of the party that holds the
+  // bytes -- the before is the file named in the arguments, read by the
+  // recorder, and the after is the reply, counted once at the wire.
 }
 
 export class SmartSymbolsTool {
@@ -175,9 +174,6 @@ export class SmartSymbolsTool {
           duration: Date.now() - startTime,
           success: true,
           cacheHit: true,
-          inputTokens: cached.metrics.originalTokens,
-          savedTokens:
-            cached.metrics.originalTokens - cached.metrics.compactedTokens,
         });
 
         return cached;
@@ -226,25 +222,22 @@ export class SmartSymbolsTool {
         byKind,
         exportedCount,
         fromCache: false,
-        duration,
       },
       symbols,
       imports,
-      metrics: this.calculateMetrics(symbols, imports),
     };
 
     // Cache the result
     this.cacheResult(cacheKey, result);
 
-    // Record metrics
+    // NO TOKEN FIGURES ON THE RECORD. savedTokens was the difference of two
+    // assumed constants, and cache_analytics summed it into a savings total
+    // that no measurement stood behind.
     this.metrics.record({
       operation: 'smart_symbols',
       duration,
       success: true,
       cacheHit: false,
-      inputTokens: result.metrics.originalTokens,
-      savedTokens:
-        result.metrics.originalTokens - result.metrics.compactedTokens,
     });
 
     return result;
@@ -257,11 +250,20 @@ export class SmartSymbolsTool {
     fileName: string,
     sourceFile: ts.SourceFile
   ): ts.LanguageServiceHost {
+    // TypeScript addresses files by a path it has normalised to forward
+    // slashes, so a host that compares against a Windows path verbatim never
+    // recognises its own file: it is asked for 'C:/dir/x.ts', holds
+    // 'C:\\dir\\x.ts', answers undefined, and the service reports "Could not
+    // find source file". That made smart_symbols fail for every absolute
+    // Windows path and every relative one, leaving a forward-slash absolute
+    // path -- which no Windows client sends -- as the only input that worked.
+    // Comparing in the normalised form is what the service already assumes.
+    const canonical = fileName.split('\\').join('/');
     return {
-      getScriptFileNames: () => [fileName],
+      getScriptFileNames: () => [canonical],
       getScriptVersion: () => '0',
       getScriptSnapshot: (name) => {
-        if (name === fileName) {
+        if (name.split('\\').join('/') === canonical) {
           return ts.ScriptSnapshot.fromString(sourceFile.text);
         }
         return undefined;
@@ -566,49 +568,6 @@ export class SmartSymbolsTool {
   }
 
   /**
-   * Calculate token reduction metrics
-   */
-  private calculateMetrics(
-    symbols: SymbolInfo[],
-    imports?: Array<{ module: string; symbols: string[] }>
-  ): {
-    originalTokens: number;
-    compactedTokens: number;
-    reductionPercentage: number;
-  } {
-    // Original: Full symbol details with types, docs, references
-    let originalSize = 0;
-    symbols.forEach((sym) => {
-      originalSize += 100; // Base symbol info
-      originalSize += sym.type?.length || 0;
-      originalSize += sym.documentation?.length || 0;
-      originalSize += 20; // Location, scope, etc.
-    });
-
-    if (imports) {
-      imports.forEach((imp) => {
-        originalSize += 50 + imp.symbols.join(', ').length;
-      });
-    }
-
-    // Compacted: Summary + symbol names only
-    const summarySize = 200;
-    const symbolListSize = symbols.map((s) => s.name).join(', ').length;
-    const compactedSize = summarySize + symbolListSize;
-
-    const originalTokens = Math.ceil(originalSize / 4);
-    const compactedTokens = Math.ceil(compactedSize / 4);
-
-    return {
-      originalTokens,
-      compactedTokens,
-      reductionPercentage: Math.round(
-        ((originalTokens - compactedTokens) / originalTokens) * 100
-      ),
-    };
-  }
-
-  /**
    * Generate cache key
    */
   private async generateCacheKey(
@@ -652,10 +611,12 @@ export class SmartSymbolsTool {
     }
 
     try {
-      const result = JSON.parse(cached) as SmartSymbolsResult & {
+      const { cachedAt, ...result } = JSON.parse(
+        cached
+      ) as SmartSymbolsResult & {
         cachedAt: number;
       };
-      const age = (Date.now() - result.cachedAt) / 1000;
+      const age = (Date.now() - cachedAt) / 1000;
 
       if (age <= maxAge) {
         result.summary.fromCache = true;
@@ -722,7 +683,11 @@ export async function runSmartSymbols(
   // open" -- twenty tools down from one call, until the server was restarted.
   const ownsCache = !cache;
   const cacheInstance =
-    cache || new CacheEngine(join(homedir(), '.hypercontext', 'cache'), 100);
+    cache ||
+    new CacheEngine(
+      resolveCacheLocation(join(homedir(), '.hypercontext', 'cache')),
+      100
+    );
   const tokenCounterInstance = tokenCounter || new TokenCounter();
   const metricsInstance = metrics || new MetricsCollector();
 
@@ -740,8 +705,7 @@ export async function runSmartSymbols(
     // Summary
     output += `File: ${result.summary.file}\n`;
     output += `Total Symbols: ${result.summary.totalSymbols}\n`;
-    output += `Exported: ${result.summary.exportedCount}\n`;
-    output += `Duration: ${result.summary.duration}ms\n\n`;
+    output += `Exported: ${result.summary.exportedCount}\n\n`;
 
     // By kind
     output += `Symbols by Kind:\n`;
@@ -774,12 +738,6 @@ export async function runSmartSymbols(
       });
       output += '\n';
     }
-
-    // Metrics
-    output += `Token Reduction:\n`;
-    output += `  Original: ${result.metrics.originalTokens} tokens\n`;
-    output += `  Compacted: ${result.metrics.compactedTokens} tokens\n`;
-    output += `  Reduction: ${result.metrics.reductionPercentage}%\n`;
 
     return output;
   } finally {

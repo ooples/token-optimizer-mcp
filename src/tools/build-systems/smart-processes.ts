@@ -14,7 +14,7 @@ import {
 } from './wmic-process-parser.js';
 import { execFileSafe } from '../../utils/safe-exec.js';
 import { measured, unmeasured } from '../shared/savings.js';
-import { CacheEngine } from '../../core/cache-engine.js';
+import { CacheEngine, resolveCacheLocation } from '../../core/cache-engine.js';
 import { TokenCounter } from '../../core/token-counter.js';
 import { MetricsCollector } from '../../core/metrics.js';
 import { join } from 'path';
@@ -741,7 +741,7 @@ export async function runSmartProcesses(
   options: SmartProcessesOptions = {}
 ): Promise<string> {
   const cache = new CacheEngine(
-    join(homedir(), '.token-optimizer-cache', 'cache.db')
+    resolveCacheLocation(join(homedir(), '.token-optimizer-cache', 'cache.db'))
   );
   const tokenCounter = new TokenCounter();
   const metrics = new MetricsCollector();

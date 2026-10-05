@@ -367,7 +367,12 @@ export class AlertManager {
     const compressedTokens = this.tokenCounter.count(cachedData).tokens;
     const tokensSaved = tokensUsed - compressedTokens;
 
-    await this.cache.set(cacheKey, cachedData, tokensUsed, compressedTokens);
+    await this.cache.set(
+      cacheKey,
+      cachedData,
+      cachedData.length,
+      cachedData.length
+    );
 
     // Persist to storage
     await this.persistAlerts();
@@ -428,7 +433,12 @@ export class AlertManager {
     const compressedTokens = this.tokenCounter.count(cachedData).tokens;
     const tokensSaved = tokensUsed - compressedTokens;
 
-    await this.cache.set(cacheKey, cachedData, tokensUsed, compressedTokens);
+    await this.cache.set(
+      cacheKey,
+      cachedData,
+      cachedData.length,
+      cachedData.length
+    );
 
     // Persist to storage
     await this.persistAlerts();
@@ -554,7 +564,12 @@ export class AlertManager {
 
     // Cache compressed list (92% reduction, 6-hour TTL)
     const cachedData = JSON.stringify(compressedAlerts);
-    await this.cache.set(cacheKey, cachedData, fullTokens, compressedTokens);
+    await this.cache.set(
+      cacheKey,
+      cachedData,
+      cachedData.length,
+      cachedData.length
+    );
 
     return {
       success: true,
@@ -712,7 +727,12 @@ export class AlertManager {
 
     // Cache aggregated history (88% reduction, 5-minute TTL)
     const cachedData = JSON.stringify(aggregatedHistory);
-    await this.cache.set(cacheKey, cachedData, fullTokens, aggregatedTokens);
+    await this.cache.set(
+      cacheKey,
+      cachedData,
+      cachedData.length,
+      cachedData.length
+    );
 
     return {
       success: true,
@@ -844,7 +864,12 @@ export class AlertManager {
 
     // Cache channel configuration (95% reduction, 24-hour TTL)
     const cachedData = JSON.stringify(compressedChannels);
-    await this.cache.set(cacheKey, cachedData, fullTokens, compressedTokens);
+    await this.cache.set(
+      cacheKey,
+      cachedData,
+      cachedData.length,
+      cachedData.length
+    );
 
     // Persist channels
     await this.persistChannels();
@@ -915,7 +940,12 @@ export class AlertManager {
     // Cache silence state (90% reduction, based on duration)
     const cacheKey = `cache-${createHash('md5').update(`alert-manager:silence:${silenceId}`).digest('hex')}`;
     const cachedData = JSON.stringify(compressedSilence);
-    await this.cache.set(cacheKey, cachedData, fullTokens, compressedTokens);
+    await this.cache.set(
+      cacheKey,
+      cachedData,
+      cachedData.length,
+      cachedData.length
+    );
 
     // Persist changes
     await this.persistSilences();
@@ -1218,7 +1248,7 @@ export function getAlertManager(
 export const ALERT_MANAGER_TOOL_DEFINITION = {
   name: 'alert_manager',
   description:
-    'Comprehensive alerting system with multi-channel notifications, intelligent routing, and 89% token reduction through aggressive caching and history aggregation',
+    'Comprehensive alerting system with multi-channel notifications, intelligent routing, and an unmeasured design target of 89% token reduction through aggressive caching and history aggregation',
   inputSchema: {
     type: 'object',
     properties: {

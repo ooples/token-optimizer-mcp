@@ -12,6 +12,7 @@ import {
 } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
+import { restoreTextPart } from '../../src/server/text-part.js';
 
 /** Newest mtime of any .ts under a directory, walked recursively. */
 function newestMtime(dir: string): number {
@@ -83,11 +84,23 @@ function call(
 }
 
 /** The tool payload, parsed back out of the text content block. */
+/**
+ * The payload, reassembled the way a client reassembles it.
+ *
+ * This used to be `JSON.parse(content[0].text)`, which is only the whole
+ * payload while every reply is one part. A reply whose largest string field was
+ * lifted into a part of its own -- to stop paying for its JSON escape -- arrives
+ * as two, and a helper that read the first one would quietly report a payload
+ * with its content missing. `restoreTextPart` is the product's own inverse, so
+ * routing the suite's reads through it means the reassembly is exercised over
+ * the real transport rather than only in a unit test.
+ */
 async function callTool(name: string, args: unknown): Promise<any> {
   const result = await call('tools/call', { name, arguments: args });
-  const text = result?.content?.[0]?.text;
-  expect(typeof text).toBe('string');
-  return JSON.parse(text);
+  expect(typeof result?.content?.[0]?.text).toBe('string');
+  const payload = restoreTextPart(result.content);
+  expect(payload).not.toBeNull();
+  return payload;
 }
 
 beforeAll(async () => {
@@ -274,19 +287,64 @@ describe('smart_read over the wire', () => {
       name: 'smart_read',
       arguments: { path },
     });
+    // THE POSITIVE CONTROL for both `not.toContain('row 0:')` assertions
+    // below: a full read DOES carry that line, so their absence later is a
+    // fact about the reply and not about the string being unreachable.
+    expect(first.content[0].text).toContain('row 0:');
+
     const second = await callTool('smart_read', { path });
-    expect(second.metadata.fromCache).toBe(true);
+    // THE CACHE HIT, READ FROM WHAT THE REPLY SAYS RATHER THAN FROM ITS
+    // BOOKKEEPING. `metadata.fromCache` is no longer on the wire: it tells the
+    // caller how this process answered, not anything about their file, and it
+    // is pruned with the rest of the restated envelope (pinned in
+    // tests/unit/server/restated.test.ts). The observable is stronger anyway --
+    // a cache hit is a reply that does not resend the file.
     expect(second.content).toContain('No changes');
+    expect(second.content).not.toContain('row 0:');
     expect(JSON.stringify(second).length).toBeLessThan(
       first.content[0].text.length
     );
     writeFileSync(path, content.replace('row 250:', 'CHANGED 250:'));
     const changed = await callTool('smart_read', { path });
-    expect(changed.metadata.isDiff).toBe(true);
+    // Likewise `metadata.isDiff`. A diff is a reply that carries the changed
+    // line and NOT the 499 that did not change; asserting that says what the
+    // flag only claimed.
     expect(changed.content).toContain('CHANGED 250:');
+    expect(changed.content).not.toContain('row 0:');
     const repeated = await callTool('smart_read', { path });
     expect(repeated.content).toContain('No changes');
     expect(repeated.content).not.toContain('CHANGED 250:');
+  });
+
+  it('sends the file as text, not as an escaped string, and it reassembles', async () => {
+    // Under the disclosure threshold, so this is the reply the dispatch built
+    // rather than a preview -- the only path where the escape is still paid.
+    // Escape-dense on purpose: the tax is per special character, and a fixture
+    // of plain words pays almost none of it.
+    const path = join(fixtures, 'escaped.ts');
+    const body = Array.from(
+      { length: 30 },
+      (_, i) => `export const k${i} = { "a": 'b ${i}', re: /x\\d+/ };`
+    ).join('\n');
+    writeFileSync(path, body);
+
+    const reply = await call('tools/call', {
+      name: 'smart_read',
+      arguments: { path },
+    });
+
+    expect(reply.content).toHaveLength(2);
+    // The second part IS the file, byte for byte -- no quotes around it, no
+    // doubled newlines, nothing added.
+    expect(reply.content[1].text).toBe(body);
+    // And the first part names where it went, so nothing is lost.
+    expect(restoreTextPart(reply.content).content).toBe(body);
+    // The whole point: the reply is smaller than the one object would have been.
+    const asOneObject = JSON.stringify(restoreTextPart(reply.content));
+    const onTheWire = reply.content
+      .map((part: { text: string }) => part.text)
+      .join('\n');
+    expect(onTheWire.length).toBeLessThan(asOneObject.length);
   });
 });
 
@@ -460,7 +518,11 @@ describe('smart_edit over the wire', () => {
       operations: [{ type: 'insert', startLine: 11, content: 'L11' }],
     });
 
-    expect(payload.success).toBe(true);
+    // `success: true` duplicates the envelope's `isError: false`, so it is
+    // pruned from the reply; `success: false` is an outcome and survives. That
+    // makes `undefined` the discriminating assertion against the refusal arm
+    // above, which still reads `false` here.
+    expect(payload.success).toBeUndefined();
 
     const after = readFileSync(path, 'utf8');
     expect(after.startsWith(TEN)).toBe(true);

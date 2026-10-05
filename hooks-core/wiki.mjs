@@ -1,4 +1,4 @@
-﻿/**
+/**
  * The wiki graph store. Phase 1: skeleton, structural only.
  *
  * See docs/WIKI_GRAPH.md for the design. This file is the persistence layer and
@@ -22,6 +22,7 @@ import { join, dirname } from 'node:path';
 import { homedir } from 'node:os';
 import { createHash } from 'node:crypto';
 import { canonicalPath, isFsSafePath } from './paths.mjs';
+import { flagOn } from './flags.mjs';
 
 /**
  * Schema version stamped on every record.
@@ -767,6 +768,26 @@ export function withBatchedWrites(dir, fn) {
   }
 }
 
+/**
+ * How many times the log has actually been locked and appended to.
+ *
+ * EXPORTED FOR THE ONE PROPERTY THAT WAS ONLY EVER MEASURABLE AS A CLOCK.
+ * Batching exists because an unbatched seed pays a lock, an append, a
+ * compaction check and a release per record -- so the regression is a COUNT,
+ * about six filesystem operations times the number of records, and it had been
+ * tested as a wall-clock budget instead. Four formulations of that test failed
+ * under parallel load, each one measuring the machine somewhere, because a time
+ * is the load times the count and only one of those factors is the subject.
+ * This reports the count directly. It only ever grows, so a caller reads it
+ * before and after and takes the difference.
+ */
+let writeCycles = 0;
+
+/** Log appends performed so far in this process. See `writeCycles`. */
+export function logWriteCycles() {
+  return writeCycles;
+}
+
 function appendAll(dir, records) {
   if (!records.length) return true;
   // A batch for a DIFFERENT directory is not ours to hold: a session touching
@@ -799,6 +820,10 @@ function appendAll(dir, records) {
       appendFileSync(logPath(dir), payload);
       compactIfWasteful(dir);
     });
+    // Counted here and not at the top: a buffered write returns above, and a
+    // throw below leaves the count where it was. What this reports is appends
+    // that reached the disk.
+    writeCycles += 1;
     return true;
   } catch {
     // The graph is an optimization. Failing to write one must never fail the
@@ -1004,10 +1029,8 @@ function readSnapshots(dir) {
  * the product's main feature off by accident.
  */
 export function wikiDisabled() {
-  const raw = String(process.env.TOKEN_OPTIMIZER_WIKI_DISABLED || '')
-    .trim()
-    .toLowerCase();
-  return raw === '1' || raw === 'true' || raw === 'yes';
+  return flagOn('TOKEN_OPTIMIZER_WIKI_DISABLED');
+
 }
 
 export function load(dir, { snapshots = false } = {}) {

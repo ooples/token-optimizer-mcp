@@ -34,7 +34,7 @@
  * and only the rows that truly repeat are elided.
  */
 
-import { count, inlineMarker } from './annotate.js';
+import { count, inlineMarker, withStamp } from './annotate.js';
 import { numericExtrema } from './json-numeric.js';
 import { compressJsonArray, compressJsonObjectMap } from './json-fragments.js';
 import {
@@ -47,6 +47,7 @@ import { needleRows, shapeRepresentatives } from './needles.js';
 import { compressNestedStrings } from './nested.js';
 import { activeRanker } from './ranking.js';
 import { DEFAULT_TUNING } from './options.js';
+import type { Tuning } from './options.js';
 import type { CompressionResult, Elision, EngineContext } from './types.js';
 import { spillFor, unchanged } from './types.js';
 
@@ -259,6 +260,93 @@ function minifyPreservingTokens(text: string): string | null {
   return out;
 }
 /**
+ * The span of every top-level element of a JSON array, as offsets into `text`.
+ *
+ * SPANS, NOT VALUES, for exactly the reason `minifyPreservingTokens` above
+ * exists: slicing the source hands back `19.90` as `19.90`, where re-serialising
+ * a parsed row hands back `19.9`. A caller that splits an array into the part it
+ * keeps and the part it spills needs BOTH halves written the way the source
+ * wrote them, and only offsets into the original give that.
+ *
+ * The string-skipping is deliberately the same shape as the two scans around
+ * it. Returns null when the scan cannot finish, when the text is not an array,
+ * or when anything follows the closing bracket -- in every one of those cases
+ * the caller has to fall back rather than emit a document it guessed at.
+ */
+function topLevelElementSpans(text: string): Array<[number, number]> | null {
+  if (text[0] !== '[') return null;
+  const spans: Array<[number, number]> = [];
+  let depth = 0;
+  let start = -1;
+  let i = 0;
+  while (i < text.length) {
+    const ch = text[i];
+    if (ch === '"') {
+      i += 1;
+      let closed = false;
+      while (i < text.length) {
+        if (text[i] === '\\') {
+          i += 2;
+          continue;
+        }
+        if (text[i] === '"') {
+          i += 1;
+          closed = true;
+          break;
+        }
+        i += 1;
+      }
+      if (!closed) return null;
+      continue;
+    }
+    if (ch === '[' || ch === '{') {
+      depth += 1;
+      if (depth === 1) start = i + 1;
+      i += 1;
+      continue;
+    }
+    if (ch === ']' || ch === '}') {
+      depth -= 1;
+      if (depth < 0) return null;
+      if (depth === 0) {
+        // The outer opener was a bracket, so a brace closing it is malformed.
+        if (ch !== ']') return null;
+        if (i > start) spans.push([start, i]);
+        // Trailing bytes mean this was not the whole document and the offsets
+        // would be read against a text the caller does not have.
+        return i === text.length - 1 ? spans : null;
+      }
+      i += 1;
+      continue;
+    }
+    if (ch === ',' && depth === 1) {
+      spans.push([start, i]);
+      start = i + 1;
+      i += 1;
+      continue;
+    }
+    i += 1;
+  }
+  return null;
+}
+
+/**
+ * How to say where the rows still in the request sat in the original array.
+ *
+ * The marker names a count and a shape; without this the two halves of the
+ * array can be reassembled as a set but not in order, and for search results
+ * and log lines the order IS the content. The contiguous case gets the short
+ * form because it is the common one -- `keepRows` takes the head -- and because
+ * a run of indices is exactly what a reader would otherwise have to check.
+ */
+function keptPositions(keptAt: readonly number[], total: number): string {
+  const contiguous = keptAt.every((at, i) => at === i);
+  return contiguous
+    ? `the ${count(keptAt.length, 'row')} above are the first of ${total}`
+    : `the ${count(keptAt.length, 'row')} above were at index ${keptAt.join(', ')} of ${total}`;
+}
+
+/**
  * The number lexemes of a document, in order, ignoring anything inside a string.
  *
  * OUTSIDE STRINGS, AND POSITIONAL. The first version asked whether each
@@ -338,9 +426,76 @@ function numbersKeptVerbatim(original: string, output: string): boolean {
   if (before.length !== after.length) return false;
   return before.every((lexeme, at) => lexeme === after[at]);
 }
+/**
+ * What one retrieval round costs, in characters of saving it has to beat.
+ *
+ * The dial is in tokens because tokens are what the round is billed in, and
+ * every comparison in this file is in characters, so the conversion has to
+ * happen once, somewhere, and be visible. 3.4 is the low end of what was
+ * measured on this project's own corpus -- 3.39 characters per token on dense
+ * log rows, 4.45 on search results -- and the low end is the permissive one:
+ * the same token cost becomes the SMALLER character threshold, so the gate
+ * refuses only what could not pay at any density that was actually seen.
+ */
+const CHARS_PER_TOKEN = 3.4;
+
+/**
+ * What a token costs while it sits in the request: written to the cache once
+ * at the 2.0x rate, then re-read on each of the 56 turns after it at 0.1x.
+ * The rates and the turn count are the cost model's
+ * (`bench/compression/cost-model.mjs`).
+ */
+const RESIDENT_RATE = 7.6;
+
+/**
+ * What the same token costs when it is spilled and then fetched back: the
+ * same write, but re-read only over the turns that REMAIN. Midway is the cost
+ * model's own assumption about when a fetch lands (`at = N * (i + 1) /
+ * (n + 1)`), and it is the neutral one -- a block fetched immediately saves
+ * nothing, one never fetched saves everything.
+ */
+const REFETCHED_RATE = 4.8;
+
+/**
+ * The smallest saving, in characters, that is worth a marker.
+ *
+ * Spilling saves `RESIDENT_RATE` per token, and at the assumed fetch rate it
+ * gives back `REFETCHED_RATE` per token plus the round trip itself. Setting
+ * the two equal gives the saving at which a marker starts to pay; anything
+ * under it is a reduction that costs more than it removes.
+ *
+ * The denominator cannot go non-positive while the rates keep their meaning
+ * -- fetching a token back is cheaper than never spilling it -- but it is
+ * guarded anyway, because these are dials and a caller may set them to
+ * anything.
+ */
+function retrievalCostChars(tuning: Tuning): number {
+  const p = Math.max(0, Math.min(1, tuning.assumedFetchRate));
+  const perToken = RESIDENT_RATE - p * REFETCHED_RATE;
+  if (perToken <= 0) return Number.POSITIVE_INFINITY;
+  return ((p * tuning.retrievalCostTokens) / perToken) * CHARS_PER_TOKEN;
+}
+/*
+ * MINTS ITS OWN STAMP WHEN THE CALLER BROUGHT NONE, AND HANDS IT BACK.
+ *
+ * An engine that emits markers and tells nobody how to verify them produces
+ * output that cannot be decoded at all -- the markers are indistinguishable
+ * from content, which is the safe direction and a useless one. So the stamp
+ * travels with the result, from whichever layer created it: the router sets one
+ * for the whole block and this passes it through, and a caller reaching an
+ * engine directly gets one minted from the content it handed over.
+ */
 export function compressJson(
   text: string,
   ctx: EngineContext = {}
+): CompressionResult {
+  const stamped = withStamp(ctx, text);
+  return { ...compressJsonDocument(text, stamped), stamp: stamped.stamp };
+}
+
+function compressJsonDocument(
+  text: string,
+  ctx: EngineContext
 ): CompressionResult {
   if (!looksLikeJson(text)) return unchanged(text);
 
@@ -358,7 +513,7 @@ export function compressJson(
         !Number.isFinite(value) ||
         (Number.isInteger(value) && !Number.isSafeInteger(value))
       ) {
-        const exact = compressJsonArray(text);
+        const exact = compressJsonArray(text, ctx.stamp ?? null);
         return exact.text.length < text.length ? exact : unchanged(text);
       }
     }
@@ -433,8 +588,29 @@ export function compressJson(
   // way, so it is a common shape rather than an exotic one. Tried here as
   // another candidate; `best` keeps whichever answer is smaller.
   {
-    const asMap = compressJsonObjectMap(text);
-    if (asMap.text.length < text.length) exact = asMap;
+    // BOTH EXACT ENCODINGS, OFFERED ONCE, UNCONDITIONALLY.
+    //
+    // The array encoder used to be reached only from inside the numeric-table
+    // branch further down, behind `extrema.keep.size && !hasRareBooleans &&
+    // !categories.keep.size`. A search result carries a `source` column drawn
+    // from a handful of values, so `rareStringGroups` claimed it and the exact
+    // encoding was never even computed -- forty identical records went out
+    // minified while a competitor folded them to a header and rows. Nothing
+    // about that gate was protecting an answer: `best()` substitutes `exact`
+    // only when it is SMALLER, so offering a lossless candidate can lower the
+    // output and can never raise it.
+    //
+    // HELD, NOT RETURNED. Returning the moment an exact encoding beats the
+    // MINIFIED text compares it against the wrong alternative: further down,
+    // the row elision can put 85 of 90 rows in a spill and come out smaller
+    // still. Making the exact path reachable for one-line records took one
+    // block from 12.9% to 50.9% and simultaneously took v3-history from 73.3%
+    // to 60.4%, because the better lossless encoding preempted a much better
+    // lossy one. So the candidate is carried to every exit instead.
+    const asMap = compressJsonObjectMap(text, ctx.stamp ?? null);
+    const asArray = compressJsonArray(text, ctx.stamp ?? null);
+    const smaller = asArray.text.length < asMap.text.length ? asArray : asMap;
+    if (smaller.text.length < text.length) exact = smaller;
   }
   /** Whichever is smaller: this answer, or the exact lossless encoding. */
   const best = (candidate: CompressionResult): CompressionResult =>
@@ -484,30 +660,9 @@ export function compressJson(
       tuning.keepRows
     );
     const keep = rareBooleanRows(stripped);
-    const hasRareBooleans = keep.size > 0;
     const extrema = numericExtrema(stripped);
     for (const i of extrema.keep) keep.add(i);
     const categories = rareStringGroups(parsed as unknown[]);
-    // Numeric tables have no rare categorical population to summarize. Keeping
-    // every record in an exact compact form avoids forcing verification reads
-    // for aggregate queries. Prefer it only when it materially beats minification.
-    if (
-      extrema.keep.size &&
-      !hasRareBooleans &&
-      !categories.keep.size &&
-      !nestedElisions.length
-    ) {
-      // HELD, NOT RETURNED. Returning here the moment the exact encoding
-      // beat MINIFIED compared it against the wrong alternative: further
-      // down, the row elision can put 85 of 90 rows in a spill and come out
-      // far smaller still. Measured, making the exact path reachable for
-      // one-line records took a block from 12.9% to 50.9% on its own and
-      // simultaneously took v3-history from 73.3% to 60.4% on the
-      // conversation, because the better lossless encoding preempted a much
-      // better lossy one. So the candidate is carried to every exit and the
-      // smaller answer wins there.
-      exact = compressJsonArray(text);
-    }
     for (const i of categories.keep) keep.add(i);
     // 1. Content that a reader would come back for -- identifiers, failure
     //    vocabulary -- which structure cannot see. Bounded, so an array made
@@ -559,25 +714,54 @@ export function compressJson(
     // whitespace removed and every lexeme as the source wrote it, so prefer
     // it; it is null exactly when a nested string was compressed, and then the
     // values are what survived and serialising them is the honest answer.
-    const recoverAt = spillFor(
-      ctx,
-      scanned ?? JSON.stringify(stripped),
-      'rows.json'
-    );
-    if (!recoverAt)
-      return best({
-        text: minified,
-        elisions,
-        lossless: !nestedLossy && lexemeSafe,
-      });
-    const kept = [...keep].sort((a, b) => a - b).map((i) => stripped[i]);
+    // AND ONLY THE ROWS THAT ACTUALLY LEFT. The spill held the whole array,
+    // including the rows sitting in the request right beside the marker, so a
+    // reader who followed the pointer paid for those rows twice -- once in
+    // context and again on recovery. On the benchmark's agent loops that is 6
+    // of every 60 rows and 8 of every 200. Recovery only needs what is missing,
+    // and the positions below are what make the two halves reassemble in order.
+    //
+    // POSITIONS ARE NAMED ONLY WHEN NAMING THEM IS CHEAPER THAN RE-SENDING THE
+    // ROWS. That is the whole test: no cap, no dial, just the comparison that
+    // decides whether the clause pays. A kept set too scattered or too large to
+    // describe falls back to the whole-array spill, which is always correct.
+    const whole = scanned ?? JSON.stringify(stripped);
+    const spans = topLevelElementSpans(whole);
+    const keptAt = [...keep].sort((a, b) => a - b);
+    const verbatim =
+      spans !== null && spans.length === stripped.length ? spans : null;
+    const sliceRow = (i: number): string =>
+      verbatim === null ? '' : whole.slice(verbatim[i][0], verbatim[i][1]);
+    const positions =
+      verbatim === null ? '' : keptPositions(keptAt, stripped.length);
+    const keptBytes =
+      verbatim === null
+        ? 0
+        : keptAt.reduce((a, i) => a + (verbatim[i][1] - verbatim[i][0]) + 1, 0);
+    const partial = verbatim !== null && positions.length < keptBytes;
+    const spillContent = partial
+      ? '[' +
+        stripped
+          .map((_row, i) => i)
+          .filter((i) => !keep.has(i))
+          .map(sliceRow)
+          .join(',') +
+        ']'
+      : whole;
     const sample = stripped.find((_row, i) => !keep.has(i));
-    const keptText = JSON.stringify(kept);
-    const body =
+    // THE KEPT ROWS COME FROM THE SOURCE TOO, on the same path. They used to be
+    // re-serialised from the parsed values, which is the very rewrite the
+    // comment above refuses for the spill: `19.90` went out as `19.9`, and once
+    // the spill stops carrying them there is nowhere else those bytes exist.
+    const keptText = partial
+      ? '[' + keptAt.map(sliceRow).join(',') + ']'
+      : JSON.stringify(keptAt.map((i) => stripped[i]));
+    const bodyWith = (at: string): string =>
       keptText.slice(0, -1) +
       ',' +
       inlineMarker(
         `${count(dropped, 'more row')}, ${shapeOf(sample)}` +
+          (partial ? `; ${positions}` : '') +
           (differing.length && differing.every((i) => keep.has(i))
             ? `; all ${count(differing.length, 'row')} that differ are kept above`
             : '') +
@@ -585,9 +769,50 @@ export function compressJson(
           nullFacts(parsed as unknown[]) +
           categories.facts +
           extrema.facts,
-        recoverAt
+        at,
+        ctx.stamp ?? null
       ) +
       ']';
+    // PRICED BEFORE IT IS WRITTEN, on both counts.
+    //
+    // The comparison used to be `is the elided text shorter`, which measures
+    // the request it shrinks against nothing. An agent that follows the marker
+    // spends a whole extra request, and that request re-reads the conversation
+    // before it reads the spill -- `retrievalCostTokens` is what that is
+    // assumed to cost, and an elision saving less than it is a loss dressed as
+    // a reduction. The alternative it has to beat is the best answer that
+    // needs no round trip at all, which is the exact encoding when there is
+    // one and the minified document otherwise.
+    //
+    // AND THE SINK IS NOT TOUCHED UNTIL THE ANSWER IS DECIDED. `spillFor` used
+    // to run first and its file stayed on disk whether or not the candidate
+    // was kept, so a rejected elision left a spill nothing pointed at -- one
+    // of them, 3,233 bytes, on `agentic-conversation`. Deciding on
+    // `bodyWith('')` prices the body at its shortest possible marker, so the
+    // gate can only ever be more permissive than the text it finally emits;
+    // the exact length is re-checked by `best` below once the path is known.
+    const noFetch =
+      exact && exact.text.length < minified.length
+        ? exact.text.length
+        : minified.length;
+    if (noFetch - bodyWith('').length < retrievalCostChars(tuning))
+      return best({
+        text: minified,
+        elisions,
+        lossless: !nestedLossy && lexemeSafe,
+      });
+    const recoverAt = spillFor(ctx, spillContent, 'rows.json');
+    // NO HOME MEANS NO ELISION -- the marker would name a count and a shape and
+    // offer no way back, which is the dangling reference this design exists to
+    // avoid. The minified document is still a real saving, so keep it and keep
+    // the rows.
+    if (!recoverAt)
+      return best({
+        text: minified,
+        elisions,
+        lossless: !nestedLossy && lexemeSafe,
+      });
+    const body = bodyWith(recoverAt);
     return best({
       text: body,
       elisions: [

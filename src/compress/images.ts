@@ -31,6 +31,9 @@
  */
 
 /** An image found in a request, with where it was and what it costs. */
+import { assertStamp, stampFor, stampPattern } from './annotate.js';
+import type { Stamp } from './types.js';
+
 export interface ImageBlock {
   /** The base64 payload, which is also its identity. */
   readonly data: string;
@@ -155,18 +158,64 @@ export function describeImage(block: unknown): ImageBlock | null {
 }
 
 /** The back-reference that replaces a repeated image. */
-export function imageBackReference(image: ImageBlock, ordinal: number): string {
+export function imageBackReference(
+  image: ImageBlock,
+  ordinal: number,
+  stamp: Stamp = null
+): string {
   const size =
     image.width && image.height ? `${image.width}x${image.height} ` : '';
   const cost = image.tokens
     ? `, about ${image.tokens.toLocaleString('en-US')} tokens`
     : '';
-  return `[... the same ${size}${image.mediaType} image already shown above (#${ordinal})${cost} -- not repeated here]`;
+  // THE AUTHENTICATOR GOES LAST, after the sentence and not inside it, because
+  // the reader below anchors on the closing bracket and a stamp anywhere else
+  // would be a second thing for the model to read.
+  const tag = stamp === null ? '' : ` ~${stamp}`;
+  return `[... the same ${size}${image.mediaType} image already shown above (#${ordinal})${cost} -- not repeated here${tag}]`;
+}
+
+/**
+ * The ordinal an image back-reference names, or null when the line is not one.
+ *
+ * The inverse of the marker above, kept beside it so the two cannot drift. What
+ * the ordinal points at is the nth DISTINCT image in the request, counted in
+ * order of first appearance -- which is exactly how `dedupImages` numbers them,
+ * and why a reader resolving one needs the images above in that same order
+ * rather than a table it has to be handed separately.
+ */
+const IMAGE_BACK_REFERENCE_HEAD =
+  /^\s*\[\.\.\. the same .*? image already shown above \(#(\d+)\)[^\]]*/;
+
+/**
+ * GATED ON THE STAMP, like every other marker reader in this directory.
+ *
+ * An unstamped line of this shape is content: the reference is replaced by
+ * whatever image sits at that ordinal, so a planted one made the decoder hand
+ * back an image the request never had there -- and call it lossless. Handed no
+ * stamp this matches nothing, and the line is returned as it arrived.
+ */
+export function readImageBackReference(
+  line: string,
+  stamp: Stamp = null
+): number | null {
+  assertStamp(stamp);
+  const match = new RegExp(
+    IMAGE_BACK_REFERENCE_HEAD.source + stampPattern(stamp) + /\]\s*$/.source
+  ).exec(line);
+  return match === null ? null : Number(match[1]);
 }
 
 export interface ImageDedupResult {
   /** One entry per input block: the replacement, or null to keep as-is. */
   readonly replacements: readonly (string | null)[];
+  /**
+   * One key per entry, aligned index for index with `replacements`.
+   *
+   * Null where nothing was replaced -- there is no marker at that position to
+   * verify, and claiming a key for one would be claiming a marker.
+   */
+  readonly stamps: readonly Stamp[];
   /** Estimated tokens removed, for reporting. */
   readonly tokensSaved: number;
   /** How many repeats were collapsed. */
@@ -185,10 +234,12 @@ export interface ImageDedupResult {
  * which one. There is nothing to look up and nothing to miss.
  */
 export function dedupImages(
-  blocks: readonly { readonly block: unknown; readonly touchable: boolean }[]
+  blocks: readonly { readonly block: unknown; readonly touchable: boolean }[],
+  stamp?: Stamp
 ): ImageDedupResult {
   const seen = new Map<string, number>();
   const replacements: (string | null)[] = [];
+  const stamps: Stamp[] = [];
   let tokensSaved = 0;
   let collapsed = 0;
 
@@ -196,6 +247,7 @@ export function dedupImages(
     const image = describeImage(block);
     if (!image || image.data.length < MIN_DEDUP_IMAGE_CHARS) {
       replacements.push(null);
+      stamps.push(null);
       continue;
     }
 
@@ -203,17 +255,27 @@ export function dedupImages(
     if (earlier === undefined) {
       seen.set(image.data, seen.size + 1);
       replacements.push(null);
+      stamps.push(null);
       continue;
     }
     if (!touchable) {
       replacements.push(null);
+      stamps.push(null);
       continue;
     }
 
-    replacements.push(imageBackReference(image, earlier));
+    // KEYED ON THE IMAGE'S OWN BYTES, so the marker is byte-identical next turn
+    // for the same screenshot -- which is the case this pass exists for, and
+    // the one where a changing marker would cost a cache read every turn.
+    // A CALLER MAY PIN IT, the same way every other marker-writing pass here
+    // honours `ctx.stamp`, so a run can be reproduced byte for byte. Omitted,
+    // the key is minted over the image.
+    const key = stamp === undefined ? stampFor(image.data) : stamp;
+    replacements.push(imageBackReference(image, earlier, key));
+    stamps.push(key);
     tokensSaved += image.tokens ?? 0;
     collapsed += 1;
   }
 
-  return { replacements, tokensSaved, collapsed };
+  return { replacements, stamps, tokensSaved, collapsed };
 }

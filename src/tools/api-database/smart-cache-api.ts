@@ -11,7 +11,7 @@
  */
 
 import { createHash } from 'crypto';
-import { CacheEngine } from '../../core/cache-engine.js';
+import { CacheEngine, resolveCacheLocation } from '../../core/cache-engine.js';
 import type { TokenCounter } from '../../core/token-counter.js';
 import type { MetricsCollector } from '../../core/metrics.js';
 
@@ -332,12 +332,10 @@ export class SmartCacheAPI {
 
     // Store in cache
     const buffer = this.serializeCachedResponse(cachedResponse);
-    this.cache.set(
-      cacheKey,
-      buffer.toString('utf-8'),
-      0, // originalSize
-      0 // compressedSize - tokens saved will be calculated on get
-    );
+    const stored = buffer.toString('utf-8');
+    this.cache.set(cacheKey, stored, stored.length, stored.length, {
+      ttlSeconds: ttl,
+    });
 
     // Count tokens
     const originalTokens = this.tokenCounter.count(responseStr).tokens;
@@ -882,7 +880,7 @@ export async function runSmartCacheApi(
   const { MetricsCollector } = await import('../../core/metrics.js');
 
   const cache = new CacheEngineClass(
-    join(homedir(), '.hypercontext', 'cache'),
+    resolveCacheLocation(join(homedir(), '.hypercontext', 'cache')),
     100
   );
   const tokenCounter = new TokenCounter();
@@ -890,7 +888,7 @@ export async function runSmartCacheApi(
   const tool = getSmartCacheApi(cache, tokenCounter, metrics);
   const result = await tool.run(options);
 
-  return JSON.stringify(result, null, 2);
+  return JSON.stringify(result);
 }
 
 /**

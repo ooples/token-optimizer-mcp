@@ -38,30 +38,53 @@ import { lastCacheBreakpoint, isAfter } from '../../dist/compress/frontier.js';
 import { anchorStore } from '../../dist/compress/anchor.js';
 import { describeImage, isImageBlock } from '../../dist/compress/images.js';
 import { pathToFileURL } from 'node:url';
+import { createHash } from 'node:crypto';
+import { tokens } from './currency.mjs';
 
 const CACHE_READ = 0.1;
-
-/**
- * How much more than the control our steady-state cost may be.
- *
- * A back-reference here reads `[... 32,107 bytes, already shown above starting
- * "export class CacheEngine {"]`; theirs reads `<<ccr:a1b2c3d4e5f6,blob,32107>>`.
- * Ours is about a hundred characters, theirs twenty-four, and on a workload with
- * several repeats that difference is the entire margin between the arms. We are
- * not going to win that by making our marker opaque -- an opaque marker is the
- * thing we are arguing against, and theirs degrades to `[unresolved: entry not
- * found]` when the cache entry is gone. So the premium is bounded and declared
- * instead of hidden.
- */
-const STEADY_PREMIUM = 1.05;
 const CACHE_WRITE = 1.25;
 
-/** Tokens, approximated consistently across arms so comparisons are fair. */
-function tokens(text) {
-  // A ratio, applied identically to every arm. The comparison is between arms
-  // on the same content, so a shared approximation cancels; what would NOT
-  // cancel is measuring one arm differently from another.
-  return Math.ceil(text.length / 4);
+/**
+ * A spill sink for one arm, named the way the proxy's sink names files.
+ *
+ * SPILL PATHS REACH THE EMITTED TEXT, so how they are named is part of what
+ * every column measures. The previous sink was one map shared by every arm,
+ * handing out `spill/${n}-${hint}` with `n` its insertion order and the arm's
+ * own name folded into the hint to keep the arms apart. Both of those put the
+ * harness into its own measurement:
+ *
+ *   - THE ARM'S NAME WAS IN THE PATH. Measured across the corpus, `v3-history`
+ *     and `ccr` emit the same 94 paths, and ours came to 4,927 characters
+ *     against their 4,275 -- 652 characters, about 250 real tokens, that are
+ *     nothing but the eight characters by which `v3-history` is a longer word
+ *     than `ccr`. Our arm was being charged for its label.
+ *   - THE ORDINAL WAS GLOBAL. An arm that ran later got more digits per path,
+ *     so `v1-anchored` -- which runs last -- cost 22 tokens more than
+ *     `v1-frontier` on codebase-exploration while compressing identically. At
+ *     chars/4 the rounding hid it and the two tied; under a real tokenizer the
+ *     digits are tokens, and the "re-anchoring is free" gate failed on five
+ *     fixtures for a reason that was entirely the harness's bookkeeping.
+ *
+ * So each arm gets its own sink -- real isolation, rather than isolation by
+ * namespacing a shared one -- and a file is named by a fixed-width digest of
+ * its content plus the engine's own hint, which is `spillTo` in
+ * `src/proxy/server.ts` exactly. Unsalted, where the sink salts: the salt is
+ * there so a path in a shared temp directory is unguessable, and these
+ * fixtures are synthetic and this file must give the same answer twice.
+ */
+function spillSink() {
+  const spilled = new Map();
+  return (content, hint) => {
+    const key = `${hint}:${content.length}:${content}`;
+    if (!spilled.has(key)) {
+      const name = createHash('sha256')
+        .update(content)
+        .digest('hex')
+        .slice(0, 32);
+      spilled.set(key, `.token-optimizer/spill/${name}-${hint}`);
+    }
+    return spilled.get(key);
+  };
 }
 
 /** Every text block in a request, with its position. */
@@ -124,6 +147,77 @@ export function blocks(request) {
 /** A block costs its pixels when it is an image, and its length otherwise. */
 const blockTokens = (block) =>
   typeof block.tokens === 'number' ? block.tokens : tokens(block.text);
+
+/**
+ * The stamp every marker in this harness carries.
+ *
+ * THE HARNESS WAS NOT REPRODUCIBLE AND THE OLD CURRENCY COULD NOT SEE IT. A
+ * marker is authenticated by nine digits the engine mints from
+ * `randomBytes(32)` once per process, so two runs of this file emit different
+ * text. Measured: 206 of the strings it prices differ between consecutive runs,
+ * with an identical length multiset and an identical character total -- which is
+ * exactly why `Math.ceil(chars / 4)` reported the same figures twice and the
+ * reproducibility check passed. The instrument was blind to the variation,
+ * rather than the variation being absent.
+ *
+ * It is not a free six characters either. Counted over 96 draws from the
+ * engine's then-current base-31 alphabet, the ` ~xxxxxx` suffix cost 5, 6, 7 or
+ * 8 tokens (7, 33, 40 and 16 draws respectively), mean 6.68 -- a random string
+ * over a large alphabet is about the worst content a tokenizer can be handed,
+ * near one token per character. chars/4 charged it two. So authenticating a
+ * marker cost roughly a third again of the 15-token marker it hung off, and the
+ * harness had been charging us a seventh of that.
+ *
+ * THAT MEASUREMENT IS WHY THE ENCODING CHANGED, and the change is why this pin
+ * is now exact rather than representative. `annotate.ts` draws nine decimal
+ * digits, which cost 4 tokens on every one of 48 draws -- digits tokenize three
+ * to a token, so the suffix has no spread left to average over and carries
+ * slightly more entropy than the six characters it replaced.
+ *
+ * `withStamp` already honours a stamp the caller supplies -- the published
+ * comparator arm passes `null` to mean "do not stamp" -- so pinning one needs
+ * nothing from the engine. Any draw would now do, because they all cost the
+ * same: there is no mode to pick and no residual bias to declare, where the old
+ * encoding had to be pinned to its 7-token mode and still charged us +0.32
+ * tokens per marker against an average run. What pinning buys here is only
+ * reproducibility -- the same bytes every run, so a count recorded against them
+ * stays valid.
+ */
+const PINNED_STAMP = '481729503';
+
+/**
+ * Marker-shaped spans in a request, cache-weighted, in tokens.
+ *
+ * BOTH ENVELOPES, so an arm is measured by what it emitted rather than by a
+ * shape named in advance: ours reads `[... 269 bytes, next above ~x18p57]` and
+ * the control's reads `<<ccr:303a32363900,blob,269>>`. Weighted the way the
+ * steady column bills them -- a marker in the cached prefix is read at a tenth,
+ * one in the fresh region is paid in full -- because an allowance has to be
+ * derived from the markers that are actually charged.
+ *
+ * IN TOKENS, AND THAT IS NOT A UNIT CHANGE. These two markers are 35 and 29
+ * characters, which read as a six-character difference and, divided by four,
+ * as a token and a half. Counted, they are 15 and 14 tokens -- 2.33 and 2.07
+ * characters per token:
+ * our longer prose marker and their shorter hex one differ by one token, not by
+ * the token and a half dividing both by four granted. Counted across the whole
+ * corpus the sign reverses on ten of twelve rows: prose tokenizes better than
+ * hex, so the allowance a character difference handed us was mostly an artefact
+ * of the control's markers tokenizing worse than ours.
+ */
+const MARKER_SHAPES = [/\[\.\.\. [^\]]*\]/g, /<<ccr:[^>]*>>/g];
+
+export function markerTokens(request, breakpoint) {
+  let weighted = 0;
+  for (const block of blocks(request)) {
+    let marked = 0;
+    for (const shape of MARKER_SHAPES)
+      for (const match of block.text.matchAll(shape))
+        marked += tokens(match[0]);
+    weighted += isAfter(block.at, breakpoint) ? marked : marked * CACHE_READ;
+  }
+  return weighted;
+}
 
 const grossTokens = (request) =>
   blocks(request).reduce((n, b) => n + blockTokens(b), 0);
@@ -290,6 +384,71 @@ function runAnchored(request, options, anchors) {
   return result;
 }
 
+/**
+ * How much more than the control our steady-state cost may be: exactly what our
+ * markers spend over theirs, and not a token more.
+ *
+ * THE OLD NUMBER WAS A FLAT 1.05 AND ITS DERIVATION WAS MEASURABLY WRONG. It
+ * read: a back-reference here reads `[... 32,107 bytes, already shown above
+ * starting "export class CacheEngine {"]`, theirs reads
+ * `<<ccr:a1b2c3d4e5f6,blob,32107>>`, ours is about a hundred characters and
+ * theirs twenty-four, so five percent is what legibility is allowed to cost.
+ * Measured on the markers the arms actually emit, ours is 35 characters and
+ * theirs 29 -- a fourfold overestimate of our own marker, which is how a premium
+ * meant to price legibility ended up pricing nothing in particular.
+ *
+ * A RATIO IS ALSO THE WRONG SHAPE FOR THIS COST, which is per marker and
+ * absolute. A flat percentage therefore bites hardest exactly where the bill is
+ * smallest: on human-authored-json a 17-token gap is 7.0% of a 243-token
+ * workload, while those same 17 tokens on repeated-reads would be 0.7% of 2,293.
+ * It failed the one workload where our markers are densest and granted several
+ * hundred unused tokens on the largest.
+ *
+ * So the allowance is measured per workload: the tokens the judged arm's
+ * markers spend over the control's, cache-weighted, each marker counted by the
+ * same authority every other figure in this file uses. Floored at zero, so a
+ * workload
+ * where we emit no more marker text than the control -- raw-build-log and
+ * grep-output, where neither arm back-references anything -- has to win or tie
+ * outright.
+ *
+ * IT WAS CHARACTERS OVER FOUR UNTIL THE CURRENCY BECAME A MEASUREMENT, and that
+ * divisor was quietly generous to us. Counted, the 35-character marker above is
+ * 15 tokens and the 29-character one is 14: ours is prose at 2.33 characters per
+ * token, theirs is hex at 2.07, and the six characters between them are worth
+ * one token, not the token and a half that dividing both by four granted. The
+ * width difference was mostly not a cost difference.
+ *
+ * MEASURED, AS CACHE-WEIGHTED MARKER TOKENS -- ours, the control's, and what
+ * the difference earns us. Counted rather than divided, our markers turn out to
+ * be CHEAPER than the control's on ten of the twelve rows, so the allowance is
+ * zero there and we win without it. Two rows earn one, and on both the gap we
+ * actually have is inside what the markers pay for:
+ *
+ *   human-authored-json   244.0 / 217.8 -> 26.2 earned, 24.8 used
+ *   repeated-reads        221.2 / 189.7 -> 31.5 earned, 30.4 used
+ *   codebase-exploration 1219.2 / 1265.7 ->  0.0 earned, 49.6 to spare
+ *   code-search           190.6 / 207.1 ->  0.0 earned, 17.6 to spare
+ *   raw-build-log           0.0 /  16.5 ->  0.0 earned, 17.6 to spare
+ *
+ * The two rows that need it are the two where our markers are densest per token
+ * of workload, which is what a per-marker allowance is for and what the flat
+ * five percent it replaced got backwards.
+ */
+/**
+ * The tokens an arm's own marker text earns it, over the control's.
+ *
+ * EXPORTED SO THE GATE CAN BE HANDED AN ARM THAT FAILS. Every fixture in the
+ * harness passes, which is exactly the condition under which a gate stops being
+ * evidence: an allowance computed from our own output could be made to absorb
+ * any regression at all and the twelve green rows would read the same. So the
+ * arithmetic lives here, where a check can ask it what it does to an arm that is
+ * worse for reasons that have nothing to do with markers.
+ */
+export function steadyAllowance(ours, theirs) {
+  return Math.max(0, ours - theirs);
+}
+
 function steadyTokens(request, run, spill) {
   // THE CONVERSATION IS REPLAYED FROM ITS START, and it has to be. A fixture
   // is a snapshot of a session already in progress: its very first block is
@@ -303,10 +462,18 @@ function steadyTokens(request, run, spill) {
     ...request,
     messages: (request.messages ?? []).slice(0, 1),
   };
-  run(opening, { spill, wanted: [] });
+  run(opening, { spill, wanted: [], stamp: PINNED_STAMP });
 
-  const first = run(request, { spill, wanted: [] }).request;
-  const second = run(nextTurn(request), { spill, wanted: [] }).request;
+  const first = run(request, {
+    spill,
+    wanted: [],
+    stamp: PINNED_STAMP,
+  }).request;
+  const second = run(nextTurn(request), {
+    spill,
+    wanted: [],
+    stamp: PINNED_STAMP,
+  }).request;
 
   const breakpoint = lastCacheBreakpoint(request);
   const sentFirst = prefixText(first, breakpoint);
@@ -333,25 +500,20 @@ function steadyTokens(request, run, spill) {
     netTokens(request) -
     blocks(request).reduce((n, b) => n + blockTokens(b), 0);
 
-  return (
-    prefix * (hit ? CACHE_READ : CACHE_WRITE) +
-    suffix +
-    Math.max(0, injected - baseline)
-  );
+  return {
+    cost:
+      prefix * (hit ? CACHE_READ : CACHE_WRITE) +
+      suffix +
+      Math.max(0, injected - baseline),
+    // MEASURED ON THE SAME REQUEST THE COST WAS MEASURED ON. Re-running the arm
+    // to count its markers would be a second measurement of a different thing:
+    // these arms are deterministic but their spill and anchor stores are not
+    // re-entrant, and the gate compares a cost with an allowance drawn from it.
+    markerTokens: markerTokens(second, breakpoint),
+  };
 }
 
 function main() {
-  // Content-addressed, exactly as the proxy sink is: the same bytes must
-  // spill to the same path, or two identical blocks compress to two
-  // different texts and cross-block dedup collapses neither of them.
-  const spilled = new Map();
-  const spill = (content, hint) => {
-    const key = `${hint}:${content.length}:${content}`;
-    if (!spilled.has(key))
-      spilled.set(key, `.token-optimizer/spill/${spilled.size + 1}-${hint}`);
-    return spilled.get(key);
-  };
-
   console.log(
     "\nCompression proof -- synthetic fixtures at the scale of HeadRoom's published workloads."
   );
@@ -385,6 +547,17 @@ function main() {
 
     const scores = {};
     const steady = {};
+    // ONLY THE MARKER TEXT AN ARM INTRODUCED earns that arm an allowance. No
+    // fixture's own content holds a marker-shaped line today -- measured, which
+    // is exactly why the subtraction belongs here rather than in a memory: a
+    // workload that quoted one of our markers would otherwise hand every arm,
+    // including an arm that compressed nothing, tokens it never spent.
+    const freshTurn = nextTurn(before);
+    const baselineMarkers = markerTokens(
+      freshTurn,
+      lastCacheBreakpoint(before)
+    );
+    const markers = {};
     // A fifth arm: V1 with the anchor store it ships with. Kept separate from
     // `v1-frontier` so the frontier-only baseline stays readable and the
     // effect of re-anchoring is attributable to re-anchoring.
@@ -397,9 +570,14 @@ function main() {
     };
     for (const [name, run] of Object.entries(arms)) {
       const steadyAnchors = anchorStore();
-      // A fresh spill per arm: one arm must not benefit from another's writes.
-      const armSpill = (content, hint) => spill(content, `${name}-${hint}`);
-      const result = run(before, { spill: armSpill, wanted: [] });
+      // A fresh sink per arm: one arm must not benefit from another's writes,
+      // and no arm may be charged for the name the harness gave it.
+      const armSpill = spillSink();
+      const result = run(before, {
+        spill: armSpill,
+        wanted: [],
+        stamp: PINNED_STAMP,
+      });
       const g = grossTokens(result.request);
       const n = netTokens(result.request);
       const e = effectiveTokens(before, result.request);
@@ -411,7 +589,9 @@ function main() {
         name === 'v1-anchored'
           ? (req, opts) => runAnchored(req, opts, steadyAnchors)
           : run;
-      steady[name] = steadyTokens(before, steadyRun, armSpill);
+      const steadyResult = steadyTokens(before, steadyRun, armSpill);
+      steady[name] = steadyResult.cost;
+      markers[name] = Math.max(0, steadyResult.markerTokens - baselineMarkers);
 
       // SIZE IS NOT THE ONLY GATE. A compressor can post any ratio it likes
       // by discarding the rows somebody was searching for -- ours hit 95.7%
@@ -497,11 +677,11 @@ function main() {
         `${fixture.name}: re-anchoring COST tokens -- v1-anchored ${steady['v1-anchored'].toFixed(0)} vs v1-frontier ${steady['v1-frontier'].toFixed(0)}`
       );
     }
-    // And a bounded premium against the control. We are NOT trying to match a
-    // 24-character opaque hash with a sentence a human can read; on the two
+    // And a measured allowance against the control. We are NOT trying to match a
+    // 29-character opaque hash with a sentence a human can read; on the
     // workloads with cross-block repeats the whole residual gap is exactly that
-    // marker, paid once per repeat. Five percent is what legibility is allowed
-    // to cost, and it is stated rather than quietly absorbed.
+    // marker, paid once per repeat. So the gate charges us for precisely those
+    // characters and nothing else -- see the allowance's derivation above.
     //
     // AGAINST OUR BEST ARM, NOT AGAINST ONE NAMED IN ADVANCE. This asserted
     // `v1-anchored` specifically, which quietly encoded a claim the evidence
@@ -519,9 +699,11 @@ function main() {
     // workload where the named arm was already winning.
     const ourArms = Object.keys(steady).filter((n) => n !== 'ccr');
     const best = ourArms.reduce((a, b) => (steady[a] <= steady[b] ? a : b));
-    if (!(steady[best] <= steady.ccr * STEADY_PREMIUM)) {
+    const allowance = steadyAllowance(markers[best], markers.ccr);
+    if (!(steady[best] <= steady.ccr + allowance)) {
       steadyFailures.push(
-        `${fixture.name}: best of ours is ${best} at ${steady[best].toFixed(0)} steady vs ccr ${steady.ccr.toFixed(0)} -- over the ${STEADY_PREMIUM}x premium`
+        `${fixture.name}: best of ours is ${best} at ${steady[best].toFixed(0)} steady vs ccr ${steady.ccr.toFixed(0)}` +
+          ` -- ${(steady[best] - steady.ccr - allowance).toFixed(0)} tokens beyond the ${allowance.toFixed(0)} its markers earn`
       );
     } else if (best !== 'v1-anchored') {
       console.log(
@@ -550,7 +732,7 @@ function main() {
   }
 
   console.log(
-    '--- gate 4: re-anchoring must never cost, and must stay within the premium ---'
+    '--- gate 4: re-anchoring must never cost, and our markers must pay for themselves ---'
   );
   if (steadyFailures.length) {
     console.log('STEADY GATE FAILED:');

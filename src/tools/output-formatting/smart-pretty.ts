@@ -1,7 +1,12 @@
 /**
  * SmartPretty - Syntax Highlighting & Formatting Tool
  *
- * Track 2C - Tool #15: Syntax highlighting and formatting with 86%+ token reduction
+ * Highlighting and formatting ADD characters to the code they are given, so
+ * neither operation can reduce anything. This file used to claim "86%+ token
+ * reduction" here and three more figures below (94% for the theme cache, 85%
+ * for grammar, 88% for incremental highlighting); not one of them was measured,
+ * and none of them described a saving that exists. What a cache buys here is
+ * time, not tokens.
  *
  * Capabilities:
  * - Syntax highlighting (50+ languages via highlight.js)
@@ -10,11 +15,6 @@
  * - HTML output with CSS themes
  * - Custom theme support (dark, light, custom)
  * - Language auto-detection
- *
- * Token Reduction Strategy:
- * - Cache theme configurations (94% reduction)
- * - Cache grammar definitions (85% reduction)
- * - Incremental highlighting (88% reduction)
  */
 
 import chalk from 'chalk';
@@ -74,12 +74,13 @@ async function loadPrettier(): Promise<PrettierFormat | null> {
   }
   return prettierFormat;
 }
-import { CacheEngine } from '../../core/cache-engine.js';
+import { CacheEngine, resolveCacheLocation } from '../../core/cache-engine.js';
 import { readCompressedJson } from '../../utils/cache-helper.js';
 import { TokenCounter } from '../../core/token-counter.js';
 import { MetricsCollector } from '../../core/metrics.js';
 import { compress, decompress } from '../shared/compression-utils.js';
 import { hashContent, generateCacheKey } from '../shared/hash-utils.js';
+import { readFile } from 'fs/promises';
 import { homedir } from 'os';
 import { join } from 'path';
 
@@ -176,10 +177,19 @@ export interface HighlightResult {
   outputMode: OutputMode;
   lineCount: number;
   highlighted: boolean;
+  /**
+   * Why `highlighted` is false, when highlighting was asked for and threw.
+   *
+   * The catch used to drop the error and return the plain code with
+   * `success: true`, so a caller could not tell a file with no tokens to
+   * colour from a grammar that crashed. Absent when nothing went wrong.
+   */
+  highlightError?: string;
   theme: ThemeName;
+  /**
+   * NO TOKEN FIGURES HERE, DELIBERATELY. See SmartPrettyResult below.
+   */
   metadata: {
-    tokensUsed: number;
-    tokensSaved: number;
     cacheHit: boolean;
     highlightTime: number;
   };
@@ -189,12 +199,18 @@ export interface FormatResult {
   code: string;
   language: string;
   formatted: boolean;
+  /**
+   * Why `formatted` is false, when the formatter threw.
+   *
+   * The catch used to drop the error and still answer `success: true`, which
+   * made "already formatted" indistinguishable from "prettier crashed".
+   * Absent when nothing went wrong.
+   */
+  formatError?: string;
   changes: number;
+  /** No token figures here either -- see SmartPrettyResult below. */
   metadata: {
-    tokensUsed: number;
-    tokensSaved: number;
     cacheHit: boolean;
-    formatTime: number;
   };
 }
 
@@ -224,11 +240,25 @@ export interface SmartPrettyResult {
     languageDetection?: LanguageDetectionResult;
     themeApplication?: ThemeApplicationResult;
   };
+  /*
+   * NEITHER HALF OF A SAVING CAN BE COUNTED FROM IN HERE.
+   *
+   * Two figures stood in this block, and a copy of them in each operation's
+   * own metadata. `tokensUsed` counted the code this object carries, which is
+   * most of the reply but not the reply: a caller pays for this object
+   * serialised, with the report text and the transport metadata built around
+   * it after the tool returns. `tokensSaved` subtracted that from the code
+   * that came in -- an honest comparison of two artifacts, and not a saving
+   * to anybody, because a caller who passed `code` paid for the input and
+   * pays for the output, while a caller who passed `filePath` displaced a
+   * read the recorder measures for itself.
+   *
+   * So there is nothing for this tool to declare and nothing for it to print.
+   * The before is the file the arguments name, read by the recorder, and the
+   * after is counted once at the wire.
+   */
   metadata: {
-    tokensUsed: number;
-    tokensSaved: number;
     cacheHit: boolean;
-    executionTime: number;
   };
 }
 
@@ -460,7 +490,12 @@ export class SmartPretty {
 
   constructor(
     private cache: CacheEngine,
-    private tokenCounter: TokenCounter,
+    // ACCEPTED AND NOT USED. The counter was held so the tool could count both
+    // halves of its own saving: the code handed in, and the code handed back
+    // standing in for a reply it cannot see. Both halves are now counted by
+    // the one party that sees both, so the parameter stays only to leave every
+    // caller's construction call unchanged.
+    _tokenCounter: TokenCounter,
     private metricsCollector: MetricsCollector
   ) {
     this.themeCache = new Map();
@@ -504,10 +539,6 @@ export class SmartPretty {
         duration: Date.now() - startTime,
         success: result.success,
         cacheHit: result.metadata.cacheHit,
-        metadata: {
-          tokensUsed: result.metadata.tokensUsed,
-          tokensSaved: result.metadata.tokensSaved,
-        },
       });
 
       return result;
@@ -533,15 +564,9 @@ export class SmartPretty {
   private async highlightCode(
     options: SmartPrettyOptions
   ): Promise<SmartPrettyResult> {
-    const startTime = Date.now();
     const useCache = options.useCache !== false;
 
-    if (!options.code && !options.filePath) {
-      throw new Error('Either code or filePath must be provided');
-    }
-
-    // Get code content
-    const code = options.code || '';
+    const code = await this.readSubject(options);
 
     // Detect or use provided language
     let language = options.language;
@@ -556,7 +581,7 @@ export class SmartPretty {
     const outputMode = options.outputMode || 'ansi';
     const theme = options.theme || 'default';
 
-    // Generate cache key (94% reduction for theme cache hit)
+    // Generate cache key
     const codeHash = hashContent(code);
     const cacheKey = generateCacheKey('pretty-highlight', {
       codeHash,
@@ -599,19 +624,19 @@ export class SmartPretty {
         }
 
         if (cachedResult) {
-          const tokensUsed = this.tokenCounter.count(cachedResult.code).tokens;
-          const baselineTokens = tokensUsed; // measured, not assumed: a multiplier here would invent a saving
-
+          // A HIT RETURNS WHAT THE FRESH CALL RETURNED, so it costs the caller
+          // the same and is counted the same -- at the wire, once. What the
+          // cache saves is time, which is the one figure still reported.
           return {
             success: true,
             operation: 'highlight-code',
-            data: { highlight: cachedResult },
-            metadata: {
-              tokensUsed,
-              tokensSaved: baselineTokens - tokensUsed,
-              cacheHit: true,
-              executionTime: Date.now() - startTime,
+            data: {
+              highlight: {
+                ...cachedResult,
+                metadata: { ...cachedResult.metadata, cacheHit: true },
+              },
             },
+            metadata: { cacheHit: true },
           };
         }
       }
@@ -634,56 +659,91 @@ export class SmartPretty {
     const highlightStartTime = Date.now();
     let highlightedCode: string;
     let highlighted = true;
+    let highlightFailure: string | undefined;
 
-    try {
-      const themeDefinition = this.getTheme(theme, options.customTheme);
-
-      if (outputMode === 'ansi') {
-        highlightedCode = this.highlightAnsi(
-          processedCode,
-          language,
-          themeDefinition,
-          options
-        );
-      } else if (outputMode === 'html') {
-        highlightedCode = this.highlightHtml(
-          processedCode,
-          language,
-          themeDefinition,
-          options
-        );
-      } else {
-        highlightedCode = processedCode;
-        highlighted = false;
-      }
-    } catch (error) {
-      // Fallback to plain code if highlighting fails
+    // HIGHLIGHTED MEANS HIGHLIGHTED.
+    //
+    // highlightAnsi and highlightHtml read the module-level hljs handle, which
+    // only runSmartPretty primed; a caller holding the class got an unloaded
+    // null, both helpers returned the code untouched, and the result still
+    // said highlighted: true with the plain source in it. The optional
+    // dependency is also genuinely absent from this package's dependencies, so
+    // that was the normal case rather than an edge one. Loading it here fixes
+    // the priming, and its absence is now reported instead of asserted away.
+    const highlighter = await loadHighlighter();
+    if (!highlighter) {
       highlightedCode = processedCode;
       highlighted = false;
+      highlightFailure =
+        'syntax highlighting is unavailable: the optional highlight.js dependency is not installed, so the code is returned uncoloured';
+    } else {
+      try {
+        const themeDefinition = this.getTheme(theme, options.customTheme);
+
+        if (outputMode === 'ansi') {
+          highlightedCode = this.highlightAnsi(
+            processedCode,
+            language,
+            themeDefinition,
+            options
+          );
+        } else if (outputMode === 'html') {
+          highlightedCode = this.highlightHtml(
+            processedCode,
+            language,
+            themeDefinition,
+            options
+          );
+        } else {
+          highlightedCode = processedCode;
+          highlighted = false;
+        }
+      } catch (error) {
+        // Fall back to the plain code, but SAY SO. This used to swallow the
+        // error entirely and still answer success: true, which made a crashed
+        // grammar indistinguishable from a file with nothing to colour.
+        highlightedCode = processedCode;
+        highlighted = false;
+        highlightFailure =
+          error instanceof Error ? error.message : String(error);
+      }
     }
 
     const highlightTime = Date.now() - highlightStartTime;
     const lineCount = highlightedCode.split('\n').length;
 
+    // HIGHLIGHTING ADDS TOKENS, AND THIS IS NOT WHERE THAT GETS COUNTED.
+    //
+    // The baseline here was count(processedCode) * 1.5 -- "minimal overhead for
+    // fresh highlight" -- clamped with Math.max(0, ...). Markup is strictly
+    // added to the code, so the output always exceeds the input; the 1.5
+    // existed only to make the difference positive and the clamp caught what
+    // it missed, which together guaranteed a non-negative saving for an
+    // operation that cannot save anything. Replacing them with a signed
+    // difference fixed the sign and left the artifacts wrong: neither the code
+    // handed in nor the code handed back is what a caller is charged for.
+    // The reply is counted at the wire and the file, when one was named, is
+    // read by the recorder.
     const result: HighlightResult = {
       code: highlightedCode,
       language,
       outputMode,
       lineCount,
       highlighted,
+      ...(highlightFailure ? { highlightError: highlightFailure } : {}),
       theme,
       metadata: {
-        tokensUsed: 0,
-        tokensSaved: 0,
         cacheHit: false,
         highlightTime,
       },
     };
 
-    // Cache the result (85% reduction with grammar compression)
+    // Cache the result. The gzip ratio is whatever the payload gives; the
+    // "85% reduction with grammar compression" this comment used to claim was
+    // measured from nothing and there is no grammar compression here.
     if (useCache) {
-      const compressionResult = compress(JSON.stringify(result), 'gzip');
-      const resultTokens = this.tokenCounter.count(highlightedCode).tokens;
+      const serialized = JSON.stringify(result);
+      const compressionResult = compress(serialized, 'gzip');
       this.cache.set(
         cacheKey,
         // BASE64, to match the base64 the read path decodes.
@@ -692,24 +752,16 @@ export class SmartPretty {
         // later call returned "incorrect header check" until the cache was
         // cleared by hand. One call was enough to break the tool permanently.
         compressionResult.compressed.toString('base64'),
-        resultTokens,
+        serialized.length,
         compressionResult.compressedSize
       );
     }
-
-    const tokensUsed = this.tokenCounter.count(highlightedCode).tokens;
-    const baselineTokens = this.tokenCounter.count(processedCode).tokens * 1.5; // Minimal overhead for fresh highlight
 
     return {
       success: true,
       operation: 'highlight-code',
       data: { highlight: result },
-      metadata: {
-        tokensUsed,
-        tokensSaved: Math.max(0, baselineTokens - tokensUsed),
-        cacheHit: false,
-        executionTime: Date.now() - startTime,
-      },
+      metadata: { cacheHit: false },
     };
   }
 
@@ -719,13 +771,7 @@ export class SmartPretty {
   private async formatCode(
     options: SmartPrettyOptions
   ): Promise<SmartPrettyResult> {
-    const startTime = Date.now();
-
-    if (!options.code && !options.filePath) {
-      throw new Error('Either code or filePath must be provided');
-    }
-
-    const code = options.code || '';
+    const code = await this.readSubject(options);
 
     // Detect language if not provided
     let language = options.language;
@@ -738,18 +784,12 @@ export class SmartPretty {
     }
 
     const result = await this.formatCodeInternal(code, language, options);
-    const tokensUsed = this.tokenCounter.count(result.code).tokens;
 
     return {
       success: true,
       operation: 'format-code',
       data: { format: result },
-      metadata: {
-        tokensUsed,
-        tokensSaved: result.metadata.tokensSaved,
-        cacheHit: result.metadata.cacheHit,
-        executionTime: Date.now() - startTime,
-      },
+      metadata: { cacheHit: result.metadata.cacheHit },
     };
   }
 
@@ -759,32 +799,22 @@ export class SmartPretty {
   private async detectLanguage(
     options: SmartPrettyOptions
   ): Promise<SmartPrettyResult> {
-    const startTime = Date.now();
-
-    if (!options.code && !options.filePath) {
-      throw new Error('Either code or filePath must be provided');
-    }
-
-    const code = options.code || '';
+    const code = await this.readSubject(options);
     const detection = await this.detectLanguageInternal(
       code,
       options.filePath,
       options.hints
     );
 
-    const resultStr = JSON.stringify(detection);
-    const tokensUsed = this.tokenCounter.count(resultStr).tokens;
-
+    // NOTHING WAS REPLACED, SO NOTHING IS CLAIMED. Naming a language does not
+    // stand in for reading the file, and the hardcoded 0 that stood here was
+    // an answer to a question nobody had measured. Saying so explicitly came
+    // next and was still a figure counted off an object that is not the reply.
     return {
       success: true,
       operation: 'detect-language',
       data: { languageDetection: detection },
-      metadata: {
-        tokensUsed,
-        tokensSaved: 0,
-        cacheHit: false,
-        executionTime: Date.now() - startTime,
-      },
+      metadata: { cacheHit: false },
     };
   }
 
@@ -794,8 +824,6 @@ export class SmartPretty {
   private async applyTheme(
     options: SmartPrettyOptions
   ): Promise<SmartPrettyResult> {
-    const startTime = Date.now();
-
     const themeName = options.theme || 'default';
     const themeDefinition = this.getTheme(themeName, options.customTheme);
     const outputMode = options.outputMode || 'ansi';
@@ -819,25 +847,52 @@ export class SmartPretty {
       applied: true,
     };
 
-    const resultStr = JSON.stringify(result);
-    const tokensUsed = this.tokenCounter.count(resultStr).tokens;
-
+    // Handing back a theme definition replaces no read either -- see
+    // detect-language above.
     return {
       success: true,
       operation: 'apply-theme',
       data: { themeApplication: result },
-      metadata: {
-        tokensUsed,
-        tokensSaved: 0,
-        cacheHit: false,
-        executionTime: Date.now() - startTime,
-      },
+      metadata: { cacheHit: false },
     };
   }
 
   // ===========================
   // Internal Methods
   // ===========================
+
+  /**
+   * THE FILE HAS TO BE READ, OR THE TOOL WORKS ON THE EMPTY STRING.
+   *
+   * Every operation took `filePath`, checked that one of code/filePath was
+   * present, and then used `options.code || ''` -- so a caller who passed a
+   * path got back `code: ""`, `formatted: true`, `changes: 0` and a measured
+   * 94% token reduction, because an empty answer is cheap. The harness had the
+   * figure right and the tool wrong: nothing had been formatted at all.
+   *
+   * An empty `code` string is still honoured, so formatting "" deliberately
+   * does not silently become a file read.
+   */
+  private async readSubject(options: SmartPrettyOptions): Promise<string> {
+    if (options.code !== undefined) {
+      return options.code;
+    }
+
+    const filePath = options.filePath;
+    if (filePath === undefined) {
+      throw new Error('Either code or filePath must be provided');
+    }
+
+    // One await instead of existsSync + readFileSync: the pair is both a
+    // blocking call this server is not allowed to make and a race, since the
+    // file can go away between the two.
+    try {
+      return await readFile(filePath, 'utf-8');
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      throw new Error(`Could not read ${filePath}: ${reason}`);
+    }
+  }
 
   /**
    * Internal code formatting
@@ -847,24 +902,20 @@ export class SmartPretty {
     language: string,
     options: SmartPrettyOptions
   ): Promise<FormatResult> {
-    const startTime = Date.now();
     const useCache = options.useCache !== false;
 
     // Check if language is supported
     const formatter = FORMATTER_SUPPORT[language];
     if (!formatter) {
-      // Return unformatted code
+      // Return unformatted code, and say only that: `formatted: false` with
+      // `changes: 0` is the whole answer, and a token figure beside it was a
+      // count of this object rather than of the reply built around it.
       return {
         code,
         language,
         formatted: false,
         changes: 0,
-        metadata: {
-          tokensUsed: this.tokenCounter.count(code).tokens,
-          tokensSaved: 0,
-          cacheHit: false,
-          formatTime: Date.now() - startTime,
-        },
+        metadata: { cacheHit: false },
       };
     }
 
@@ -879,7 +930,7 @@ export class SmartPretty {
       configHash,
     });
 
-    // Check cache (88% reduction for incremental format)
+    // Check cache
     if (useCache) {
       const cached = this.cache.get(cacheKey);
       // An unreadable entry is a MISS, not a failure -- see
@@ -891,16 +942,11 @@ export class SmartPretty {
         cacheKey
       );
       if (cachedResult) {
-        const tokensUsed = this.tokenCounter.count(cachedResult.code).tokens;
-        const baselineTokens = tokensUsed; // measured, not assumed: a multiplier here would invent a saving
-
+        // A hit returns what the fresh call returned and therefore costs the
+        // same -- see the highlight cache-hit path.
         return {
           ...cachedResult,
-          metadata: {
-            ...cachedResult.metadata,
-            cacheHit: true,
-            tokensSaved: baselineTokens - tokensUsed,
-          },
+          metadata: { ...cachedResult.metadata, cacheHit: true },
         };
       }
     }
@@ -908,6 +954,7 @@ export class SmartPretty {
     // Format code
     let formattedCode = code;
     let formatted = false;
+    let formatFailure: string | undefined;
 
     try {
       if (formatter === 'prettier') {
@@ -930,30 +977,32 @@ export class SmartPretty {
       // Note: Other formatters (black, gofmt, rustfmt) would require CLI execution
       // which is beyond the scope of this implementation
     } catch (error) {
-      // Formatting failed, return original code
+      // Fall back to the unformatted code, but SAY SO. This used to drop the
+      // error and still answer success: true with formatted: false, so a
+      // caller could not tell "already formatted" from "prettier threw".
       formatted = false;
+      formatFailure = error instanceof Error ? error.message : String(error);
     }
 
     const changes = this.calculateChanges(code, formattedCode);
-    const formatTime = Date.now() - startTime;
 
+    // A FORMATTER CANNOT SAVE TOKENS EITHER. A hardcoded 0 stood here, then a
+    // signed difference between the code in and the code out -- which is a
+    // true statement about prettier's reflow and not a saving to anyone: the
+    // caller who passed `code` paid for both halves of it.
     const result: FormatResult = {
       code: formattedCode,
       language,
       formatted,
+      ...(formatFailure ? { formatError: formatFailure } : {}),
       changes,
-      metadata: {
-        tokensUsed: this.tokenCounter.count(formattedCode).tokens,
-        tokensSaved: 0,
-        cacheHit: false,
-        formatTime,
-      },
+      metadata: { cacheHit: false },
     };
 
     // Cache the result
     if (useCache && formatted) {
-      const compressionResult = compress(JSON.stringify(result), 'gzip');
-      const resultTokens = this.tokenCounter.count(formattedCode).tokens;
+      const serialized = JSON.stringify(result);
+      const compressionResult = compress(serialized, 'gzip');
       this.cache.set(
         cacheKey,
         // BASE64, to match the base64 the read path decodes.
@@ -962,7 +1011,7 @@ export class SmartPretty {
         // later call returned "incorrect header check" until the cache was
         // cleared by hand. One call was enough to break the tool permanently.
         compressionResult.compressed.toString('base64'),
-        resultTokens,
+        serialized.length,
         compressionResult.compressedSize
       );
     }
@@ -1460,7 +1509,10 @@ export async function runSmartPretty(
   // use it (or correctly find it absent) without each becoming async.
   await loadHighlighter();
 
-  const cache = new CacheEngine(join(homedir(), '.hypercontext', 'cache'), 100);
+  const cache = new CacheEngine(
+    resolveCacheLocation(join(homedir(), '.hypercontext', 'cache')),
+    100
+  );
   const tokenCounter = new TokenCounter();
   const metrics = new MetricsCollector();
 
@@ -1475,7 +1527,7 @@ export async function runSmartPretty(
 export const SMART_PRETTY_TOOL_DEFINITION = {
   name: 'smart_pretty',
   description:
-    'Syntax highlighting and code formatting with 86%+ token reduction. Supports 50+ languages, ANSI/HTML output, multiple themes, and Prettier integration.',
+    'Syntax highlighting and code formatting. Supports 50+ languages, ANSI/HTML output, multiple themes, and Prettier integration. Measured token reduction vs reading the file: -2% to 1% first read, -2% to 1% repeated (bench/tools, 3 fixtures) -- both operations hand the code itself back, so there is nothing here to reduce: two fixtures cost 1-2% more than the file, and the third comes back four tokens shorter because Prettier collapsed something. The earlier 94% was an elided payload counted as economy.',
   inputSchema: {
     type: 'object' as const,
     properties: {

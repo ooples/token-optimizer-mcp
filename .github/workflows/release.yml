@@ -109,6 +109,17 @@ jobs:
       - name: Stamp the shipped version into the packaged hooks
         run: npm run stamp:version
 
+      # THE SAME WINDOW AS THE VERSION STAMP: after the drift check, before the
+      # tarball. The anon key is not in git because this repository is public and
+      # the package is published, so a committed key is handed to everyone and
+      # cannot be rotated out of installed copies. A build without the secret is
+      # not an error -- forks and pull requests get none -- it simply cannot
+      # upload, and `doctor` says so.
+      - name: Stamp the telemetry key into the package
+        run: npm run stamp:telemetry
+        env:
+          TOKEN_OPTIMIZER_BEACON_KEY: ${{ secrets.TOKEN_OPTIMIZER_BEACON_KEY }}
+
       - name: Build project
         run: npm run build
 
@@ -177,6 +188,17 @@ jobs:
       # ships; a stamp applied after it would ship files the checksums disown.
       - name: Stamp the shipped version into the packaged hooks
         run: npm run stamp:version
+
+      # THE SAME WINDOW AS THE VERSION STAMP: after the drift check, before the
+      # tarball. The anon key is not in git because this repository is public and
+      # the package is published, so a committed key is handed to everyone and
+      # cannot be rotated out of installed copies. A build without the secret is
+      # not an error -- forks and pull requests get none -- it simply cannot
+      # upload, and `doctor` says so.
+      - name: Stamp the telemetry key into the package
+        run: npm run stamp:telemetry
+        env:
+          TOKEN_OPTIMIZER_BEACON_KEY: ${{ secrets.TOKEN_OPTIMIZER_BEACON_KEY }}
 
       - name: Build project
         run: npm run build

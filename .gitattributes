@@ -1,2 +1,17 @@
 * text=auto
 *.sh text eol=lf
+
+# THE BENCH PRICES THESE FILES BY THEIR BYTES, SO THEIR BYTES CANNOT VARY.
+#
+# `* text=auto` above normalises to LF in the repository and checks out native,
+# so this machine reads CRLF where Linux CI reads LF. Measured on the three .ts
+# fixtures, that moves the baseline by 5, 5 and 17 tokens -- enough to move a
+# published bracket, and enough that the same recording is unreproducible on
+# the other platform. It also makes a content-digest-keyed token-count fixture
+# impossible, because the digest would differ per checkout.
+bench/tools/fixtures/** text eol=lf
+
+# Same reason: the corpus snapshot and the recorded counts are keyed by, or
+# compared against, exact bytes.
+bench/compression/corpus.snapshot.json text eol=lf
+bench/compression/token-counts.json text eol=lf

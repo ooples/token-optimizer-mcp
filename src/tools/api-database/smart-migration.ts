@@ -22,9 +22,17 @@ import { createHash } from 'crypto';
 import {
   CacheEngine,
   CacheEngine as CacheEngineClass,
+  resolveCacheLocation,
 } from '../../core/cache-engine.js';
 import { TokenCounter } from '../../core/token-counter.js';
 import { MetricsCollector } from '../../core/metrics.js';
+/**
+ * Default seconds a cached result stays servable.
+ *
+ * The read path already uses (options.ttl || 3600) and the tool schema documents 3600,
+ * so the write path takes the same number rather than a second opinion.
+ */
+const DEFAULT_CACHE_TTL_SECONDS = 3600;
 
 // ============================================================================
 // Type Definitions
@@ -506,19 +514,16 @@ CREATE TABLE IF NOT EXISTS example (
   private async cacheResult(
     key: string,
     result: SmartMigrationResult,
-    _ttl?: number
+    ttl?: number
   ): Promise<void> {
     try {
       // Add timestamp
       const cacheData = { ...result, timestamp: Date.now() };
 
-      // Calculate tokens saved
-      const fullOutput = JSON.stringify(cacheData, null, 2);
-      const tokensSaved = this.tokenCounter.count(fullOutput).tokens;
-
-      // Cache for specified TTL (default: 1 hour)
       const cacheStr = JSON.stringify(cacheData);
-      this.cache.set(key, cacheStr, tokensSaved, cacheStr.length);
+      this.cache.set(key, cacheStr, cacheStr.length, cacheStr.length, {
+        ttlSeconds: ttl || DEFAULT_CACHE_TTL_SECONDS,
+      });
     } catch (error) {
       // Caching failure should not break the operation
       console.error('Failed to cache migration result:', error);
@@ -742,7 +747,7 @@ ${result.generated.content}
 Complete migration file content shown above.`;
     }
 
-    return JSON.stringify(result, null, 2);
+    return JSON.stringify(result);
   }
 
   private formatCachedOutput(result: SmartMigrationResult): string {
@@ -886,7 +891,7 @@ export async function runSmartMigration(
   const { join } = await import('path');
 
   const cache = new CacheEngineClass(
-    join(homedir(), '.hypercontext', 'cache'),
+    resolveCacheLocation(join(homedir(), '.hypercontext', 'cache')),
     100
   );
   const tokenCounter = new TokenCounter();
@@ -910,7 +915,7 @@ ${result.cached ? 'Cached result' : 'Fresh analysis'}`;
 export const SMART_MIGRATION_TOOL_DEFINITION = {
   name: 'smart_migration',
   description:
-    'Database migration tracker with status monitoring and 83% token reduction. Supports listing migrations, checking status, viewing history, rollback operations, and migration generation.',
+    'Database migration tracker with status monitoring and an unmeasured design target of 83% token reduction. Supports listing migrations, checking status, viewing history, rollback operations, and migration generation.',
   inputSchema: {
     type: 'object',
     properties: {
