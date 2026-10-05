@@ -136,7 +136,13 @@ export interface CompressionFacts {
   readonly deferredToolChars?: number;
 
   /**
-   * How many units this request withheld, and how many a later one put back.
+   * How many withheld units a later request put back.
+   *
+   * THE DENOMINATOR ALREADY EXISTS AND I ALMOST DUPLICATED IT. `spilledBlocks`
+   * is counted at the sink in server.ts and already flows into the telemetry
+   * rollup as `live.spilled` -- so how many units leave a request has been
+   * recorded all along. What has never been recorded is how many come back,
+   * which is the numerator and the only half that was missing.
    *
    * THE RATE THESE TWO MAKE IS THE ONE NUMBER THE WHOLE EVICTION CASE RESTS ON.
    * Withholding a unit saves its residency for every remaining turn and costs
@@ -155,7 +161,6 @@ export interface CompressionFacts {
    * reasons and tool names, never content. A unit's identity, path or bytes are
    * none of the ledger's business.
    */
-  readonly withheldUnits?: number;
   readonly reinstatedUnits?: number;
   /**
    * Characters of cached knowledge added to the request.
