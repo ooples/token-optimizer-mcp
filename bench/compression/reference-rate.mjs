@@ -23,6 +23,22 @@
  * the rate is a property of this corpus under this policy. A live session can
  * differ, and the counters are in the shipped ledger precisely so that one can
  * be read later.
+ *
+ * AND IT MEASURES NOTHING YET, FOR A REASON THAT IS PROBABLY MINE. Over 1,323
+ * requests with `spill: true` and `spillWholeBlockBelow: 0.9`, nothing was
+ * withheld. Called directly with the same sink and threshold, `v1Frontier`
+ * returns zero spills AND ZERO ELISIONS -- it compresses nothing at all, which
+ * is what strategy.ts:569 says it must do without a previous turn to work
+ * from: the frontier compresses only the span after the breakpoint it saw LAST
+ * turn, and respecting the marker on THIS request leaves nothing compressible.
+ *
+ * So the arm needs a conversation the proxy can recognise ACROSS turns, and
+ * these synthetic requests may not give it one -- every turn may look like a
+ * first turn, which has nothing to compress by design. That walks back what an
+ * earlier commit floated: this is most likely a gap in the harness rather than
+ * the withholding arm being unreachable through the proxy. Establishing what
+ * the proxy keys a conversation on is the next step, and until then no claim
+ * either way is supported.
  */
 import { createServer } from 'node:http';
 import { existsSync, readFileSync } from 'node:fs';
