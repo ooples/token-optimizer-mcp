@@ -33,6 +33,18 @@
  * batching those would change what the model does rather than how its requests
  * are packaged, which is the aggressive bar and needs an accuracy arm before
  * any cost claim.
+ *
+ * THE OTHER LEVER ON N IS MODEL ROUTING, AND IT IS ADVISORY BY DESIGN.
+ * `src/server/routing-tool.ts` says so in its own header: "Advice only. Nothing
+ * here switches a model." The proxy reads `model` for attribution at
+ * server.ts:650 and never writes it, so nothing in the product routes anything.
+ *
+ * That is the lever that multiplies the whole bill rather than trimming one
+ * term -- a subscription cap is model-weighted, so moving half the traffic to a
+ * cheaper model is worth more than any compression result on this branch. It is
+ * also the one change that alters which model answers a user's request, which
+ * is a consent decision and not a technical one, so it is recorded here rather
+ * than taken.
  */
 import { readFileSync, readdirSync } from 'node:fs';
 import { homedir } from 'node:os';
