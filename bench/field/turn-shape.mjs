@@ -20,6 +20,19 @@
  * of the grain, not a property of the model. 1,680 consecutive entry pairs
  * share a `requestId` and none share a `parentUuid`, which is what gives the
  * split away. Grouped properly the figure is 1.15.
+ *
+ * AND THE BATCHABLE HEADROOM IS BOUNDED, measured the same way. Of 36,301 runs
+ * of consecutive tool-only turns holding 52,785 turns between them, 69.5% are a
+ * run of ONE -- a single tool call sitting between two pieces of reasoning,
+ * with no neighbour to batch it with. 20.8% are runs of two, 6.4% of three, and
+ * the tail past five is half a percent.
+ *
+ * Collapsing every run into a single turn would take 52,785 turns to 36,301, so
+ * 31% fewer tool turns is the CEILING on batching, not a target. And because
+ * most runs are length one, most calls are genuinely interleaved with thinking:
+ * batching those would change what the model does rather than how its requests
+ * are packaged, which is the aggressive bar and needs an accuracy arm before
+ * any cost claim.
  */
 import { readFileSync, readdirSync } from 'node:fs';
 import { homedir } from 'node:os';
@@ -99,5 +112,100 @@ for (const target of [1.5, 2, 3]) {
   const needed = Math.ceil(calls / target);
   console.log(
     `  at ${target} calls per turn: ${needed} turn(s), ${(((turns - needed) / turns) * 100).toFixed(0)}% fewer`
+  );
+}
+
+/**
+ * Runs of consecutive tool-only turns: the batchable population.
+ *
+ * A run is a stretch of turns that each carry tool calls and no prose, broken
+ * by any turn that reasons or by a real user message. Collapsing a run into one
+ * turn is the most batching could ever do, so the distribution of run lengths
+ * is the ceiling -- and a run of one has no neighbour, so it is headroom only
+ * if the model can be made to think and call in the same breath.
+ */
+export function runLengths() {
+  const histogram = new Map();
+  let turnsInRuns = 0;
+  const close = (run) => {
+    if (run <= 0) return;
+    const bucket = Math.min(run, 6);
+    histogram.set(bucket, (histogram.get(bucket) ?? 0) + 1);
+    turnsInRuns += run;
+  };
+  for (const name of readdirSync(ROOT)) {
+    const dir = join(ROOT, name);
+    let files = [];
+    try {
+      files = readdirSync(dir).filter((f) => f.endsWith('.jsonl'));
+    } catch {
+      continue;
+    }
+    for (const file of files) {
+      let text;
+      try {
+        text = readFileSync(join(dir, file), 'utf8');
+      } catch {
+        continue;
+      }
+      let run = 0;
+      let lastRequest = null;
+      for (const line of text.split('\n')) {
+        if (!line.trim()) continue;
+        let entry;
+        try {
+          entry = JSON.parse(line);
+        } catch {
+          continue;
+        }
+        const message = entry.message;
+        if (!message) continue;
+        const blocks = Array.isArray(message.content) ? message.content : [];
+        if (message.role !== 'assistant') {
+          // A tool RESULT continues the run; a real user message ends it.
+          const isResult = blocks.some((b) => b?.type === 'tool_result');
+          if (!isResult) {
+            close(run);
+            run = 0;
+          }
+          continue;
+        }
+        const uses = blocks.filter((b) => b?.type === 'tool_use');
+        const prose = blocks.filter(
+          (b) => b?.type === 'text' && String(b.text ?? '').trim()
+        );
+        if (uses.length === 0) {
+          close(run);
+          run = 0;
+          continue;
+        }
+        // One logical turn per request, however many entries it was split into.
+        if (entry.requestId === lastRequest) continue;
+        lastRequest = entry.requestId;
+        if (prose.length === 0) run += 1;
+        else {
+          close(run);
+          run = 1;
+        }
+      }
+      close(run);
+      run = 0;
+    }
+  }
+  return { histogram, turnsInRuns };
+}
+
+const { histogram: runs, turnsInRuns } = runLengths();
+const runCount = [...runs.values()].reduce((sum, n) => sum + n, 0);
+if (runCount > 0) {
+  console.log(
+    `\n${runCount} run(s) of consecutive tool-only turns holding ${turnsInRuns} turn(s)`
+  );
+  for (const bucket of [1, 2, 3, 4, 5, 6])
+    console.log(
+      `  ${bucket === 6 ? '6+' : bucket}: ${runs.get(bucket) ?? 0} (${(((runs.get(bucket) ?? 0) / runCount) * 100).toFixed(1)}%)`
+    );
+  console.log(
+    `  collapsing every run: ${turnsInRuns} -> ${runCount} turn(s), ${(((turnsInRuns - runCount) / turnsInRuns) * 100).toFixed(0)}% fewer -- the CEILING on batching`
   );
 }
