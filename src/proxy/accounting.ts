@@ -184,9 +184,22 @@ export interface CompressionFacts {
    * its elisions are in-place -- and a delegating wrapper cannot turn an
    * in-place elision into a move. The mechanism is still unexplained.
    *
-   * The next attempt therefore starts from the bisect, not from the feature:
-   * find what observable differs between calling the proxy's sink directly and
-   * calling it through one extra frame. An 11x move in a measurement from a
+   * EXPLAINED. compress/types.ts:229 holds `const SPILLED = new WeakMap<object,
+   * ...>()` -- a memo of what each sink has already moved out, keyed on the SINK
+   * FUNCTION ITSELF. The proxy builds its sink once per proxy, so that memo
+   * survives every request and a block already spilled is not spilled again:
+   * 75. My wrapper was built fresh inside each `compressBody` call, so every
+   * request presented a new key, the memo was empty each time, and the same
+   * blocks moved out over and over: 845. The 11x was the deduplication being
+   * defeated, exactly once per request.
+   *
+   * So a sink's IDENTITY is load-bearing, and anything that wraps one -- to
+   * count, to log, to test -- must be hoisted to the sink's own lifetime or it
+   * silently turns spill dedup off. That is also why the count belongs where the
+   * proxy already puts it: `spilledBlocks`, incremented in the wrapper created
+   * beside the sink at startup, IS the per-request withheld count and is
+   * correct. The only thing missing was ever carrying it onto CompressionFacts
+   * so the savings ledger could see it. An 11x move in a measurement from a
    * refactor that cannot affect it means the measurement was not understood,
    * and shipping a report built on it would publish that misunderstanding.
    */
