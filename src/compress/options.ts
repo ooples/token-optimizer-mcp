@@ -241,6 +241,30 @@ export const PRESETS: Readonly<
     keepSentenceFraction: 0.3,
     minBodyLines: 1,
     minDedupBytes: 300,
+    /**
+     * MOVE A BLOCK OUT WHEN COMPRESSING IT IN PLACE COULD NOT REACH 90%.
+     *
+     * This was 0 in every preset, which is "never move anything", so the arm
+     * that withholds was unreachable by any configuration a user can set -- it
+     * could only be had by a caller passing `compression` programmatically.
+     * Measured over the competitive corpus, that arm costs 146,064 tokens with
+     * nothing fetched against their 2,746,640, and 2.81x against their 1.69x on
+     * what a monthly cap buys. It is the strongest arm we have and nobody could
+     * turn it on.
+     *
+     * It belongs here and not in `balanced` because it is a trade, not a free
+     * win: content moves out of the request, so a reader who wants it back pays
+     * a round trip, and above roughly an 87% fetch rate the arm is worse than
+     * doing nothing. 0.9 is the threshold the measurements used -- move a block
+     * only where in-place compression could not take 90% off it, which on that
+     * corpus is the log and grep shapes and nothing else, so well-compressed
+     * blocks stay in the request.
+     *
+     * It needs a spill sink to do anything. Without one every engine reads the
+     * threshold as "keep it in the request", which is the zero-round-trip
+     * default.
+     */
+    spillWholeBlockBelow: 0.9,
   }),
 
   /**
