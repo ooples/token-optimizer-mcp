@@ -76,8 +76,15 @@ const payload = (turn: number) => ({
 const systemOf = (body: string): unknown =>
   (JSON.parse(body) as { system?: unknown }).system;
 
-async function proxyTo(url: string): Promise<number> {
-  const proxy = await startProxy({ upstream: url, projectRoot: EMPTY_PROJECT });
+async function proxyTo(
+  url: string,
+  onSummary?: (summary: { compressed: boolean }) => void
+): Promise<number> {
+  const proxy = await startProxy({
+    upstream: url,
+    projectRoot: EMPTY_PROJECT,
+    onSummary,
+  });
   servers.push(proxy.server);
   return proxy.port;
 }
@@ -153,5 +160,111 @@ describe('the batching guidance on the wire', () => {
         'You are a coding assistant.'
       );
     }
+  });
+  it('survives compression, which runs on the body after the injection', async () => {
+    process.env[BATCH_GUIDANCE_ENV] = '1';
+    const provider = await upstream();
+    // A POSITIVE CONTROL, because a transform that did nothing would pass this
+    // test for the wrong reason. `compressed` has to be true on the request
+    // below, or "the block survived compression" means "no compression ran".
+    const compressed: boolean[] = [];
+    const port = await proxyTo(provider.url, (summary) =>
+      compressed.push(summary.compressed)
+    );
+    // THE EMPTY PAYLOADS ABOVE COMPRESS TO NOTHING, so they cannot tell
+    // whether the block survives the transform that runs right after the
+    // injection. This one is large and repetitive enough that the compressor
+    // has something to do, and the assertion is that it did not do it to us.
+    // A LOG BLOCK, which is what the compressor is for, and A BREAKPOINT ON
+    // BOTH TURNS. Three earlier versions of this test read `compressed: false`
+    // with the reason "compression did not pay": sixty one-line messages have
+    // no redundancy to find, and -- the one that took longest -- a first turn
+    // with no `cache_control` records no anchor, so the second turn has no
+    // previous breakpoint and the frontier finds nothing compressible after
+    // it. With both fixed, 17,497 bytes become 2,817.
+    const logBlock = (rows: number) =>
+      Array.from(
+        { length: rows },
+        (_, i) =>
+          `2026-10-05T10:${String(i % 60).padStart(2, '0')}:00Z INFO handler=src/server.ts request=${i} status=200 duration=${i * 3}ms user=alice@example.com region=us-east-1 cache=hit bytes=4096 trace=abcdef0123456789`
+      ).join(String.fromCharCode(10));
+    const ephemeral = { cache_control: { type: 'ephemeral' } };
+    const turn = (rows: number | null) => ({
+      model: 'claude-sonnet-4-5-20250929',
+      system: 'You are a coding assistant.',
+      messages: [
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'text',
+              text: 'read the log',
+              ...(rows === null ? ephemeral : {}),
+            },
+          ],
+        },
+        ...(rows === null
+          ? []
+          : [
+              {
+                role: 'user',
+                content: [{ type: 'text', text: logBlock(rows), ...ephemeral }],
+              },
+            ]),
+      ],
+    });
+    for (const rows of [null, 200]) {
+      await fetch(`http://127.0.0.1:${port}/v1/messages`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(turn(rows)),
+      });
+    }
+    expect(provider.bodies).toHaveLength(2);
+    expect(compressed[1]).toBe(true);
+    expect(String(systemOf(provider.bodies[1]))).toContain(
+      'multiple tool calls in one message'
+    );
+  });
+
+  it('does not cost the outgoing prefix more than once', async () => {
+    // THE WHOLE CLAIM FOR PUTTING IT HERE. Injection re-serialises the body,
+    // so our bytes stop matching the client's -- that is accepted, and paid
+    // once. What must NOT happen is our own stream losing its prefix turn to
+    // turn, because then the write is charged again on every request and the
+    // block costs far more than the residency it was priced at.
+    const prefixLength = (a: string, b: string): number => {
+      let i = 0;
+      while (i < a.length && i < b.length && a[i] === b[i]) i += 1;
+      return i;
+    };
+    const growing = (turn: number) => ({
+      model: 'claude-sonnet-4-5-20250929',
+      system: 'You are a coding assistant.',
+      messages: Array.from({ length: turn }, (_, i) => ({
+        role: i % 2 === 0 ? 'user' : 'assistant',
+        content: [{ type: 'text', text: `step ${i} of the conversation` }],
+      })),
+    });
+    const run = async (): Promise<number> => {
+      const provider = await upstream();
+      const port = await proxyTo(provider.url);
+      for (const turn of [4, 5]) {
+        await fetch(`http://127.0.0.1:${port}/v1/messages`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(growing(turn)),
+        });
+      }
+      expect(provider.bodies).toHaveLength(2);
+      return prefixLength(provider.bodies[0], provider.bodies[1]);
+    };
+    delete process.env[BATCH_GUIDANCE_ENV];
+    const without = await run();
+    process.env[BATCH_GUIDANCE_ENV] = '1';
+    const withBlock = await run();
+    // The shared prefix grows by the block rather than shrinking: the block
+    // sits ahead of the messages, so everything stable stays stable.
+    expect(withBlock).toBeGreaterThan(without);
   });
 });
