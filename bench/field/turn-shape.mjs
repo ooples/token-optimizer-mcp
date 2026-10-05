@@ -58,6 +58,24 @@
  * act in one turn at all -- the proxy cannot force that, only ask through the
  * system prompt, and whether asking works is the next measurement.
  *
+ * AND THERE IS A CAUTION FROM THE BATCHING PRECEDENT. Claude Code's own
+ * instructions already ask for multi-call batching -- "make all of the
+ * independent calls in the same response" -- and the measured result is 1.15
+ * calls per turn with 92% of turns making exactly one. So asking for batching
+ * demonstrably achieves very little, which is reason to doubt that asking for
+ * anything about turn shape achieves much.
+ *
+ * It is a caution and not a refutation, because the think-then-act merge is a
+ * different request. Batching asks the model to plan further ahead and commit to
+ * several calls at once. Merging asks it not to split ONE decision across two
+ * requests, which nothing currently asks for. Untested rather than disproven,
+ * and the precedent says to test it before believing the 33%.
+ *
+ * A probe that grepped the transcripts for existing batching instructions is
+ * not evidence either way: it matched the probe's own source, written into the
+ * transcript as it ran. Searching a transcript for a phrase while writing that
+ * phrase into it measures nothing.
+ *
  * AND THE BATCHABLE HEADROOM IS BOUNDED, measured the same way. Of 36,301 runs
  * of consecutive tool-only turns holding 52,785 turns between them, 69.5% are a
  * run of ONE -- a single tool call sitting between two pieces of reasoning,
