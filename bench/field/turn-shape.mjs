@@ -331,21 +331,39 @@ if (runCount > 0) {
 /**
  * How often the model thinks and acts in the same turn.
  *
- * THE LEVER ON N, AND THE ONE THE RUN-LENGTH WALK ABOVE MISSED. A thinking turn
- * and the tool turn that follows it are two requests, and each re-reads the
- * whole context -- so if the two could be one turn, the second re-read is
- * simply not paid. This does not ask the model to decide more per turn, only to
- * say what it has decided in the turn it acts on.
+ * THE ANSWER IS "ALMOST ALWAYS", AND THE FIRST VERSION OF THIS SAID THE
+ * OPPOSITE. It reported 37,545 think turns and 60,779 act turns with 2 doing
+ * both, from which 33% of requests looked like a think-then-act pair that one
+ * turn could have carried -- the whole case for putting a batching instruction
+ * in front of the model, and the only lever on N anything here had found.
  *
- * Reasoning lives in `thinking` blocks, not `text`. Looking for prose finds one
- * tool turn in 52,800 and reads as "nothing to merge", which is how the earlier
- * ceiling came out wrong.
+ * It was counting TRANSCRIPT ENTRIES. A single assistant message holding
+ * [thinking, tool_use] is written to the JSONL as two entries that share a
+ * `requestId`, so splitting on entries splits every turn into its blocks and
+ * then reports the halves as separate turns. Of the 37,630 entries carrying a
+ * thinking block, 37,631 carried neither text nor a tool call -- a census where
+ * every entry has exactly one block type, which is the signature of the
+ * artefact rather than of a model that thinks and then stops.
+ *
+ * GROUPED BY `requestId`, which is what a turn actually is: 32,667 of 32,882
+ * thinking turns (99.3%) carry a tool call in the SAME turn, and 215 do not.
+ * Of the 32,665 adjacent think-then-act pairs the broken walk counted, 32,665
+ * were one request; 54 were genuinely two. So the headroom is 54 turns of
+ * 54,522 -- 0.1% -- and the behaviour the instruction would ask for is already
+ * universal.
+ *
+ * This is the same trap as `callsPerTurn` above, which read 1.00 calls per turn
+ * for the same reason and was corrected to 1.15 by grouping. Having fixed it
+ * once in this file, I then wrote the lever on top of the unfixed version.
  */
 export function thinkAndAct() {
-  let entries = 0;
+  let turns = 0;
   let thinking = 0;
   let acting = 0;
   let both = 0;
+  /** Adjacent think-then-act pairs, split by whether they are one request. */
+  let sameRequest = 0;
+  let twoRequests = 0;
   for (const name of readdirSync(ROOT)) {
     const dir = join(ROOT, name);
     let files = [];
@@ -361,7 +379,11 @@ export function thinkAndAct() {
       } catch {
         continue;
       }
-      for (const line of text.split('\n')) {
+      /** Block types seen per request, in the order the requests appeared. */
+      const kinds = new Map();
+      const order = [];
+      let pendingThink = null;
+      for (const line of text.split(String.fromCharCode(10))) {
         if (!line.trim()) continue;
         let entry;
         try {
@@ -371,42 +393,58 @@ export function thinkAndAct() {
         }
         const message = entry.message;
         if (!message || message.role !== 'assistant') continue;
-        entries += 1;
         const blocks = Array.isArray(message.content) ? message.content : [];
+        // A turn with no requestId is its own turn: the fallback must not
+        // collapse unrelated entries into one, which a constant key would.
+        const key = entry.requestId ?? `unkeyed-${order.length}`;
+        if (!kinds.has(key)) {
+          kinds.set(key, new Set());
+          order.push(key);
+        }
+        for (const block of blocks)
+          if (block?.type) kinds.get(key).add(block.type);
         const thinks = blocks.some(
           (b) => b?.type === 'thinking' || b?.type === 'redacted_thinking'
         );
         const acts = blocks.some((b) => b?.type === 'tool_use');
+        if (thinks) pendingThink = key;
+        else if (acts && pendingThink !== null) {
+          if (pendingThink === key) sameRequest += 1;
+          else twoRequests += 1;
+          pendingThink = null;
+        }
+      }
+      for (const key of order) {
+        const seen = kinds.get(key);
+        turns += 1;
+        const thinks =
+          seen.has('thinking') || seen.has('redacted_thinking');
+        const acts = seen.has('tool_use');
         if (thinks) thinking += 1;
         if (acts) acting += 1;
         if (thinks && acts) both += 1;
       }
     }
   }
-  return { entries, thinking, acting, both };
+  return { turns, thinking, acting, both, sameRequest, twoRequests };
 }
 
 const split = thinkAndAct();
-if (split.entries > 0) {
+if (split.turns > 0) {
   console.log(
-    `\n${split.entries} assistant entr(ies): ${split.thinking} think, ${split.acting} act, ${split.both} do both`
+    `\n${split.turns} turn(s) grouped by requestId: ${split.thinking} think, ${split.acting} act, ${split.both} do both in ONE turn`
   );
-  const separable = Math.min(split.thinking, split.acting) - split.both;
-  const requests = split.thinking + split.acting - split.both;
+  const separable = split.thinking - split.both;
   console.log(
-    `  separable thinking turns: ${separable} of ${requests} request(s), ${((separable / requests) * 100).toFixed(0)}% fewer if each merged with the act it precedes`
+    `  thinking turns that do not act: ${separable} (${((separable / split.turns) * 100).toFixed(1)}% of turns) -- the ONLY turns a merge instruction could remove`
   );
-  // A CEILING AND NOT A TARGET. It assumes every thinking turn is followed by
-  // an act it could have carried, which is the most favourable pairing
-  // available; the real figure needs the pairs walked in order.
-  // AND THE ADJACENCY, so this is a figure rather than a ceiling. Walked in
-  // order, 32,591 of 37,544 thinking-only turns -- 86.8% -- are immediately
-  // followed by a turn that acts, with only a tool result in between. Those are
-  // the pairs a single turn could have been.
-  const adjoining = adjacentThinkThenAct();
-  if (adjoining.thinkingOnly > 0)
+  // THE REFUTATION, printed as the figure rather than as prose. An adjacent
+  // think-then-act pair is the thing the lever was priced on, and almost every
+  // one of them is already a single request.
+  const pairs = split.sameRequest + split.twoRequests;
+  if (pairs > 0)
     console.log(
-      `  measured: ${adjoining.followedByAct} of ${adjoining.thinkingOnly} thinking turns (${((adjoining.followedByAct / adjoining.thinkingOnly) * 100).toFixed(1)}%) are immediately followed by an act, so ${((adjoining.followedByAct / requests) * 100).toFixed(0)}% of requests are a pair that could be one`
+      `  adjacent think-then-act pairs: ${pairs}, of which ${split.sameRequest} are ONE request already and ${split.twoRequests} are two -- headroom ${((split.twoRequests / split.turns) * 100).toFixed(2)}% of turns, not 33%`
     );
 }
 

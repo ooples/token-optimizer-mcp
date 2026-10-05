@@ -1,50 +1,58 @@
 /**
- * PRICING THE ONE LEVER THAT IS OURS ALONE.
+ * THE TURN LEVER, PRICED AND REFUTED. KEPT SO IT STAYS REFUTED.
  *
- * Every saving on this branch so far has been a saving on the PAYLOAD, and a
- * payload saving is something the competitor also makes. At the recorded
- * figures we hand over 406,321 tokens against their 361,400, so on payload
- * alone we lose the subscription metric at p=0 (1.61x against their 1.69x) and
- * win it only narrowly at p=50.
+ * The argument was good and the measurement behind it was wrong.
  *
- * The cost line says why payload is the wrong place to push. A token written
- * into context costs `W + R*N` -- 2.0 to write it, then 0.1 on each of the N
- * requests that follow -- which at the measured N=56 is 7.6, of which 5.6 is
- * residency. Five sevenths of what a token costs is the re-reading, so N is
- * the larger half of the bill and neither engine has ever touched it.
+ * THE ARGUMENT. Every saving on this branch is a saving on the PAYLOAD, and a
+ * payload saving is one the competitor also makes: we hand over 406,321 tokens
+ * against their 361,400 and lose the subscription metric at p=0, 1.61x against
+ * their 1.69x. But a token written into context costs `W + R*N` = 7.6 at the
+ * measured N=56, of which 5.6 is residency -- the re-reading on the 56
+ * requests that follow. Five sevenths of what a token costs is N, and neither
+ * engine has ever touched it. A turn the model does not take is a whole
+ * context re-read that no amount of compression can refund.
  *
- * THE COMMON-FACTOR TEST, which is the thing that disqualified every other
- * idea here: a lever only moves the COMPETITIVE number if it reduces our cost
- * and not everybody's. Raising the cache-write multiple fails it (the ratio is
- * 1.1243 at W=2.0 and at W=1.25 alike). Client-side compaction fails it: the
- * client does it with or without us. N passes it, but only through the proxy
- * -- we are the only party in the exchange that can put text in front of the
- * model on every request, and a turn the model does not take is a whole
- * context re-read neither engine's compression can refund.
+ * It also passes the common-factor test, which is what disqualified everything
+ * else: a lever only moves the COMPETITIVE number if it reduces our cost and
+ * not everybody's. Raising the cache-write multiple fails it (the ratio is
+ * 1.1243 at W=2.0 and at W=1.25 alike). Client-side compaction fails it -- the
+ * client compacts with or without us. Cache TTL fails it. N passes, and only
+ * through the proxy, because we are the only party in the exchange that can
+ * put text in front of the model on every request.
  *
- * WHAT IS MEASURED AND WHAT IS NOT. Measured, from 52,773 real tool turns of
- * local transcripts (bench/field/turn-shape.mjs): 32,591 of 37,544
- * thinking-only turns -- 86.8% -- are immediately followed by a turn that
- * acts, with only a tool result between them, so 33% of requests are a
- * think-then-act pair that one turn could have carried. NOT measured: whether
- * the instruction actually merges them. That is why this file prints the
- * break-even -- the merge rate at which the block pays for its own residency
- * -- and the figures either side of it, rather than a single claim.
+ * THE MEASUREMENT. 33% of requests were a think-then-act pair that one turn
+ * could have carried, from 52,773 real tool turns. On that figure this file
+ * priced a 2.00x cap multiple against their 1.69x, and the number went into
+ * the pull request.
  *
- * WHY THE GUIDANCE IS CHARGED AT ITS CHARACTER COUNT. A real token count needs
- * the recorded fixture and a credential; a census estimate (chars/4) is
- * available without one and has flattered an arm here three times. So neither:
- * every token is at least one character, so the character count is a hard
- * UPPER bound on the tokens, and the bound is what gets charged. It costs us
- * about four times the truth and still rounds to nothing, which is the whole
- * point of using it.
+ * IT WAS COUNTING TRANSCRIPT ENTRIES. An assistant message holding [thinking,
+ * tool_use] is written to the JSONL as two entries sharing a `requestId`, so
+ * splitting on entries splits every turn into its blocks and reports the
+ * halves as two turns. Grouped by `requestId` -- which is what a turn is --
+ * 32,667 of 32,882 thinking turns (99.3%) already carry their tool call in the
+ * same turn, 215 do not, and of the 32,665 adjacent pairs the broken walk
+ * counted, 32,665 were ONE request and 54 were two.
+ *
+ * So the headroom is 54 turns of 54,522: 0.10%, not 33%. The behaviour the
+ * instruction would have asked for is already universal, and this file now
+ * prices that: against a block costing 1.30% of the payload, a 0.10% headroom
+ * cannot pay for itself at ANY obedience rate, including perfect obedience.
+ * The feature was removed rather than shipped behind a flag, because a flag
+ * does not make a measured net loss safe -- it makes it easy to turn on.
+ *
+ * WHAT IS STILL LIVE, and what this file is kept in CI for: the same grouping
+ * gives a real ceiling on BATCHING -- 36,399 runs of consecutive tool-only
+ * turns holding 52,955 turns, so collapsing every run would be 31% fewer. That
+ * is a ceiling and not a target, because a run can only collapse where the
+ * later call does not need the earlier result. The subset that provably does
+ * not is the thing to measure next, and until it is measured this file asserts
+ * the refutation rather than projecting from the ceiling.
  */
 
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DEFAULTS, commonSessionCost, usageMultiplier } from './cost-model.mjs';
-import { turnGuidance } from '../../dist/compress/turn-guidance.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const RECORD = join(HERE, 'headroom', 'results', 'head-to-head.json');
@@ -67,36 +75,66 @@ const RECORDED = {
   workloads: record.workloads.length,
 };
 
+/**
+ * What `bench/field/turn-shape.mjs` measures, grouped by requestId.
+ *
+ * Copied here as constants rather than imported, because that instrument reads
+ * the local agent transcripts and CI has none; a check that silently measures
+ * an empty corpus is the vacuity failure this harness has hit five times. Run
+ * it to re-derive these.
+ */
+const FIELD = Object.freeze({
+  turns: 54522,
+  thinking: 32882,
+  thinkAndActInOneTurn: 32667,
+  thinkWithoutActing: 215,
+  pairsOneRequest: 32665,
+  pairsTwoRequests: 54,
+  // The batching ceiling, which is the part that survived.
+  runs: 36399,
+  turnsInRuns: 52955,
+});
+
+/**
+ * The block the lever would have injected, kept verbatim for its length.
+ *
+ * CHARGED AT ITS CHARACTER COUNT. A real token count needs the recorded
+ * fixture and a credential; a census estimate (chars/4) is available without
+ * one and has flattered an arm here three times. So neither: every token is at
+ * least one character, so characters bound the tokens from above, and the
+ * bound is what gets charged. It overcharges by roughly four and still decides
+ * the question, which is the point of using it.
+ */
+const BLOCK =
+  'When you have decided what to do, do it in the same turn you decide it: ' +
+  'put the tool call in the message that explains the reasoning for it, ' +
+  'rather than ending a turn and acting in the next one. Each turn re-reads ' +
+  'the whole conversation, so a decision split across two turns is paid for ' +
+  'twice.';
+
 const failures = [];
 const check = (ok, line) => {
   if (!ok) failures.push(line);
   console.log(`${ok ? 'ok  ' : 'FAIL'} ${line}`);
 };
 
-/** The guidance, in characters, which bounds its tokens from above. */
-const GUIDANCE_CHARS = (
-  turnGuidance({ TOKEN_OPTIMIZER_TURN_GUIDANCE: '1' }) ?? ''
-).length;
-
 /**
- * Our session cost with N requests following, charging the guidance per session.
+ * Our session cost with N requests following, charging the block per session.
  *
- * Our arm fetches nothing -- `turns.ours` is 0 across the corpus -- so its cost
- * line has no c1 and no c2 and reduces to `handed * (W + R*N)`. That identity
- * is not assumed here: `cost-decomposition.check.mjs` proves p0 === handed *
- * 7.6 for both arms with no residual, and the control below re-derives the
- * recorded figure from it.
+ * Our arm fetches nothing -- `turns.ours` is 0 across the corpus -- so its
+ * cost line has no c1 and no c2 and reduces to `handed * (W + R*N)`. That is
+ * not assumed: `cost-decomposition.check.mjs` proves p0 === handed * 7.6 for
+ * both arms with no residual, and the control below re-derives the recorded
+ * figure from it.
  *
- * The guidance is charged ONCE PER WORKLOAD, not once for the corpus. Each
- * workload is its own conversation, so a session-constant block is written
- * eighteen times across the eighteen of them. Charging it once would be the
- * flattering reading.
+ * The block is charged ONCE PER WORKLOAD. Each workload is its own
+ * conversation, so a session-constant block is written eighteen times across
+ * the eighteen of them; charging it once would be the flattering reading.
  */
-function oursAt(turnsAfter, { guidance = true } = {}) {
+function oursAt(turnsAfter, { block = true } = {}) {
   const perToken = DEFAULTS.cacheWrite + DEFAULTS.cacheRead * turnsAfter;
   const payload = RECORDED.handedOurs * perToken;
-  const block = guidance ? GUIDANCE_CHARS * RECORDED.workloads * perToken : 0;
-  return payload + block;
+  return payload + (block ? BLOCK.length * RECORDED.workloads * perToken : 0);
 }
 
 /** The same subscription cap, arm against no optimizer, with N moving for us. */
@@ -104,41 +142,32 @@ function capMultiple(armCost, armTurns) {
   const params = { ...DEFAULTS, baseContextTokens: RECORDED.baseContextTokens };
   return usageMultiplier(RECORDED.none, armCost, {
     params,
-    // THE COMMON TERM MOVES WITH N, which is the second half of the lever and
-    // the half it is easy to leave out. The output the assistant writes over
-    // the turns that follow is `N * outputTokensPerTurn * outputPerInput`, so
-    // a turn not taken is also output not written. The baseline keeps N=56
-    // because a user with no optimizer takes every turn.
-    //
-    // PER SESSION TIMES THE NUMBER OF SESSIONS, because every figure read off
-    // this record is a corpus total and a workload is one session. Charging a
-    // single session's output against an eighteen-session payload pushed the
-    // multiple away from 1 -- 2.26x where the record says 1.61x -- and always
-    // in our favour, which is how the control caught it.
+    // THE COMMON TERM MOVES WITH N, and is per session times the number of
+    // sessions. The output the assistant writes over the turns that follow is
+    // `N * outputTokensPerTurn * outputPerInput`, so a turn not taken is also
+    // output not written -- but every figure here is a corpus total over
+    // eighteen sessions, and charging one session's worth read 2.26x where the
+    // record says 1.61x: away from 1, in our favour, which is the direction
+    // this mistake always takes. The baseline keeps N=56 because a user with
+    // no optimizer takes every turn.
     commonCost:
       commonSessionCost({ ...params, turnsAfter: armTurns }) *
       RECORDED.workloads,
   });
 }
 
-const baselineCommon =
-  commonSessionCost({
-    ...DEFAULTS,
-    baseContextTokens: RECORDED.baseContextTokens,
-  }) * RECORDED.workloads;
-
 console.log(
   `record ${record.recordedAt} commit ${record.commit}: N=${RECORDED.turnsAfter}, base context ${RECORDED.baseContextTokens}, ${RECORDED.workloads} workload(s)`
 );
-console.log(`guidance bound: ${GUIDANCE_CHARS} chars >= its tokens`);
+console.log(`block bound: ${BLOCK.length} chars >= its tokens`);
 
 // ---------------------------------------------------------------------------
 // THE CONTROL. Everything below is this arithmetic with one input changed, so
-// if it cannot reproduce the recorded figure at the recorded N the rest of the
-// file is a fabrication. An instrument whose zero case is unchecked has
-// reported a win from a run that never happened on this branch five times.
+// if it cannot reproduce the recorded figures at the recorded N, nothing below
+// means anything. An instrument whose zero case is unchecked has reported a
+// result from a run that never happened five times on this branch.
 // ---------------------------------------------------------------------------
-const controlOurs = oursAt(RECORDED.turnsAfter, { guidance: false });
+const controlOurs = oursAt(RECORDED.turnsAfter, { block: false });
 check(
   Math.abs(controlOurs - RECORDED.oursP0) < 1,
   `control: recomputed p0 ${controlOurs.toFixed(0)} == recorded ${RECORDED.oursP0}`
@@ -153,102 +182,78 @@ check(
   `${theirsCap.toFixed(2)}x` === RECORDED.theirsCapP0,
   `control: their cap ${theirsCap.toFixed(2)}x == recorded ${RECORDED.theirsCapP0}`
 );
-
-// A control that cannot fail proves nothing, so this is the arm that must NOT
-// reproduce the recorded figure: charging the guidance has to cost something.
-const withBlock = oursAt(RECORDED.turnsAfter);
+// A control that cannot fail stands in for nothing, so this one must not
+// reproduce the record: charging the block has to cost something.
 check(
-  withBlock > controlOurs,
-  `control: the guidance is not free -- ${withBlock.toFixed(0)} > ${controlOurs.toFixed(0)} at the same N`
+  oursAt(RECORDED.turnsAfter) > controlOurs,
+  `control: the block is not free -- ${oursAt(RECORDED.turnsAfter).toFixed(0)} > ${controlOurs.toFixed(0)} at the same N`
 );
 
 // ---------------------------------------------------------------------------
-// THE SWEEP. What the merge rate buys, including the rate at which it buys
-// nothing. The competitor's figures do not move: they have no way to put an
-// instruction in front of the model.
+// THE FIELD MEASUREMENT, re-derived from its own counts so the retraction is
+// arithmetic rather than a claim in a comment.
 // ---------------------------------------------------------------------------
-/** The share of requests that are the thinking half of a mergeable pair. */
-const MERGEABLE = 0.33;
-/** Requests remaining when `rate` of that share actually merge. */
-const turnsAt = (rate) => RECORDED.turnsAfter * (1 - MERGEABLE * rate);
-
-console.log('\nmerge  N     ours p0     cap    vs theirs p0   vs theirs p1');
-const rows = [];
-for (const rate of [0, 0.1, 0.25, 0.5, 0.75, 1]) {
-  const n = turnsAt(rate);
-  const cost = oursAt(n);
-  const cap = capMultiple(cost, n);
-  rows.push({ rate, n, cost, cap });
-  const vs0 = ((RECORDED.theirsP0 - cost) / RECORDED.theirsP0) * 100;
-  const vs1 = ((RECORDED.theirsP1 - cost) / RECORDED.theirsP1) * 100;
-  const s0 = `${vs0 >= 0 ? '+' : ''}${vs0.toFixed(1)}%`;
-  const s1 = `${vs1 >= 0 ? '+' : ''}${vs1.toFixed(1)}%`;
-  console.log(
-    `${(rate * 100).toFixed(0).padStart(4)}%  ${n.toFixed(1).padStart(4)}  ${cost.toFixed(0).padStart(9)}  ${cap.toFixed(2)}x  ${s0.padStart(8)}      ${s1.padStart(8)}`
-  );
-}
-
-// ---------------------------------------------------------------------------
-// THE BREAK-EVENS. Two of them, and they answer different questions.
-// ---------------------------------------------------------------------------
-const zero = rows[0];
-const tax = ((zero.cost - RECORDED.oursP0) / RECORDED.oursP0) * 100;
+const pairs = FIELD.pairsOneRequest + FIELD.pairsTwoRequests;
+const alreadyOneTurn = FIELD.pairsOneRequest / pairs;
 check(
-  zero.cost > RECORDED.oursP0,
-  `at a 0% merge rate the block is a pure tax: ${zero.cost.toFixed(0)} vs ${RECORDED.oursP0} without it (+${tax.toFixed(2)}%)`
+  alreadyOneTurn > 0.99,
+  `${(alreadyOneTurn * 100).toFixed(2)}% of adjacent think-then-act pairs are ALREADY one request (${FIELD.pairsOneRequest} of ${pairs})`
+);
+const headroom = FIELD.pairsTwoRequests / FIELD.turns;
+check(
+  headroom < 0.002,
+  `headroom for a merge instruction: ${(headroom * 100).toFixed(2)}% of turns (${FIELD.pairsTwoRequests} of ${FIELD.turns}), against the 33% this was priced on`
+);
+check(
+  FIELD.thinkAndActInOneTurn / FIELD.thinking > 0.99,
+  `the instruction asks for what already happens: ${((FIELD.thinkAndActInOneTurn / FIELD.thinking) * 100).toFixed(1)}% of thinking turns already act in the same turn`
 );
 
-/** The merge rate at which the block has paid for its own residency. */
-const payback = (() => {
-  for (let rate = 0; rate <= 1.0001; rate += 0.0005)
-    if (oursAt(turnsAt(rate)) <= RECORDED.oursP0) return rate;
-  return null;
-})();
-// THE BAR, AND A GUESS THAT WAS WRONG. Pre-registered at 2% and it is not:
-// the block is charged against all eighteen sessions, so its residency is
-// 1.30% of the payload and takes a 5.3% merge rate to recover. 10% is the
-// bound asserted because it is still far inside the 86.8% adjacency measured
-// in real transcripts -- the bar is clearable, which is the only claim here.
-check(
-  payback !== null && payback < 0.1,
-  `pays for itself at a ${payback === null ? 'n/a' : (payback * 100).toFixed(2) + '%'} merge rate -- the bar the instruction has to clear`
-);
-
-/** The merge rate at which we take the subscription metric at p=0. */
-const toWin = (() => {
-  for (let rate = 0; rate <= 1.0001; rate += 0.0005) {
-    const n = turnsAt(rate);
-    if (capMultiple(oursAt(n), n) >= theirsCap) return rate;
-  }
-  return null;
-})();
-check(
-  toWin !== null,
-  `takes the p=0 cap multiple from ${theirsCap.toFixed(2)}x at a ${toWin === null ? 'unreachable' : (toWin * 100).toFixed(1) + '%'} merge rate`
-);
-
-const full = rows[rows.length - 1];
+// ---------------------------------------------------------------------------
+// THE VERDICT. Perfect obedience is the arm that decides it: if the block
+// cannot pay for itself when every mergeable turn merges, no obedience rate
+// saves it and there is nothing left to measure.
+// ---------------------------------------------------------------------------
+const bestN = RECORDED.turnsAfter * (1 - headroom);
+const bestCost = oursAt(bestN);
+const taxOnly = oursAt(RECORDED.turnsAfter);
 console.log(
-  `\nat full merge: ${full.cap.toFixed(2)}x against their ${theirsCap.toFixed(2)}x, and our line is FLAT in p (nothing fetched) while theirs rises to ${RECORDED.theirsP1} at p=1`
+  `\nat PERFECT obedience: N ${RECORDED.turnsAfter} -> ${bestN.toFixed(2)}, cost ${bestCost.toFixed(0)} against ${RECORDED.oursP0} without the block`
+);
+check(
+  bestCost > RECORDED.oursP0,
+  `the block is a net loss at perfect obedience: +${(((bestCost - RECORDED.oursP0) / RECORDED.oursP0) * 100).toFixed(2)}% (residency ${(((taxOnly - RECORDED.oursP0) / RECORDED.oursP0) * 100).toFixed(2)}%, saving ${(((taxOnly - bestCost) / RECORDED.oursP0) * 100).toFixed(2)}%)`
+);
+check(
+  capMultiple(bestCost, bestN) < theirsCap,
+  `and still loses the p=0 cap multiple: ${capMultiple(bestCost, bestN).toFixed(2)}x against their ${theirsCap.toFixed(2)}x`
+);
+
+// ---------------------------------------------------------------------------
+// WHAT SURVIVED. The batching ceiling comes from the same grouping and is a
+// ceiling, not a target: a run collapses only where the later call does not
+// need the earlier result.
+// ---------------------------------------------------------------------------
+const collapsed = 1 - FIELD.runs / FIELD.turnsInRuns;
+const ceilingN = RECORDED.turnsAfter * (1 - collapsed);
+const ceilingCost = oursAt(ceilingN, { block: false });
+console.log(
+  `\nbatching CEILING: ${FIELD.turnsInRuns} turn(s) in ${FIELD.runs} run(s), ${(collapsed * 100).toFixed(0)}% fewer if every run collapsed`
 );
 console.log(
-  `baseline both arms are measured against: ${(RECORDED.none + baselineCommon).toFixed(0)} effective input tokens with no optimizer`
-);
-
-// ---------------------------------------------------------------------------
-// WHAT THIS DOES NOT SHOW, asserted so it cannot be read as more than it is.
-// ---------------------------------------------------------------------------
-check(
-  GUIDANCE_CHARS > 0,
-  `the block exists and is charged -- were it empty every row above would be the payload alone`
+  `  priced, with no instruction charged: N -> ${ceilingN.toFixed(1)}, ${ceilingCost.toFixed(0)}, cap ${capMultiple(ceilingCost, ceilingN).toFixed(2)}x against their ${theirsCap.toFixed(2)}x`
 );
 check(
-  turnGuidance({}) === null,
-  `off by default, so none of this is in the shipped path until an operator asks`
+  capMultiple(ceilingCost, ceilingN) > theirsCap,
+  `the ceiling WOULD take the metric, which is why the provable subset is worth measuring -- it is not evidence that any of it is reachable`
+);
+check(
+  collapsed > headroom * 10,
+  `and it is a different lever: ${(collapsed * 100).toFixed(0)}% against the merge instruction's ${(headroom * 100).toFixed(2)}%`
 );
 
 if (failures.length > 0) {
   console.log(`\n${failures.length} check(s) failed`);
   process.exit(1);
 }
-console.log(`\nall ${rows.length} row(s) priced, every check passed`);
+console.log('\nthe merge instruction is refuted; the batching ceiling stands');
