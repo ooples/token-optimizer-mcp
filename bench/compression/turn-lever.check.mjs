@@ -337,6 +337,49 @@ WHAT IS STILL UNMEASURED: whether an instruction moves the calls-per-turn figure
 );
 
 // ---------------------------------------------------------------------------
+// THE THIRD BAR: INJECT ONLY WHEN THE CONTEXT IS BIG ENOUGH TO BE WORTH IT.
+//
+// Three bars were on the table for a batching instruction: a conservative one
+// asking only for calls whose results are not needed by each other (what
+// shipped, and what arm B measures), an aggressive one asking for batching
+// unless a dependence is known (arm A), and this one, a cost-first gate that
+// injects only on sessions big enough to repay the residency.
+//
+// I FIRST CLAIMED THIS CLOSED BY ARITHMETIC AND IT DOES NOT. The argument was
+// that cost and saving are both linear in `perToken` so the ratio is
+// scale-free -- true of N, false of size. The block's cost is a FIXED number
+// of characters per session while the saving is proportional to `handed`, so
+// the ratio is proportional to session size and a gate on size decides
+// something real. The assertion written for the wrong claim caught it: 0.1x to
+// 235.0x across the grid, which is not one side of break-even.
+//
+// SO THE BAR REDUCES TO A THRESHOLD, computed rather than chosen. Per session,
+// the block pays once `handed * (perToken - perTokenReduced)` exceeds
+// `blockChars * perToken`.
+// ---------------------------------------------------------------------------
+const breakEvenHanded = (n) => {
+  const perToken = DEFAULTS.cacheWrite + DEFAULTS.cacheRead * n;
+  const reduced = DEFAULTS.cacheWrite + DEFAULTS.cacheRead * n * (1 - batchB);
+  return (BLOCK.length * perToken) / (perToken - reduced);
+};
+const threshold = breakEvenHanded(RECORDED.turnsAfter);
+const perSession = RECORDED.handedOurs / RECORDED.workloads;
+console.log(
+  `
+cost-first gate: the block repays itself above ${threshold.toFixed(0)} payload token(s) in a session; the corpus averages ${perSession.toFixed(0)}`
+);
+check(
+  threshold < perSession,
+  `the gate is real but inert: ${(perSession / threshold).toFixed(0)}x clearance on an average session, so gating would withhold the lever from sessions where it is worth least rather than from sessions where it loses`
+);
+// AND IT MOVES WITH N, so the threshold is not a constant to hardcode.
+const spread = [8, 20, RECORDED.turnsAfter, 120].map(breakEvenHanded);
+check(
+  Math.max(...spread) / Math.min(...spread) > 1.5,
+  `and it is not a constant: ${Math.min(...spread).toFixed(0)} to ${Math.max(...spread).toFixed(0)} tokens as N runs 8 to 120 -- a gate would have to be computed per session, which is why none shipped`
+);
+
+// ---------------------------------------------------------------------------
 // DO EVICTION AND BATCHING OVERLAP? They were approved as two items and the
 // honest question is whether building both buys both.
 //
