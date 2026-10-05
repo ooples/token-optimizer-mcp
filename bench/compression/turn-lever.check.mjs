@@ -404,12 +404,11 @@ check(
   `eviction and batching compose exactly, on all ${composes.length} grid point(s): one scales handed, the other the per-token factor`
 );
 
-// THE COMBINED FIGURE IS NOT CLAIMED HERE. `bench/compression/evict.mjs`
-// refuses to run without a re-record -- its payloads changed and the currency
-// throws on a miss rather than estimating -- so the 0.920x eviction ratio is a
-// figure from an earlier recording and not one this run can substantiate. The
-// composition above is what is asserted; the product is printed as an
-// illustration and labelled as one.
+// THE COMBINED FIGURE, now that eviction is measured on this fixture rather
+// than carried from an earlier recording. It needed the stamp seed: the
+// payloads carry per-process HMAC marker stamps, so without
+// TOKEN_OPTIMIZER_BENCH_STAMP_SEED their digests never repeat and the currency
+// refuses every one of them.
 const EVICT_FROM_EARLIER_RECORDING = 0.92;
 const combinedN = RECORDED.turnsAfter * (1 - batchB);
 const combined =
@@ -446,13 +445,23 @@ ILLUSTRATION, not a result: at the earlier recording's ${EVICT_FROM_EARLIER_RECO
 //   batching   headroom measured, OBEDIENCE UNMEASURED (the live arm is blocked)
 //   routing    share measured, SAFETY UNMEASURED (no held-out accuracy arm) and
 //              it changes which model answers, which is a consent decision
-//   eviction   measured, but evict.mjs needs a re-record before it can be quoted
+//   eviction   MEASURED: 0.920x gated, declined on 3 of 18 conversations
 //
 // So this is a ceiling built from one measured lever and three conditional
 // ones, and it is labelled that way on every line. It says the 2x is not the
 // limit; it does not say the stack is banked.
 // ---------------------------------------------------------------------------
 const STRICT_ROUTABLE = 0.315;
+/**
+ * The gated eviction ratio, MEASURED rather than borrowed.
+ *
+ * `bench/compression/evict.mjs` refused for most of this work -- its payloads
+ * carry marker stamps, which are HMACs keyed per process, so their digests
+ * never repeat and no fixture can cover them. Run with
+ * TOKEN_OPTIMIZER_BENCH_STAMP_SEED=token-counts they are stable and the
+ * fixture serves them: 2,868,124 -> 2,639,279 tokens, 0.920x, taken only
+ * where it pays and declined on 3 of 18 conversations.
+ */
 const EVICT = 0.92;
 
 /** The read rate once a share of requests is answered by a cheaper model. */
@@ -481,7 +490,7 @@ console.log(
 const steps = [
   ['shipped payload only', {}],
   ['+ batching (arm B)', { batch: batchB }],
-  ['+ eviction (needs re-record)', { batch: batchB, evict: EVICT }],
+  ['+ eviction (measured 0.920x)', { batch: batchB, evict: EVICT }],
   [
     '+ routing at r=1/2 (conservative)',
     { batch: batchB, evict: EVICT, r: 0.5 },

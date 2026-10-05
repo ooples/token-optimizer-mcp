@@ -34,6 +34,21 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = join(HERE, '..', '..');
 
 /** Everything that asks this harness for a token count. */
+/**
+ * Narrow the run to one target: `--only bench/compression/evict.mjs`.
+ *
+ * A full fixed-point run walks the comparator, which is eighteen workloads
+ * against their engine and takes the better part of an hour. When one
+ * instrument is the thing that needs counts -- eviction, whose payloads
+ * changed and whose ratio therefore cannot be quoted -- that is the whole cost
+ * for nothing. The fixed point is per-target anyway: a pass that discovers no
+ * new string is the fixed point for whatever was run.
+ */
+const only = (() => {
+  const at = process.argv.indexOf('--only');
+  return at === -1 ? null : process.argv[at + 1];
+})();
+
 const TARGETS = [
   'bench/compression/proof.mjs',
   'bench/compression/proof-metrics.check.mjs',
@@ -108,6 +123,13 @@ const TARGETS = [
   // both the baseline bodies and the stubbed ones.
   'bench/compression/evict.mjs',
 ];
+
+/** The targets this run will walk, which is all of them unless --only. */
+const RUN = only === null ? TARGETS : TARGETS.filter((t) => t === only);
+if (RUN.length === 0) {
+  console.error(`--only ${only} matches no target; add it to TARGETS first`);
+  process.exit(2);
+}
 
 const ENDPOINT = 'https://api.anthropic.com/v1/messages/count_tokens';
 const { token } = readOAuthToken();
@@ -296,7 +318,7 @@ let reached = new Set();
 
 for (let round = 1; round <= 5; round += 1) {
   rmSync(censusPath, { force: true });
-  for (const target of TARGETS) {
+  for (const target of RUN) {
     const status = run(target, { TOKEN_OPTIMIZER_BENCH_CENSUS: censusPath });
     // A TARGET THAT DID NOT RUN IS NOT A TARGET THAT FOUND NOTHING. Census mode
     // answers a miss provisionally so a target is expected to SUCCEED here; a
@@ -343,7 +365,28 @@ for (let round = 1; round <= 5; round += 1) {
   save(record);
 }
 
-const dead = Object.keys(record.counts).filter((d) => !reached.has(d));
+// A PARTIAL RUN MUST NOT PRUNE, and the first version of `--only` did.
+//
+// `reached` is every digest the census asked for, so pruning to it is only
+// sound when the census walked EVERY target. Under `--only` it walks one, and
+// the prune then deletes the counts belonging to the targets that did not run:
+// measured, the fixture went from 5,091 strings to 3,719 after an `--only
+// evict.mjs` run, which is the comparator's currency deleted by a run that
+// never looked at the comparator. The strict pass still said `pass`, because
+// the only target it checked was the one that had just been counted.
+//
+// So the filter withholds the prune as well. The cost is a fixture that can
+// carry a dead count until the next full run, which is the lesser failure: a
+// dead count is indistinguishable from a live one to a reader, but a MISSING
+// one makes every instrument that needs it refuse outright.
+const dead =
+  only === null
+    ? Object.keys(record.counts).filter((d) => !reached.has(d))
+    : [];
+if (only !== null)
+  console.log(
+    `  prune withheld: --only walked 1 of ${TARGETS.length} target(s), so what this run did not reach is not dead`
+  );
 if (dead.length > 0) {
   for (const d of dead) delete record.counts[d];
   record.recordedAt = new Date().toISOString();
@@ -359,7 +402,7 @@ console.log(
 // THE ONLY PROOF THE FIXTURE IS COMPLETE: a pass with no census and no
 // provisional answers, where a single missing string is a hard refusal.
 let bad = 0;
-for (const target of TARGETS) {
+for (const target of RUN) {
   const status = run(target, { TOKEN_OPTIMIZER_BENCH_CENSUS: '' });
   console.log(
     `strict ${label(target)}: ${status === 0 ? 'pass' : `FAIL (exit ${status})`}`
