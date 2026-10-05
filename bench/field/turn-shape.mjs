@@ -40,6 +40,24 @@
  * The numbers under the old heading are left for the record and are not a
  * ceiling on anything.
  *
+ * WHAT THE MEASURED 33% IS WORTH, at the recorded 406,321 handed tokens against
+ * their 2,746,640 at p=0 and 3,523,083 at p=1:
+ *
+ *   today, 56 turns              3,088,040   lose
+ *   33% fewer turns, 37.5        2,337,158   WIN p=0 by 15%
+ *   + the 8% eviction measured   2,150,186   WIN p=0 by 21.7%
+ *
+ * None of it defers anything, so the same figure stands at p=1 where theirs
+ * rises to 3,523,083 -- a 39% win there. That makes it the first arrangement on
+ * this branch to win both ends without withholding, resting on a measurement of
+ * real transcripts rather than a projection from a borrowed corpus.
+ *
+ * TWO ASSUMPTIONS, STATED RATHER THAN BURIED. That N scales with request count,
+ * which is the cost model's own structure since `readsPerWrittenToken` counts
+ * the requests that carried a token. And that the model can be led to think and
+ * act in one turn at all -- the proxy cannot force that, only ask through the
+ * system prompt, and whether asking works is the next measurement.
+ *
  * AND THE BATCHABLE HEADROOM IS BOUNDED, measured the same way. Of 36,301 runs
  * of consecutive tool-only turns holding 52,785 turns between them, 69.5% are a
  * run of ONE -- a single tool call sitting between two pieces of reasoning,
