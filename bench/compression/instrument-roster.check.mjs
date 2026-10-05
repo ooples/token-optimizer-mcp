@@ -63,6 +63,17 @@ const RUNS_ELSEWHERE = {
  * forgetting one is a published figure nothing guards.
  */
 const NOT_IN_CI = {
+  'bench/compression/cost-decomposition.check.mjs':
+    'red today by design, on one count -- it gates on a MEASURED fetch rate and ' +
+    'there is not one yet. The whole withholding case is linear in how often a ' +
+    'withheld unit is wanted back; it has been estimated once at 0.23 from ' +
+    'textual recurrence on a corpus belonging to the engine we measure against, which cannot see a unit ' +
+    'the model read without quoting and so is biased in our favour. The counters ' +
+    'that would answer it from real work now exist -- spilled at the sink, ' +
+    'reinstatedUnits on the way in, referenceRate dividing them -- and until a ' +
+    'session fills them this check must fail rather than let the 8.1x-to-15.3x ' +
+    'projection read as a result. Putting it in CI would make the gate green by ' +
+    'deleting the gate',
   'bench/compression/readme-headroom.check.mjs':
     'red today by design, on three counts -- 27 of the table figures and all 25 ' +
     'of the corpus figures are absent from the record, and the table does not name ' +

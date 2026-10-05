@@ -71,6 +71,12 @@ const TARGETS = [
   // capture is on disk -- which is why the decomposition check fails loudly on
   // the encoding instead of trusting a census to have caught it.
   ['bench/compression/head-to-head.mjs', 'hr30/merged/warm'],
+  // THE STORE-EMPTY HALF OF THE PUBLISHED PAIR. store-pair.check.mjs requires
+  // the warm and empty records to name the same commit -- the pair is meant to
+  // be one variable apart, and two captures measuring different code is two
+  // variables. Re-recording the empty half needs its payloads counted, which is
+  // what this target is for.
+  ['bench/compression/head-to-head.mjs', 'hr30/merged/empty'],
   // THE REPLICATE'S CAPTURE, which is a different sweep and therefore different
   // payloads. A speed verdict needs two independent recordings that agree, and
   // the replicate could not be re-taken at all until its strings were counted:
