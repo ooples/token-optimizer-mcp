@@ -36,6 +36,9 @@ interface Counters {
   injected_chars: number;
   elisions: number;
   spilled: number;
+  /** Withheld units a later request brought back. The numerator of the
+   * reference rate, where `spilled` is the denominator. */
+  reinstated: number;
 }
 
 const zero = (): Counters => ({
@@ -48,6 +51,7 @@ const zero = (): Counters => ({
   injected_chars: 0,
   elisions: 0,
   spilled: 0,
+  reinstated: 0,
 });
 
 let live = zero();
@@ -72,6 +76,17 @@ export interface RequestFacts {
   readonly injectedChars?: number;
   readonly elisions?: number;
   readonly spilledBlocks?: number;
+  /**
+   * How many withheld units this request brought back.
+   *
+   * `spilledBlocks` is how many left; this is how many returned. The ratio is
+   * the reference rate, and it is the only thing the whole withholding case
+   * turns on: a withheld unit saves its residency for every remaining turn and
+   * costs nothing unless it is wanted again. It had been estimated once, at
+   * 0.23, from textual recurrence on a borrowed corpus, in the direction that
+   * flatters the arm, with no second signal to check it against.
+   */
+  readonly reinstatedUnits?: number;
   /**
    * True when nothing may leave the request -- the default arm.
    *
@@ -107,6 +122,7 @@ export function noteRequest(
   }
   live.elisions += finite(facts.elisions);
   live.spilled += finite(facts.spilledBlocks);
+  live.reinstated += finite(facts.reinstatedUnits);
   if (typeof facts.losslessMode === 'boolean') mode = facts.losslessMode;
   if (live.requests < ROLLUP_EVERY) return null;
   return emit('window', env);

@@ -68,6 +68,9 @@ import {
 } from './transformations.js';
 import { anchorStore, type AnchorStore } from '../compress/anchor.js';
 import { serialiseKeepingPrefix } from './cached-prefix.js';
+import { batchGuidance } from '../compress/batch-guidance.js';
+import { injectKnowledge } from '../compress/knowledge.js';
+import { digestOf, reinstatedIn } from './reinstated.js';
 import { record, libraryVersion } from '../telemetry/recorder.js';
 import { noteRequest, flushRollup } from '../telemetry/rollup.js';
 import type { SpillSink, Stamp } from '../compress/types.js';
@@ -279,6 +282,9 @@ export interface ProxySummary {
    */
   readonly anchorReason?: string;
   readonly elisions?: number;
+  /** Whole units moved out of the body. See CompressionFacts for why it
+   * lives there too and must not be counted by wrapping the sink. */
+  readonly withheldUnits?: number;
   /** Section sizes, for locating where a request's bytes live. No content. */
   readonly deferredTools?: number;
   /** Probe: thinking blocks removed from older assistant turns. */
@@ -1762,14 +1768,48 @@ export async function startProxy(options: ProxyOptions = {}): Promise<{
   // synchronous, so nothing else can increment this between the two reads
   // either side of the call.
   let spilledBlocks = 0;
+  /**
+   * A DIGEST PER WITHHELD UNIT, SO A REINSTATEMENT CAN BE COUNTED.
+   *
+   * Withholding a unit saves its residency for every remaining turn and costs
+   * nothing unless it is wanted back, so the arm's whole value is the rate at
+   * which that happens -- and that rate has only ever been estimated, at 0.23,
+   * from textual recurrence on a borrowed corpus, with no second signal.
+   * `spilledBlocks` is the denominator and has been recorded all along; this is
+   * the numerator.
+   *
+   * Digests, not content: the set holds a sha256 of each unit that left and
+   * nothing else, so a reinstatement is observable without the proxy keeping a
+   * copy of anything it sent away.
+   *
+   * Bounded, because a proxy lives as long as the session does. Past the cap the
+   * oldest digests are forgotten, which can only UNDERcount reinstatements --
+   * the safe direction, since an undercount makes the arm look worse rather
+   * than better.
+   */
+  const spilledDigests = new Set<string>();
+  const MAX_TRACKED_SPILLS = 4096;
   const sink = options.spill === true ? spillTo(spillRoot) : undefined;
   const spill: SpillSink =
     sink === undefined
       ? undefined
       : (content, hint) => {
           spilledBlocks += 1;
+          if (spilledDigests.size >= MAX_TRACKED_SPILLS) {
+            const oldest = spilledDigests.values().next().value;
+            if (oldest !== undefined) spilledDigests.delete(oldest);
+          }
+          spilledDigests.add(digestOf(content));
           return sink(content, hint);
         };
+
+  /**
+   * How many withheld units this request has brought back.
+   *
+   * A unit comes back as the text of a block, so every block is hashed and
+   * looked up. It counts a unit once however many times it appears, because the
+   * question is whether it was wanted, not how often it was pasted.
+   */
   // One store per proxy, holding a hash and a boolean per conversation.
   // Per-conversation, never per-request, and passed in explicitly rather
   // than reached for -- HeadRoom's #3486 is a shared router keeping request
@@ -1907,6 +1947,44 @@ export async function startProxy(options: ProxyOptions = {}): Promise<{
           }
         });
 
+      // THE BATCHING GUIDANCE, INJECTED BEFORE ANYTHING ELSE LOOKS AT THE BODY.
+      //
+      // Off unless the operator asks. It is HERE and not in the compression
+      // strategy, where the knowledge block goes and where this was first
+      // wired, because that injection sits downstream of an early return taken
+      // by every request with nothing compressible -- which includes the first
+      // request of every session. With the flag on, five unit tests passing and
+      // the strategy wired, the block reached no request at all.
+      //
+      // And a session-constant instruction has to arrive on the FIRST request
+      // or not at all: arriving later moves the cached prefix mid-session and
+      // charges a write on everything behind it, which costs more than the
+      // instruction can save. Injected here, consistently, our outgoing prefix
+      // is stable turn to turn and the cost is one re-serialisation against the
+      // client's bytes, paid once rather than missed every turn.
+      //
+      // NOT ON EVERY ROUTE. `count_tokens` is the client asking what a request
+      // would cost; adding to it would make the answer describe a request the
+      // client never sends, and a token count has to stay the client's own.
+      const generates = /\/(messages|chat\/completions)\/?$/.test(
+        (requestPath(req.url) ?? '').split('?')[0]
+      );
+      const guidance = generates ? batchGuidance() : null;
+      let guidanceChars = 0;
+      if (guidance !== null) {
+        try {
+          const parsed = JSON.parse(body.toString('utf8')) as ProviderRequest;
+          body = Buffer.from(
+            JSON.stringify(injectKnowledge(parsed, guidance)),
+            'utf8'
+          );
+          guidanceChars = guidance.length;
+        } catch {
+          // A body that does not parse is one we leave alone: the guidance is
+          // an optimisation and must never be the reason a request fails.
+        }
+      }
+
       const transformStarted = performance.now();
       const spilledBefore = spilledBlocks;
       const { body: next, summary } = compressBody(
@@ -1933,9 +2011,20 @@ export async function startProxy(options: ProxyOptions = {}): Promise<{
         beforeBytes: summary.beforeBytes,
         afterBytes: summary.afterBytes,
         compressed: summary.compressed,
-        injectedChars: summary.injectedChars,
+        // THE GUIDANCE COUNTS AS INJECTION. It is text we added that the
+        // client did not send, which is what injectedChars means; leaving it
+        // out would let the block read as free in the ledger, and that is
+        // exactly how an A/B of the knowledge block once read its own effect
+        // as zero.
+        injectedChars: (summary.injectedChars ?? 0) + guidanceChars,
         elisions: summary.elisions,
         spilledBlocks: spilledBlocks - spilledBefore,
+        // COUNTED ON THE WAY IN, BEFORE THIS REQUEST IS REWRITTEN. A unit the
+        // client has brought back arrives as the text of a block, so it is
+        // matched against the digests of what left -- the numerator of the one
+        // rate the eviction case turns on, where `spilledBlocks` is the
+        // denominator and has been recorded all along.
+        reinstatedUnits: reinstatedIn(body.toString('utf8'), spilledDigests),
         losslessMode: options.spill !== true,
       });
       // SPREAD, NOT RE-LISTED. This was seventeen fields copied across by hand,
@@ -1967,7 +2056,9 @@ export async function startProxy(options: ProxyOptions = {}): Promise<{
         req,
         res,
         next,
-        summary,
+        // The per-request delta, not the proxy's running total: a ledger row
+        // describes one request.
+        { ...summary, withheldUnits: spilledBlocks - spilledBefore },
         performance.now() - transformStarted,
         observe,
         counted

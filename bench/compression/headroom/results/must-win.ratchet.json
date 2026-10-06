@@ -6,6 +6,16 @@
       "capture": "merged/warm",
       "fingerprint": "v1:detect=rust kompress=ready degraded=none witness=yes chunks=6 store=warm"
     },
+    "agent-loop-logs/cost-proxy": {
+      "pass": true,
+      "capture": "merged/warm",
+      "fingerprint": "v1:detect=rust kompress=ready degraded=none witness=yes chunks=6 store=warm"
+    },
+    "agent-loop-logs/latency": {
+      "pass": true,
+      "capture": "merged/warm",
+      "fingerprint": "v1:detect=rust kompress=ready degraded=none witness=yes chunks=6 store=warm"
+    },
     "agent-loop-logs/retention": {
       "pass": true,
       "capture": "merged/warm",
@@ -22,6 +32,11 @@
       "fingerprint": "v1:detect=rust kompress=ready degraded=none witness=yes chunks=6 store=warm"
     },
     "agent-loop/cost": {
+      "pass": true,
+      "capture": "merged/warm",
+      "fingerprint": "v1:detect=rust kompress=ready degraded=none witness=yes chunks=6 store=warm"
+    },
+    "agent-loop/latency": {
       "pass": true,
       "capture": "merged/warm",
       "fingerprint": "v1:detect=rust kompress=ready degraded=none witness=yes chunks=6 store=warm"
@@ -62,6 +77,11 @@
       "fingerprint": "v1:detect=rust kompress=ready degraded=none witness=yes chunks=6 store=warm"
     },
     "code-search/cost": {
+      "pass": true,
+      "capture": "merged/warm",
+      "fingerprint": "v1:detect=rust kompress=ready degraded=none witness=yes chunks=6 store=warm"
+    },
+    "code-search/cost-proxy": {
       "pass": true,
       "capture": "merged/warm",
       "fingerprint": "v1:detect=rust kompress=ready degraded=none witness=yes chunks=6 store=warm"
@@ -131,7 +151,22 @@
       "capture": "merged/warm",
       "fingerprint": "v1:detect=rust kompress=ready degraded=none witness=yes chunks=6 store=warm"
     },
+    "issue-triage/cost-proxy": {
+      "pass": true,
+      "capture": "merged/warm",
+      "fingerprint": "v1:detect=rust kompress=ready degraded=none witness=yes chunks=6 store=warm"
+    },
+    "issue-triage/latency": {
+      "pass": true,
+      "capture": "merged/warm",
+      "fingerprint": "v1:detect=rust kompress=ready degraded=none witness=yes chunks=6 store=warm"
+    },
     "issue-triage/retention": {
+      "pass": true,
+      "capture": "merged/warm",
+      "fingerprint": "v1:detect=rust kompress=ready degraded=none witness=yes chunks=6 store=warm"
+    },
+    "issue-triage/speed": {
       "pass": true,
       "capture": "merged/warm",
       "fingerprint": "v1:detect=rust kompress=ready degraded=none witness=yes chunks=6 store=warm"
@@ -147,6 +182,11 @@
       "fingerprint": "v1:detect=rust kompress=ready degraded=none witness=yes chunks=6 store=warm"
     },
     "raw-build-log/turns": {
+      "pass": true,
+      "capture": "merged/warm",
+      "fingerprint": "v1:detect=rust kompress=ready degraded=none witness=yes chunks=6 store=warm"
+    },
+    "relevance-probe/cost": {
       "pass": true,
       "capture": "merged/warm",
       "fingerprint": "v1:detect=rust kompress=ready degraded=none witness=yes chunks=6 store=warm"
@@ -298,12 +338,21 @@
     "issue-triage/speed": {
       "reason": "recorded against v1:detect=rust kompress=ready degraded=none witness=yes, this capture is v1:detect=rust kompress=ready degraded=none witness=yes chunks=6 store=warm",
       "verdict": "vs best: ours-movewhole vs crusher: our p90 0.4ms vs their p10 26.9ms (medians of 3 passes: ours 0.4 / 0.4 / 0.4, theirs 26.9 / 24.0 / 29.2; published medians 0.343 / 30.393) | replicate agrees: ours-movewhole vs crusher: our p90 0.4ms vs their p10 26.9ms (medians of 3 passes: ours 0.4 / 0.4 / 0.4, theirs 26.9 / 24.0 / 29.2; published medians 0.34 / 30.393) | vs comparable: ours-default vs crusher: our p90 27.3ms vs their p10 26.9ms (medians of 3 passes: ours 44.3 / 27.3 / 24.7, theirs 26.9 / 24.0 / 29.2; published medians 24.46 / 30.393) | replicate agrees: ours-default vs crusher: our p90 29.9ms vs their p10 26.9ms (medians of 3 passes: ours 29.9 / 35.5 / 27.7, theirs 26.9 / 24.0 / 29.2; published medians 26.494 / 30.393)",
-      "pass": false
+      "pass": false,
+      "supersededBy": {
+        "capture": "merged/warm",
+        "fingerprint": "v1:detect=rust kompress=ready degraded=none witness=yes chunks=6 store=warm"
+      }
     },
     "sre-debugging/speed": {
       "reason": "recorded against v1:detect=rust kompress=ready degraded=none witness=yes, this capture is v1:detect=rust kompress=ready degraded=none witness=yes chunks=6 store=warm",
       "verdict": "vs best: ours-movewhole vs crusher-lossy-ccr: our p90 1.1ms vs their p10 116.1ms (medians of 3 passes: ours 1.0 / 1.1 / 1.1, theirs 116.1 / 111.3 / 116.5; published medians 1.013 / 122.197) | replicate agrees: ours-movewhole vs crusher-lossy-ccr: our p90 1.2ms vs their p10 116.1ms (medians of 3 passes: ours 1.1 / 1.2 / 1.2, theirs 116.1 / 111.3 / 116.5; published medians 1.068 / 122.197) | vs comparable: ours-default vs crusher: our p90 120.1ms vs their p10 84.4ms (medians of 3 passes: ours 120.1 / 88.2 / 123.1, theirs 93.6 / 83.1 / 84.4; published medians 86.203 / 93.958) | replicate agrees: ours-default vs crusher: our p90 99.9ms vs their p10 84.4ms (medians of 3 passes: ours 99.9 / 128.7 / 99.3, theirs 93.6 / 83.1 / 84.4; published medians 94.251 / 93.958)",
       "pass": false
     }
-  }
+  },
+  "warmOnly": [
+    "code-search/latency",
+    "code-search/speed",
+    "sre-debugging/speed"
+  ]
 }

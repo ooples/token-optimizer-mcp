@@ -34,6 +34,21 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = join(HERE, '..', '..');
 
 /** Everything that asks this harness for a token count. */
+/**
+ * Narrow the run to one target: `--only bench/compression/evict.mjs`.
+ *
+ * A full fixed-point run walks the comparator, which is eighteen workloads
+ * against their engine and takes the better part of an hour. When one
+ * instrument is the thing that needs counts -- eviction, whose payloads
+ * changed and whose ratio therefore cannot be quoted -- that is the whole cost
+ * for nothing. The fixed point is per-target anyway: a pass that discovers no
+ * new string is the fixed point for whatever was run.
+ */
+const only = (() => {
+  const at = process.argv.indexOf('--only');
+  return at === -1 ? null : process.argv[at + 1];
+})();
+
 const TARGETS = [
   'bench/compression/proof.mjs',
   'bench/compression/proof-metrics.check.mjs',
@@ -44,7 +59,77 @@ const TARGETS = [
   // content-digest-keyed fixture possible for them at all.
   'bench/tools/reduction.mjs',
   'bench/tools/reduction.check.mjs',
+  // THE COMPETITIVE COMPARATOR, which counted with tiktoken cl100k_base until
+  // the currency was corrected.
+  //
+  // ITS CENSUS DOES NOT CONVERGE YET, and the cause is known. Rounds 4 and 5
+  // each found exactly 72 new strings and two independent census passes gave
+  // `run1 234 run2 234 only1 72 only2 72`: 72 of its 234 payloads have
+  // different bytes on every run, so their digests never repeat and no fixture
+  // can be complete. Those are the payloads carrying marker stamps. A stamp is
+  // an HMAC keyed by `SECRET = randomBytes(32)` at annotate.ts:114, minted once
+  // per process and never emitted, so every run stamps differently.
+  //
+  // FIXED by seeding the stamp secret for every target below, which took three
+  // attempts to get right: `options.stamp` at the comparator's compressBlock
+  // sites took it from 72 to 29, wiring the two sites written on one line took
+  // it to 13, and the last 13 were `compressBody`, which takes positional
+  // arguments through four levels and has nowhere to receive a stamp. Seeding
+  // the secret covers every path at once, including the ones that were never
+  // found. Two census passes over one capture now agree exactly: 0 of 234.
+  //
+  // IT TAKES THE COMPETITOR'S CAPTURE DIRECTORY AS AN ARGUMENT, so registering
+  // it bare recorded nothing: a run with no argument prints its usage line and
+  // exits, which the census read as a target that reached zero strings rather
+  // than as a target that never ran. The capture the recorded result was taken
+  // over is `hr30/merged/warm`, and the census is only as complete as whatever
+  // capture is on disk -- which is why the decomposition check fails loudly on
+  // the encoding instead of trusting a census to have caught it.
+  ['bench/compression/head-to-head.mjs', 'hr30/merged/warm'],
+  // THE STORE-EMPTY HALF OF THE PUBLISHED PAIR. store-pair.check.mjs requires
+  // the warm and empty records to name the same commit -- the pair is meant to
+  // be one variable apart, and two captures measuring different code is two
+  // variables. Re-recording the empty half needs its payloads counted, which is
+  // what this target is for.
+  ['bench/compression/head-to-head.mjs', 'hr30/merged/empty'],
+  // THE REPLICATE'S CAPTURE, which is a different sweep and therefore different
+  // payloads. A speed verdict needs two independent recordings that agree, and
+  // the replicate could not be re-taken at all until its strings were counted:
+  // the currency refuses a digest it has never seen rather than estimating, so
+  // a capture absent from the fixture is a capture the comparator cannot price.
+  // NO SECOND CAPTURE IS USABLE, SO THE REPLICATE IS NOT REGISTERED HERE.
+  // A speed verdict needs two independent recordings that agree, and neither
+  // candidate on disk can produce one:
+  //
+  //   hr31/warm      complete, but their engine ran with a capability missing --
+  //                  Kompress gave up with its time budget exhausted four times
+  //                  and kept the remainder verbatim, so their column is a floor
+  //                  on their engine rather than a measurement of it
+  //   hr30/warm      no payloads.json: the sweep was never resolved, so there is
+  //                  nothing for the comparator to read
+  //
+  // hr30/merged/warm is the only complete, healthy capture and it is the main
+  // record. So the speed pair stays NOT ENFORCEABLE, and that is a fact about
+  // the captures rather than about the instrument: closing it needs their engine
+  // re-captured on a quiesced machine, which this one is not.
+  // The prefix-survival measurement, which counts the shared run between turns
+  // as text rather than scaling a character share.
+  'bench/compression/prefix-survival.mjs',
+  // The turn-by-turn replay, which prices each turn against the prefix the one
+  // before it left cached. Its payloads are whole requests rather than single
+  // replies, so it contributes the largest strings in the fixture.
+  'bench/compression/replay.mjs',
+  // The eviction arms, which replay each conversation twice and so contribute
+  // both the baseline bodies and the stubbed ones.
+  'bench/compression/evict.mjs',
 ];
+
+/** The targets this run will walk, which is all of them unless --only. */
+const RUN = only === null ? TARGETS : TARGETS.filter((t) => t === only);
+if (RUN.length === 0) {
+  console.error(`--only ${only} matches no target; add it to TARGETS first`);
+  process.exit(2);
+}
 
 const ENDPOINT = 'https://api.anthropic.com/v1/messages/count_tokens';
 const { token } = readOAuthToken();
@@ -58,19 +143,35 @@ let calls = 0;
 async function countRequest(text) {
   for (let attempt = 0; ; attempt += 1) {
     calls += 1;
-    const response = await fetch(ENDPOINT, {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'anthropic-version': '2023-06-01',
-        'anthropic-beta': 'oauth-2025-04-20',
-        authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        model: MODEL,
-        messages: [{ role: 'user', content: [{ type: 'text', text }] }],
-      }),
-    });
+    // A TRANSPORT FAILURE IS RETRYABLE TOO, and it used to escape this loop.
+    // The retry below covers HTTP statuses only, so a connection aborted mid
+    // write -- ECONNABORTED, which the comparator's six-figure payloads provoke
+    // -- threw straight out of the recorder and ended the run with a stack
+    // trace, after it had already spent every call before it. The payload size
+    // is not the problem: the largest fixture counts fine on its own.
+    let response;
+    try {
+      response = await fetch(ENDPOINT, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'anthropic-version': '2023-06-01',
+          'anthropic-beta': 'oauth-2025-04-20',
+          authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          model: MODEL,
+          messages: [{ role: 'user', content: [{ type: 'text', text }] }],
+        }),
+      });
+    } catch (error) {
+      if (attempt >= 5)
+        throw new Error(
+          `count_tokens transport failure after ${attempt + 1} attempts on a ${text.length}-character payload: ${error.message}`
+        );
+      await new Promise((r) => setTimeout(r, 1000 * 2 ** attempt));
+      continue;
+    }
     if (response.ok) return (await response.json()).input_tokens;
     const body = (await response.text()).slice(0, 200);
     const retryable = response.status === 429 || response.status >= 500;
@@ -148,13 +249,37 @@ function save(record) {
   writeFileSync(FIXTURE, `${JSON.stringify({ ...record, counts }, null, 2)}\n`);
 }
 
+/**
+ * A target is a path, or a path plus the arguments it needs to do anything.
+ *
+ * REGISTERING ONE BARE THAT NEEDS AN ARGUMENT RECORDS NOTHING, and looks like
+ * success. head-to-head.mjs takes the competitor's capture directory; with no
+ * argument it printed its usage line and exited, and the census read that as a
+ * target which had reached zero new strings rather than as one which had never
+ * run. The strict pass afterwards was the only thing that noticed.
+ */
 function run(target, env) {
-  return spawnSync(process.execPath, [target], {
+  const [file, ...args] = Array.isArray(target) ? target : [target];
+  return spawnSync(process.execPath, [file, ...args], {
     cwd: REPO,
-    env: { ...process.env, ...env },
+    env: {
+      ...process.env,
+      // EVERY TARGET STAMPS THE SAME WAY, OR NO FIXTURE CAN BE COMPLETE. A
+      // marker stamp is an HMAC keyed by a per-process random secret, so a
+      // payload carrying one has different bytes every run and its digest never
+      // repeats. Measured on the comparator: 72 of 234 payloads varied, and with
+      // this set, 0. The seed is read only by annotate.ts and only when present,
+      // so nothing in production is affected; see the note there for the trade.
+      TOKEN_OPTIMIZER_BENCH_STAMP_SEED: 'token-counts',
+      ...env,
+    },
     stdio: 'ignore',
   }).status;
 }
+
+/** For a message: the path, with its arguments if it has any. */
+const label = (target) =>
+  Array.isArray(target) ? target.join(' ') : String(target);
 
 const scratch = mkdtempSync(join(tmpdir(), 'token-counts-'));
 const censusPath = join(scratch, 'census.jsonl');
@@ -193,8 +318,26 @@ let reached = new Set();
 
 for (let round = 1; round <= 5; round += 1) {
   rmSync(censusPath, { force: true });
-  for (const target of TARGETS)
-    run(target, { TOKEN_OPTIMIZER_BENCH_CENSUS: censusPath });
+  for (const target of RUN) {
+    const status = run(target, { TOKEN_OPTIMIZER_BENCH_CENSUS: censusPath });
+    // A TARGET THAT DID NOT RUN IS NOT A TARGET THAT FOUND NOTHING. Census mode
+    // answers a miss provisionally so a target is expected to SUCCEED here; a
+    // non-zero exit means it never reached its payloads, and carrying on would
+    // record a fixture that silently omits every string it would have counted.
+    if (status !== 0) {
+      // A KILL IS NOT A FAILURE, and saying so matters: the comparator takes
+      // longer than any wrapper's patience, and under `timeout` it comes back
+      // 143 having counted thousands of payloads perfectly well. Reporting that
+      // as "reached none of its payloads" sent me looking for a defect in the
+      // target instead of for the stopwatch around it.
+      const killed = status === 143 || status === 137 || status === null;
+      throw new Error(
+        killed
+          ? `census target ${label(target)} was killed (status ${status}) before it finished, so the fixture would be incomplete for whatever it had not yet reached. It needs to run to completion -- do not wrap it in a timeout.`
+          : `census target ${label(target)} exited ${status}, so it reached none of its payloads; the counts it would have contributed cannot be recorded and the fixture would be silently incomplete`
+      );
+    }
+  }
 
   const fresh = new Map();
   reached = new Set();
@@ -222,7 +365,28 @@ for (let round = 1; round <= 5; round += 1) {
   save(record);
 }
 
-const dead = Object.keys(record.counts).filter((d) => !reached.has(d));
+// A PARTIAL RUN MUST NOT PRUNE, and the first version of `--only` did.
+//
+// `reached` is every digest the census asked for, so pruning to it is only
+// sound when the census walked EVERY target. Under `--only` it walks one, and
+// the prune then deletes the counts belonging to the targets that did not run:
+// measured, the fixture went from 5,091 strings to 3,719 after an `--only
+// evict.mjs` run, which is the comparator's currency deleted by a run that
+// never looked at the comparator. The strict pass still said `pass`, because
+// the only target it checked was the one that had just been counted.
+//
+// So the filter withholds the prune as well. The cost is a fixture that can
+// carry a dead count until the next full run, which is the lesser failure: a
+// dead count is indistinguishable from a live one to a reader, but a MISSING
+// one makes every instrument that needs it refuse outright.
+const dead =
+  only === null
+    ? Object.keys(record.counts).filter((d) => !reached.has(d))
+    : [];
+if (only !== null)
+  console.log(
+    `  prune withheld: --only walked 1 of ${TARGETS.length} target(s), so what this run did not reach is not dead`
+  );
 if (dead.length > 0) {
   for (const d of dead) delete record.counts[d];
   record.recordedAt = new Date().toISOString();
@@ -238,10 +402,10 @@ console.log(
 // THE ONLY PROOF THE FIXTURE IS COMPLETE: a pass with no census and no
 // provisional answers, where a single missing string is a hard refusal.
 let bad = 0;
-for (const target of TARGETS) {
+for (const target of RUN) {
   const status = run(target, { TOKEN_OPTIMIZER_BENCH_CENSUS: '' });
   console.log(
-    `strict ${target}: ${status === 0 ? 'pass' : `FAIL (exit ${status})`}`
+    `strict ${label(target)}: ${status === 0 ? 'pass' : `FAIL (exit ${status})`}`
   );
   if (status !== 0) bad += 1;
 }

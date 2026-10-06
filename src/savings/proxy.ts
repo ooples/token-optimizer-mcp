@@ -71,6 +71,8 @@ export interface ProxySavingsWindow {
   readonly since: string | null;
   /** Every ledger row in the window, whatever it proves. */
   readonly requests: number;
+  /** Whole units the withholding arm moved out of these requests. */
+  readonly withheldUnits: number;
   /** Rows the provider accepted with a 2xx and therefore charged for. */
   readonly billedRequests: number;
   /** Billed rows that also carry our token count of both bodies. */
@@ -247,6 +249,7 @@ function freezeWindow(
     label,
     since: since === null ? null : since.toISOString(),
     requests: totals.requests,
+    withheldUnits: totals.withheldUnits,
     billedRequests: totals.billedRequests,
     countedRequests: totals.countedRequests,
     pricedRequests: totals.pricedRequests,

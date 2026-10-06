@@ -111,7 +111,36 @@ const STAMP_MODULUS = 10n ** BigInt(STAMP_CHARS);
  * Persisting compressed text and decoding it later needs the stamp stored
  * beside it, which is why `CompressionResult` carries it as data.
  */
-const SECRET = randomBytes(32);
+/**
+ * A SEED FOR THE BENCH, AND ONLY FOR THE BENCH.
+ *
+ * A fresh random secret per process is what makes a stamp unforgeable, and it
+ * is also what made the competitive comparator impossible to denominate in
+ * recorded token counts: a count is keyed on the exact payload bytes, and a
+ * payload carrying `~<stamp>` has different bytes on every run. Two census
+ * passes over one capture measured 72 of 234 payloads varying for this reason
+ * alone.
+ *
+ * `options.stamp` pins it per call, but it reaches only the entry points that
+ * take an options object. `compressBody` and the wire-format functions beneath
+ * it take positional arguments through four levels, so threading a stamp down
+ * to them would mean a new parameter on each -- and would still only cover the
+ * paths somebody remembered to thread.
+ *
+ * This covers all of them at the source. Unset -- which is every production
+ * process, since nothing in the package ever sets it -- the secret is random as
+ * before. The trade is explicit: anyone who can set this variable can predict
+ * stamps, so it is worth only as much as the environment it runs in, and a
+ * harness measuring its own output is exactly the case where that is a fair
+ * price. The forgery guarantee for production is held by
+ * tests/unit/compress/planted-marker-is-content.test.ts, which does not set it.
+ */
+const STAMP_SEED = process.env.TOKEN_OPTIMIZER_BENCH_STAMP_SEED;
+const SECRET = STAMP_SEED
+  ? createHmac('sha256', 'token-optimizer bench stamp seed')
+      .update(STAMP_SEED)
+      .digest()
+  : randomBytes(32);
 
 export function stampFor(text: string): string {
   const mac = createHmac('sha256', SECRET).update(text).digest();

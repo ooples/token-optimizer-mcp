@@ -1,0 +1,287 @@
+/**
+ * PER-TURN CONTEXT ASSEMBLY: THE COST MODEL A PROXY ACTUALLY HAS.
+ *
+ * `costLine` prices one body written once and re-read N times, plus a penalty
+ * per fetch: a model-authored ask, an extra request, and residency for every
+ * remaining turn. That is the shape of a withhold-to-a-store engine, and 86% of
+ * its fetch cost is that residency term.
+ *
+ * A proxy has none of those. It rebuilds the request body on every turn, so
+ * "retrieval" is not an event -- it is bytes being present in the next body.
+ * There is no tool call, no extra request, and no round trip. A unit present
+ * for turns 12 to 18 costs six turns of re-reads, not forty-four, and the fetch
+ * rate `p` does not appear anywhere, because nothing is ever fetched.
+ *
+ * So the bill is a sum over turns, not a product:
+ *
+ *   cost = SUM over turns of [ shared(t) * R + changed(t) * W ]
+ *
+ * where `shared(t)` is the prefix the provider still has cached from turn t-1
+ * and `changed(t)` is everything after the first byte that moved. It reduces to
+ * `costLine` exactly when the body never changes: handed * W on the first turn
+ * and handed * R on each of the next N, which is handed * (W + R*N).
+ *
+ * AND IT PRODUCES A DESIGN RULE THAT IS THE OPPOSITE OF CACHE INTUITION.
+ * Dropping a unit saves R per remaining turn but costs W once on everything
+ * after it in the body, because the cached prefix breaks at the drop point. So
+ * a drop pays only when
+ *
+ *   W * suffix  <  R * dropped * (N - t)
+ *
+ * which at W=2, R=0.1 and N=56 means the suffix after the drop has to be under
+ * about 2.8x the size of what was dropped. Dropping the OLDEST unit -- what an
+ * LRU would do -- re-writes the whole conversation after it and is the most
+ * expensive choice available. Dropping from the end is nearly free, and
+ * batching every drop into one turn pays the suffix penalty once instead of
+ * once per unit.
+ */
+
+/** Matches DEFAULTS in cost-model.mjs; duplicated here so this file is readable alone. */
+export const RATES = Object.freeze({ cacheWrite: 2, cacheRead: 0.1 });
+
+/**
+ * Price a schedule.
+ *
+ * `bodies` is the token count of the assembled body at each turn, and
+ * `shared` the prefix each turn still shares with the one before it. Both are
+ * in tokens, and `shared[t] <= min(bodies[t], bodies[t-1])` is required rather
+ * than clamped: a prefix longer than either body means the caller measured two
+ * different things, and clamping would turn that into a plausible discount.
+ */
+export function assemblyCost(bodies, shared, rates = RATES) {
+  if (bodies.length !== shared.length)
+    throw new Error(
+      `a schedule needs one shared-prefix figure per turn: ${bodies.length} bodies against ${shared.length}`
+    );
+  const { cacheWrite: W, cacheRead: R } = rates;
+  let total = 0;
+  for (let t = 0; t < bodies.length; t += 1) {
+    const previous = t === 0 ? 0 : bodies[t - 1];
+    const cached = t === 0 ? 0 : shared[t];
+    if (cached > Math.min(bodies[t], previous))
+      throw new Error(
+        `turn ${t} shares ${cached} tokens with a body of ${previous} and sends ${bodies[t]}: a prefix cannot exceed either`
+      );
+    total += cached * R + (bodies[t] - cached) * W;
+  }
+  return total;
+}
+
+/**
+ * The three policies, priced on one payload of equal-sized units.
+ *
+ * Deliberately a synthetic schedule rather than a corpus replay: the point is
+ * the SHAPE of the three answers, and a replay would need a per-unit liveness
+ * trace that nothing records yet. The absolute figures are therefore not a
+ * measurement of our engine; the ordering between them is the claim.
+ */
+/**
+ * The policies, priced against a liveness order that is not chosen to flatter
+ * them.
+ *
+ * THE PREVIOUS VERSION OF THIS WAS INVALID AND READ AS A 47% WIN. It let the
+ * drop-from-the-end policy remove the same NUMBER of units as drop-oldest while
+ * the units that had actually died were at the FRONT -- so it bought its saving
+ * by dropping live content and was never a policy anyone could ship. The
+ * tension it papered over is the real finding here: in a conversation, dead
+ * content is old content and sits at the front, where the cache makes it the
+ * most expensive thing to remove, while the cheap end to remove from holds the
+ * turn the model is working on. Cache economics and liveness economics point in
+ * opposite directions.
+ *
+ * So `dropDead` drops from the front, because that is where the dead units are,
+ * and pays the suffix re-write the cache charges for it. `dropBatched` drops the
+ * same units at one turn instead of a few per turn, paying that penalty once.
+ */
+export function comparePolicies({ units, unitTokens, turns, deadAfter }) {
+  const all = units * unitTokens;
+  const schedule = (bodyAt, sharedAt) => {
+    const bodies = [];
+    const shared = [];
+    for (let t = 0; t <= turns; t += 1) {
+      bodies.push(bodyAt(t));
+      shared.push(t === 0 ? 0 : sharedAt(t));
+    }
+    return { bodies, shared };
+  };
+  /** How many units have died by turn t, oldest first. */
+  const deadBy = (t) => Math.min(units, Math.floor(t / deadAfter));
+
+  // Nothing is ever removed: one write, then a re-read every turn. This is the
+  // arm `costLine` prices, and `reducesToCostLine` below checks it agrees.
+  const keepAll = schedule(
+    () => all,
+    () => all
+  );
+
+  // Remove each dead unit as it dies. The dead ones are the oldest, so the
+  // first byte of the body moves and nothing before the drop survives: the
+  // cached prefix is zero on every turn a drop happens.
+  const dropDead = schedule(
+    (t) => all - deadBy(t) * unitTokens,
+    (t) => (deadBy(t) === deadBy(t - 1) ? all - deadBy(t) * unitTokens : 0)
+  );
+
+  // The same units, removed in one event at the half-way turn.
+  const at = Math.ceil(turns / 2);
+  const dropBatched = schedule(
+    (t) => (t < at ? all : all - deadBy(at) * unitTokens),
+    (t) => (t === at ? 0 : t < at ? all : all - deadBy(at) * unitTokens)
+  );
+
+  return {
+    keepAll: assemblyCost(keepAll.bodies, keepAll.shared),
+    dropDead: assemblyCost(dropDead.bodies, dropDead.shared),
+    dropBatched: assemblyCost(dropBatched.bodies, dropBatched.shared),
+  };
+}
+
+/**
+ * THE CONTROL: this model has to agree with the one it generalises.
+ *
+ * A body that never changes costs `handed * W` on the first turn and
+ * `handed * R` on each of the next N, which is `handed * (W + R*N)` -- exactly
+ * `costLine`'s c0 with no cached prefix. The first version of this file claimed
+ * that reduction and was off by one turn, because its schedule ran N turns
+ * rather than the first turn plus N after it.
+ */
+export function reducesToCostLine(handed, turnsAfter, rates = RATES) {
+  const bodies = Array.from({ length: turnsAfter + 1 }, () => handed);
+  const shared = bodies.map((_, t) => (t === 0 ? 0 : handed));
+  const mine = assemblyCost(bodies, shared, rates);
+  const theirs = handed * (rates.cacheWrite + rates.cacheRead * turnsAfter);
+  return { mine, theirs, agree: Math.abs(mine - theirs) < 1e-6 };
+}
+
+/**
+ * Price a batched drop against a real dead-share, per conversation.
+ *
+ * `handed` is the tokens the arm hands over today, `deadShare` the fraction of
+ * it liveness.mjs finds is never referenced again, and `at` the turn the drop
+ * happens on. The drop pays the cache a full re-write of what survives it --
+ * which is why doing it once beats doing it per unit -- and then re-reads the
+ * smaller body for every remaining turn.
+ *
+ * `at` matters in two directions and the caller has to choose it: early saves
+ * more turns of residency, late is safer because a unit that looked dead has
+ * had longer to prove it. The sweep below reports both ends rather than picking.
+ */
+export function batchedDrop(
+  { handed, deadShare, turnsAfter, at },
+  rates = RATES
+) {
+  if (!(deadShare >= 0 && deadShare <= 1))
+    throw new Error(`deadShare must be a fraction, got ${deadShare}`);
+  if (!(at >= 1 && at <= turnsAfter))
+    throw new Error(
+      `the drop turn must fall inside the session: got ${at} of ${turnsAfter}`
+    );
+  const kept = handed * (1 - deadShare);
+  const bodies = [];
+  const shared = [];
+  for (let t = 0; t <= turnsAfter; t += 1) {
+    const body = t < at ? handed : kept;
+    bodies.push(body);
+    // At the drop the prefix breaks: the dead units were the OLD ones, so
+    // nothing in front of them survives and the whole remainder is re-written.
+    shared.push(t === 0 ? 0 : t === at ? 0 : body);
+  }
+  return assemblyCost(bodies, shared, rates);
+}
+
+/**
+ * A STABLE PREFIX AND A VOLATILE TAIL, which is the only layout where eviction
+ * is cheap enough to repeat.
+ *
+ * Batching exists because a drop breaks the cached prefix at the drop point and
+ * everything behind it is re-written at W. Confine every mutation to a TAIL at
+ * the end of the body and that penalty is bounded by the tail's size instead of
+ * the conversation's: a suffix cut leaves the prefix byte-identical, so a drop
+ * from the tail costs nothing, and a drop can happen every turn rather than
+ * once per session.
+ *
+ * It needs all three operations to touch only the tail, and they do. New tool
+ * output APPENDS to the tail, so the stable region is untouched. A unit that
+ * proves live is PROMOTED into the stable region, which rewrites the tail but
+ * nothing before it. A unit that proves dead is CUT from the tail, which
+ * rewrites nothing at all.
+ *
+ * AND IT COMES WITH A COST NOBODY WOULD GUESS. The tail changes every turn, so
+ * every token in it is charged a write at W=2; a token in the stable prefix is
+ * charged a read at R=0.1. Tail residency is therefore TWENTY TIMES more
+ * expensive per turn than stable residency, which inverts the intuition that a
+ * staging area is cheap. The tail has to be small and drain fast, and a design
+ * that parks content there to decide about it later is paying twenty times over
+ * for the privilege. Swept over how long a unit waits in the tail before it is
+ * promoted or cut:
+ *
+ *   k=1   1,093,497   0.354x   beats their p=0
+ *   k=2   1,920,650   0.622x   beats their p=0
+ *   k=4   3,574,957   1.158x   worse than keeping everything
+ *   k=16 13,500,799   4.372x
+ *
+ * AND THAT SWEEP IS AN UPPER BOUND, NOT THE ANSWER. It charges the WHOLE tail a
+ * write every turn, which is true only if the tail is rewritten every turn. An
+ * append-only tail is not: yesterday's tail is still a prefix of today's body,
+ * so the provider has it cached and only the newly appended bytes are written.
+ * Under that discipline -- append at the end, cut only from the end, never
+ * reorder -- holding a unit in the tail costs R like anything else and the
+ * k-sweep above collapses.
+ *
+ * So the real rule is not "decide within one turn". It is "only ever append to
+ * the end and cut from the end", and the k-sweep measures the price of breaking
+ * that discipline: a promotion that inserts into the middle, or a cut that is
+ * not at the tip, costs what the numbers above say. Which of the two regimes a
+ * real implementation lands in is the next thing to measure, and it is the
+ * difference between a 2.5x win and a 1.16x loss.
+ *
+ * ADVERSARIAL REVIEW OF THE ABOVE, with four things it got right by luck and
+ * two it still does not know.
+ *
+ * W=2 IS NOT A GUESS. cost-model.mjs carries `cacheWrite5m: 1.25` and
+ * `cacheWrite1h: 2.0` and defaults to the one-hour rate, so the 20x gap between
+ * tail and stable residency is the provider's published arithmetic. On a
+ * five-minute TTL it is 12.5x, which changes the numbers and not the ordering.
+ *
+ * THE LAYOUT ALREADY EXISTS, AND THE CLIENT BUILT IT. anchor.ts:279 records,
+ * verified, that Claude Code puts its `cache_control` marker on the LAST message
+ * of every request and moves it forward each turn. So the conversation is
+ * already a stable prefix and a volatile tail, and a tail at the end is working
+ * with that discipline rather than inventing one.
+ *
+ * AND SO DOES THE DISCIPLINE. src/proxy/cached-prefix.ts exports
+ * `serialiseKeepingPrefix`, wired at src/proxy/server.ts:70, and its header
+ * states the problem this file re-derived from scratch: a re-serialised request
+ * is a cache MISS even when nothing changed, the agreement is 57 characters, and
+ * the arm pays a 1.25x write for a prefix it could have sent at the read rate.
+ * None of this needed inventing.
+ *
+ * WHAT IS MISSING IS THE MEASUREMENT, AND THAT IS THE ACTIONABLE GAP.
+ * head-to-head.mjs computes `cachedPrefixChars` and `cachedPrefixTok` per row
+ * (:801, :1229) and writes NEITHER into the recorded JSON, so the single number
+ * that says which regime we are in is discarded on every run. Persisting it is
+ * the next change.
+ *
+ * TWO THINGS THIS STILL DOES NOT KNOW. Whether a unit can be promoted out of
+ * the tail at all, given that messages must alternate and a tool result cannot
+ * be freely moved -- if it cannot, promotion is out and only append-and-cut
+ * survives. And the liveness share behind every figure here is measured on
+ * THEIR eighteen fixtures, which were chosen by an engine that wins by
+ * deferring; a corpus that rewards withholding may also reward dropping.
+ */
+export function stableAndTail({ stable, tailAt, turnsAfter }, rates = RATES) {
+  if (typeof tailAt !== 'function')
+    throw new Error('tailAt must be a function of the turn');
+  const { cacheWrite: W, cacheRead: R } = rates;
+  let total = 0;
+  for (let t = 0; t <= turnsAfter; t += 1) {
+    const stableNow = stable(t);
+    const tailNow = tailAt(t);
+    if (!(stableNow >= 0 && tailNow >= 0))
+      throw new Error(`turn ${t} has a negative body: ${stableNow}/${tailNow}`);
+    // The prefix is cached from turn 1 onward; the tail is rewritten whenever it
+    // changes, which for a staging area is every turn it is not empty.
+    total += (t === 0 ? stableNow * W : stableNow * R) + tailNow * W;
+  }
+  return total;
+}

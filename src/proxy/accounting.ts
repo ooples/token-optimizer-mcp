@@ -132,8 +132,99 @@ export interface CompressionFacts {
   /** References actually forwarded by the Responses deduplicator. */
   readonly dedupReferences?: number;
 
+  /**
+   * Whole units this request moved out of the body.
+   *
+   * HERE, AND NOT ON AccountingRecord, which is the lesson of three wrong
+   * turns. The record extends this interface, so a field declared here arrives
+   * there; declared there it is populated by nothing, because the proxy builds
+   * a CompressionFacts and the record is assembled from it.
+   *
+   * The value is the proxy's per-request spill delta, taken from the wrapper
+   * built beside the sink at startup. It must NOT be obtained by wrapping the
+   * sink again: compress/types.ts:229 memoises what each sink has spilled in a
+   * WeakMap keyed on the sink function, so a per-call wrapper presents a fresh
+   * key, empties the memo and re-spills the same blocks every turn. Measured,
+   * that read 845 against a true 75 -- a plausible figure rather than an error,
+   * which is the dangerous kind.
+   *
+   * It exists so an operator running the withholding arm can see how much it
+   * held back. Without it `src/savings/` reports nothing about the arm that
+   * measures 2.81x against their 1.69x on what a subscription cap buys.
+   */
+  readonly withheldUnits?: number;
+
   readonly deferredTools?: number;
   readonly deferredToolChars?: number;
+
+  /**
+   * NOT HERE. Withheld and reinstated counts live on the telemetry rollup, not
+   * on this record, and this is where I put the declaration by mistake.
+   *
+   * `reinstatedUnits` was declared on this type and populated nowhere: the
+   * value is passed to `noteRequest` in server.ts, which builds a
+   * `RequestFacts` for the rollup, and `spilledBlocks` goes to the same place.
+   * So the field here read as recorded and never was -- the exact failure mode
+   * reproducibility.mjs refuses a record for, since a field that is present and
+   * unusable is worse than an absent one.
+   *
+   * It matters because the two sinks are not interchangeable. The rollup is
+   * where `spilled` and `reinstated` are counted; `src/savings/` reads THIS
+   * record from the accounting ledger and can see neither. So the savings
+   * report cannot show an operator how much the withholding arm held back or
+   * how often it came back -- the two numbers that decide whether the arm is
+   * paying for them.
+   *
+   * AND THEY DO NOT BELONG ON THIS TYPE EITHER. This record is assembled by
+   * spreading a `CompressionFacts` into it (server.ts:1553), so a count has to
+   * be on THAT type to arrive here -- which is also why the compiler rejected
+   * the field when I first tried to populate it: the object I was writing to is
+   * an `Omit<ProxySummary, 'path'>`, not this. The next attempt starts on
+   * CompressionFacts, carrying the per-request spill delta, and arrives here for
+   * free.
+   *
+   * AND IT MUST NOT BE DONE BY SPREADING THE RESULT. I tried exactly that --
+   * wrap compressBody's sink to tally the calls, then return
+   * `{ ...result, summary: { ...result.summary, withheldUnits } }` -- and the
+   * proxy's own `spilledBlocks` figure went from 75 to 845 over the same 1,323
+   * requests, close to the 854 elisions. Wrapping a sink only delegates, so
+   * that change should have been count-neutral and was not. It is reverted, and
+   * the cause is not established: either `spill` is invoked per elided block
+   * rather than per whole-unit move, or copying the result object changes
+   * something downstream that depends on its identity.
+   *
+   * BISECTED SINCE, and it is the wrapper alone. Applying only the sink wrapper
+   * -- counting into a variable that is then discarded, no result copied, no
+   * field added -- still moves the figure from 75 to 845. The result spread is
+   * innocent. And `spillTo` returns a plain arrow with no attached properties,
+   * so the engine cannot be reading anything off the sink that a wrapper drops.
+   *
+   * What a known-answer test DID settle (tests/unit/proxy/spill-counts-what.test.ts):
+   * one sink call is one whole-unit move, not one elided fragment, and a move is
+   * also counted as an elision. Four incompressible messages give four calls and
+   * four elisions. So the replay's 854 elisions against 75 spills means most of
+   * its elisions are in-place -- and a delegating wrapper cannot turn an
+   * in-place elision into a move. The mechanism is still unexplained.
+   *
+   * EXPLAINED. compress/types.ts:229 holds `const SPILLED = new WeakMap<object,
+   * ...>()` -- a memo of what each sink has already moved out, keyed on the SINK
+   * FUNCTION ITSELF. The proxy builds its sink once per proxy, so that memo
+   * survives every request and a block already spilled is not spilled again:
+   * 75. My wrapper was built fresh inside each `compressBody` call, so every
+   * request presented a new key, the memo was empty each time, and the same
+   * blocks moved out over and over: 845. The 11x was the deduplication being
+   * defeated, exactly once per request.
+   *
+   * So a sink's IDENTITY is load-bearing, and anything that wraps one -- to
+   * count, to log, to test -- must be hoisted to the sink's own lifetime or it
+   * silently turns spill dedup off. That is also why the count belongs where the
+   * proxy already puts it: `spilledBlocks`, incremented in the wrapper created
+   * beside the sink at startup, IS the per-request withheld count and is
+   * correct. The only thing missing was ever carrying it onto CompressionFacts
+   * so the savings ledger could see it. An 11x move in a measurement from a
+   * refactor that cannot affect it means the measurement was not understood,
+   * and shipping a report built on it would publish that misunderstanding.
+   */
   /**
    * Characters of cached knowledge added to the request.
    *

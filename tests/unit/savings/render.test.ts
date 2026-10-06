@@ -12,6 +12,7 @@ import {
   calibrationLine,
   deferralLine,
   latencyLine,
+  withheldLine,
   outputLines,
   count,
   gateNote,
@@ -1014,5 +1015,49 @@ describe('the deferral holdout line', () => {
     expect(without.some((line) => line.includes('tool-deferral holdout'))).toBe(
       false
     );
+  });
+});
+
+describe('withheldLine', () => {
+  it('names how much the arm held back, over how many requests', () => {
+    const line = withheldLine(
+      proxyReport({
+        windows: [proxyWindow({ requests: 1323, withheldUnits: 75 })],
+      })
+    );
+    expect(line).toContain('75');
+    expect(line).toContain('1,323');
+  });
+
+  it('says nothing when the arm held nothing back', () => {
+    // SILENT RATHER THAN ZERO. The arm is opt-in, so "0 units withheld" would
+    // appear on every report of every operator who never enabled it -- saying
+    // nothing and training people to skip the section it sits in.
+    expect(
+      withheldLine(
+        proxyReport({
+          windows: [proxyWindow({ requests: 1323, withheldUnits: 0 })],
+        })
+      )
+    ).toBe('');
+  });
+
+  it('says nothing when there is no all-time window', () => {
+    expect(withheldLine(proxyReport({ windows: [] }))).toBe('');
+  });
+
+  it('does not claim a saving', () => {
+    // THE RESTRAINT IS THE POINT. What withholding is worth depends on how
+    // often the content is asked for again, and that rate is not in this
+    // ledger -- retrievals arrive as tool results and are counted on the
+    // telemetry rollup. A dollar figure here would be a projection dressed as
+    // a measurement, so the line states the limit instead.
+    const line = withheldLine(
+      proxyReport({
+        windows: [proxyWindow({ requests: 100, withheldUnits: 10 })],
+      })
+    );
+    expect(line).not.toMatch(/\$/);
+    expect(line).toContain('depends on how often');
   });
 });

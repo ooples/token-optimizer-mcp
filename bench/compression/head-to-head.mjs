@@ -34,7 +34,7 @@
  *    their harness's own dump. Not a reimplementation of their fixtures.
  *
  * 2. BOTH DENOMINATORS, NAMED, AND ACTUALLY DIFFERENT. Characters, and tokens
- *    from a real tokeniser (cl100k_base) run over both arms' real output. An
+ *    from Anthropic's own count_tokens, run over both arms' real output. An
  *    earlier version counted tokens as chars/4, which made the second column a
  *    rescaling of the first and the phrase "both denominators" untrue.
  *
@@ -95,7 +95,7 @@ import { readBaseContext } from '../subscription/base-context.mjs';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { join } from 'node:path';
-import { get_encoding } from 'tiktoken';
+import { FIXTURE, MODEL, tokens as countText } from './currency.mjs';
 import { createRequire } from 'node:module';
 import { dirname } from 'node:path';
 import { reproducibilityRefusal } from './reproducibility.mjs';
@@ -300,8 +300,61 @@ const resolved = existsSync(resolvedPath)
 // encoding the token column was measured in and a second literal is a second
 // thing to forget. cl100k_base against o200k_base moves the same text by double
 // digits.
-const ENCODING_NAME = 'cl100k_base';
-const encoding = get_encoding(ENCODING_NAME);
+// AND IT IS NOT OURS TO CHOOSE. This read `cl100k_base` -- OpenAI's tokenizer
+// -- while every claim the column supports is about what a CLAUDE subscription
+// spends. The two do not differ by a constant: they split code and punctuation
+// differently, so a ratio taken under one is not preserved under the other, and
+// the competitive gap measured under cl100k could be larger, smaller or the
+// other way round. The only authority for the claim is Anthropic's own
+// `count_tokens`, which `currency.mjs` serves from a recorded fixture keyed on
+// the exact payload bytes so CI stays offline. A lookup throws on a miss rather
+// than estimating, so a payload that changed since the counts were recorded
+// cannot be priced at all -- which is the property that makes the figures
+// reproducible rather than merely repeatable.
+const ENCODING_NAME = `anthropic:${MODEL}`;
+
+/**
+ * The recorded counts this run was priced against, read for provenance only.
+ *
+ * A figure is only as good as the fixture behind it, and nothing in the record
+ * said which fixture that was: a reader could see the encoding had changed and
+ * had no way to tell whether two records had been priced against the same
+ * counts. Read defensively -- a missing fixture is a problem for `tokens`, not
+ * for the provenance block, and it must not turn into a second failure here.
+ */
+const COUNTS = (() => {
+  try {
+    return JSON.parse(readFileSync(FIXTURE, 'utf8'));
+  } catch {
+    return {};
+  }
+})();
+
+/**
+ * A FIXED MARKER STAMP, so this harness's payloads have the same bytes twice.
+ *
+ * A stamp is an HMAC keyed by `SECRET = randomBytes(32)` in annotate.ts, minted
+ * once per process and never emitted. That is what makes a stamp unforgeable,
+ * and it is also what made this harness unmeasurable in a currency keyed on
+ * exact payload bytes: two census passes over the same capture produced
+ * `run1 234 run2 234 only1 72 only2 72`, so 72 of its 234 payloads had fresh
+ * digests every run and no recorded fixture could ever be complete.
+ *
+ * `options.stamp` is the seam built for exactly this. Production omits it and
+ * still gets the keyed MAC, so nothing about the forgery guarantee changes; the
+ * guarantee is held by tests/unit/compress/planted-marker-is-content.test.ts,
+ * not by this constant. Nine characters because that is `STAMP_CHARS`.
+ *
+ * MEASURED DOWN IN TWO STEPS, NOT ASSUMED. Two census passes over one capture
+ * went 72 of 234 payloads varying, then 29 once every `compressBlock` site took
+ * the stamp -- the first pass had matched only options objects with a trailing
+ * comma, so the main `ours` arm written on one line kept minting its own -- and
+ * then 13. The last 13 are the proxy arm: `compressBody` takes positional
+ * arguments and has no options parameter, so there is nowhere to hand it a
+ * stamp. Giving it one is the remaining work before this harness can be
+ * denominated in recorded counts at all.
+ */
+const BENCH_STAMP = '100000001';
 
 // IMAGES ARE NOT BILLED AS THE TEXT THEY ARRIVE IN, and counting them that way
 // was not a rounding error. browser-session carries four PNG screenshots; the
@@ -329,7 +382,7 @@ const tokens = (text) => {
     imaged += Math.ceil((size.width * size.height) / PIXELS_PER_TOKEN);
     return '';
   });
-  return encoding.encode(stripped).length + imaged;
+  return countText(stripped) + imaged;
 };
 
 // The identifier extractor moved to its own module so it could be tested; see
@@ -454,7 +507,7 @@ function timeEveryWorkload(byName) {
       const samples = [];
       for (let i = 0; i < SPEED_SAMPLES; i += 1) {
         const t0 = performance.now();
-        compressBlock(text, { query: queryOf(text) });
+        compressBlock(text, { query: queryOf(text), stamp: BENCH_STAMP });
         samples.push(performance.now() - t0);
       }
       // KEPT IN RUN ORDER. Sorting loses which reading was first, and the
@@ -473,6 +526,7 @@ function timeEveryWorkload(byName) {
             return `.token-optimizer/spill/t${held.length}-${hint}`;
           },
           query: queryOf(text),
+          stamp: BENCH_STAMP,
           tuning: subTuning,
         });
         subSamples.push(performance.now() - t0);
@@ -537,7 +591,7 @@ for (const [name, text] of Object.entries(payloads)) {
   const subMsSamples = subMsPasses.flat();
   const subSorted = [...subMsSamples].sort((a, b) => a - b);
   const subMs = subSorted[(subSorted.length - 1) >> 1];
-  const out = compressBlock(text, { query: queryOf(text) });
+  const out = compressBlock(text, { query: queryOf(text), stamp: BENCH_STAMP });
 
   // THE SUBSTITUTION ARM, MEASURED SEPARATELY AND NAMED FOR WHAT IT IS. HeadRoom
   // reaches ~99.7% on the three workloads our engines find hardest by not
@@ -575,6 +629,7 @@ for (const [name, text] of Object.entries(payloads)) {
       return `.token-optimizer/spill/s${subSpilled.length}-${hint}`;
     },
     query: queryOf(text),
+    stamp: BENCH_STAMP,
     tuning: resolveTuning({ spillWholeBlockBelow: 1 }),
   });
   // OUR HALF OF MUST-WIN 2b, ON THE BLOCKS THIS ARM ACTUALLY MOVED OUT.
@@ -625,6 +680,7 @@ for (const [name, text] of Object.entries(payloads)) {
       return `.token-optimizer/spill/p${presetSpilled.length}-${hint}`;
     },
     query: queryOf(text),
+    stamp: BENCH_STAMP,
     tuning: resolveTuning({ spillWholeBlockBelow: 0.9 }),
   });
 
@@ -1721,7 +1777,7 @@ console.log(
   `chars   ours ${pct(oursChars)}   theirs ${pct(theirsChars)}   (denominator: the payload bytes both arms were given; theirs is best-of-any arm, offload included -- see like4like)`
 );
 console.log(
-  `tokens  ours ${pct(oursTokens)}   theirs ${pct(theirsTokens)}   (denominator: the same payload; cl100k_base on text, pixels/750 on images, both arms' real output; theirs is best-of-any arm, offload included -- see like4like)`
+  `tokens  ours ${pct(oursTokens)}   theirs ${pct(theirsTokens)}   (denominator: the same payload; ${ENCODING_NAME} on text, pixels/750 on images, both arms' real output; theirs is best-of-any arm, offload included -- see like4like)`
 );
 // THE LIKE-FOR-LIKE ROW: our encoding arm against their best NON-offloading
 // arm, over the workloads where such an arm exists on their side.
@@ -2302,8 +2358,26 @@ if (process.argv[3] === '--record') {
     commit,
     dirty,
     node: process.versions.node,
+    // THE TOKENISER PACKAGE, WHICH NO LONGER GOVERNS ANY NUMBER HERE. The
+    // column was counted by tiktoken for the life of this file and the version
+    // was recorded because a different version tokenises differently. It is now
+    // counted by Anthropic's `count_tokens`, served from a recorded fixture, so
+    // this version is kept for the history of older records and is no longer
+    // what a reader should check.
     tiktoken: tiktokenVersion,
     encoding: ENCODING_NAME,
+    // WHAT A READER SHOULD CHECK INSTEAD. A recorded count is only as good as
+    // the fixture it came from, and two records priced against different
+    // fixtures are not comparable however alike their columns look -- the same
+    // reason the payload digest below exists. `envelope` is the per-request
+    // overhead the counts were derived with, re-measured on every recording and
+    // refused if it is not linear, so a change in it changes every figure.
+    counts: {
+      model: COUNTS.model ?? 'unknown',
+      recordedAt: COUNTS.recordedAt ?? 'unknown',
+      envelope: COUNTS.envelope ?? null,
+      strings: Object.keys(COUNTS.counts ?? {}).length,
+    },
     // THE INPUT THE RATIOS ARE A FUNCTION OF. The payload set is generated, so
     // it drifts, and two records taken over different payloads are not
     // comparable however alike their columns look.
@@ -2348,6 +2422,12 @@ if (process.argv[3] === '--record') {
   };
   const record = {
     harness: 'bench/compression/head-to-head.mjs',
+    // THE CURRENCY, RECORDED RATHER THAN REMEMBERED. The token column was
+    // counted in tiktoken cl100k_base for the life of this file and nothing in
+    // the record said so, so a reader had no way to know the figures were in
+    // OpenAI's units while the claim was about Claude subscription spend. A
+    // consumer can now check what it is reading.
+    encoding: ENCODING_NAME,
     // NOT NULL MEANS NOT A MEASUREMENT -- our column came from stub arms and
     // this record describes the scorer, not the product. The mirror of
     // `__provenance__.stubArms` on their side.
@@ -2475,6 +2555,17 @@ if (process.argv[3] === '--record') {
         // read 0.999537 and 0.999771, and rounding either to 1.000 would print
         // the exact claim the arm cannot support.
         bodyBehind: r.bodyRatio === null ? null : r.bodyBehind.toFixed(6),
+        // HOW MUCH OF THE PREFIX SURVIVED, which this file has always measured
+        // and never recorded. A re-serialised request is a cache miss even when
+        // nothing in it changed, and the agreement between what came in and what
+        // went out has been 57 characters on every row that compresses -- so the
+        // arm pays a write for a prefix it could have sent at the read rate.
+        // Without this in the record there is no way to tell from a recording
+        // whether an arm preserved the prefix or destroyed it, which is the
+        // difference between residency at R and residency at W: a factor of 20
+        // on the one-hour cache rate.
+        bodyCachedPrefixChars: String(r.bodyCachedPrefixChars ?? 0),
+        bodyCachedPrefixTok: String(r.bodyCachedPrefixTok ?? 0),
         // WHAT THE PROVIDER ACTUALLY SERVED FROM CACHE, in characters and in
         // the tokens cost-model.mjs discounts. Near-zero on every row that
         // compresses, because the proxy re-serialises the request; recorded so
@@ -2919,6 +3010,31 @@ if (process.argv[3] === '--record') {
                 theirsP50: times(
                   costAt(corpus.none, 0.5),
                   costAt(corpus.theirs, 0.5)
+                ),
+                // THE ARM THAT EVICTS, AND THE ONE A USER SHOULD BE GIVEN.
+                //
+                // `ours` above compresses in place and spills nothing, so its
+                // multiple is the same at every fetch rate and it loses to them
+                // at all of them. The preset arm evicts, which is why it is 17.9x
+                // cheaper at rest -- and the published verdict has rested on the
+                // arm that does not, with the preset computed on every workload
+                // and then dropped before the cost comparison.
+                //
+                // Recorded at both ends so the trade is visible rather than
+                // argued: at p=0 nothing is fetched and the eviction is free, at
+                // p=1 every one of its 61 round trips is paid, and the break-even
+                // between those is `presetBreakEven`.
+                presetP0: times(
+                  costAt(corpus.none, 0),
+                  costAt(corpus.preset, 0)
+                ),
+                presetP50: times(
+                  costAt(corpus.none, 0.5),
+                  costAt(corpus.preset, 0.5)
+                ),
+                presetP1: times(
+                  costAt(corpus.none, 1),
+                  costAt(corpus.preset, 1)
                 ),
               },
             },
