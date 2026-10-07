@@ -255,7 +255,12 @@ jobs:
     needs: [release-please, publish-npm]
     if: ${{ needs.release-please.outputs.release_created == 'true' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # LONGER THAN THE NPM POLL BELOW, OR THE POLL CANNOT FINISH. The wait was
+    # raised to 30 minutes and this was left at 15, so Actions would have
+    # killed the job at 15 and the longer deadline would never have been
+    # reached -- a fix that cannot take effect. 40 leaves the poll its full
+    # half hour plus the publish itself.
+    timeout-minutes: 40
     permissions:
       contents: read
       id-token: write # the OIDC token IS the credential here
@@ -270,14 +275,21 @@ jobs:
       # consistent -- it answers "being processed and may take a few minutes to become available".
       # Publishing straight after `npm publish` therefore races, and the failure is a rejection of
       # a version that is perfectly fine seconds later.
+      #
+      # TEN MINUTES WAS NOT ENOUGH. 7.4.0 published, this step timed out waiting for it, and the
+      # release was left half-done: on npm, absent from the MCP registry. The version was being
+      # served shortly afterwards, so the deadline was the only thing wrong -- the poll itself
+      # already asks for the exact version with --prefer-online, which is the right question.
+      # Thirty minutes costs a waiting runner on the rare slow publish and avoids a manual rerun
+      # of a job whose only failure mode is impatience.
       - name: Wait for npm to serve the released version
         env:
           RELEASE_VERSION: ${{ needs.release-please.outputs.version }}
         run: |
-          deadline=$(( $(date +%s) + 600 ))
+          deadline=$(( $(date +%s) + 1800 ))
           until [ "$(npm view "@ooples/token-optimizer-mcp@$RELEASE_VERSION" version --prefer-online 2>/dev/null)" = "$RELEASE_VERSION" ]; do
             if [ "$(date +%s)" -ge "$deadline" ]; then
-              echo "::error::npm is not serving $RELEASE_VERSION after 10 minutes; not publishing to the registry"
+              echo "::error::npm is not serving $RELEASE_VERSION after 30 minutes; not publishing to the registry"
               exit 1
             fi
             echo "waiting for @ooples/token-optimizer-mcp@$RELEASE_VERSION on npm..."
