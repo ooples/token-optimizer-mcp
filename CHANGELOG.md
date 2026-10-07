@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.4.1](https://github.com/ooples/token-optimizer-mcp/compare/v7.4.0...v7.4.1) (2026-10-07)
+
+
+### CI/CD
+
+* wait up to 30 minutes for npm to serve a released version ([#459](https://github.com/ooples/token-optimizer-mcp/issues/459)) ([c8d4374](https://github.com/ooples/token-optimizer-mcp/commit/c8d4374e216d6a2febee6844c7d7c84c87365295))
+
 ## [7.4.0](https://github.com/ooples/token-optimizer-mcp/compare/v7.3.0...v7.4.0) (2026-10-07)
 
 
