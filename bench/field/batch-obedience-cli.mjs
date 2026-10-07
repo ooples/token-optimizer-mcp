@@ -191,9 +191,20 @@ function runTask(block, t) {
     for (const b of blocks) {
       if (b?.type === 'tool_use') {
         calls += 1;
-        const where = String(b.input?.file_path ?? b.input?.path ?? '');
-        for (const want of t.paths)
-          if (where.endsWith(want)) readFiles.add(want);
+        // ONLY A `Read` COUNTS AS A READ. Matching any tool_use that carries
+        // a file_path would let an Edit or Write of a requested path count as
+        // having read it.
+        if (b.name === 'Read') {
+          // SEPARATORS NORMALISED. `Read` reports an absolute Windows path
+          // (`C:\...\src\service-0.ts`), which never ends with
+          // `src/service-0.ts`, so coverage read 0 and every run scored
+          // incorrect the moment the check was actually enforced.
+          const where = String(b.input?.file_path ?? b.input?.path ?? '')
+            .split(String.fromCharCode(92))
+            .join('/');
+          for (const want of t.paths)
+            if (where.endsWith(want)) readFiles.add(want);
+        }
       }
       if (b?.type === 'text' && typeof b.text === 'string' && b.text.trim())
         lastText = b.text;
@@ -202,8 +213,23 @@ function runTask(block, t) {
   // COMPARED IN ORDER. `includes` per value accepted any order, extra
   // numbers, and a value mentioned only in passing.
   const answered = (lastText.match(NUMBER) ?? []).join(',');
-  const correct = answered === t.expect.join(',');
-  return { turns, calls, correct, status: run.status };
+  // CORRECT MEANS THE RIGHT ANSWER *AND* HAVING READ EVERY FILE. readFiles
+  // was collected and then never used -- my own regression when this loop was
+  // rewritten -- so a run that read one file and inferred the rest still
+  // scored correct, which is the exact failure the scrambled ports exist to
+  // close. The coverage requirement is what enforces it.
+  const readEvery = readFiles.size === t.files;
+  const correct = answered === t.expect.join(',') && readEvery;
+  return {
+    turns,
+    calls,
+    reads: readFiles.size,
+    correct,
+    // Right answer without reading everything is a guess, and a guess cannot
+    // be batched, so a fixture that allows one measures nothing.
+    guessed: answered === t.expect.join(',') && !readEvery,
+    status: run.status,
+  };
 }
 
 const results = new Map();
