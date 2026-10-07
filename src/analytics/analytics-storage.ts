@@ -96,6 +96,19 @@ export class SqliteAnalyticsStorage implements AnalyticsStorage {
    * before the stamp existed can only ever say "an older contract produced
    * this", and that is what a reader needs it to say.
    */
+  /**
+   * WHY eligible_operations CARRIES `DEFAULT 0` IN THE SCHEMA ABOVE.
+   *
+   * This copies only the columns present in BOTH the old and rebuilt tables,
+   * so a column that is NOT NULL and absent from the old one makes the INSERT
+   * fail: `NOT NULL constraint failed: analytics_rollup.eligible_operations`.
+   * It was the only column added after the first schema without a default.
+   *
+   * The throw happened inside the constructor, so the migration left the store
+   * unusable and every later save was lost. The symptom was pruneOldEntries
+   * folding 0 rows -- four Node shards red on a test about day-grain folding,
+   * for a reason that had nothing to do with folding.
+   */
   private restoreOldRollup(columns: Set<string> | null): void {
     if (columns === null) return;
     const carried = [...this.columnsOf('analytics_rollup')].filter((name) =>
@@ -152,34 +165,34 @@ export class SqliteAnalyticsStorage implements AnalyticsStorage {
         route TEXT NOT NULL,
         classification TEXT NOT NULL,
         measurement_schema_version INTEGER NOT NULL DEFAULT 0,
-        operations INTEGER NOT NULL,
-        eligible_operations INTEGER NOT NULL,
-        tokens_saved INTEGER NOT NULL,
-        tokens_before INTEGER NOT NULL,
-        original_tokens INTEGER NOT NULL,
-        optimized_tokens INTEGER NOT NULL,
-        reported_savings INTEGER NOT NULL,
-        observed_returns INTEGER NOT NULL,
-        cost_usd REAL NOT NULL,
-        priced_operations INTEGER NOT NULL,
-        unpriced_operations INTEGER NOT NULL,
-        verified_operations INTEGER NOT NULL,
-        expansion_operations INTEGER NOT NULL,
-        unverified_operations INTEGER NOT NULL,
-        verified_original_tokens INTEGER NOT NULL,
-        verified_reported_savings INTEGER NOT NULL,
-        expansion_optimized_tokens INTEGER NOT NULL,
-        observed_optimized_tokens INTEGER NOT NULL,
-        measured_optimized_tokens INTEGER NOT NULL,
-        context_usd REAL NOT NULL,
-        priced_context_operations INTEGER NOT NULL,
-        unverified_reported_savings INTEGER NOT NULL,
+        operations INTEGER NOT NULL DEFAULT 0,
+        eligible_operations INTEGER NOT NULL DEFAULT 0, -- see note below
+        tokens_saved INTEGER NOT NULL DEFAULT 0,
+        tokens_before INTEGER NOT NULL DEFAULT 0,
+        original_tokens INTEGER NOT NULL DEFAULT 0,
+        optimized_tokens INTEGER NOT NULL DEFAULT 0,
+        reported_savings INTEGER NOT NULL DEFAULT 0,
+        observed_returns INTEGER NOT NULL DEFAULT 0,
+        cost_usd REAL NOT NULL DEFAULT 0,
+        priced_operations INTEGER NOT NULL DEFAULT 0,
+        unpriced_operations INTEGER NOT NULL DEFAULT 0,
+        verified_operations INTEGER NOT NULL DEFAULT 0,
+        expansion_operations INTEGER NOT NULL DEFAULT 0,
+        unverified_operations INTEGER NOT NULL DEFAULT 0,
+        verified_original_tokens INTEGER NOT NULL DEFAULT 0,
+        verified_reported_savings INTEGER NOT NULL DEFAULT 0,
+        expansion_optimized_tokens INTEGER NOT NULL DEFAULT 0,
+        observed_optimized_tokens INTEGER NOT NULL DEFAULT 0,
+        measured_optimized_tokens INTEGER NOT NULL DEFAULT 0,
+        context_usd REAL NOT NULL DEFAULT 0,
+        priced_context_operations INTEGER NOT NULL DEFAULT 0,
+        unverified_reported_savings INTEGER NOT NULL DEFAULT 0,
         input_displacement_tokens INTEGER NOT NULL DEFAULT 0,
         displacement_operations INTEGER NOT NULL DEFAULT 0,
         declared_displacement_tokens INTEGER NOT NULL DEFAULT 0,
         declared_operations INTEGER NOT NULL DEFAULT 0,
-        first_timestamp TEXT NOT NULL,
-        last_timestamp TEXT NOT NULL,
+        first_timestamp TEXT NOT NULL DEFAULT '',
+        last_timestamp TEXT NOT NULL DEFAULT '',
         PRIMARY KEY (
           day, hook_phase, tool_name, mcp_server, client, client_version,
           model, model_version, provider, route, classification,
