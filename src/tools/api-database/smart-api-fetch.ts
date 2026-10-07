@@ -141,6 +141,29 @@ const CREDENTIAL_HEADERS = new Set([
 ]);
 
 /**
+ * Anything whose NAME says it carries a secret.
+ *
+ * A FIXED LIST WAS THE WRONG SHAPE, and the miss proves it: this repository
+ * authenticates with `x-goog-api-key`, which the list above does not contain,
+ * so a public first hop could redirect and hand that key to the second host.
+ * Adding one more name would leave the next one -- `x-amz-security-token`,
+ * `x-functions-key`, whatever a caller passes -- just as exposed.
+ *
+ * So the test is the name, and the failure direction decides the shape: over-
+ * stripping loses a header on a cross-origin redirect, which is recoverable
+ * and visible. Under-stripping leaks a credential to a host the caller never
+ * named, which is neither.
+ */
+const CREDENTIAL_PATTERN =
+  /(^|-)(authorization|auth|token|api[-_]?key|key|secret|credential|password|session|cookie|signature|sig)(-|$)/i;
+
+/** Does this header carry something we must not forward off-origin? */
+export function carriesCredential(name: string): boolean {
+  const lower = name.toLowerCase();
+  return CREDENTIAL_HEADERS.has(lower) || CREDENTIAL_PATTERN.test(lower);
+}
+
+/**
  * Smart API Fetch Class
  */
 export class SmartApiFetch {
@@ -376,6 +399,11 @@ export class SmartApiFetch {
           response.status >= 400
         )
           break;
+        // CANCELLED BEFORE THE VALIDATION THROWS, not after. The hop bound and
+        // the SSRF refusal below both throw, and cancelling after them leaks
+        // the body of the response that was refused -- the one case where a
+        // chain is most likely to be long or hostile.
+        await response.body?.cancel().catch(() => undefined);
         // A BOUND, because a redirect loop is a denial of service and the
         // runtime is no longer counting hops for us.
         if (hop >= 5)
@@ -390,8 +418,7 @@ export class SmartApiFetch {
         if (new URL(next).origin !== new URL(target).origin) {
           const stripped: Record<string, string> = {};
           for (const [key, value] of Object.entries(hopHeaders))
-            if (!CREDENTIAL_HEADERS.has(key.toLowerCase()))
-              stripped[key] = value;
+            if (!carriesCredential(key)) stripped[key] = value;
           hopHeaders = stripped;
         }
         const wasUnsafe =
@@ -415,11 +442,6 @@ export class SmartApiFetch {
               withoutBody[key] = value;
           hopHeaders = withoutBody;
         }
-        // THE REDIRECT BODY IS CANCELLED BEFORE THE NEXT HOP. `follow` used
-        // to discard intermediate responses for us; taking the hops by hand
-        // means an unread body holds its connection until GC gets to it, and
-        // a five-hop chain can leave five of them occupied.
-        await response.body?.cancel().catch(() => undefined);
         target = next;
       }
 

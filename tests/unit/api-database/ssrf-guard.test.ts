@@ -106,3 +106,45 @@ describe('what smart_api_fetch refuses to reach', () => {
     expect(ssrfRefusal('')).not.toBeNull();
   });
 });
+
+/**
+ * WHAT MUST NOT CROSS AN ORIGIN (issue #454 follow-up).
+ *
+ * The first version listed six header names. This repository authenticates
+ * with `x-goog-api-key`, which was not among them, so a public first hop could
+ * redirect and hand that key to the second host. Adding one more name would
+ * leave the next one just as exposed, so the test is the NAME now.
+ */
+import { carriesCredential } from '../../../src/tools/api-database/smart-api-fetch.js';
+
+describe('headers that must not survive a change of origin', () => {
+  it('strips the ones a fixed list would have missed', () => {
+    for (const name of [
+      'x-goog-api-key',
+      'X-Goog-Api-Key',
+      'x-amz-security-token',
+      'x-functions-key',
+      'x-api-token',
+      'x-session-id',
+      'x-request-signature',
+      'proxy-authorization',
+      'Authorization',
+      'Cookie',
+    ])
+      expect(carriesCredential(name)).toBe(true);
+  });
+
+  it('leaves ordinary headers alone, so over-stripping has a limit', () => {
+    // THE POSITIVE CONTROL: a predicate that stripped everything would pass
+    // the case above and break every redirect.
+    for (const name of [
+      'content-type',
+      'accept',
+      'user-agent',
+      'x-request-id',
+      'if-none-match',
+      'accept-encoding',
+    ])
+      expect(carriesCredential(name)).toBe(false);
+  });
+});
