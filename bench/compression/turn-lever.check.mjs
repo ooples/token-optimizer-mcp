@@ -541,17 +541,30 @@ check(
 // plus one turn to answer, is 2 turns against the control's 5. So obedience is
 // the observed reduction over what was available, not the reduction itself.
 // ---------------------------------------------------------------------------
-// RE-RUN AT 30 TASKS, AND THE 10-TASK RESULT DID NOT SURVIVE. The check below
-// said a 6% effect was within what this design can produce by chance, and it
-// was: at n=30 the conservative text reads 0.7% and the aggressive 4.2%,
-// against 6.0% and 14.0% at n=10. Correctness held at 30/30 in every arm, so
-// nothing was traded for it -- the effect was simply smaller than the noise of
-// ten tasks.
+// MEASURED AT 30 TASKS, ON A HARNESS THAT HAD TO BE FIXED TWICE FIRST.
+//
+// The ten-task arm reported 6.0% and 14.0% and the check here said a 6% effect
+// was within what ten tasks can produce by chance. It was: thirty tasks cut it
+// to 0.7% and 4.2%. Those thirty were then themselves measured on a harness
+// with a dead read-check -- `readFiles` was collected and never used, so a run
+// that read one file and inferred the rest still scored correct -- and with a
+// deny list that let Bash answer three files in one grep.
+//
+// With coverage of every requested file enforced, only `Read` blocks counted,
+// path separators normalised, the answer compared in order against the LAST
+// assistant text, and failed invocations excluded from the averages:
+//
+//   control        4.50 turns, 3.07 calls, 30/30 correct
+//   conservative   4.40 turns, 2.97 calls, 30/30 correct   2.2% fewer turns
+//   aggressive     4.30 turns, 2.97 calls, 30/30 correct   4.4% fewer turns
+//
+// 30/30 in every arm is what says the figures are about turn count and not
+// about one arm quietly answering less.
 const OBSERVED = Object.freeze({
-  // control 4.77 turns at 3.00 calls, so perfect batching is 2 turns.
-  fixtureHeadroom: (4.77 - 2) / 4.77,
-  conservative: 0.007,
-  aggressive: 0.042,
+  // control 4.50 turns at 3.07 calls, so perfect batching is 2 turns.
+  fixtureHeadroom: (4.5 - 2) / 4.5,
+  conservative: 0.022,
+  aggressive: 0.044,
   tasks: 30,
   priorAtTen: Object.freeze({ conservative: 0.06, aggressive: 0.14 }),
 });
@@ -561,13 +574,16 @@ const obedience = (observed) => observed / OBSERVED.fixtureHeadroom;
 // caveat on it. 0.7% of a 58% headroom is 1.2% obedience against a 4.85%
 // break-even, so the conservative block is a net loss at n=30. It is off by
 // default, and this is the measurement that says it should stay that way.
+// THE SHIPPED TEXT IS THE AGGRESSIVE ONE, and these labels were stale after
+// the wording was switched: the check still called the conservative text
+// "SHIPPED" after batch-guidance.ts had stopped carrying it.
 check(
   obedience(OBSERVED.conservative) < 0.0485,
-  `the SHIPPED text is below its own break-even: ${(obedience(OBSERVED.conservative) * 100).toFixed(1)}% obedience against 4.85% -- a net loss, and it stays off`
+  `the conservative wording, NOT shipped, is below its own break-even: ${(obedience(OBSERVED.conservative) * 100).toFixed(1)}% obedience against 4.85% -- which is why it was replaced`
 );
 check(
   obedience(OBSERVED.aggressive) > 0.0485,
-  `only the aggressive text clears it, and barely: ${(obedience(OBSERVED.aggressive) * 100).toFixed(1)}%`
+  `the SHIPPED aggressive wording clears it, and barely: ${(obedience(OBSERVED.aggressive) * 100).toFixed(1)}% against 4.85%`
 );
 
 console.log(`\nPRICED AT MEASURED OBEDIENCE, not at the headroom:`);
