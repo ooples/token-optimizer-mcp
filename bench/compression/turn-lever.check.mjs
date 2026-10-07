@@ -582,6 +582,73 @@ check(
   `${OBSERVED.tasks} tasks is a small arm -- a 6% effect is within what this design can produce by chance, and the 14% is the one worth re-running`
 );
 
+// ---------------------------------------------------------------------------
+// THE FIFTH LEVER, AND THE WHOLE STACK AT MEASURED OBEDIENCE.
+//
+// The stack above has four factors and the plan always had five. The missing
+// one is WITHHOLDING -- the preset arm, `spillWholeBlockBelow` on aggressive --
+// which does not shrink `handed` so much as remove it from context until it is
+// asked for. Recorded: p0 146,064 and 2.81x, p1 3,925,756 and 1.43x, break-even
+// 87%.
+//
+// IT IS THE ONLY LEVER WHOSE SIGN DEPENDS ON SOMETHING UNMEASURED. The other
+// four are monotone -- fewer tokens, fewer turns, cheaper reads, always. This
+// one is a bet on p, the rate at which a withheld unit is wanted back, and p
+// has never been measured: it was estimated once at 0.23 from textual
+// recurrence on THEIR corpus, which cannot see a unit the model read without
+// quoting, so the estimate is biased in our favour. That is exactly what
+// cost-decomposition.check.mjs stays red over, and why this is reported across
+// p rather than at a point.
+//
+// Batching enters at MEASURED obedience (23%, the aggressive text), not at its
+// headroom.
+// ---------------------------------------------------------------------------
+const PRESET = Object.freeze({
+  p0: num(session.p0.preset),
+  p1: num(session.p1.preset),
+});
+const obeyed = obedience(OBSERVED.aggressive);
+const nAll = RECORDED.turnsAfter * (1 - batchB * obeyed);
+/** The residency factor the N and R levers leave, against the recorded 7.6. */
+const factor =
+  (DEFAULTS.cacheWrite + readRate(1 / 3) * nAll) /
+  (DEFAULTS.cacheWrite + DEFAULTS.cacheRead * RECORDED.turnsAfter);
+
+console.log(
+  `
+ALL FIVE, batching at its MEASURED ${(obeyed * 100).toFixed(0)}% obedience (theirs: 1.69x at p=0, 1.59x at p=50):`
+);
+for (const [label, base, theirsAt] of [
+  ['p=0  nothing fetched', PRESET.p0, RECORDED.theirsP0],
+  ['p=1  everything fetched', PRESET.p1, RECORDED.theirsP1],
+]) {
+  const cost = base * factor * EVICT;
+  console.log(
+    `  ${label.padEnd(24)} ${cost.toFixed(0).padStart(9)}  ${capMultiple(cost, nAll).toFixed(2)}x   (theirs ${theirsAt})`
+  );
+}
+const atP0 = PRESET.p0 * factor * EVICT;
+const atP1 = PRESET.p1 * factor * EVICT;
+check(
+  capMultiple(atP0, nAll) > theirsCap,
+  `all five take the p=0 column: ${capMultiple(atP0, nAll).toFixed(2)}x against their ${theirsCap.toFixed(2)}x`
+);
+// THE OTHER END, AND I HAD THE SIGN WRONG. This was written expecting the
+// stack to lose at p=1 the way the preset arm alone does -- 1.43x against
+// their 1.59x -- so withholding's bet on p would have to be hedged. It does
+// not. The N and R levers cut the residency of the FETCHED units too, so the
+// fetch term shrinks with everything else and the stack is cheaper at both
+// ends. That is what makes withholding safe to stack when it is not safe
+// alone, and it is the difference between a bet on p and a lever.
+check(
+  atP1 < RECORDED.theirsP1,
+  `and the p=1 end too: ${atP1.toFixed(0)} against their ${RECORDED.theirsP1}, ${(((RECORDED.theirsP1 - atP1) / RECORDED.theirsP1) * 100).toFixed(1)}% cheaper -- so the stack is ahead across the whole fetch-rate range, unlike withholding alone, which loses at p=1`
+);
+check(
+  capMultiple(atP1, nAll) > capMultiple(RECORDED.theirsP1, RECORDED.turnsAfter),
+  `on the cap multiple at p=1: ${capMultiple(atP1, nAll).toFixed(2)}x against their ${capMultiple(RECORDED.theirsP1, RECORDED.turnsAfter).toFixed(2)}x`
+);
+
 if (failures.length > 0) {
   console.log(`\n${failures.length} check(s) failed`);
   process.exit(1);
