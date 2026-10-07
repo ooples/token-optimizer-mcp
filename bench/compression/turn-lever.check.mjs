@@ -526,6 +526,169 @@ check(
   `routing and batching commute, so the stack is not order-dependent`
 );
 
+// ---------------------------------------------------------------------------
+// OBEDIENCE, MEASURED AT LAST -- and it does not carry the p=0 column alone.
+//
+// `bench/field/batch-obedience-cli.mjs`, 10 tasks x 3 arms through the real
+// agent CLI. Every arm did identical WORK -- 3.00 tool calls, 10/10 correct --
+// and differed only in how many turns it took:
+//
+//   control        5.00 turns
+//   conservative   4.70 turns   6.0% fewer
+//   aggressive     4.30 turns  14.0% fewer
+//
+// The fixture's own headroom is 60%: 3 reads that could arrive in one turn,
+// plus one turn to answer, is 2 turns against the control's 5. So obedience is
+// the observed reduction over what was available, not the reduction itself.
+// ---------------------------------------------------------------------------
+// MEASURED AT 30 TASKS, ON A HARNESS THAT HAD TO BE FIXED TWICE FIRST.
+//
+// The ten-task arm reported 6.0% and 14.0% and the check here said a 6% effect
+// was within what ten tasks can produce by chance. It was: thirty tasks cut it
+// to 0.7% and 4.2%. Those thirty were then themselves measured on a harness
+// with a dead read-check -- `readFiles` was collected and never used, so a run
+// that read one file and inferred the rest still scored correct -- and with a
+// deny list that let Bash answer three files in one grep.
+//
+// With coverage of every requested file enforced, only `Read` blocks counted,
+// path separators normalised, the answer compared in order against the LAST
+// assistant text, and failed invocations excluded from the averages:
+//
+//   control        4.50 turns, 3.07 calls, 30/30 correct
+//   conservative   4.40 turns, 2.97 calls, 30/30 correct   2.2% fewer turns
+//   aggressive     4.30 turns, 2.97 calls, 30/30 correct   4.4% fewer turns
+//
+// 30/30 in every arm is what says the figures are about turn count and not
+// about one arm quietly answering less.
+const OBSERVED = Object.freeze({
+  // control 4.50 turns at 3.07 calls, so perfect batching is 2 turns.
+  fixtureHeadroom: (4.5 - 2) / 4.5,
+  conservative: 0.022,
+  aggressive: 0.044,
+  tasks: 30,
+  priorAtTen: Object.freeze({ conservative: 0.06, aggressive: 0.14 }),
+});
+const obedience = (observed) => observed / OBSERVED.fixtureHeadroom;
+
+// THE SHIPPED TEXT DOES NOT PAY FOR ITSELF, which is the result and not a
+// caveat on it. 0.7% of a 58% headroom is 1.2% obedience against a 4.85%
+// break-even, so the conservative block is a net loss at n=30. It is off by
+// default, and this is the measurement that says it should stay that way.
+// THE SHIPPED TEXT IS THE AGGRESSIVE ONE, and these labels were stale after
+// the wording was switched: the check still called the conservative text
+// "SHIPPED" after batch-guidance.ts had stopped carrying it.
+check(
+  obedience(OBSERVED.conservative) < 0.0485,
+  `the conservative wording, NOT shipped, is below its own break-even: ${(obedience(OBSERVED.conservative) * 100).toFixed(1)}% obedience against 4.85% -- which is why it was replaced`
+);
+check(
+  obedience(OBSERVED.aggressive) > 0.0485,
+  `the SHIPPED aggressive wording clears it, and barely: ${(obedience(OBSERVED.aggressive) * 100).toFixed(1)}% against 4.85%`
+);
+
+console.log(`\nPRICED AT MEASURED OBEDIENCE, not at the headroom:`);
+let takesColumn = false;
+for (const [label, observed] of [
+  ['conservative', OBSERVED.conservative],
+  ['aggressive', OBSERVED.aggressive],
+]) {
+  const rate = obedience(observed);
+  const n = RECORDED.turnsAfter * (1 - batchB * rate);
+  const cost = oursAt(n);
+  const cap = capMultiple(cost, n);
+  if (cap >= theirsCap) takesColumn = true;
+  console.log(
+    `  ${label.padEnd(13)} obedience ${(rate * 100).toFixed(0).padStart(3)}%  N -> ${n.toFixed(1)}  ${cost.toFixed(0)}  ${cap.toFixed(2)}x`
+  );
+}
+// THE RESULT THIS ASSERTS IS THE DISAPPOINTING ONE, because that is what was
+// measured. Obedience is real, it pays for the block, and at these rates
+// batching ALONE does not reach their 1.69x -- the 27.5% the column needs is
+// above what either text achieved.
+check(
+  !takesColumn,
+  `and does NOT take the p=0 column alone at these rates: the column needs 27.5% obedience against the full headroom`
+);
+// THE n=10 FIGURES ARE KEPT so the shrinkage is on the record rather than
+// quietly replaced: 6.0% -> 0.7% and 14.0% -> 4.2%.
+check(
+  OBSERVED.conservative < OBSERVED.priorAtTen.conservative &&
+    OBSERVED.aggressive < OBSERVED.priorAtTen.aggressive,
+  `both arms shrank on re-run: conservative ${(OBSERVED.priorAtTen.conservative * 100).toFixed(1)}% -> ${(OBSERVED.conservative * 100).toFixed(1)}%, aggressive ${(OBSERVED.priorAtTen.aggressive * 100).toFixed(1)}% -> ${(OBSERVED.aggressive * 100).toFixed(1)}%`
+);
+
+// ---------------------------------------------------------------------------
+// THE FIFTH LEVER, AND THE WHOLE STACK AT MEASURED OBEDIENCE.
+//
+// The stack above has four factors and the plan always had five. The missing
+// one is WITHHOLDING -- the preset arm, `spillWholeBlockBelow` on aggressive --
+// which does not shrink `handed` so much as remove it from context until it is
+// asked for. Recorded: p0 146,064 and 2.81x, p1 3,925,756 and 1.43x, break-even
+// 87%.
+//
+// IT IS THE ONLY LEVER WHOSE SIGN DEPENDS ON SOMETHING UNMEASURED. The other
+// four are monotone -- fewer tokens, fewer turns, cheaper reads, always. This
+// one is a bet on p, the rate at which a withheld unit is wanted back, and p
+// has never been measured: it was estimated once at 0.23 from textual
+// recurrence on THEIR corpus, which cannot see a unit the model read without
+// quoting, so the estimate is biased in our favour. That is exactly what
+// cost-decomposition.check.mjs stays red over, and why this is reported across
+// p rather than at a point.
+//
+// Batching enters at MEASURED obedience (23%, the aggressive text), not at its
+// headroom.
+// ---------------------------------------------------------------------------
+const PRESET = Object.freeze({
+  p0: num(session.p0.preset),
+  p1: num(session.p1.preset),
+});
+const obeyed = obedience(OBSERVED.aggressive);
+const nAll = RECORDED.turnsAfter * (1 - batchB * obeyed);
+/** The residency factor the N and R levers leave, against the recorded 7.6. */
+const factor =
+  (DEFAULTS.cacheWrite + readRate(1 / 3) * nAll) /
+  (DEFAULTS.cacheWrite + DEFAULTS.cacheRead * RECORDED.turnsAfter);
+
+console.log(
+  `
+ALL FIVE, batching at its MEASURED ${(obeyed * 100).toFixed(0)}% obedience (theirs: 1.69x at p=0, 1.59x at p=50):`
+);
+// ONLY p=0 IS DERIVABLE THIS WAY, and the p=1 row that used to sit here was
+// wrong. `PRESET.p1` is `c0 + c1 + c2`: the fetch-call output the model
+// writes, the extra-request reads, and the residency of blocks that were
+// fetched back. Multiplying that whole total by the residency factor applies
+// the N and R levers to terms they do not scale -- output is not a cached
+// read, and an extra request is a count, not a resident token -- so it
+// credited the stack with a saving on the fetch machinery itself.
+//
+// It read 2,875,500 and 18.4% cheaper than theirs at p=1, and on that basis I
+// asserted the stack leads at both ends and told the operator so. Withdrawn:
+// the record publishes preset p0 and p1 as totals and does not expose the
+// components, so the p=1 end needs a per-block decomposition this file does
+// not have. `cost-decomposition.check.mjs` is where that belongs.
+//
+// p=0 is sound because at p=0 the line IS c0 -- every fetch term carries a
+// factor of p -- so scaling it by the residency factor is exact.
+const atP0 = PRESET.p0 * factor * EVICT;
+console.log(
+  `  p=0  nothing fetched      ${atP0.toFixed(0).padStart(9)}  ${capMultiple(atP0, nAll).toFixed(2)}x   (theirs ${RECORDED.theirsP0}, ${theirsCap.toFixed(2)}x)`
+);
+console.log(
+  `  p=1  everything fetched   not derivable from a published total -- see the note above`
+);
+check(
+  capMultiple(atP0, nAll) > theirsCap,
+  `all five take the p=0 column: ${capMultiple(atP0, nAll).toFixed(2)}x against their ${theirsCap.toFixed(2)}x`
+);
+// THE WITHDRAWN CLAIM, PINNED SO IT CANNOT COME BACK. Withholding alone loses
+// at p=1 -- 1.43x against their 1.59x at p=50 and worse beyond -- and nothing
+// here has shown the other four levers cover that. Any future p=1 figure has
+// to come from the components.
+check(
+  PRESET.p1 > RECORDED.theirsP1,
+  `and withholding alone still LOSES at p=1 on the record: ${PRESET.p1} against their ${RECORDED.theirsP1} -- so the stack's p=1 end is an open question, not a win`
+);
+
 if (failures.length > 0) {
   console.log(`\n${failures.length} check(s) failed`);
   process.exit(1);

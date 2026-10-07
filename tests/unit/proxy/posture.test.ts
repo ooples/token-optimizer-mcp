@@ -111,6 +111,14 @@ const CONSENT_BEARING: readonly string[] = [
   'TOKEN_OPTIMIZER_PROXY_ACCOUNTING',
   'TOKEN_OPTIMIZER_OUTPUT_HOLDOUT',
   'TOKEN_OPTIMIZER_PROXY_DEFER_HOLDOUT',
+  // SPILL BELONGS HERE FOR THE SAME REASON, and it was added the moment it
+  // became settable by environment at all. Withholding takes content out of a
+  // request and buys it back with a round trip: the context someone is working
+  // in changes, and so does the number of requests they pay for. That is a
+  // decision about their traffic, not a dial, and a one-word posture cannot
+  // make it for them -- `max-lossy` turning it on quietly is exactly the
+  // failure this list exists to prevent.
+  'TOKEN_OPTIMIZER_PROXY_SPILL',
 ];
 
 describe('a posture only names variables something reads', () => {

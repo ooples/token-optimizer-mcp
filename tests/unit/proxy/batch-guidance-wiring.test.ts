@@ -118,7 +118,7 @@ describe('the batching guidance on the wire', () => {
     // it, which costs more than it can save.
     expect(provider.bodies).toHaveLength(1);
     expect(String(systemOf(provider.bodies[0]))).toContain(
-      'multiple tool calls in one message'
+      'in parallel in a single message'
     );
     expect(String(systemOf(provider.bodies[0]))).toContain(
       'You are a coding assistant.'
@@ -223,7 +223,7 @@ describe('the batching guidance on the wire', () => {
     expect(provider.bodies).toHaveLength(2);
     expect(compressed[1]).toBe(true);
     expect(String(systemOf(provider.bodies[1]))).toContain(
-      'multiple tool calls in one message'
+      'in parallel in a single message'
     );
   });
 
