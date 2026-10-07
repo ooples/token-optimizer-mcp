@@ -271,13 +271,19 @@ export class SqliteAnalyticsStorage implements AnalyticsStorage {
 
     const insertMany = this.db.transaction((entries: AnalyticsEntry[]) => {
       for (const entry of entries) {
+        // NUMBERS COERCED AT BIND TIME, because a column default cannot save
+        // an explicit NULL. An entry without `originalTokens` binds
+        // `undefined`, better-sqlite3 sends NULL, and SQLite rejects it with
+        // `NOT NULL constraint failed: analytics.original_tokens` no matter
+        // what DEFAULT the column carries -- a default applies when a column
+        // is OMITTED from the insert, not when NULL is passed for it.
         stmt.run(
           entry.hookPhase,
           entry.toolName,
           entry.mcpServer,
-          entry.originalTokens,
-          entry.optimizedTokens,
-          entry.tokensSaved,
+          entry.originalTokens ?? 0,
+          entry.optimizedTokens ?? 0,
+          entry.tokensSaved ?? 0,
           entry.timestamp,
           entry.sessionId || null,
           entry.metadata ? JSON.stringify(entry.metadata) : null,
