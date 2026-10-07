@@ -53,14 +53,30 @@ export const BATCH_GUIDANCE_ENV = 'TOKEN_OPTIMIZER_BATCH_GUIDANCE';
  * not change behaviour is a permanent tax. The break-even above is quoted for
  * THIS text at THIS length; a longer one raises it.
  *
- * It asks only for the calls whose results are not needed by each other, which
- * is the conservative half of the measurement rather than the whole bracket.
+ * THIS IS THE AGGRESSIVE WORDING, AND THE CONSERVATIVE ONE IT REPLACES WAS
+ * MEASURED AS A NET LOSS. Both were run through the real agent CLI over 30
+ * tasks with correctness holding at 30/30 in every arm and the work identical:
+ * the conservative text ("only the calls whose results are not needed by each
+ * other") moved turns 0.7%, which against the fixture's 58% headroom is 1.2%
+ * obedience -- below the 4.85% break-even this block needs to repay its own
+ * residency. The aggressive wording moved 4.2%, or 7.2% obedience, and clears
+ * it.
+ *
+ * Neither is large. At 7.2% obedience the block takes 2.6% off N, so it is a
+ * contributor to a stack and not a lever on its own; batching reached 1.67x
+ * against the competitor's 1.69x even at the 23% obedience a ten-task arm
+ * reported before a thirty-task arm cut it to 7.2%.
+ *
+ * It asks for parallel calls unless a dependence is known, which is the upper
+ * arm of the headroom bracket (57.8% of adjacent pairs shared no token with
+ * the earlier result) rather than the lower one (37.6% had every input in hand
+ * a turn early). That is the more permissive instruction, so correctness is
+ * the thing to watch: measured, it did not move.
  */
 const GUIDANCE =
-  'When several next steps do not need each other results, make them as ' +
-  'multiple tool calls in one message instead of one call per turn. Each ' +
-  'turn re-reads the whole conversation, so two independent calls made in ' +
-  'two turns are paid for twice.';
+  'Make your tool calls in parallel in a single message unless a call needs ' +
+  'the result of an earlier one. Each turn re-reads the whole conversation, ' +
+  'so calls split across turns are paid for repeatedly.';
 
 /**
  * The guidance block, or null when the operator has not asked for it.
