@@ -100,6 +100,30 @@ const USAGE = [
 
 class UsageError extends Error {}
 
+/**
+ * Whether the environment asks for spilling.
+ *
+ * SPILL WAS FLAG-ONLY, and that meant only a hand-started proxy could withhold
+ * anything: the SUPERVISED proxy -- the one a client's base URL actually points
+ * at -- had no way to be told, so measuring the fetch rate on real traffic
+ * would have needed every client repointed at an ad-hoc port that dies with
+ * the shell that started it.
+ *
+ * IT IS CONSENT-BEARING and must never be seeded by a posture. Withholding
+ * takes content out of a request and buys it back with a round trip, which is
+ * a decision about someone's traffic rather than a dial -- the same reason
+ * TOKEN_OPTIMIZER_PROXY_CAPTURE and ..._ACCOUNTING are operator-set only.
+ *
+ * Unset is off, and the words an operator reaches for to mean off are honoured
+ * rather than read as a truthy string.
+ */
+export function spillFromEnv(env: NodeJS.ProcessEnv = process.env): boolean {
+  const raw = (env.TOKEN_OPTIMIZER_PROXY_SPILL ?? '').trim().toLowerCase();
+  if (raw === '' || raw === '0' || raw === 'false' || raw === 'off')
+    return false;
+  return true;
+}
+
 export function parseArgs(argv: readonly string[]): Args {
   let port = 0;
   let upstream: string | undefined;
@@ -107,7 +131,8 @@ export function parseArgs(argv: readonly string[]): Args {
   let posture: string | undefined;
   let projectRoot: string | undefined;
   let quiet = false;
-  let spill = false;
+  // `--spill` still wins; this is the default it starts from.
+  let spill = spillFromEnv();
   let help = false;
   let printEnv = false;
   let json = false;

@@ -24,7 +24,12 @@
  */
 
 import { afterEach, describe, expect, it, jest } from '@jest/globals';
-import { parseArgs, run, shellQuote } from '../../../src/proxy/cli.js';
+import {
+  parseArgs,
+  run,
+  shellQuote,
+  spillFromEnv,
+} from '../../../src/proxy/cli.js';
 import {
   COMPRESSION_ENV,
   POSTURES,
@@ -225,5 +230,30 @@ describe('the exports survive a shell', () => {
         expect(shellQuote(value).startsWith("'")).toBe(true);
       }
     }
+  });
+});
+
+/**
+ * SPILL IS SETTABLE BY ENVIRONMENT, because the flag alone could not reach the
+ * proxy that matters.
+ *
+ * A client's base URL points at the SUPERVISED proxy, and a flag can only be
+ * given to one started by hand. So withholding was unreachable exactly where
+ * real traffic flows, and measuring the fetch rate would have meant repointing
+ * every client at an ad-hoc port that dies with its shell.
+ */
+describe('spill from the environment', () => {
+  it('is off when nothing is set', () => {
+    expect(spillFromEnv({})).toBe(false);
+  });
+
+  it('is off for every value an operator would use to mean off', () => {
+    for (const value of ['', '0', 'false', 'off', ' OFF ', 'False'])
+      expect(spillFromEnv({ TOKEN_OPTIMIZER_PROXY_SPILL: value })).toBe(false);
+  });
+
+  it('is on when asked for', () => {
+    for (const value of ['1', 'true', 'yes', 'on'])
+      expect(spillFromEnv({ TOKEN_OPTIMIZER_PROXY_SPILL: value })).toBe(true);
   });
 });
