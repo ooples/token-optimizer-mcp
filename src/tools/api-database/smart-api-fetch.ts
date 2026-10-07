@@ -351,12 +351,20 @@ export class SmartApiFetch {
       const follow = options.followRedirects !== false;
       let target = options.url;
       let hopHeaders = headers;
+      // THE METHOD AND BODY CHANGE ON A REDIRECT, which `redirect: 'follow'`
+      // did for us and a manual loop must do itself. The Fetch spec turns a
+      // 303 into a GET with no body, and does the same for a 301 or 302 that
+      // followed anything other than GET or HEAD. Replaying a POST and its
+      // body at the Location breaks POST-redirect-GET and, worse, repeats a
+      // side effect at a second URL.
+      let hopMethod = options.method;
+      let hopBody = body;
       let response: Response;
       for (let hop = 0; ; hop += 1) {
         response = await fetch(target, {
-          method: options.method,
+          method: hopMethod,
           headers: hopHeaders,
-          body,
+          body: hopBody,
           signal: controller.signal,
           redirect: 'manual',
         });
@@ -385,6 +393,27 @@ export class SmartApiFetch {
             if (!CREDENTIAL_HEADERS.has(key.toLowerCase()))
               stripped[key] = value;
           hopHeaders = stripped;
+        }
+        const wasUnsafe =
+          hopMethod !== undefined &&
+          hopMethod.toUpperCase() !== 'GET' &&
+          hopMethod.toUpperCase() !== 'HEAD';
+        if (
+          response.status === 303 ||
+          (wasUnsafe && (response.status === 301 || response.status === 302))
+        ) {
+          hopMethod = 'GET';
+          hopBody = undefined;
+          // A BODY THAT IS GONE TAKES ITS CONTENT HEADERS WITH IT, or the next
+          // request announces a length it is not sending.
+          const withoutBody: Record<string, string> = {};
+          for (const [key, value] of Object.entries(hopHeaders))
+            if (
+              key.toLowerCase() !== 'content-type' &&
+              key.toLowerCase() !== 'content-length'
+            )
+              withoutBody[key] = value;
+          hopHeaders = withoutBody;
         }
         target = next;
       }

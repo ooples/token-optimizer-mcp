@@ -97,11 +97,16 @@ export function ssrfRefusal(raw: string): string | null {
   }
   if (url.protocol !== 'http:' && url.protocol !== 'https:')
     return `refusing scheme '${url.protocol}' -- only http and https are fetched`;
-  const host = url.hostname.toLowerCase();
+  // THE TRAILING DOT IS STRIPPED FIRST, and without this the guard was
+  // bypassable: `new URL('http://localhost./').hostname` is `localhost.`,
+  // which is in no list and ends with neither `.localhost` nor `.internal`.
+  // A fully-qualified name with the root label resolves to exactly the same
+  // host, so it has to be compared as the same host.
+  const host = url.hostname.toLowerCase().replace(/\.+$/, '');
   if (host === '') return 'no host in the URL';
   if (BLOCKED_HOSTNAMES.has(host))
     return `refusing '${host}' -- it names a local or metadata service`;
-  if (isBlockedAddress(url.hostname))
+  if (isBlockedAddress(host))
     return `refusing '${url.hostname}' -- loopback, private, link-local or metadata address`;
   if (host.endsWith('.localhost') || host.endsWith('.internal'))
     return `refusing '${host}' -- a local-only name`;

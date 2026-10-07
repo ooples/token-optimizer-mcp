@@ -89,6 +89,18 @@ describe('what smart_api_fetch refuses to reach', () => {
       expect(ssrfRefusal(url)).toBeNull();
   });
 
+  it('refuses a name with the root label, which resolves to the same host', () => {
+    // THE BYPASS: `new URL('http://localhost./').hostname` is `localhost.`,
+    // which is in no list and ends with neither `.localhost` nor `.internal`.
+    for (const url of [
+      'http://localhost./',
+      'http://localhost../',
+      'http://metadata.google.internal./',
+      'http://app.localhost./',
+    ])
+      expect(ssrfRefusal(url)).not.toBeNull();
+  });
+
   it('refuses something that is not a URL at all', () => {
     expect(ssrfRefusal('not a url')).not.toBeNull();
     expect(ssrfRefusal('')).not.toBeNull();
