@@ -123,6 +123,23 @@ const inFlightRequests = new Map<string, Promise<ApiResponse>>();
 // Circuit breaker state per endpoint
 const circuitBreakers = new Map<string, CircuitBreakerState>();
 
+import { ssrfRefusal } from './ssrf-guard.js';
+
+/**
+ * Headers that must not survive a change of origin.
+ *
+ * These are the ones that authenticate, and a redirect is the caller's
+ * credential being offered to a host the caller never named.
+ */
+const CREDENTIAL_HEADERS = new Set([
+  'authorization',
+  'cookie',
+  'proxy-authorization',
+  'x-api-key',
+  'x-auth-token',
+  'api-key',
+]);
+
 /**
  * Smart API Fetch Class
  */
@@ -319,14 +336,58 @@ export class SmartApiFetch {
         }
       }
 
-      // Execute fetch
-      const response = await fetch(options.url, {
-        method: options.method,
-        headers,
-        body,
-        signal: controller.signal,
-        redirect: options.followRedirects !== false ? 'follow' : 'manual',
-      });
+      // SSRF GUARD (CWE-918). The URL arrives from the caller, and `follow`
+      // used to hand every redirect hop the caller's own headers. Each hop is
+      // now checked before it is requested, and the headers that carry
+      // credentials are dropped the moment the origin changes.
+      const firstRefusal = ssrfRefusal(options.url);
+      if (firstRefusal !== null)
+        throw new Error(`smart_api_fetch: ${firstRefusal}`);
+
+      // MANUAL REDIRECTS, ALWAYS, even when the caller asked to follow: the
+      // only way to re-check a hop is to be handed it instead of having the
+      // runtime take it. `followRedirects === false` still means stop at the
+      // first response, it just no longer decides whether the guard runs.
+      const follow = options.followRedirects !== false;
+      let target = options.url;
+      let hopHeaders = headers;
+      let response: Response;
+      for (let hop = 0; ; hop += 1) {
+        response = await fetch(target, {
+          method: options.method,
+          headers: hopHeaders,
+          body,
+          signal: controller.signal,
+          redirect: 'manual',
+        });
+        const location = response.headers.get('location');
+        if (
+          !follow ||
+          location === null ||
+          response.status < 300 ||
+          response.status >= 400
+        )
+          break;
+        // A BOUND, because a redirect loop is a denial of service and the
+        // runtime is no longer counting hops for us.
+        if (hop >= 5)
+          throw new Error('smart_api_fetch: too many redirects (5)');
+        const next = new URL(location, target).toString();
+        const refusal = ssrfRefusal(next);
+        if (refusal !== null)
+          throw new Error(`smart_api_fetch: redirect ${refusal}`);
+        // CROSS-ORIGIN MEANS THE CREDENTIALS DO NOT TRAVEL. An allow-listed
+        // first hop that redirects elsewhere was enough to hand a caller's
+        // X-Api-Key or Authorization to a host they never named.
+        if (new URL(next).origin !== new URL(target).origin) {
+          const stripped: Record<string, string> = {};
+          for (const [key, value] of Object.entries(hopHeaders))
+            if (!CREDENTIAL_HEADERS.has(key.toLowerCase()))
+              stripped[key] = value;
+          hopHeaders = stripped;
+        }
+        target = next;
+      }
 
       // Parse response
       const responseHeaders: Record<string, string> = {};
