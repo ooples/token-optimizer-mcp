@@ -526,6 +526,62 @@ check(
   `routing and batching commute, so the stack is not order-dependent`
 );
 
+// ---------------------------------------------------------------------------
+// OBEDIENCE, MEASURED AT LAST -- and it does not carry the p=0 column alone.
+//
+// `bench/field/batch-obedience-cli.mjs`, 10 tasks x 3 arms through the real
+// agent CLI. Every arm did identical WORK -- 3.00 tool calls, 10/10 correct --
+// and differed only in how many turns it took:
+//
+//   control        5.00 turns
+//   conservative   4.70 turns   6.0% fewer
+//   aggressive     4.30 turns  14.0% fewer
+//
+// The fixture's own headroom is 60%: 3 reads that could arrive in one turn,
+// plus one turn to answer, is 2 turns against the control's 5. So obedience is
+// the observed reduction over what was available, not the reduction itself.
+// ---------------------------------------------------------------------------
+const OBSERVED = Object.freeze({
+  fixtureHeadroom: (5 - 2) / 5,
+  conservative: 0.06,
+  aggressive: 0.14,
+  tasks: 10,
+});
+const obedience = (observed) => observed / OBSERVED.fixtureHeadroom;
+
+check(
+  obedience(OBSERVED.conservative) > 0.0485,
+  `obedience clears the block's own residency: ${(obedience(OBSERVED.conservative) * 100).toFixed(0)}% on the shipped text against a 4.85% break-even`
+);
+
+console.log(`\nPRICED AT MEASURED OBEDIENCE, not at the headroom:`);
+let takesColumn = false;
+for (const [label, observed] of [
+  ['conservative', OBSERVED.conservative],
+  ['aggressive', OBSERVED.aggressive],
+]) {
+  const rate = obedience(observed);
+  const n = RECORDED.turnsAfter * (1 - batchB * rate);
+  const cost = oursAt(n);
+  const cap = capMultiple(cost, n);
+  if (cap >= theirsCap) takesColumn = true;
+  console.log(
+    `  ${label.padEnd(13)} obedience ${(rate * 100).toFixed(0).padStart(3)}%  N -> ${n.toFixed(1)}  ${cost.toFixed(0)}  ${cap.toFixed(2)}x`
+  );
+}
+// THE RESULT THIS ASSERTS IS THE DISAPPOINTING ONE, because that is what was
+// measured. Obedience is real, it pays for the block, and at these rates
+// batching ALONE does not reach their 1.69x -- the 27.5% the column needs is
+// above what either text achieved.
+check(
+  !takesColumn,
+  `and does NOT take the p=0 column alone at these rates: the column needs 27.5% obedience against the full headroom`
+);
+check(
+  OBSERVED.tasks < 30,
+  `${OBSERVED.tasks} tasks is a small arm -- a 6% effect is within what this design can produce by chance, and the 14% is the one worth re-running`
+);
+
 if (failures.length > 0) {
   console.log(`\n${failures.length} check(s) failed`);
   process.exit(1);
