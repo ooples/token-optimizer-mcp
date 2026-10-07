@@ -255,7 +255,12 @@ jobs:
     needs: [release-please, publish-npm]
     if: ${{ needs.release-please.outputs.release_created == 'true' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # LONGER THAN THE NPM POLL BELOW, OR THE POLL CANNOT FINISH. The wait was
+    # raised to 30 minutes and this was left at 15, so Actions would have
+    # killed the job at 15 and the longer deadline would never have been
+    # reached -- a fix that cannot take effect. 40 leaves the poll its full
+    # half hour plus the publish itself.
+    timeout-minutes: 40
     permissions:
       contents: read
       id-token: write # the OIDC token IS the credential here
