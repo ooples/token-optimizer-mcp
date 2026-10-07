@@ -270,14 +270,21 @@ jobs:
       # consistent -- it answers "being processed and may take a few minutes to become available".
       # Publishing straight after `npm publish` therefore races, and the failure is a rejection of
       # a version that is perfectly fine seconds later.
+      #
+      # TEN MINUTES WAS NOT ENOUGH. 7.4.0 published, this step timed out waiting for it, and the
+      # release was left half-done: on npm, absent from the MCP registry. The version was being
+      # served shortly afterwards, so the deadline was the only thing wrong -- the poll itself
+      # already asks for the exact version with --prefer-online, which is the right question.
+      # Thirty minutes costs a waiting runner on the rare slow publish and avoids a manual rerun
+      # of a job whose only failure mode is impatience.
       - name: Wait for npm to serve the released version
         env:
           RELEASE_VERSION: ${{ needs.release-please.outputs.version }}
         run: |
-          deadline=$(( $(date +%s) + 600 ))
+          deadline=$(( $(date +%s) + 1800 ))
           until [ "$(npm view "@ooples/token-optimizer-mcp@$RELEASE_VERSION" version --prefer-online 2>/dev/null)" = "$RELEASE_VERSION" ]; do
             if [ "$(date +%s)" -ge "$deadline" ]; then
-              echo "::error::npm is not serving $RELEASE_VERSION after 10 minutes; not publishing to the registry"
+              echo "::error::npm is not serving $RELEASE_VERSION after 30 minutes; not publishing to the registry"
               exit 1
             fi
             echo "waiting for @ooples/token-optimizer-mcp@$RELEASE_VERSION on npm..."
