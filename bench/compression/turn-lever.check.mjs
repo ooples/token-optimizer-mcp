@@ -541,17 +541,33 @@ check(
 // plus one turn to answer, is 2 turns against the control's 5. So obedience is
 // the observed reduction over what was available, not the reduction itself.
 // ---------------------------------------------------------------------------
+// RE-RUN AT 30 TASKS, AND THE 10-TASK RESULT DID NOT SURVIVE. The check below
+// said a 6% effect was within what this design can produce by chance, and it
+// was: at n=30 the conservative text reads 0.7% and the aggressive 4.2%,
+// against 6.0% and 14.0% at n=10. Correctness held at 30/30 in every arm, so
+// nothing was traded for it -- the effect was simply smaller than the noise of
+// ten tasks.
 const OBSERVED = Object.freeze({
-  fixtureHeadroom: (5 - 2) / 5,
-  conservative: 0.06,
-  aggressive: 0.14,
-  tasks: 10,
+  // control 4.77 turns at 3.00 calls, so perfect batching is 2 turns.
+  fixtureHeadroom: (4.77 - 2) / 4.77,
+  conservative: 0.007,
+  aggressive: 0.042,
+  tasks: 30,
+  priorAtTen: Object.freeze({ conservative: 0.06, aggressive: 0.14 }),
 });
 const obedience = (observed) => observed / OBSERVED.fixtureHeadroom;
 
+// THE SHIPPED TEXT DOES NOT PAY FOR ITSELF, which is the result and not a
+// caveat on it. 0.7% of a 58% headroom is 1.2% obedience against a 4.85%
+// break-even, so the conservative block is a net loss at n=30. It is off by
+// default, and this is the measurement that says it should stay that way.
 check(
-  obedience(OBSERVED.conservative) > 0.0485,
-  `obedience clears the block's own residency: ${(obedience(OBSERVED.conservative) * 100).toFixed(0)}% on the shipped text against a 4.85% break-even`
+  obedience(OBSERVED.conservative) < 0.0485,
+  `the SHIPPED text is below its own break-even: ${(obedience(OBSERVED.conservative) * 100).toFixed(1)}% obedience against 4.85% -- a net loss, and it stays off`
+);
+check(
+  obedience(OBSERVED.aggressive) > 0.0485,
+  `only the aggressive text clears it, and barely: ${(obedience(OBSERVED.aggressive) * 100).toFixed(1)}%`
 );
 
 console.log(`\nPRICED AT MEASURED OBEDIENCE, not at the headroom:`);
@@ -577,9 +593,12 @@ check(
   !takesColumn,
   `and does NOT take the p=0 column alone at these rates: the column needs 27.5% obedience against the full headroom`
 );
+// THE n=10 FIGURES ARE KEPT so the shrinkage is on the record rather than
+// quietly replaced: 6.0% -> 0.7% and 14.0% -> 4.2%.
 check(
-  OBSERVED.tasks < 30,
-  `${OBSERVED.tasks} tasks is a small arm -- a 6% effect is within what this design can produce by chance, and the 14% is the one worth re-running`
+  OBSERVED.conservative < OBSERVED.priorAtTen.conservative &&
+    OBSERVED.aggressive < OBSERVED.priorAtTen.aggressive,
+  `both arms shrank on re-run: conservative ${(OBSERVED.priorAtTen.conservative * 100).toFixed(1)}% -> ${(OBSERVED.conservative * 100).toFixed(1)}%, aggressive ${(OBSERVED.priorAtTen.aggressive * 100).toFixed(1)}% -> ${(OBSERVED.aggressive * 100).toFixed(1)}%`
 );
 
 // ---------------------------------------------------------------------------
