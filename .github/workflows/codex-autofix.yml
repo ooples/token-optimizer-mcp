@@ -45,9 +45,20 @@ jobs:
         if: ${{ env.OPENAI_API_KEY != '' }}
         run: |
           if [ -f package-lock.json ]; then npm ci; else npm i; fi
+      # ADVISORY, SO IT MUST NOT REPORT THE REPOSITORY RED. This job reacts to a
+      # CI failure and attempts a fix; when the attempt itself cannot run, the
+      # useful signal is still the CI run it was reacting to. Six of these sat
+      # red on master for a failure on a feature branch that had already been
+      # fixed by hand, which is noise that hides a real red.
+      #
+      # PINNED, because `@main` is a moving target: the action can change under
+      # us between runs, so a job that worked yesterday fails today with no
+      # commit of ours, and an unpinned third-party action is also a
+      # supply-chain decision nobody made deliberately.
       - name: Run Codex
         if: ${{ env.OPENAI_API_KEY != '' }}
-        uses: openai/codex-action@main
+        continue-on-error: true
+        uses: openai/codex-action@v1
         id: codex
         with:
           openai-api-key: ${{ secrets.OPENAI_API_KEY }}
@@ -59,8 +70,11 @@ jobs:
       # The stdio contract suite drives dist/server/index.js, so the build has to
       # happen here too -- otherwise this gate fails for a missing artefact
       # rather than for anything Codex did or did not fix.
+      # ONLY WHEN CODEX ACTUALLY RAN. Verifying after a step that bailed tests
+      # the unchanged tree, which re-reports the same failure under a second
+      # name and tells a reader nothing new.
       - name: Verify tests
-        if: ${{ env.OPENAI_API_KEY != '' }}
+        if: ${{ env.OPENAI_API_KEY != '' && steps.codex.outcome == 'success' }}
         run: |
           npm run build
           npm test --silent
