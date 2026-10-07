@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.4.0](https://github.com/ooples/token-optimizer-mcp/compare/v7.3.0...v7.4.0) (2026-10-07)
+
+
+### Features
+
+* **bench:** measure twelve workloads as sessions, and gate the claims on a ratchet ([#448](https://github.com/ooples/token-optimizer-mcp/issues/448)) ([1fe0610](https://github.com/ooples/token-optimizer-mcp/commit/1fe06109a67be2970d105c001d3fb13caf42b8ec))
+* measure batching obedience, and stack all five levers ([#456](https://github.com/ooples/token-optimizer-mcp/issues/456)) ([98c62cd](https://github.com/ooples/token-optimizer-mcp/commit/98c62cd59af3364c6c3d29d53747ad0aa40c7866))
+
+
+### Bug Fixes
+
+* **security:** validate the url and every redirect hop in smart_api_fetch ([#458](https://github.com/ooples/token-optimizer-mcp/issues/458)) ([591161e](https://github.com/ooples/token-optimizer-mcp/commit/591161e63ad3a989e71d7bb1cd1284b6059b8833))
+* stop installing hooks into global settings without being asked ([#450](https://github.com/ooples/token-optimizer-mcp/issues/450)) ([13b1a62](https://github.com/ooples/token-optimizer-mcp/commit/13b1a62da156c6cf4df53f6e3022a2879e8637a4))
+
+
+### Performance
+
+* win the p=0 cost column ([#453](https://github.com/ooples/token-optimizer-mcp/issues/453)) ([aeed23e](https://github.com/ooples/token-optimizer-mcp/commit/aeed23ee69762f509a3cae281e677f15c61a50e5))
+
 ## [7.3.0](https://github.com/ooples/token-optimizer-mcp/compare/v7.2.0...v7.3.0) (2026-09-23)
 
 
