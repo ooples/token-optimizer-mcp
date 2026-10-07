@@ -248,7 +248,20 @@ describe('spill from the environment', () => {
   });
 
   it('is off for every value an operator would use to mean off', () => {
-    for (const value of ['', '0', 'false', 'off', ' OFF ', 'False'])
+    // `no` IS THE ONE THAT CAUGHT IT: the deny-list version returned true for
+    // anything it did not list, so `no` enabled withholding.
+    for (const value of [
+      '',
+      '0',
+      'false',
+      'off',
+      ' OFF ',
+      'False',
+      'no',
+      'n',
+      'disabled',
+      'nope',
+    ])
       expect(spillFromEnv({ TOKEN_OPTIMIZER_PROXY_SPILL: value })).toBe(false);
   });
 

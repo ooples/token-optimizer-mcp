@@ -637,35 +637,40 @@ console.log(
   `
 ALL FIVE, batching at its MEASURED ${(obeyed * 100).toFixed(0)}% obedience (theirs: 1.69x at p=0, 1.59x at p=50):`
 );
-for (const [label, base, theirsAt] of [
-  ['p=0  nothing fetched', PRESET.p0, RECORDED.theirsP0],
-  ['p=1  everything fetched', PRESET.p1, RECORDED.theirsP1],
-]) {
-  const cost = base * factor * EVICT;
-  console.log(
-    `  ${label.padEnd(24)} ${cost.toFixed(0).padStart(9)}  ${capMultiple(cost, nAll).toFixed(2)}x   (theirs ${theirsAt})`
-  );
-}
+// ONLY p=0 IS DERIVABLE THIS WAY, and the p=1 row that used to sit here was
+// wrong. `PRESET.p1` is `c0 + c1 + c2`: the fetch-call output the model
+// writes, the extra-request reads, and the residency of blocks that were
+// fetched back. Multiplying that whole total by the residency factor applies
+// the N and R levers to terms they do not scale -- output is not a cached
+// read, and an extra request is a count, not a resident token -- so it
+// credited the stack with a saving on the fetch machinery itself.
+//
+// It read 2,875,500 and 18.4% cheaper than theirs at p=1, and on that basis I
+// asserted the stack leads at both ends and told the operator so. Withdrawn:
+// the record publishes preset p0 and p1 as totals and does not expose the
+// components, so the p=1 end needs a per-block decomposition this file does
+// not have. `cost-decomposition.check.mjs` is where that belongs.
+//
+// p=0 is sound because at p=0 the line IS c0 -- every fetch term carries a
+// factor of p -- so scaling it by the residency factor is exact.
 const atP0 = PRESET.p0 * factor * EVICT;
-const atP1 = PRESET.p1 * factor * EVICT;
+console.log(
+  `  p=0  nothing fetched      ${atP0.toFixed(0).padStart(9)}  ${capMultiple(atP0, nAll).toFixed(2)}x   (theirs ${RECORDED.theirsP0}, ${theirsCap.toFixed(2)}x)`
+);
+console.log(
+  `  p=1  everything fetched   not derivable from a published total -- see the note above`
+);
 check(
   capMultiple(atP0, nAll) > theirsCap,
   `all five take the p=0 column: ${capMultiple(atP0, nAll).toFixed(2)}x against their ${theirsCap.toFixed(2)}x`
 );
-// THE OTHER END, AND I HAD THE SIGN WRONG. This was written expecting the
-// stack to lose at p=1 the way the preset arm alone does -- 1.43x against
-// their 1.59x -- so withholding's bet on p would have to be hedged. It does
-// not. The N and R levers cut the residency of the FETCHED units too, so the
-// fetch term shrinks with everything else and the stack is cheaper at both
-// ends. That is what makes withholding safe to stack when it is not safe
-// alone, and it is the difference between a bet on p and a lever.
+// THE WITHDRAWN CLAIM, PINNED SO IT CANNOT COME BACK. Withholding alone loses
+// at p=1 -- 1.43x against their 1.59x at p=50 and worse beyond -- and nothing
+// here has shown the other four levers cover that. Any future p=1 figure has
+// to come from the components.
 check(
-  atP1 < RECORDED.theirsP1,
-  `and the p=1 end too: ${atP1.toFixed(0)} against their ${RECORDED.theirsP1}, ${(((RECORDED.theirsP1 - atP1) / RECORDED.theirsP1) * 100).toFixed(1)}% cheaper -- so the stack is ahead across the whole fetch-rate range, unlike withholding alone, which loses at p=1`
-);
-check(
-  capMultiple(atP1, nAll) > capMultiple(RECORDED.theirsP1, RECORDED.turnsAfter),
-  `on the cap multiple at p=1: ${capMultiple(atP1, nAll).toFixed(2)}x against their ${capMultiple(RECORDED.theirsP1, RECORDED.turnsAfter).toFixed(2)}x`
+  PRESET.p1 > RECORDED.theirsP1,
+  `and withholding alone still LOSES at p=1 on the record: ${PRESET.p1} against their ${RECORDED.theirsP1} -- so the stack's p=1 end is an open question, not a win`
 );
 
 if (failures.length > 0) {

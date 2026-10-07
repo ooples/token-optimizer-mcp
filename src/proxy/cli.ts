@@ -119,9 +119,13 @@ class UsageError extends Error {}
  */
 export function spillFromEnv(env: NodeJS.ProcessEnv = process.env): boolean {
   const raw = (env.TOKEN_OPTIMIZER_PROXY_SPILL ?? '').trim().toLowerCase();
-  if (raw === '' || raw === '0' || raw === 'false' || raw === 'off')
-    return false;
-  return true;
+  // AN ALLOW-LIST, NOT A DENY-LIST, because this variable carries consent.
+  // The first version listed the words meaning off and returned true for
+  // everything else, so TOKEN_OPTIMIZER_PROXY_SPILL=no turned withholding ON.
+  // A deny-list cannot be complete, and the failure direction here is enabling
+  // something on an operator's traffic that they were refusing, so an
+  // unrecognised value is not consent.
+  return raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on';
 }
 
 export function parseArgs(argv: readonly string[]): Args {

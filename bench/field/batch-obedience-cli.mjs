@@ -116,9 +116,14 @@ function task(n) {
       picks.map((i) => `src/service-${i}.ts`).join(', ') +
       '? Answer with just the numbers, comma separated. Do not change any files.',
     expect: picks.map((i) => String(PORTS[i])),
+    // The exact paths asked for, so a read of something else does not count.
+    paths: picks.map((i) => `src/service-${i}.ts`),
     files: picks.length,
   };
 }
+
+/** Three or more digits: the port values, not a single-digit retry count. */
+const NUMBER = /[0-9]{3,}/g;
 
 /**
  * One task under one arm, measured from the CLI's own stream.
@@ -162,8 +167,16 @@ function runTask(block, t) {
   });
   let turns = 0;
   let calls = 0;
-  let text = '';
-  for (const line of (run.stdout ?? '').split('\n')) {
+  // THE LAST ASSISTANT TEXT IS THE ANSWER, not everything it ever said. A
+  // value quoted while reasoning in an earlier turn is not an answer, and
+  // concatenating all of them let a run score correct for numbers it had
+  // speculated about rather than reported.
+  let lastText = '';
+  // READS OF THE FILES THAT WERE ASKED ABOUT, deduplicated. `calls` counts
+  // tool_use blocks, so repeated reads of one file, or reads of files nobody
+  // asked about, could reach the expected count without doing the work.
+  const readFiles = new Set();
+  for (const line of (run.stdout ?? '').split(String.fromCharCode(10))) {
     if (!line.trim()) continue;
     let event;
     try {
@@ -175,11 +188,21 @@ function runTask(block, t) {
     if (event?.type !== 'assistant' || !message) continue;
     const blocks = Array.isArray(message.content) ? message.content : [];
     turns += 1;
-    calls += blocks.filter((b) => b?.type === 'tool_use').length;
-    for (const b of blocks)
-      if (b?.type === 'text' && typeof b.text === 'string') text += b.text;
+    for (const b of blocks) {
+      if (b?.type === 'tool_use') {
+        calls += 1;
+        const where = String(b.input?.file_path ?? b.input?.path ?? '');
+        for (const want of t.paths)
+          if (where.endsWith(want)) readFiles.add(want);
+      }
+      if (b?.type === 'text' && typeof b.text === 'string' && b.text.trim())
+        lastText = b.text;
+    }
   }
-  const correct = t.expect.every((want) => text.includes(want));
+  // COMPARED IN ORDER. `includes` per value accepted any order, extra
+  // numbers, and a value mentioned only in passing.
+  const answered = (lastText.match(NUMBER) ?? []).join(',');
+  const correct = answered === t.expect.join(',');
   return { turns, calls, correct, status: run.status };
 }
 
@@ -216,7 +239,10 @@ if (failures > 0)
 
 const mean = (xs) => xs.reduce((a, b) => a + b, 0) / Math.max(1, xs.length);
 const rows = ARMS.map(([label]) => {
-  const rs = results.get(label);
+  // FAILED INVOCATIONS ARE EXCLUDED, not averaged in. A non-zero exit leaves
+  // partial or empty counts, and a failed CONTROL run lowers the control's
+  // turn average and manufactures a saving for every other arm.
+  const rs = results.get(label).filter((r) => r.status === 0);
   return {
     label,
     turns: mean(rs.map((r) => r.turns)),
