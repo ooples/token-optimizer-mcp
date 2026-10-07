@@ -415,6 +415,11 @@ export class SmartApiFetch {
               withoutBody[key] = value;
           hopHeaders = withoutBody;
         }
+        // THE REDIRECT BODY IS CANCELLED BEFORE THE NEXT HOP. `follow` used
+        // to discard intermediate responses for us; taking the hops by hand
+        // means an unread body holds its connection until GC gets to it, and
+        // a five-hop chain can leave five of them occupied.
+        await response.body?.cancel().catch(() => undefined);
         target = next;
       }
 
