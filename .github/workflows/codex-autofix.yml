@@ -51,14 +51,15 @@ jobs:
       # red on master for a failure on a feature branch that had already been
       # fixed by hand, which is noise that hides a real red.
       #
-      # PINNED, because `@main` is a moving target: the action can change under
-      # us between runs, so a job that worked yesterday fails today with no
-      # commit of ours, and an unpinned third-party action is also a
-      # supply-chain decision nobody made deliberately.
+      # PINNED TO A COMMIT, because `@main` is a moving target and `@v1` is only
+      # a slower one: a tag can be repointed, so pinning to it still lets the
+      # action change under us between runs. The SHA below is `v1`
+      # dereferenced, and it is what makes the pin a supply-chain decision
+      # rather than a gesture at one. Bumping it is then a visible commit.
       - name: Run Codex
         if: ${{ env.OPENAI_API_KEY != '' }}
         continue-on-error: true
-        uses: openai/codex-action@v1
+        uses: openai/codex-action@bdf19a4a223ec2549a3e2274a0cf61556bc07675 # v1
         id: codex
         with:
           openai-api-key: ${{ secrets.OPENAI_API_KEY }}
@@ -79,7 +80,12 @@ jobs:
           npm run build
           npm test --silent
       - name: Create pull request with fixes
-        if: ${{ success() && env.OPENAI_API_KEY != '' }}
+        # GATED ON CODEX HAVING SUCCEEDED, not just on the job being green.
+        # `continue-on-error` on the Codex step means `success()` is still true
+        # after it bails, so this would have opened a pull request carrying no
+        # fix -- a consequence of making that step non-fatal, and worse than
+        # the red job it replaced.
+        if: ${{ success() && env.OPENAI_API_KEY != '' && steps.codex.outcome == 'success' }}
         uses: peter-evans/create-pull-request@v6
         with:
           commit-message: "fix(ci): auto-fix failing tests via Codex"
