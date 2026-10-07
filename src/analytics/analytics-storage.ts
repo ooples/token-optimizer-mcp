@@ -33,7 +33,24 @@ export class SqliteAnalyticsStorage implements AnalyticsStorage {
   private pruning = false;
   private readonly PRUNE_EVERY_SAVES = 64;
 
-  constructor(dbPath?: string) {
+  /**
+   * The clock the automatic prune reads.
+   *
+   * INJECTABLE BECAUSE THE WALL CLOCK MADE THIS STORE UNTESTABLE. The prune
+   * that runs after a write took `new Date()` while `pruneOldEntries(now)`
+   * takes an argument, so a caller could inject a date for the explicit prune
+   * and still have the automatic one fold rows out from under it against the
+   * real clock. That is exactly what happened: a fixture dated 2026-09-01 was
+   * folded by the post-write prune the moment the real date passed the
+   * retention window, and the test's own `pruneOldEntries(2027-01-01)` then
+   * found nothing and returned 0 -- a failure that appeared on four Node
+   * shards roughly a month after the fixture was written and had nothing to do
+   * with folding.
+   */
+  private readonly clock: () => Date;
+
+  constructor(dbPath?: string, clock: () => Date = () => new Date()) {
+    this.clock = clock;
     // Default to user's home directory
     const defaultPath = path.join(
       os.homedir(),
@@ -327,7 +344,7 @@ export class SqliteAnalyticsStorage implements AnalyticsStorage {
     this.sinceLastPrune = 0;
     this.prunedOnce = true;
     try {
-      await this.pruneOldEntries();
+      await this.pruneOldEntries(this.clock());
     } catch (error) {
       // A store that cannot be pruned is a store that grows, which costs a
       // disk; it is not worth failing the write that reported the savings.
