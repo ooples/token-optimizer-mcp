@@ -33,7 +33,24 @@ export class SqliteAnalyticsStorage implements AnalyticsStorage {
   private pruning = false;
   private readonly PRUNE_EVERY_SAVES = 64;
 
-  constructor(dbPath?: string) {
+  /**
+   * The clock the automatic prune reads.
+   *
+   * INJECTABLE BECAUSE THE WALL CLOCK MADE THIS STORE UNTESTABLE. The prune
+   * that runs after a write took `new Date()` while `pruneOldEntries(now)`
+   * takes an argument, so a caller could inject a date for the explicit prune
+   * and still have the automatic one fold rows out from under it against the
+   * real clock. That is exactly what happened: a fixture dated 2026-09-01 was
+   * folded by the post-write prune the moment the real date passed the
+   * retention window, and the test's own `pruneOldEntries(2027-01-01)` then
+   * found nothing and returned 0 -- a failure that appeared on four Node
+   * shards roughly a month after the fixture was written and had nothing to do
+   * with folding.
+   */
+  private readonly clock: () => Date;
+
+  constructor(dbPath?: string, clock: () => Date = () => new Date()) {
+    this.clock = clock;
     // Default to user's home directory
     const defaultPath = path.join(
       os.homedir(),
@@ -96,6 +113,19 @@ export class SqliteAnalyticsStorage implements AnalyticsStorage {
    * before the stamp existed can only ever say "an older contract produced
    * this", and that is what a reader needs it to say.
    */
+  /**
+   * WHY eligible_operations CARRIES `DEFAULT 0` IN THE SCHEMA ABOVE.
+   *
+   * This copies only the columns present in BOTH the old and rebuilt tables,
+   * so a column that is NOT NULL and absent from the old one makes the INSERT
+   * fail: `NOT NULL constraint failed: analytics_rollup.eligible_operations`.
+   * It was the only column added after the first schema without a default.
+   *
+   * The throw happened inside the constructor, so the migration left the store
+   * unusable and every later save was lost. The symptom was pruneOldEntries
+   * folding 0 rows -- four Node shards red on a test about day-grain folding,
+   * for a reason that had nothing to do with folding.
+   */
   private restoreOldRollup(columns: Set<string> | null): void {
     if (columns === null) return;
     const carried = [...this.columnsOf('analytics_rollup')].filter((name) =>
@@ -120,9 +150,9 @@ export class SqliteAnalyticsStorage implements AnalyticsStorage {
         hook_phase TEXT NOT NULL,
         tool_name TEXT NOT NULL,
         mcp_server TEXT NOT NULL,
-        original_tokens INTEGER NOT NULL,
-        optimized_tokens INTEGER NOT NULL,
-        tokens_saved INTEGER NOT NULL,
+        original_tokens INTEGER NOT NULL DEFAULT 0,
+        optimized_tokens INTEGER NOT NULL DEFAULT 0,
+        tokens_saved INTEGER NOT NULL DEFAULT 0,
         timestamp TEXT NOT NULL,
         session_id TEXT,
         metadata TEXT,
@@ -152,34 +182,34 @@ export class SqliteAnalyticsStorage implements AnalyticsStorage {
         route TEXT NOT NULL,
         classification TEXT NOT NULL,
         measurement_schema_version INTEGER NOT NULL DEFAULT 0,
-        operations INTEGER NOT NULL,
-        eligible_operations INTEGER NOT NULL,
-        tokens_saved INTEGER NOT NULL,
-        tokens_before INTEGER NOT NULL,
-        original_tokens INTEGER NOT NULL,
-        optimized_tokens INTEGER NOT NULL,
-        reported_savings INTEGER NOT NULL,
-        observed_returns INTEGER NOT NULL,
-        cost_usd REAL NOT NULL,
-        priced_operations INTEGER NOT NULL,
-        unpriced_operations INTEGER NOT NULL,
-        verified_operations INTEGER NOT NULL,
-        expansion_operations INTEGER NOT NULL,
-        unverified_operations INTEGER NOT NULL,
-        verified_original_tokens INTEGER NOT NULL,
-        verified_reported_savings INTEGER NOT NULL,
-        expansion_optimized_tokens INTEGER NOT NULL,
-        observed_optimized_tokens INTEGER NOT NULL,
-        measured_optimized_tokens INTEGER NOT NULL,
-        context_usd REAL NOT NULL,
-        priced_context_operations INTEGER NOT NULL,
-        unverified_reported_savings INTEGER NOT NULL,
+        operations INTEGER NOT NULL DEFAULT 0,
+        eligible_operations INTEGER NOT NULL DEFAULT 0, -- see note below
+        tokens_saved INTEGER NOT NULL DEFAULT 0,
+        tokens_before INTEGER NOT NULL DEFAULT 0,
+        original_tokens INTEGER NOT NULL DEFAULT 0,
+        optimized_tokens INTEGER NOT NULL DEFAULT 0,
+        reported_savings INTEGER NOT NULL DEFAULT 0,
+        observed_returns INTEGER NOT NULL DEFAULT 0,
+        cost_usd REAL NOT NULL DEFAULT 0,
+        priced_operations INTEGER NOT NULL DEFAULT 0,
+        unpriced_operations INTEGER NOT NULL DEFAULT 0,
+        verified_operations INTEGER NOT NULL DEFAULT 0,
+        expansion_operations INTEGER NOT NULL DEFAULT 0,
+        unverified_operations INTEGER NOT NULL DEFAULT 0,
+        verified_original_tokens INTEGER NOT NULL DEFAULT 0,
+        verified_reported_savings INTEGER NOT NULL DEFAULT 0,
+        expansion_optimized_tokens INTEGER NOT NULL DEFAULT 0,
+        observed_optimized_tokens INTEGER NOT NULL DEFAULT 0,
+        measured_optimized_tokens INTEGER NOT NULL DEFAULT 0,
+        context_usd REAL NOT NULL DEFAULT 0,
+        priced_context_operations INTEGER NOT NULL DEFAULT 0,
+        unverified_reported_savings INTEGER NOT NULL DEFAULT 0,
         input_displacement_tokens INTEGER NOT NULL DEFAULT 0,
         displacement_operations INTEGER NOT NULL DEFAULT 0,
         declared_displacement_tokens INTEGER NOT NULL DEFAULT 0,
         declared_operations INTEGER NOT NULL DEFAULT 0,
-        first_timestamp TEXT NOT NULL,
-        last_timestamp TEXT NOT NULL,
+        first_timestamp TEXT NOT NULL DEFAULT '',
+        last_timestamp TEXT NOT NULL DEFAULT '',
         PRIMARY KEY (
           day, hook_phase, tool_name, mcp_server, client, client_version,
           model, model_version, provider, route, classification,
@@ -258,13 +288,19 @@ export class SqliteAnalyticsStorage implements AnalyticsStorage {
 
     const insertMany = this.db.transaction((entries: AnalyticsEntry[]) => {
       for (const entry of entries) {
+        // NUMBERS COERCED AT BIND TIME, because a column default cannot save
+        // an explicit NULL. An entry without `originalTokens` binds
+        // `undefined`, better-sqlite3 sends NULL, and SQLite rejects it with
+        // `NOT NULL constraint failed: analytics.original_tokens` no matter
+        // what DEFAULT the column carries -- a default applies when a column
+        // is OMITTED from the insert, not when NULL is passed for it.
         stmt.run(
           entry.hookPhase,
           entry.toolName,
           entry.mcpServer,
-          entry.originalTokens,
-          entry.optimizedTokens,
-          entry.tokensSaved,
+          entry.originalTokens ?? 0,
+          entry.optimizedTokens ?? 0,
+          entry.tokensSaved ?? 0,
           entry.timestamp,
           entry.sessionId || null,
           entry.metadata ? JSON.stringify(entry.metadata) : null,
@@ -308,7 +344,7 @@ export class SqliteAnalyticsStorage implements AnalyticsStorage {
     this.sinceLastPrune = 0;
     this.prunedOnce = true;
     try {
-      await this.pruneOldEntries();
+      await this.pruneOldEntries(this.clock());
     } catch (error) {
       // A store that cannot be pruned is a store that grows, which costs a
       // disk; it is not worth failing the write that reported the savings.

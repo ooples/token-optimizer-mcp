@@ -123,6 +123,46 @@ const inFlightRequests = new Map<string, Promise<ApiResponse>>();
 // Circuit breaker state per endpoint
 const circuitBreakers = new Map<string, CircuitBreakerState>();
 
+import { ssrfRefusal } from './ssrf-guard.js';
+
+/**
+ * Headers that must not survive a change of origin.
+ *
+ * These are the ones that authenticate, and a redirect is the caller's
+ * credential being offered to a host the caller never named.
+ */
+const CREDENTIAL_HEADERS = new Set([
+  'authorization',
+  'cookie',
+  'proxy-authorization',
+  'x-api-key',
+  'x-auth-token',
+  'api-key',
+]);
+
+/**
+ * Anything whose NAME says it carries a secret.
+ *
+ * A FIXED LIST WAS THE WRONG SHAPE, and the miss proves it: this repository
+ * authenticates with `x-goog-api-key`, which the list above does not contain,
+ * so a public first hop could redirect and hand that key to the second host.
+ * Adding one more name would leave the next one -- `x-amz-security-token`,
+ * `x-functions-key`, whatever a caller passes -- just as exposed.
+ *
+ * So the test is the name, and the failure direction decides the shape: over-
+ * stripping loses a header on a cross-origin redirect, which is recoverable
+ * and visible. Under-stripping leaks a credential to a host the caller never
+ * named, which is neither.
+ */
+const CREDENTIAL_PATTERN =
+  /(^|-)(authorization|auth|token|api[-_]?key|key|secret|credential|password|session|cookie|signature|sig)(-|$)/i;
+
+/** Does this header carry something we must not forward off-origin? */
+export function carriesCredential(name: string): boolean {
+  const lower = name.toLowerCase();
+  return CREDENTIAL_HEADERS.has(lower) || CREDENTIAL_PATTERN.test(lower);
+}
+
 /**
  * Smart API Fetch Class
  */
@@ -319,14 +359,91 @@ export class SmartApiFetch {
         }
       }
 
-      // Execute fetch
-      const response = await fetch(options.url, {
-        method: options.method,
-        headers,
-        body,
-        signal: controller.signal,
-        redirect: options.followRedirects !== false ? 'follow' : 'manual',
-      });
+      // SSRF GUARD (CWE-918). The URL arrives from the caller, and `follow`
+      // used to hand every redirect hop the caller's own headers. Each hop is
+      // now checked before it is requested, and the headers that carry
+      // credentials are dropped the moment the origin changes.
+      const firstRefusal = ssrfRefusal(options.url);
+      if (firstRefusal !== null)
+        throw new Error(`smart_api_fetch: ${firstRefusal}`);
+
+      // MANUAL REDIRECTS, ALWAYS, even when the caller asked to follow: the
+      // only way to re-check a hop is to be handed it instead of having the
+      // runtime take it. `followRedirects === false` still means stop at the
+      // first response, it just no longer decides whether the guard runs.
+      const follow = options.followRedirects !== false;
+      let target = options.url;
+      let hopHeaders = headers;
+      // THE METHOD AND BODY CHANGE ON A REDIRECT, which `redirect: 'follow'`
+      // did for us and a manual loop must do itself. The Fetch spec turns a
+      // 303 into a GET with no body, and does the same for a 301 or 302 that
+      // followed anything other than GET or HEAD. Replaying a POST and its
+      // body at the Location breaks POST-redirect-GET and, worse, repeats a
+      // side effect at a second URL.
+      let hopMethod = options.method;
+      let hopBody = body;
+      let response: Response;
+      for (let hop = 0; ; hop += 1) {
+        response = await fetch(target, {
+          method: hopMethod,
+          headers: hopHeaders,
+          body: hopBody,
+          signal: controller.signal,
+          redirect: 'manual',
+        });
+        const location = response.headers.get('location');
+        if (
+          !follow ||
+          location === null ||
+          response.status < 300 ||
+          response.status >= 400
+        )
+          break;
+        // CANCELLED BEFORE THE VALIDATION THROWS, not after. The hop bound and
+        // the SSRF refusal below both throw, and cancelling after them leaks
+        // the body of the response that was refused -- the one case where a
+        // chain is most likely to be long or hostile.
+        await response.body?.cancel().catch(() => undefined);
+        // A BOUND, because a redirect loop is a denial of service and the
+        // runtime is no longer counting hops for us.
+        if (hop >= 5)
+          throw new Error('smart_api_fetch: too many redirects (5)');
+        const next = new URL(location, target).toString();
+        const refusal = ssrfRefusal(next);
+        if (refusal !== null)
+          throw new Error(`smart_api_fetch: redirect ${refusal}`);
+        // CROSS-ORIGIN MEANS THE CREDENTIALS DO NOT TRAVEL. An allow-listed
+        // first hop that redirects elsewhere was enough to hand a caller's
+        // X-Api-Key or Authorization to a host they never named.
+        if (new URL(next).origin !== new URL(target).origin) {
+          const stripped: Record<string, string> = {};
+          for (const [key, value] of Object.entries(hopHeaders))
+            if (!carriesCredential(key)) stripped[key] = value;
+          hopHeaders = stripped;
+        }
+        const wasUnsafe =
+          hopMethod !== undefined &&
+          hopMethod.toUpperCase() !== 'GET' &&
+          hopMethod.toUpperCase() !== 'HEAD';
+        if (
+          response.status === 303 ||
+          (wasUnsafe && (response.status === 301 || response.status === 302))
+        ) {
+          hopMethod = 'GET';
+          hopBody = undefined;
+          // A BODY THAT IS GONE TAKES ITS CONTENT HEADERS WITH IT, or the next
+          // request announces a length it is not sending.
+          const withoutBody: Record<string, string> = {};
+          for (const [key, value] of Object.entries(hopHeaders))
+            if (
+              key.toLowerCase() !== 'content-type' &&
+              key.toLowerCase() !== 'content-length'
+            )
+              withoutBody[key] = value;
+          hopHeaders = withoutBody;
+        }
+        target = next;
+      }
 
       // Parse response
       const responseHeaders: Record<string, string> = {};

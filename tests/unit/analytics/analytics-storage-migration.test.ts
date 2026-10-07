@@ -209,7 +209,25 @@ describe('the rollup table gains the measurement contract', () => {
      * The new row arrives the way every real row does: recorded, then folded
      * by the retention prune. Nothing writes a rollup directly.
      */
-    const storage = new SqliteAnalyticsStorage(legacyRollupStore());
+    // THE CLOCK IS INJECTED, so the automatic post-write prune and the
+    // explicit one below agree on what "now" is. Without it the store's
+    // after-write prune read the WALL clock and folded this 2026-09-01 fixture
+    // the moment the real date passed the retention window, leaving the
+    // explicit prune nothing to do and returning 0 -- which is how this test
+    // started failing on four Node shards about a month after it was written,
+    // for a reason unrelated to folding.
+    // TWO DIFFERENT NOWS, because that is what the premise needs: the row is
+    // recorded while it is still FRESH, and folded later by the retention
+    // prune. The store prunes after a write, so a clock already past the
+    // retention window folds the row during `save` and leaves the explicit
+    // prune nothing to count -- which is why this returned 0.
+    //
+    // The injected clock sits a day after the entry, so housekeeping correctly
+    // leaves it alone; the explicit prune then runs at 2027 and folds it.
+    const storage = new SqliteAnalyticsStorage(
+      legacyRollupStore(),
+      () => new Date(2026, 8, 2, 12)
+    );
     await storage.save(newContractEntry());
     const folded = await storage.pruneOldEntries(new Date(2027, 0, 1, 12));
     const rollups = await storage.getRollups();
