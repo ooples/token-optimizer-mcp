@@ -101,3 +101,104 @@ describe('what a spill call counts', () => {
     expect(calls.length + elisions).toBeGreaterThanOrEqual(calls.length);
   });
 });
+
+/**
+ * AN OBSERVER OF `onSummary` CAN SEE WHAT WAS WITHHELD.
+ *
+ * It could not, and the absence read as a product defect. `withheldUnits` was
+ * attached only at the ledger call, so anything watching `onSummary` saw
+ * `undefined` and counted zero -- which is exactly what an end-to-end check of
+ * env-driven spilling reported: spill true and nothing withheld, on repetitive
+ * logs and high-entropy bodies alike. Three fixtures were rewritten chasing a
+ * product bug that was a blind instrument.
+ */
+describe('what an onSummary observer can see', () => {
+  it('carries the withheld count, not just the ledger', async () => {
+    const { startProxy } = await import('../../../src/proxy/server.js');
+    const { createServer } = await import('node:http');
+    const { createHash } = await import('node:crypto');
+    const { mkdtempSync } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const { join } = await import('node:path');
+
+    const upstream = createServer((req, res) => {
+      req.on('data', () => {});
+      req.on('end', () => {
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ content: [{ type: 'text', text: 'ok' }] }));
+      });
+    });
+    await new Promise<void>((resolve) =>
+      upstream.listen(0, '127.0.0.1', () => resolve())
+    );
+    const address = upstream.address();
+    const port = typeof address === 'object' && address ? address.port : 0;
+
+    const seen: (number | undefined)[] = [];
+    const previous = process.env.TOKEN_OPTIMIZER_COMPRESSION;
+    process.env.TOKEN_OPTIMIZER_COMPRESSION = 'aggressive';
+    const proxy = await startProxy({
+      upstream: `http://127.0.0.1:${port}`,
+      projectRoot: mkdtempSync(join(tmpdir(), 'withheld-seen-')),
+      spill: true,
+      onSummary: (summary) => seen.push(summary.withheldUnits),
+    });
+
+    // HIGH ENTROPY, because withholding is for bodies the engines cannot
+    // describe -- a repetitive log compresses well and is not a candidate.
+    const noise = (rows: number) =>
+      Array.from({ length: rows }, (_unused, i) =>
+        createHash('sha256').update(`row-${i}`).digest('base64')
+      ).join(String.fromCharCode(10));
+    const body = (rows: number | null) => ({
+      model: 'claude-sonnet-4-5-20250929',
+      system: 'You are a coding assistant.',
+      messages: [
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'text',
+              text: 'read it',
+              ...(rows === null
+                ? { cache_control: { type: 'ephemeral' } }
+                : {}),
+            },
+          ],
+        },
+        ...(rows === null
+          ? []
+          : [
+              {
+                role: 'user',
+                content: [
+                  {
+                    type: 'text',
+                    text: noise(rows),
+                    cache_control: { type: 'ephemeral' },
+                  },
+                ],
+              },
+            ]),
+      ],
+    });
+    for (const rows of [null, 400])
+      await fetch(`http://127.0.0.1:${proxy.port}/v1/messages`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body(rows)),
+      });
+
+    await new Promise<void>((resolve) => proxy.server.close(() => resolve()));
+    await new Promise<void>((resolve) => upstream.close(() => resolve()));
+    if (previous === undefined) delete process.env.TOKEN_OPTIMIZER_COMPRESSION;
+    else process.env.TOKEN_OPTIMIZER_COMPRESSION = previous;
+
+    // The number is the point: an observer that reads `undefined` counts zero,
+    // and zero is indistinguishable from "nothing was withheld".
+    expect(seen.every((value) => value !== undefined)).toBe(true);
+    expect(
+      seen.reduce((sum, value) => (sum ?? 0) + (value ?? 0), 0)
+    ).toBeGreaterThan(0);
+  }, 30000);
+});

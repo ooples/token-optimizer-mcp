@@ -2001,7 +2001,18 @@ export async function startProxy(options: ProxyOptions = {}): Promise<{
           : undefined
       );
       refreshFindings();
-      options.onSummary?.({ path: req.url || '/', ...summary });
+      // WITHHELD UNITS BELONG HERE TOO, and their absence read as a product
+      // defect. `summary` does not carry them -- they were attached only at
+      // the ledger call below -- so every observer watching onSummary saw
+      // `withheldUnits: undefined` and counted 0. That is what an end-to-end
+      // check of env-driven spilling reported: spill true, nothing withheld,
+      // on repetitive logs AND high-entropy bodies alike. The spilling was
+      // fine; the only instrument that could see it was not wired.
+      options.onSummary?.({
+        path: req.url || '/',
+        ...summary,
+        withheldUnits: spilledBlocks - spilledBefore,
+      });
       // OPT-IN USAGE COUNTERS. Accumulated in memory and written as one rolled-up
       // event per window -- see telemetry/rollup.ts for why not one per request.
       // `noteRequest` counts unconditionally and `record` decides whether any of
