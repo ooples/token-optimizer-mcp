@@ -354,7 +354,10 @@ jobs:
     needs: [release-please, publish-npm]
     if: ${{ needs.release-please.outputs.release_created == 'true' }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
+    # LONGER THAN THE WAIT BELOW, OR THE WAIT CANNOT FINISH. The same trap that
+    # made the mcp-registry fix inert: raising a poll past the job's own timeout
+    # just moves which thing kills it.
+    timeout-minutes: 55
     permissions:
       contents: read
       issues: write
@@ -379,7 +382,7 @@ jobs:
       - name: Install and launch the published version through plugin/launch.mjs
         env:
           RELEASE_VERSION: ${{ needs.release-please.outputs.version }}
-        run: npm run verify:published-launch -- --version "$RELEASE_VERSION" --wait-minutes 20
+        run: npm run verify:published-launch -- --version "$RELEASE_VERSION" --wait-minutes 45
         shell: bash
 
       - name: Open an issue when the published release does not start
