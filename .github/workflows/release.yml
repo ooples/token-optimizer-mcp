@@ -382,7 +382,7 @@ jobs:
       - name: Install and launch the published version through plugin/launch.mjs
         env:
           RELEASE_VERSION: ${{ needs.release-please.outputs.version }}
-        run: npm run verify:published-launch -- --version "$RELEASE_VERSION" --wait-minutes 45
+        run: npm run verify:published-launch -- --version "$RELEASE_VERSION" --wait-minutes 45 --pending-ok
         shell: bash
 
       - name: Open an issue when the published release does not start

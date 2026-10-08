@@ -1,0 +1,140 @@
+# WHY THIS EXISTS SEPARATELY FROM release.yml
+#
+# npm accepts a publish and then queues it for processing: "Your package is being
+# processed and may take a few minutes to become available." That queue took 26
+# minutes for 7.4.1 and 85 minutes for 7.4.2. The release run cannot hold two
+# runners open that long, so `verify-published` now exits PENDING instead of red
+# when the wait runs out (it filed #466 and #467 against an artifact that passed
+# the very same check).
+#
+# Something still has to do the verification, which is what this does. It checks
+# whatever npm currently serves as `latest` -- a version npm serves is, by
+# definition, finished processing, so this can never race the queue. It also
+# catches the case the release run can no longer see: a tag that was published
+# and that npm never served at all.
+name: Verify the latest release
+
+on:
+  schedule:
+    # Every six hours. The observed worst case was 85 minutes, so a release is
+    # always covered well before the next check.
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: verify-latest-release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  resolve:
+    name: Resolve what npm serves and what was released
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      npm_version: ${{ steps.pick.outputs.npm_version }}
+      tag_version: ${{ steps.pick.outputs.tag_version }}
+      lagging: ${{ steps.pick.outputs.lagging }}
+    steps:
+      - name: Pick the versions
+        id: pick
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm_version="$(npm view @ooples/token-optimizer-mcp version --prefer-online)"
+          tag_name="$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName)"
+          published="$(gh release view --repo "$GITHUB_REPOSITORY" --json publishedAt --jq .publishedAt)"
+          tag_version="${tag_name#v}"
+          echo "npm serves $npm_version; newest release is $tag_version (published $published)"
+          echo "npm_version=$npm_version" >> "$GITHUB_OUTPUT"
+          echo "tag_version=$tag_version" >> "$GITHUB_OUTPUT"
+          # A release npm never served. Only call it lagging once the queue has had
+          # far longer than it has ever taken, so this cannot fire on a slow publish.
+          age=$(( $(date -u +%s) - $(date -u -d "$published" +%s) ))
+          if [ "$npm_version" != "$tag_version" ] && [ "$age" -gt 21600 ]; then
+            echo "lagging=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "lagging=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  verify:
+    name: Verify npm's latest installs and runs (${{ matrix.os }})
+    needs: resolve
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      issues: write
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-2022]
+    steps:
+      - name: Checkout the tag npm is serving
+        uses: actions/checkout@v4
+        with:
+          ref: v${{ needs.resolve.outputs.npm_version }}
+          # This job runs package scripts from a released tag; without this,
+          # checkout leaves a token with issues: write in the local git config.
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # No --pending-ok and a short wait: npm already serves this version, so a
+      # timeout here is a real defect, not a queue.
+      - name: Install and launch what npm serves
+        env:
+          NPM_VERSION: ${{ needs.resolve.outputs.npm_version }}
+        shell: bash
+        run: npm run verify:published-launch -- --version "$NPM_VERSION" --wait-minutes 5
+
+      - name: Open an issue when the served release does not start
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_VERSION: ${{ needs.resolve.outputs.npm_version }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          title="v$NPM_VERSION does not install or start through the plugin launcher (${{ matrix.os }})"
+          # This job repeats every six hours; without this it would reopen the same
+          # issue four times a day.
+          if [ -n "$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "$title in:title" --json number --jq '.[0].number // ""')" ]; then
+            echo "an open issue already reports this"
+            exit 0
+          fi
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body "npm serves $NPM_VERSION as latest, but it does not install and start through the plugin launcher on ${{ matrix.os }}: $RUN_URL. Users installing or updating the plugin are affected until this is fixed."
+
+  report-lag:
+    name: Report a release npm never served
+    needs: resolve
+    if: ${{ needs.resolve.outputs.lagging == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Open an issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_VERSION: ${{ needs.resolve.outputs.tag_version }}
+          NPM_VERSION: ${{ needs.resolve.outputs.npm_version }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          title="v$TAG_VERSION was released but npm still serves $NPM_VERSION"
+          if [ -n "$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "$title in:title" --json number --jq '.[0].number // ""')" ]; then
+            echo "an open issue already reports this"
+            exit 0
+          fi
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body "v$TAG_VERSION was released more than six hours ago and npm still serves $NPM_VERSION as latest, so the publish never completed: $RUN_URL."
