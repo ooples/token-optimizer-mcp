@@ -86,6 +86,19 @@ for (;;) {
     }
   );
   if (view.status === 0 && view.stdout.trim() === version) break;
+  // ONLY A MISSING VERSION IS PENDING. `npm view` fails the same way for "this version does not
+  // exist yet" as for a registry that is down, unreachable or refusing our auth, and treating the
+  // second as a queue would report a broken pipeline as a release merely worth waiting on.
+  const stderr = `${view.stderr ?? ''}`;
+  const missing =
+    /E404|ETARGET|No match(ing version)? found|is not in this registry/i.test(
+      stderr
+    );
+  if (view.error || (view.status !== 0 && !missing)) {
+    const detail =
+      view.error?.message ?? stderr.trim().split('\n').slice(-3).join(' ');
+    fail(`cannot ask the registry about ${PACKAGE}@${version}: ${detail}`);
+  }
   if (Date.now() > deadline) {
     const waited = `${PACKAGE}@${version} is not installable after ${waitMinutes} minutes`;
     if (pendingOk)
