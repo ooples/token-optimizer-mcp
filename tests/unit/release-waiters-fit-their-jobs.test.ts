@@ -56,13 +56,31 @@ function waitMinutesOf(run: string): number | null {
 }
 
 /** Every job step that waits on npm, found rather than listed. */
-const waiters: { job: string; step: string; minutes: number }[] = [];
+const waiters: {
+  job: string;
+  step: string;
+  minutes: number;
+  pendingOk: boolean;
+}[] = [];
 for (const [name, job] of Object.entries(workflow.jobs))
   for (const step of job.steps ?? []) {
-    const minutes = waitMinutesOf(step.run ?? '');
+    const run = step.run ?? '';
+    const minutes = waitMinutesOf(run);
     if (minutes !== null)
-      waiters.push({ job: name, step: step.name ?? '(unnamed)', minutes });
+      waiters.push({
+        job: name,
+        step: step.name ?? '(unnamed)',
+        minutes,
+        pendingOk: run.includes('--pending-ok'),
+      });
   }
+
+const FOLLOW_UP = join(
+  process.cwd(),
+  '.github',
+  'workflows',
+  'verify-latest-release.yml'
+);
 
 describe('release waiters fit inside their jobs', () => {
   it('finds every waiter, so a new one cannot be missed', () => {
@@ -87,9 +105,48 @@ describe('release waiters fit inside their jobs', () => {
   });
 
   it('waits long enough to cover what npm has actually taken', () => {
-    // MEASURED, NOT GUESSED: 7.4.0 was not served after 10 minutes and 7.4.1
-    // was not installable after 20, so anything at or below 20 is known to be
-    // too short rather than merely untested.
-    for (const waiter of waiters) expect(waiter.minutes).toBeGreaterThan(20);
+    // MEASURED, NOT GUESSED: 7.4.0 was not served after 10 minutes, 7.4.1 was
+    // not installable after 20 and 7.4.2 not after 45, so anything at or below
+    // 20 is known to be too short rather than merely untested.
+    //
+    // A pending-tolerant waiter is exempt because running out of time is not a
+    // failure for it -- 7.4.2 proved the queue can outlast any budget worth
+    // holding a runner for, so the budget stopped being the thing that decides.
+    for (const waiter of waiters) {
+      if (waiter.pendingOk) continue;
+      expect(waiter.minutes).toBeGreaterThan(20);
+    }
+  });
+
+  it('never lets a slow npm queue fail the release', () => {
+    // 7.4.2 published fine and was reported broken: the waiter could not tell
+    // "npm has not processed it yet" from "the artifact does not work", so it
+    // filed #466 and #467 against a package that passes this very check.
+    const published = waiters.find((w) => w.job === 'verify-published');
+    expect(published).toBeDefined();
+    expect(published?.pendingOk).toBe(true);
+  });
+
+  it('follows up every pending verification somewhere else', () => {
+    // THE OTHER HALF, AND THE REASON --pending-ok IS SAFE. Tolerating a pending
+    // outcome is only acceptable while something still performs the check; on
+    // its own it would silently mean "never verify a published release again".
+    const followUp = load(readFileSync(FOLLOW_UP, 'utf8')) as {
+      on?: Record<string, unknown>;
+      jobs: Record<string, Job>;
+    };
+    const runs = Object.values(followUp.jobs)
+      .flatMap((job) => job.steps ?? [])
+      .map((step) => step.run ?? '');
+    const verifies = runs.filter((run) =>
+      run.includes('verify:published-launch')
+    );
+    expect(verifies.length).toBeGreaterThan(0);
+    // It checks what npm already serves, so a timeout there is a real defect
+    // and must still fail. Tolerating pending in both places would close the
+    // loop on nothing.
+    for (const run of verifies) expect(run).not.toContain('--pending-ok');
+    // And it has to run on its own, without a release to trigger it.
+    expect(Object.keys(followUp.on ?? {})).toContain('schedule');
   });
 });
