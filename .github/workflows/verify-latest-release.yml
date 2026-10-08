@@ -51,38 +51,60 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          npm_version="$(npm view @ooples/token-optimizer-mcp version --prefer-online)"
+          PKG=@ooples/token-optimizer-mcp
+
+          # Only E404/ETARGET means "npm does not serve this yet". A registry that
+          # is down, unreachable or refusing our auth must not be read as a queue,
+          # or a version near the end of the window leaves it unverified.
+          serves_it() {
+            local out
+            if out="$(npm view "$PKG@$1" version --prefer-online 2>&1)"; then
+              return 0
+            fi
+            if printf '%s' "$out" | grep -qE 'E404|ETARGET|No match(ing version)? found'; then
+              return 1
+            fi
+            echo "cannot ask the registry about $1: $out" >&2
+            exit 1
+          }
+
+          npm_version="$(npm view "$PKG" version --prefer-online)"
           echo "npm serves $npm_version"
           echo "npm_version=$npm_version" >> "$GITHUB_OUTPUT"
 
-          # Releases from the last 24 hours, newest first.
-          cutoff="$(date -u -d '24 hours ago' +%s)"
-          recent="$(gh release list --repo "$GITHUB_REPOSITORY" --limit 20 \
-            --json tagName,publishedAt,isDraft \
-            --jq '[.[] | select(.isDraft == false)] | .[] | "\(.tagName) \(.publishedAt)"')"
+          # ORDERED BY publishedAt, NOT BY gh's DEFAULT. `gh release list` sorts by
+          # CREATED_AT, so a draft published later than a newer release would
+          # otherwise be taken as the newest. 100 rather than 20 for the same reason.
+          releases="$(gh release list --repo "$GITHUB_REPOSITORY" --limit 100 \
+            --json tagName,publishedAt,isDraft,isPrerelease \
+            --jq '[.[] | select(.isDraft == false)] | sort_by(.publishedAt) | reverse
+                  | .[] | "\(.tagName) \(.publishedAt) \(.isPrerelease)"')"
 
+          cutoff="$(date -u -d '24 hours ago' +%s)"
+          serves=()
           newest_tag=""
           newest_published=""
-          serves=()
-          while read -r tag published; do
+          while read -r tag published prerelease; do
             [ -n "$tag" ] || continue
-            if [ -z "$newest_tag" ]; then
+            # The tag npm `latest` is compared against must be a STABLE release.
+            # A prerelease published under its own npm tag leaves `latest` on the
+            # stable version correctly, and reporting that as a failed publish
+            # would be a false alarm six hours later.
+            if [ "$prerelease" = "false" ] && [ -z "$newest_tag" ]; then
               newest_tag="$tag"
               newest_published="$published"
             fi
+            # Prereleases stay eligible for verification itself.
             [ "$(date -u -d "$published" +%s)" -ge "$cutoff" ] || continue
             candidate="${tag#v}"
-            # Only versions npm actually serves: anything else is still in the
-            # queue, and the lag check below is what reports it if it never lands.
-            if npm view "@ooples/token-optimizer-mcp@$candidate" version --prefer-online >/dev/null 2>&1; then
+            if serves_it "$candidate"; then
               serves+=("$candidate")
               echo "will verify $candidate (published $published)"
             else
               echo "skipping $candidate: npm does not serve it yet"
             fi
-          done <<< "$recent"
+          done <<< "$releases"
 
-          # `latest` is always worth checking, even when it is older than the window.
           case " ${serves[*]-} " in
             *" $npm_version "*) ;;
             *) serves+=("$npm_version"); echo "adding $npm_version as current latest" ;;
@@ -93,13 +115,15 @@ jobs:
 
           tag_version="${newest_tag#v}"
           echo "tag_version=$tag_version" >> "$GITHUB_OUTPUT"
-          # A release npm never served at all. Only called lagging once the queue
-          # has had far longer than it has ever taken, so a slow publish is quiet.
-          age=$(( $(date -u +%s) - $(date -u -d "$newest_published" +%s) ))
-          if [ "$npm_version" != "$tag_version" ] && [ "$age" -gt 21600 ]; then
-            echo "lagging=true" >> "$GITHUB_OUTPUT"
-          else
+          if [ -z "$newest_tag" ]; then
             echo "lagging=false" >> "$GITHUB_OUTPUT"
+          else
+            age=$(( $(date -u +%s) - $(date -u -d "$newest_published" +%s) ))
+            if [ "$npm_version" != "$tag_version" ] && [ "$age" -gt 21600 ]; then
+              echo "lagging=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "lagging=false" >> "$GITHUB_OUTPUT"
+            fi
           fi
 
   verify:
