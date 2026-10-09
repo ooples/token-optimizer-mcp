@@ -11,7 +11,7 @@
  */
 
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, rmSync, statSync, writeFileSync, readFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, statSync, writeFileSync, readFileSync, readdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -143,6 +143,68 @@ describe('a whole-file shell dump is outlined like a Read', () => {
       command: build(big.replace(/\\/g, '/')),
     });
     expect(out.updatedInput).toBeUndefined();
+  });
+});
+
+describe('outlines in the default install: assist, with the optimizer tools present (issue #478)', () => {
+  // Every other test here declares NO optimizer tools, so no read ever earns a
+  // verdict. With the tools present -- the normal plugin install -- a large read
+  // does earn one, and the verdict path outlined only when refusals were on. In
+  // the default assist mode the files the outline exists for were never outlined.
+  const withTools = (sessionId, toolName, toolInput) => {
+    const result = spawnSync(process.execPath, [join(ROOT, 'plugin/hooks/pretooluse-router.mjs')], {
+      input: JSON.stringify({ session_id: sessionId, cwd: workspace, tool_name: toolName, tool_input: toolInput }),
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        TOKEN_OPTIMIZER_STATE_DIR: join(workspace, 'state'),
+        TOKEN_OPTIMIZER_MODE: 'assist',
+        TOKEN_OPTIMIZER_MCP_CAPABILITIES:
+          'mcp__plugin_token-optimizer_token-optimizer__smart_read,mcp__plugin_token-optimizer_token-optimizer__smart_grep',
+      },
+    });
+    expect({ status: result.status, stderr: result.stderr }).toEqual({ status: 0, stderr: '' });
+    return result.stdout.trim() ? JSON.parse(result.stdout.trim()).hookSpecificOutput || {} : {};
+  };
+
+  test('a whole-file Read is outlined, and the second Read gets the file', () => {
+    const session = `tools-${randomUUID()}`;
+    expect(withTools(session, 'Read', { file_path: big }).updatedInput?.file_path).toMatch(/\.outline\.txt$/);
+    expect(withTools(session, 'Read', { file_path: big }).updatedInput?.file_path).toBeUndefined();
+  });
+
+  test('the call count that prices an outline is per agent', () => {
+    // It used to count marker files whose names began with the session id, but
+    // those names are hashes, so it was always 0 -- and had it worked, a
+    // subagent would have inherited its parent's and siblings' calls.
+    const session = `count-${randomUUID()}`;
+    const stateDir = join(workspace, 'count-state');
+    const small = join(workspace, 'small.txt');
+    writeFileSync(small, 'x\n');
+    const call = (transcript) =>
+      spawnSync(process.execPath, [join(ROOT, 'plugin/hooks/pretooluse-router.mjs')], {
+        input: JSON.stringify({ session_id: session, transcript_path: transcript, cwd: workspace, tool_name: 'Read', tool_input: { file_path: small } }),
+        encoding: 'utf8',
+        env: { ...process.env, TOKEN_OPTIMIZER_STATE_DIR: stateDir },
+      });
+    const parent = join(workspace, `${session}.jsonl`);
+    const child = join(workspace, session, 'subagents', 'agent-a1.jsonl');
+    call(parent);
+    call(parent);
+    call(parent);
+    call(child);
+    const counts = readdirSync(stateDir)
+      .filter((name) => name.endsWith('.json'))
+      .map((name) => JSON.parse(readFileSync(join(stateDir, name), 'utf8')).toolCalls)
+      .sort();
+    expect(counts).toEqual([1, 3]);
+  });
+
+  test('a whole-file shell dump is outlined, and the second dump gets the file', () => {
+    const session = `tools-${randomUUID()}`;
+    const command = `Get-Content -Raw '${big}'`;
+    expect(withTools(session, 'PowerShell', { command }).updatedInput?.command).toMatch(/\.outline\.txt'/);
+    expect(withTools(session, 'PowerShell', { command }).updatedInput?.command).toBeUndefined();
   });
 });
 
