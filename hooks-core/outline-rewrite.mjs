@@ -61,11 +61,18 @@ export function outlineRead({ sessionId, filePath, offset, limit, state }) {
   if (!found) return null;
 
   try {
-    mkdirSync(outlineDir(), { recursive: true });
-    writeFileSync(target, found.outline);
+    mkdirSync(outlineDir(), { recursive: true, mode: 0o700 });
+    // EXCLUSIVE AND PRIVATE. The record is also the once-per-file rule, and
+    // checking for it and then writing it left a window in which two parallel
+    // calls both served an outline. `wx` makes creating it the claim: whoever
+    // loses gets EEXIST and serves the file. 0o600, because the outline of a
+    // private source file sits in the shared temp directory; and `wx` never
+    // follows a path someone else created there first.
+    writeFileSync(target, found.outline, { flag: 'wx', mode: 0o600 });
     return { target, found };
   } catch {
-    // Nowhere to write means no substitution, never a broken read.
+    // Already claimed by a parallel call, or nowhere to write: either way, no
+    // substitution -- never a broken read.
     return null;
   }
 }

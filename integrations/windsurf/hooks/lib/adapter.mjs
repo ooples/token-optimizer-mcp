@@ -1685,7 +1685,9 @@ async function runHook(clientName, event, invocation) {
   // PreToolUse can rewrite the call (issue #478). This used to exist only in the
   // Claude Code router, so no other client was ever outlined. It comes before
   // the refusal: a rewritten call goes through, so there is no turn to pay.
-  if (event === 'pre-tool' && client.inputRewrite) {
+  // NEVER PAST A UCR GUARD. A guard's verdict is a refusal that must stand; an
+  // outline rewrite allows the call, so a guarded read would go through.
+  if (event === 'pre-tool' && client.inputRewrite && !ucrGuardVerdict) {
     const rewrite = outlineRewrite(raw, payload, state, clientName);
     if (rewrite) {
       const told = verdict && adviseOnce(state, verdict) ? verdict.reason : null;

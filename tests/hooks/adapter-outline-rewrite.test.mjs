@@ -9,12 +9,13 @@
  * Codex applies it only with `permissionDecision: 'allow'`.
  */
 
-import { spawnSync } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync, existsSync } from 'node:fs';
+import { spawn, spawnSync } from 'node:child_process';
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
+import { canonicalJson, sha256 } from '../../ucr/index.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
@@ -114,6 +115,102 @@ describe('Codex', () => {
     expect(out.permissionDecision).toBe('allow');
     expect(Object.keys(out.updatedInput)).toEqual(['command']);
     expect(out.updatedInput.command).toMatch(/^Get-Content -LiteralPath '.*\.outline\.txt' -Encoding UTF8$/);
+  });
+});
+
+describe('an outline never overrides a UCR guard', () => {
+  // A guard's verdict is a refusal that must stand. Before this check the
+  // rewrite came first and ALLOWED the call: measured on the previous commit, a
+  // guarded read was allowed and outlined in both the router and Qwen.
+  const guard = () => {
+    const ucrRoot = join(workspace, 'ucr');
+    mkdirSync(ucrRoot, { recursive: true });
+    const body = {
+      schemaVersion: 'ucr.active-guards/1',
+      guards: [
+        {
+          id: 'guard:rules',
+          state: 'active',
+          triggers: [{ field: 'path', operator: 'matches', value: 'rules\\.py$' }],
+          intervention: { type: 'replace-parameters' },
+          replacementAction: { path: 'other.py' },
+          rollback: 'disable this guard',
+          failureBehavior: 'advise',
+          evidence: ['receipt:verified'],
+          scope: { taskId: 't', projectId: 'p', workspaceId: 'w' },
+          sourceObjectId: 'failure:one',
+        },
+      ],
+      eventDigest: 'events',
+    };
+    writeFileSync(join(ucrRoot, 'active-guards.json'), `${canonicalJson({ ...body, indexHash: sha256(body) })}\n`);
+    return {
+      TOKEN_OPTIMIZER_UCR_DIR: ucrRoot,
+      TOKEN_OPTIMIZER_TASK_ID: 't',
+      TOKEN_OPTIMIZER_PROJECT_ID: 'p',
+      TOKEN_OPTIMIZER_WORKSPACE_ID: 'w',
+    };
+  };
+  const call = (entryPath, toolName, toolInput, env) => {
+    const result = spawnSync(process.execPath, [entryPath], {
+      input: JSON.stringify({ hook_event_name: 'PreToolUse', session_id: randomUUID(), cwd: workspace, tool_name: toolName, tool_input: toolInput }),
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        TOKEN_OPTIMIZER_STATE_DIR: join(workspace, 'state'),
+        TOKEN_OPTIMIZER_HOLDOUT: '0',
+        TOKEN_OPTIMIZER_MODE: 'enforce',
+        TOKEN_OPTIMIZER_MCP_CAPABILITIES: 'smart_read,smart_grep',
+        ...env,
+      },
+    });
+    expect(result.status).toBe(0);
+    return result.stdout.trim() ? JSON.parse(result.stdout.trim()).hookSpecificOutput || {} : {};
+  };
+
+  test('the Claude Code router refuses a guarded read rather than outlining it', () => {
+    const router = join(ROOT, 'plugin', 'hooks', 'pretooluse-router.mjs');
+    const out = call(router, 'Read', { file_path: big }, guard());
+    expect(out.permissionDecision).toBe('deny');
+    expect(out.updatedInput).toBeUndefined();
+    // The control: with no guard the same read is outlined.
+    expect(call(router, 'Read', { file_path: big }, {}).updatedInput?.file_path).toMatch(/\.outline\.txt$/);
+  });
+
+  test('the adapter refuses a guarded read rather than outlining it', () => {
+    const out = call(entry('qwen'), 'read_file', { absolute_path: big }, guard());
+    expect(out.permissionDecision).toBe('deny');
+    expect(out.updatedInput).toBeUndefined();
+  });
+});
+
+describe('the once-per-file rule holds under parallel calls', () => {
+  test('eight simultaneous reads of one file in one session serve one outline', async () => {
+    // Checking for the record and writing it later let two parallel calls both
+    // serve an outline -- 3 runs in 5 on the previous commit. Creating the record
+    // exclusively makes it the claim, so exactly one call can win.
+    const router = join(ROOT, 'plugin', 'hooks', 'pretooluse-router.mjs');
+    const session = randomUUID();
+    const outlined = await Promise.all(
+      Array.from(
+        { length: 8 },
+        () =>
+          new Promise((resolve) => {
+            const child = spawn(process.execPath, [router], {
+              env: { ...process.env, TOKEN_OPTIMIZER_STATE_DIR: join(workspace, 'state'), TOKEN_OPTIMIZER_HOLDOUT: '0', TOKEN_OPTIMIZER_MODE: 'assist' },
+            });
+            let stdout = '';
+            child.stdout.on('data', (chunk) => {
+              stdout += chunk;
+            });
+            child.on('close', () => resolve(/outline\.txt/.test(stdout)));
+            child.stdin.end(
+              JSON.stringify({ session_id: session, cwd: workspace, tool_name: 'Read', tool_input: { file_path: big } })
+            );
+          })
+      )
+    );
+    expect(outlined.filter(Boolean)).toHaveLength(1);
   });
 });
 

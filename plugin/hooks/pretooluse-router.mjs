@@ -915,7 +915,10 @@ function compactorFor(sessionId, command) {
   // every file the outline was built for got only the after-the-fact advisory.
   // An outline is not a refusal; it is offered once per file per session, and
   // the second read of the file gets the file, which is what bounds its cost.
-  if (payload.tool_name === 'Read') {
+  //
+  // NEVER PAST A UCR GUARD: a guard's verdict is a refusal that must stand, and
+  // an outline rewrite allows the call.
+  if (payload.tool_name === 'Read' && !ucrGuardVerdict) {
     const substitution = outlineSubstitution(payload, state);
     if (substitution) {
       allowWithRewrite(
@@ -928,8 +931,8 @@ function compactorFor(sessionId, command) {
   // And for a whole-file shell dump on this path too: a dump large enough to earn
   // a verdict is exactly the dump worth outlining, so wiring it only to the
   // allowed path would repeat the half-shipped defect described above. Not gated
-  // on refusals either, for the reason given for Read.
-  if (payload.tool_name === 'Bash') {
+  // on refusals either, for the reason given for Read. Never past a UCR guard.
+  if (payload.tool_name === 'Bash' && !ucrGuardVerdict) {
     const shellOutline = shellOutlineSubstitution(
       payload,
       raw?.tool_name ?? raw?.toolName ?? raw?.tool,
