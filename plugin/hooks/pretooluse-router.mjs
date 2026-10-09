@@ -69,7 +69,7 @@ import { isFsSafePath, canonicalPath } from './lib/paths.mjs';
 // mean different things -- that one swaps a stale claim, this one swaps a
 // large read for an outline of the same file.
 import { substitutionFor as outlineFor } from './lib/substitute.mjs';
-import { readFileSync, statSync, mkdirSync, writeFileSync, readdirSync, existsSync } from 'node:fs';
+import { readFileSync, statSync, mkdirSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -186,6 +186,10 @@ try {
   const state = loadState(payload.session_id, agentScope);
   const toolEvidence = optimizerToolsForHook(raw, state);
   rememberOptimizerTools(state, toolEvidence);
+  // This agent's position in its session, for pricing an outline. Counted in the
+  // agent's own state, so a subagent starts at its own first call rather than at
+  // its parent's and siblings' total.
+  state.toolCalls = (Number(state.toolCalls) || 0) + 1;
   // A subagent never sees SessionStart, so its first tool call carries the
   // guidance instead, on whichever exit this call takes.
   const briefing = subagentBriefing(raw, state);
@@ -555,7 +559,7 @@ ${nudge}`
     }
 
     if (payload.tool_name === 'Read') {
-      const substitution = outlineSubstitution(payload);
+      const substitution = outlineSubstitution(payload, state);
       if (substitution) {
         allowWithRewrite(
           { ...payload.tool_input, file_path: substitution.target },
@@ -569,7 +573,8 @@ ${nudge}`
     if (payload.tool_name === 'Bash') {
       const shellOutline = shellOutlineSubstitution(
         payload,
-        raw?.tool_name ?? raw?.toolName ?? raw?.tool
+        raw?.tool_name ?? raw?.toolName ?? raw?.tool,
+        state
       );
       if (shellOutline) {
         allowWithRewrite(
@@ -699,20 +704,16 @@ ${nudge}`
  * which degrades to the client's own behaviour rather than to ours.
  */
 /**
- * How many tool calls this session has made, for pricing a substitution.
+ * How many tool calls this agent has made, for pricing a substitution.
  *
- * The floor rises as a session runs out of turns to amortise a saving over, so
- * the decision needs a rough position in the session. The marker directory
- * already holds one file per command seen; counting this session's is close
- * enough and costs a readdir.
+ * READ FROM THE AGENT'S STATE (issue #478). It used to count files in the marker
+ * directory whose names began with the session id -- but those files are named
+ * by a hash of session and command, so the filter matched nothing and every
+ * session priced itself as if at its first call. The counter in state is per
+ * agent, so a subagent is not charged for its parent's and siblings' calls.
  */
-function turnsSoFar(sessionId) {
-  try {
-    return readdirSync(stateDir()).filter((f) => f.startsWith(`${sessionId.slice(0, 8)}-`))
-      .length;
-  } catch {
-    return 0;
-  }
+function turnsSoFar(state) {
+  return Number(state?.toolCalls) || 0;
 }
 
 /**
@@ -743,7 +744,7 @@ function outlineNotice(payload, substitution) {
   );
 }
 
-function outlineSubstitution(payload) {
+function outlineSubstitution(payload, state) {
   const filePath = payload.tool_input?.file_path;
   if (!filePath) return null;
 
@@ -768,7 +769,7 @@ function outlineSubstitution(payload) {
   );
 
   const found = outlineFor(filePath, {
-    turnsSoFar: turnsSoFar(payload.session_id || ''),
+    turnsSoFar: turnsSoFar(state),
     alreadyRead: existsSync(target),
   });
   if (!found) return null;
@@ -800,7 +801,7 @@ function outlineSubstitution(payload) {
  *
  * Returns `{ command, notice }`, or null to leave the command alone.
  */
-function shellOutlineSubstitution(payload, rawToolName) {
+function shellOutlineSubstitution(payload, rawToolName, state) {
   const dump = wholeFileDump(payload.tool_input?.command, payload.cwd);
   if (!dump) return null;
   const powershell = /powershell|pwsh/i.test(String(rawToolName || ''));
@@ -808,10 +809,10 @@ function shellOutlineSubstitution(payload, rawToolName) {
   // builtin that describes a command, so rewriting it would change its meaning.
   if (!powershell && !/^cat$/i.test(dump.head)) return null;
   const filePath = canonicalPath(dump.path, payload.cwd);
-  const substitution = outlineSubstitution({
-    ...payload,
-    tool_input: { file_path: filePath },
-  });
+  const substitution = outlineSubstitution(
+    { ...payload, tool_input: { file_path: filePath } },
+    state
+  );
   if (!substitution) return null;
 
   // The rewrite has to be valid in the shell that runs it. PowerShell takes a
@@ -1002,11 +1003,16 @@ function compactorFor(sessionId, command) {
   // turns track the MCP redirects at 0.90 turns per redirected call. A rewrite
   // delivers the same substitution for none of that.
   //
-  // Gated on `refusalsEnabled()` for the reason the Bash arm gives: under assist
-  // this read is already going through untouched, and bounding it there would
-  // be new behaviour rather than a cheaper spelling of an existing refusal.
-  if (payload.tool_name === 'Read' && refusalsEnabled()) {
-    const substitution = outlineSubstitution(payload);
+  // NOT GATED ON REFUSALS (issue #478). It was, on the reasoning that under
+  // assist this read goes through untouched and an outline would be new
+  // behaviour. But the allowed path above already outlines under assist -- so
+  // a file too small to earn a verdict was outlined and a file large enough to
+  // earn one was not: in the default mode, with the optimizer tools installed,
+  // every file the outline was built for got only the after-the-fact advisory.
+  // An outline is not a refusal; it is offered once per file per session, and
+  // the second read of the file gets the file, which is what bounds its cost.
+  if (payload.tool_name === 'Read') {
+    const substitution = outlineSubstitution(payload, state);
     if (substitution) {
       allowWithRewrite(
         { ...payload.tool_input, file_path: substitution.target },
@@ -1017,11 +1023,13 @@ function compactorFor(sessionId, command) {
 
   // And for a whole-file shell dump on this path too: a dump large enough to earn
   // a verdict is exactly the dump worth outlining, so wiring it only to the
-  // allowed path would repeat the half-shipped defect described above.
-  if (payload.tool_name === 'Bash' && refusalsEnabled()) {
+  // allowed path would repeat the half-shipped defect described above. Not gated
+  // on refusals either, for the reason given for Read.
+  if (payload.tool_name === 'Bash') {
     const shellOutline = shellOutlineSubstitution(
       payload,
-      raw?.tool_name ?? raw?.toolName ?? raw?.tool
+      raw?.tool_name ?? raw?.toolName ?? raw?.tool,
+      state
     );
     if (shellOutline) {
       allowWithRewrite(

@@ -49,9 +49,27 @@ const ABSOLUTE_FLOOR_BYTES = 4_000;
  * Saving `b` bytes is worth `b / BYTES_PER_TOKEN * remaining` re-read tokens.
  * Substituting risks at most one extra turn, worth TOKENS_PER_TURN. Solving for
  * the break-even and keeping the absolute floor gives the size we require.
+ *
+ * REMAINING IS AT LEAST WHAT HAS ELAPSED. The estimate used to be
+ * `typicalTurns - turnsSoFar`, floored at 1, so from turn 16 on every session was
+ * priced as if it ended on the next call -- the floor jumped to ~116 KB and files
+ * below that were never outlined again. Real sessions say the opposite: across 53
+ * of them (main sessions and workflow agents, one call per message.id), the
+ * median calls still to come were 115-125 at every position from call 1 to call
+ * 100, and the 25th percentile 40-54 (issue #478). A session that has already
+ * run long is evidence it will keep running, which is exactly where a re-read
+ * file costs the most. Taking the larger of the two estimates keeps a short
+ * session's pricing unchanged through turn 8 and never assumes more turns
+ * remain than have elapsed, which stays below the measured 25th percentile.
+ *
+ * It also makes an overcounted position harmless. The router's count is per
+ * SESSION, and subagents inherit their parent's session id, so a fresh agent
+ * can see its siblings' calls; under the old estimate that pushed it straight to
+ * the 116 KB floor on its first read.
  */
 export function floorBytes(turnsSoFar, typicalTurns = TYPICAL_TURNS) {
-  const remaining = Math.max(1, typicalTurns - turnsSoFar);
+  const elapsed = Math.max(0, turnsSoFar);
+  const remaining = Math.max(1, typicalTurns - elapsed, elapsed);
   const breakEven = (TOKENS_PER_TURN / remaining) * BYTES_PER_TOKEN;
   return Math.max(ABSOLUTE_FLOOR_BYTES, Math.round(breakEven));
 }

@@ -22,7 +22,7 @@ import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
-import { substitutionFor } from '../../hooks-core/substitute.mjs';
+import { substitutionFor, floorBytes } from '../../hooks-core/substitute.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
@@ -66,6 +66,45 @@ beforeEach(() => {
   writeFileSync(big, module_(300));
 });
 afterEach(() => rmSync(workspace, { recursive: true, force: true }));
+
+describe('the size floor over a long session (issue #478)', () => {
+  // Pricing assumed every session ends at turn 16, so from there on the floor sat
+  // at ~116 KB and ordinary source files were never outlined -- in exactly the long
+  // agent sessions where a re-read costs the most. Measured on 53 real sessions,
+  // the median calls still to come stayed at 115-125 from call 1 to call 100.
+  test('a short session is priced exactly as before, through turn 8', () => {
+    // 33000 tokens / remaining turns * 3.6 bytes per token, as the formula always was.
+    expect(floorBytes(0)).toBe(Math.round((33_000 / 16) * 3.6));
+    expect(floorBytes(4)).toBe(Math.round((33_000 / 12) * 3.6));
+    expect(floorBytes(8)).toBe(Math.round((33_000 / 8) * 3.6));
+  });
+
+  test('the floor never rises past where elapsed equals remaining', () => {
+    // The old estimate reached 118,800 bytes at turn 16 and stayed there.
+    for (const turn of [9, 16, 50, 300, 5000]) {
+      expect(floorBytes(turn)).toBeLessThanOrEqual(floorBytes(8));
+    }
+    expect(floorBytes(16)).toBeLessThan(33_000 * 3.6);
+  });
+
+  test('deep into a session it settles at the absolute floor', () => {
+    expect(floorBytes(300)).toBe(4_000);
+  });
+
+  test('a ~50 KB source file is still outlined on its first read at call 300', () => {
+    // The live failure: a 64 KB file dumped whole at this point in a session went
+    // through untouched. Whether a subagent's count included its siblings' calls
+    // no longer matters, because a larger count can only lower the floor.
+    const size = statSync(big).size;
+    expect(size).toBeGreaterThan(floorBytes(300));
+    expect(size).toBeLessThan(33_000 * 3.6);
+    expect(substitutionFor(big, { turnsSoFar: 300 })).not.toBeNull();
+  });
+
+  test('a negative position is treated as the start of a session', () => {
+    expect(floorBytes(-5)).toBe(floorBytes(0));
+  });
+});
 
 describe('the decision itself', () => {
   test('a large outlineable file is outlined on the first read', () => {

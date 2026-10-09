@@ -1,6 +1,6 @@
 // GENERATED FILE -- do not edit.
 // Source of truth: hooks-core/policy.mjs. Regenerate with `npm run sync:hooks`.
-﻿/**
+/**
  * Shared policy for the token-optimizer Claude Code hooks.
  *
  * WHY THIS EXISTS: before this module, installing the plugin registered exactly
@@ -383,6 +383,7 @@ function emptyState() {
     routingAdvised: [],
     subagentBriefed: false,
     seenUrls: {},
+    toolCalls: 0,
     optimizerToolAbsentAt: {},
     optimizerToolOkAt: {},
     optimizerTools: [],
@@ -468,6 +469,7 @@ export function loadState(sessionId, agent) {
         ? parsed.routingAdvised.filter((kind) => typeof kind === 'string').slice(-200)
         : [],
       subagentBriefed: parsed.subagentBriefed === true,
+      toolCalls: Number.isFinite(parsed.toolCalls) && parsed.toolCalls > 0 ? parsed.toolCalls : 0,
       seenUrls:
         parsed.seenUrls && typeof parsed.seenUrls === 'object' && !Array.isArray(parsed.seenUrls)
           ? parsed.seenUrls
@@ -644,6 +646,9 @@ export function saveState(sessionId, state, agent) {
         ...new Set([...(current.routingAdvised || []), ...(state.routingAdvised || [])]),
       ].slice(-200),
       subagentBriefed: Boolean(current.subagentBriefed || state.subagentBriefed),
+      // A count, so the larger wins: two processes that each counted one more call
+      // must not move it backwards.
+      toolCalls: Math.max(Number(current.toolCalls) || 0, Number(state.toolCalls) || 0),
       seenUrls: { ...(current.seenUrls || {}), ...(state.seenUrls || {}) },
       // An inventory is a point-in-time observation, not an append-only set.
       // Union would resurrect a tool after a newer host payload explicitly
