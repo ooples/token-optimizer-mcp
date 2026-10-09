@@ -111,4 +111,58 @@ describe('the cache is bounded', () => {
     // And it is still correct with a cache that has been cleared under it.
     expect(tokenCost(last)).toBe(walkCost(last));
   });
+
+  it('refuses to cache a fragment that cannot fit the bound on its own', () => {
+    // REVIEW FINDING ON #472, AND A REAL ONE. The guard used to clear and then
+    // insert regardless, so a single oversized key sat in a long-lived server
+    // with occupancy above its own declared ceiling: a 5MB string measured
+    // 5,242,880 bytes retained against a 4,194,304 maximum. Every key in the
+    // test above is 1KB, which is why none of them caught it.
+    const oversized = 'x'.repeat(5 * 1024 * 1024);
+    expect(tokenCost(oversized)).toBe(walkCost(oversized));
+    const held = tokenCostCacheOccupancy();
+    expect(held.bytes).toBeLessThanOrEqual(held.maxBytes);
+    // Still answers correctly on the way back out, uncached.
+    expect(tokenCost(oversized)).toBe(walkCost(oversized));
+    expect(tokenCostCacheOccupancy().bytes).toBeLessThanOrEqual(held.maxBytes);
+  });
+
+  it('accounts a multibyte fragment at two bytes per code unit', () => {
+    // REVIEW FINDING ON #472: `text.length` is UTF-16 code units, not bytes,
+    // so a run of CJK was accounted at half what it retains.
+    //
+    // THIS ASSERTION HAD TO BE EARNED. A first version costed a 3M-unit CJK
+    // string and asserted only that the ceiling still held -- which it does
+    // either way, so mutating the measure back to `text.length` passed it.
+    // The accounting itself is what has to be observed.
+    const cjk = '\u6f22'.repeat(1000) + 'unique-multibyte-accounting-probe';
+    const units = cjk.length;
+    const before = tokenCostCacheOccupancy();
+    tokenCost(cjk);
+    const after = tokenCostCacheOccupancy();
+    // Either this entry was added to the set already there, or the insert
+    // cleared first and it is now all that is left. Both say two bytes a unit.
+    expect([after.bytes - before.bytes, after.bytes]).toContain(units * 2);
+  });
+
+  it('refuses a multibyte fragment whose retention exceeds the bound', () => {
+    // 3M code units is under the 4MiB ceiling counted as a raw length and over
+    // it counted as retention, which is the case the measure above exists for.
+    const huge = '\u6f22'.repeat(3 * 1024 * 1024);
+    // MEASURED AS A DELTA, not against total occupancy: the tests above leave
+    // a working set behind, so an absolute reading here would be about them.
+    const before = tokenCostCacheOccupancy();
+    expect(tokenCost(huge)).toBe(walkCost(huge));
+    const after = tokenCostCacheOccupancy();
+    // Refused outright, so nothing is stored AND nothing is evicted for it.
+    expect(after.bytes).toBe(before.bytes);
+    expect(after.entries).toBe(before.entries);
+    expect(after.bytes).toBeLessThanOrEqual(after.maxBytes);
+  });
+
+  it('agrees with a fresh walk on multibyte text that does fit', () => {
+    const small = ['\u6f22\u5b57 and latin', '\ud83d\ude80\ud83d\ude80 rocket', 'caf\u00e9 na\u00efve'];
+    small.forEach((t) => tokenCost(t));
+    expect(small.map((t) => tokenCost(t))).toEqual(small.map((t) => walkCost(t)));
+  });
 });

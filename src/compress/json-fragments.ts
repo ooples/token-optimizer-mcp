@@ -407,15 +407,29 @@ export function tokenCost(text: string): number {
   let n = 0;
   PRETOKEN.lastIndex = 0;
   while (PRETOKEN.exec(text) !== null) n += 1;
+  // WHAT THE MAP RETAINS, which is the quantity the byte bound is about.
+  // `text.length` is UTF-16 code units, not bytes, so a run of CJK counts
+  // half what it occupies; two bytes per unit is the upper bound on retention,
+  // since V8 may store a latin1 string at one byte per unit. Deliberately NOT
+  // `Buffer.byteLength`: that is an O(n) scan over the hot path this function
+  // exists to keep cheap, and the bound only needs to be an honest ceiling.
+  const retained = text.length * 2;
+
+  // A FRAGMENT THAT CANNOT FIT ALONE IS NEVER CACHED. Clearing to make room
+  // for it would evict a working set that is paying for itself and still leave
+  // occupancy above the declared maximum -- one 5MB string measured 5,242,880
+  // bytes retained against a 4,194,304 ceiling before this guard existed.
+  if (retained > TOKEN_COST_CACHE_BYTES) return n;
+
   if (
     TOKEN_COST_CACHE.size >= TOKEN_COST_CACHE_ENTRIES ||
-    tokenCostCacheBytes + text.length > TOKEN_COST_CACHE_BYTES
+    tokenCostCacheBytes + retained > TOKEN_COST_CACHE_BYTES
   ) {
     TOKEN_COST_CACHE.clear();
     tokenCostCacheBytes = 0;
   }
   TOKEN_COST_CACHE.set(text, n);
-  tokenCostCacheBytes += text.length;
+  tokenCostCacheBytes += retained;
   return n;
 }
 
