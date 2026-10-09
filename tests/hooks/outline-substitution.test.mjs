@@ -319,6 +319,13 @@ describe('a refused read is answered, not just refused', () => {
     expect(result.context).toContain('finance expects half-up');
     expect(result.context).toContain('What is known about it, beside its outline');
     expect(result.context).not.toContain('rule_0001  (line');
+
+    // And when the read names the file RELATIVE to the session's cwd. The hook
+    // process runs elsewhere, so a lookup by the spelling the caller used
+    // resolves against the wrong directory and finds nothing.
+    const relative = read('enforce', { file: 'rules.py' });
+    expect(relative.updatedInput?.file_path).toMatch(/\.outline\.txt$/);
+    expect(relative.context).toContain('finance expects half-up');
   });
 
   test('assist answers the read with the outline too (issue #478)', () => {

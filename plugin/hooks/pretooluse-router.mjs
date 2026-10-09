@@ -800,12 +800,10 @@ function knownBesideOutline(payload) {
     const dir = wikiDir(projectRootFor(path, payload.cwd));
     const source = readFileSync(path, 'utf8');
     indexFile(dir, path, source);
-    return annotatedSkeleton(
-      load(dir),
-      payload.tool_input.raw_file_path ?? path,
-      source,
-      { outlined: true }
-    ).text;
+    // The CANONICAL path: annotatedSkeleton looks findings up by it, and a
+    // relative spelling would resolve against this process's cwd, not the
+    // session's, and miss them.
+    return annotatedSkeleton(load(dir), path, source, { outlined: true }).text;
   } catch {
     // Knowledge beside an outline is a courtesy; the outline stands without it.
     return null;
