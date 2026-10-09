@@ -20,6 +20,17 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const PACKAGE_VERSION = JSON.parse(
   readFileSync(join(ROOT, 'package.json'), 'utf8')
 ).version;
+// WRITTEN AT THE BUNDLED GRADE, which is weaker than proof and now says so.
+//
+// This list used to be assigned to TOKEN_OPTIMIZER_MCP_CAPABILITIES -- the
+// variable hooks-core/capabilities.mjs treats as a HOST-supplied inventory. A
+// list this generator made up therefore read back as "the host named these
+// tools in this session", so every plugin install claimed positive runtime
+// inventory evidence whether or not a single tool had been registered. #469 is
+// that defect observed: 19 tools claimed, none of them callable, the model told
+// to call them anyway. The grade is a different variable so the two can never be
+// confused again, and an operator who really does know the inventory still
+// states it through TOKEN_OPTIMIZER_MCP_CAPABILITIES and still outranks this.
 const BUNDLED_MCP_CAPABILITIES = HOOK_MCP_TOOLS.join(',');
 
 /** [directory, client key, event, filename] */
@@ -126,7 +137,8 @@ ${versionStamp}// THE BUNDLED INVENTORY IS ASSERTED ONLY FOR AN ACTUAL PLUGIN IN
 // NOTE FOR EDITORS: this whole block is inside a template literal. A backtick
 // here terminates the string and the generator dies with a SyntaxError far from
 // the cause -- which is exactly what happened writing this comment.
-process.env.TOKEN_OPTIMIZER_MCP_CAPABILITIES ??= '${BUNDLED_MCP_CAPABILITIES}';
+// Install-time default: contributes names, never proof. See #469.
+process.env.TOKEN_OPTIMIZER_MCP_CAPABILITIES_BUNDLED ??= '${BUNDLED_MCP_CAPABILITIES}';
 try {
   const { run } = await import('./lib/adapter.mjs');
   await run('${client}', '${event}');

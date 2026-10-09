@@ -124,6 +124,14 @@ function addInventoryValue(value, names) {
  * TOKEN_OPTIMIZER_MCP_CAPABILITIES environment variable is the portable escape
  * hatch for hosts whose hook payload has no inventory field; it must enumerate
  * exact registered names and is never inferred from TOOL_PROFILE.
+ *
+ * TOKEN_OPTIMIZER_MCP_CAPABILITIES_BUNDLED is the WEAKER grade and is read only
+ * when nothing stronger is present. A client entry point writes it at install
+ * time to say "this package shipped an MCP declaration beside these hooks",
+ * which a broken or unregistered server satisfies exactly as well as a working
+ * one. It contributes names, never proof. See #469: a session was told it had
+ * "positive runtime inventory evidence" for tools that the host had not
+ * registered and no call could reach.
  */
 export function optimizerToolEvidence(raw = {}, env = process.env) {
   const hostNames = new Set();
@@ -153,27 +161,163 @@ export function optimizerToolEvidence(raw = {}, env = process.env) {
     env,
     'TOKEN_OPTIMIZER_MCP_CAPABILITIES'
   );
-  if (proven) addInventoryValue(env.TOKEN_OPTIMIZER_MCP_CAPABILITIES, names);
-  return { proven, names };
+  if (proven) {
+    addInventoryValue(env.TOKEN_OPTIMIZER_MCP_CAPABILITIES, names);
+    return { proven, names };
+  }
+
+  // The install-time default, which is a claim about the package rather than
+  // about this session. Named so the grade cannot be laundered: writing it into
+  // TOKEN_OPTIMIZER_MCP_CAPABILITIES is what made a fabricated list read as
+  // proof for every plugin install (#469).
+  addInventoryValue(env.TOKEN_OPTIMIZER_MCP_CAPABILITIES_BUNDLED, names);
+  return { proven: false, names };
+}
+
+/**
+ * The tool-not-found replies a host sends when a DECLARED MCP tool never
+ * reached the session's tool registry.
+ *
+ * Deliberately narrow. A wiki_write that fails because the claim carried no
+ * anchor, or a smart_read that fails on a missing path, says nothing about
+ * whether the tool exists -- treating those as absence would disable the whole
+ * subsystem on the first ordinary error. Only "there is no such tool" counts.
+ */
+const TOOL_ABSENT =
+  /no such tool|tool not found|unknown tool|no tool named|not a registered tool|is not available|method not found|-32601|server not connected|mcp server .* not (?:found|connected|running)/i;
+
+/**
+ * Whether a failed call's message means THE TOOL DOES NOT EXIST.
+ *
+ * Exported so the transcript reader can apply the same test without a second
+ * copy of the pattern. It takes text and returns a boolean, which is what lets
+ * the caller that holds transcript text classify in place and hand back only a
+ * tool name -- no transcript bytes cross the boundary.
+ */
+export function isToolAbsentMessage(text) {
+  return TOOL_ABSENT.test(String(text || ''));
+}
+
+/**
+ * Grade a COMPLETED optimizer MCP call -- the only direct evidence either way.
+ *
+ * Every other signal in this file is a declaration: a host listing names, or a
+ * package saying it shipped a server. An actual call is the thing those
+ * declarations are predictions about, so it settles the question for that one
+ * tool. #469 is the case that needs it: the server launched and listed 19 tools
+ * standalone, the hooks advertised them, and not one of them could be called in
+ * the session. Nothing short of a call distinguishes that from a healthy
+ * install, because the host never told the hooks either way.
+ *
+ * Kept per-name and apart from `optimizerTools`, which holds a whole inventory
+ * a host supplied. Folding one observation into that list would shrink the
+ * inventory to the single tool that happened to be called first.
+ */
+export function observeOptimizerToolCall(
+  state,
+  toolName,
+  { ok = false, text = '', at = Date.now() } = {}
+) {
+  const name = optimizerToolName(toolName);
+  if (!state || !name || !HOOK_MCP_TOOL_SET.has(name)) return state;
+  // TWO TIMESTAMPS PER NAME, AND THE LATER ONE WINS.
+  //
+  // An MCP server can be started, reloaded or reconnected mid-session -- the
+  // reporter of #469 ran `/plugin` and `/reload-plugins` -- so a suppression
+  // has to be revocable or a user who fixes their install never gets the tools
+  // back. A plain list cannot do that here, for two reasons that both bite:
+  // the transcript scan re-reads the SAME failure on every later event and
+  // would re-add a name that had just been cleared, and `saveState` merges
+  // concurrent hook processes field by field, where a union resurrects a
+  // removal. Comparing a last-absent against a last-ok instant is monotonic,
+  // order-independent and merges as a per-key max, exactly like `actCounts`.
+  if (ok) return markOptimizerToolOk(state, name, at);
+  if (!isToolAbsentMessage(text)) return state;
+  return markOptimizerToolAbsent(state, name, at);
+}
+
+/** Per-name instant maps, created lazily so an untouched state stays clean. */
+function stampTool(state, field, name, at) {
+  const stamps = { ...(state[field] || {}) };
+  const when = Number(at) || Date.now();
+  // MONOTONIC. A transcript entry with no parsable timestamp arrives as 0 and
+  // must not pull a later observation backwards.
+  stamps[name] = Math.max(Number(stamps[name]) || 0, when);
+  state[field] = stamps;
+  return state;
+}
+
+/**
+ * Record that a named optimizer tool is not in this session's tool registry.
+ *
+ * Separate from `observeOptimizerToolCall` because the two callers hold
+ * different things: a post-tool event hands over a result to be classified,
+ * while the transcript reader has already classified its own text and can only
+ * hand back a name and an instant. Both end here, so the stored shape has one
+ * writer.
+ */
+export function markOptimizerToolAbsent(state, toolName, at = Date.now()) {
+  const name = optimizerToolName(toolName);
+  if (!state || !name || !HOOK_MCP_TOOL_SET.has(name)) return state;
+  return stampTool(state, 'optimizerToolAbsentAt', name, at);
+}
+
+/** Record that a named optimizer tool answered a call. Revokes an absence. */
+export function markOptimizerToolOk(state, toolName, at = Date.now()) {
+  const name = optimizerToolName(toolName);
+  if (!state || !name || !HOOK_MCP_TOOL_SET.has(name)) return state;
+  return stampTool(state, 'optimizerToolOkAt', name, at);
+}
+
+/** Names a call in this session proved absent, and no later call brought back. */
+export function unreachableOptimizerTools(state = {}) {
+  const absentAt = state?.optimizerToolAbsentAt || {};
+  const okAt = state?.optimizerToolOkAt || {};
+  const out = new Set();
+  for (const [name, when] of Object.entries(absentAt)) {
+    if (!HOOK_MCP_TOOL_SET.has(name)) continue;
+    if ((Number(when) || 0) > (Number(okAt[name]) || 0)) out.add(name);
+  }
+  return out;
 }
 
 /** Rehydrate the most recently proven inventory for this exact hook session. */
 export function optimizerToolsForHook(raw, state = {}, env = process.env) {
+  // A TOOL A CALL PROVED ABSENT IS DROPPED AT EVERY GRADE (#469), including a
+  // host's own inventory: the host said it registered the tool and the call
+  // says otherwise, and the call is the later and more direct observation.
+  const absent = unreachableOptimizerTools(state);
+  const without = (evidence) =>
+    absent.size === 0
+      ? evidence
+      : {
+          proven: evidence.proven,
+          names: new Set(
+            [...evidence.names].filter((name) => !absent.has(name))
+          ),
+        };
+
   const current = optimizerToolEvidence(raw, env);
-  if (current.proven) return current;
+  if (current.proven) return without(current);
   if (
     Number.isFinite(state.optimizerToolsObservedAt) &&
     state.optimizerToolsObservedAt > 0 &&
     Array.isArray(state.optimizerTools)
   ) {
-    return {
+    return without({
       proven: true,
       names: new Set(
         state.optimizerTools.filter((name) => HOOK_MCP_TOOL_SET.has(name))
       ),
-    };
+    });
   }
-  return { proven: false, names: new Set() };
+  // CARRY THE BUNDLED NAMES RATHER THAN AN EMPTY SET. This used to return
+  // nothing at all, which was unreachable while the install-time default was
+  // written into the proven variable. Now that the default grades honestly,
+  // returning an empty set here would silently switch routing advice off for
+  // every plugin install -- a regression dressed as a fix. The names still
+  // steer advice; `proven` still gates anything that costs the user a call.
+  return without({ proven: false, names: current.names });
 }
 
 /** Persist a proven inventory on the state object used by later hook events. */

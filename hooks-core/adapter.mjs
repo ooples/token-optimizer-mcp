@@ -75,7 +75,11 @@ import {
 import { indexFile } from './staleness.mjs';
 import { recordAuthoredContent } from './authored.mjs';
 import { observedWrites, queueInvalidation } from './pending.mjs';
-import { archive, isArchived } from './transcript.mjs';
+import {
+  absentToolsFromTranscript,
+  archive,
+  isArchived,
+} from './transcript.mjs';
 import { harvestMode } from './harvest.mjs';
 import { canonicalPath, isFsSafePath } from './paths.mjs';
 import {
@@ -86,6 +90,8 @@ import {
 import {
   HOOK_MCP_TOOLS,
   nativeClientProfiles,
+  markOptimizerToolAbsent,
+  observeOptimizerToolCall,
   optimizerToolEvidence,
   optimizerToolsForHook,
   rememberOptimizerTools,
@@ -729,6 +735,45 @@ function extractionNotice() {
   }
 }
 
+/**
+ * Fold what this session has OBSERVED about tool reachability into its state.
+ *
+ * Called from every branch that then reads the inventory, because an inventory
+ * read without this is a reading of what was declared rather than of what
+ * works. Both signals land in one writer so the two branches cannot drift --
+ * the Stop branch keeps its own evidence lookup, and when this lived inline it
+ * reached only the other one, which is how the fix for #469 first failed its
+ * own test.
+ *
+ * Fail-open and silent by design: grading is an optimization and must never
+ * cost a tool call.
+ */
+function gradeObservedTools(state, event, payload, raw) {
+  try {
+    // THE TRANSCRIPT IS THE ONLY SIGNAL ON THE PRIMARY CLIENT. Claude Code
+    // fires no PostToolUse for a failed tool call -- the measurement is in
+    // transcript.mjs's own header, 2,238 of 2,238 live events carrying
+    // `success: true` -- and a call to a tool the host never registered is the
+    // most complete failure there is, so it produces no event at all. Reading
+    // the transcript is what lets a session ever learn that the inventory it
+    // was handed is wrong.
+    const transcriptPath = payload?.transcript_path ?? payload?.transcriptPath;
+    for (const { name, at } of absentToolsFromTranscript(transcriptPath)) {
+      markOptimizerToolAbsent(state, name, at);
+    }
+    // And the event itself, for the ten clients that do report a failed call.
+    if (event === 'post-tool') {
+      observeOptimizerToolCall(state, payload?.tool_name, {
+        ok: toolSucceeded(raw),
+        text: outputFrom(raw),
+      });
+    }
+  } catch {
+    // Fail open, as above.
+  }
+  return state;
+}
+
 /** The session-start notice, shared verbatim so no client drifts its own copy. */
 export function policyText(
   canDeny,
@@ -760,11 +805,21 @@ export function policyText(
   if (tools.has('smart_write'))
     routes.push(`- Writing a file larger than ~${kb} KB -> smart_write`);
 
+  // SAY WHICH GRADE OF EVIDENCE THIS IS (#469). "Positive runtime inventory
+  // evidence" was emitted for an install-time default that no host had
+  // confirmed, so a session was told 19 tools were proven while none of them
+  // could be called. The two cases now read differently, and the weaker one
+  // tells the model what to do when a call comes back with no such tool --
+  // which is the only way it finds out, since nothing else in the session will
+  // tell it.
   const connection =
     tools.size > 0 && registrationProven
-      ? `The host supplied positive runtime inventory evidence for ${tools.size} optimizer MCP tool(s).`
+      ? `The host named ${tools.size} optimizer MCP tool(s) as registered for this session.`
       : tools.size > 0
-        ? 'The following optimizer MCP tools are available to this policy caller.'
+        ? // Counted rather than "the tools below", because assist mode
+          // suppresses the routing list and the sentence must not promise one
+          // that is not there.
+          `This install declares ${tools.size} optimizer MCP tool(s); the host has not confirmed them for this session. If a call reports no such tool, use the built-in tool and do not call that one again.`
         : registrationProven
           ? 'The host supplied a proven empty optimizer MCP inventory for this session.'
           : 'This hook received no positive evidence that optimizer MCP tools are registered in this session.';
@@ -1201,6 +1256,7 @@ async function runHook(clientName, event, invocation) {
       raw.session_id ?? raw.sessionId ?? raw.conversation_id ?? 'default';
     const agentScope = raw.transcript_path ?? raw.transcriptPath ?? null;
     const state = loadState(sessionId, agentScope);
+    gradeObservedTools(state, event, raw, raw);
     const toolEvidence = optimizerToolsForHook(raw, state);
     rememberOptimizerTools(state, toolEvidence);
     const episode = episodeMeta({ client: clientName, raw });
@@ -1421,6 +1477,15 @@ async function runHook(clientName, event, invocation) {
   // falls back to session scope, which is right for a main session's own calls.
   const agentScope = payload.transcript_path || null;
   const state = loadState(payload.session_id, agentScope);
+  // GRADE THE CALL THAT JUST COMPLETED, BEFORE ANYTHING READS THE INVENTORY.
+  //
+  // A post-tool event is the only moment the hooks learn whether a declared
+  // optimizer tool exists: a host that never registered the server says so
+  // nowhere else (#469). Recording it above `optimizerToolsForHook` is what
+  // makes the same hook run act on it -- otherwise the run that was just told
+  // "no such tool" recommends that tool again on its way out, which is the
+  // loop the reporter actually saw.
+  gradeObservedTools(state, event, payload, raw);
   const toolEvidence = optimizerToolsForHook(raw, state);
   rememberOptimizerTools(state, toolEvidence);
   let recordingContext = null;
