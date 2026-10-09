@@ -23,7 +23,12 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const PACKAGE = '@ooples/token-optimizer-mcp';
-const REQUIRED_TOOLS = ['smart_read', 'smart_grep', 'smart_edit', 'install_doctor'];
+const REQUIRED_TOOLS = [
+  'smart_read',
+  'smart_grep',
+  'smart_edit',
+  'install_doctor',
+];
 
 function argument(name, fallback = '') {
   const index = process.argv.indexOf(`--${name}`);
@@ -35,15 +40,34 @@ function fail(message) {
   process.exit(1);
 }
 
+// NOT SERVED YET IS NOT BROKEN. npm accepts a publish and then queues it -- "Your package is being
+// processed and may take a few minutes to become available" -- and that wait is ours to absorb, not
+// ours to control. It took 26 minutes for 7.4.1 and 85 for 7.4.2, both longer than any poll worth
+// holding two runners for. Reporting it as a failed release filed #466 and #467 against an artifact
+// that passes this very check, so `--pending-ok` separates the two outcomes: the release stays
+// green and verify-latest-release.yml finishes the job once npm has.
+function pending(message) {
+  console.log(`verify-published-launch: PENDING - ${message}`);
+  process.exit(0);
+}
+
 const version = argument('version');
-if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(version)) fail(`--version must be an exact version (got "${version}")`);
+if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(version))
+  fail(`--version must be an exact version (got "${version}")`);
 const waitMinutes = Number(argument('wait-minutes', '15'));
+const pendingOk = process.argv.includes('--pending-ok');
 
 // 1. The two committed version stamps agree with the release.
-const packageVersion = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')).version;
-const pluginVersion = JSON.parse(readFileSync(join(ROOT, 'plugin', '.claude-plugin', 'plugin.json'), 'utf8')).version;
+const packageVersion = JSON.parse(
+  readFileSync(join(ROOT, 'package.json'), 'utf8')
+).version;
+const pluginVersion = JSON.parse(
+  readFileSync(join(ROOT, 'plugin', '.claude-plugin', 'plugin.json'), 'utf8')
+).version;
 if (packageVersion !== version || pluginVersion !== version) {
-  fail(`version stamps disagree: package.json ${packageVersion}, plugin.json ${pluginVersion}, release ${version}`);
+  fail(
+    `version stamps disagree: package.json ${packageVersion}, plugin.json ${pluginVersion}, release ${version}`
+  );
 }
 
 // 2. The registry serves it. `npm view` resolves the full manifest, which is what `npm install`
@@ -53,13 +77,36 @@ const deadline = Date.now() + waitMinutes * 60_000;
 for (;;) {
   // One command string (the version is validated above): a shell with an argument list is what
   // Node reports as DEP0190.
-  const view = spawnSync(`${npm} view ${PACKAGE}@${version} version --prefer-online`, {
-    encoding: 'utf8',
-    shell: true,
-    windowsHide: true,
-  });
+  const view = spawnSync(
+    `${npm} view ${PACKAGE}@${version} version --prefer-online`,
+    {
+      encoding: 'utf8',
+      shell: true,
+      windowsHide: true,
+    }
+  );
   if (view.status === 0 && view.stdout.trim() === version) break;
-  if (Date.now() > deadline) fail(`${PACKAGE}@${version} is not installable after ${waitMinutes} minutes`);
+  // ONLY A MISSING VERSION IS PENDING. `npm view` fails the same way for "this version does not
+  // exist yet" as for a registry that is down, unreachable or refusing our auth, and treating the
+  // second as a queue would report a broken pipeline as a release merely worth waiting on.
+  const stderr = `${view.stderr ?? ''}`;
+  const missing =
+    /E404|ETARGET|No match(ing version)? found|is not in this registry/i.test(
+      stderr
+    );
+  if (view.error || (view.status !== 0 && !missing)) {
+    const detail =
+      view.error?.message ?? stderr.trim().split('\n').slice(-3).join(' ');
+    fail(`cannot ask the registry about ${PACKAGE}@${version}: ${detail}`);
+  }
+  if (Date.now() > deadline) {
+    const waited = `${PACKAGE}@${version} is not installable after ${waitMinutes} minutes`;
+    if (pendingOk)
+      pending(
+        `${waited}; npm accepted the publish but has not finished processing it`
+      );
+    fail(waited);
+  }
   console.log(`waiting for ${PACKAGE}@${version} on the registry...`);
   await new Promise((resolve) => setTimeout(resolve, 20_000));
 }
@@ -101,8 +148,12 @@ const result = await new Promise((resolve) => {
       }
       if (message.id === 1) {
         outcome.server = message.result?.serverInfo ?? null;
-        child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' })}\n`);
-        child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/list' })}\n`);
+        child.stdin.write(
+          `${JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' })}\n`
+        );
+        child.stdin.write(
+          `${JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/list' })}\n`
+        );
       } else if (message.id === 2) {
         outcome.tools = (message.result?.tools ?? []).map((tool) => tool.name);
         child.kill();
@@ -113,12 +164,18 @@ const result = await new Promise((resolve) => {
     clearTimeout(timer);
     resolve(outcome);
   });
-  child.stdin.write(`${JSON.stringify({
-    jsonrpc: '2.0',
-    id: 1,
-    method: 'initialize',
-    params: { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'release-verification', version } },
-  })}\n`);
+  child.stdin.write(
+    `${JSON.stringify({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'initialize',
+      params: {
+        protocolVersion: '2025-06-18',
+        capabilities: {},
+        clientInfo: { name: 'release-verification', version },
+      },
+    })}\n`
+  );
 });
 
 try {
@@ -127,12 +184,21 @@ try {
   /* a Windows handle may linger; the temp directory is disposable */
 }
 
-if (result.timedOut) fail(`the launcher did not answer within five minutes\n${result.stderr}`);
+if (result.timedOut)
+  fail(`the launcher did not answer within five minutes\n${result.stderr}`);
 if (result.server?.version !== version) {
-  fail(`the launcher served ${result.server?.version ?? 'nothing'} instead of ${version}\n${result.stderr}`);
+  fail(
+    `the launcher served ${result.server?.version ?? 'nothing'} instead of ${version}\n${result.stderr}`
+  );
 }
 const missing = REQUIRED_TOOLS.filter((name) => !result.tools.includes(name));
-if (missing.length) fail(`tools/list is missing ${missing.join(', ')} (got ${result.tools.length} tools)`);
-if (/DEP0\d{3}|DeprecationWarning/.test(result.stderr)) fail(`the launcher printed a deprecation warning:\n${result.stderr}`);
+if (missing.length)
+  fail(
+    `tools/list is missing ${missing.join(', ')} (got ${result.tools.length} tools)`
+  );
+if (/DEP0\d{3}|DeprecationWarning/.test(result.stderr))
+  fail(`the launcher printed a deprecation warning:\n${result.stderr}`);
 
-console.log(`verify-published-launch: OK - ${PACKAGE}@${version} installed and served through plugin/launch.mjs with ${result.tools.length} tools`);
+console.log(
+  `verify-published-launch: OK - ${PACKAGE}@${version} installed and served through plugin/launch.mjs with ${result.tools.length} tools`
+);
