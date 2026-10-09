@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 /**
  * Installs one client's hook directory, composing the core INTO THE DESTINATION.
  *
@@ -33,6 +34,7 @@ import { homedir } from 'node:os';
 import { CLIENT_HOOK_INSTALLS } from '../hooks-core/capabilities.mjs';
 import { composeCoreFile, coreFiles } from './lib/hook-core.mjs';
 import { contentMatches, readIfExists } from './lib/text.mjs';
+import { isMainModule } from './lib/main-module.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -202,7 +204,7 @@ export function installClientHooks({
   return { client, destination: target, written, pending };
 }
 
-if (process.argv[1] && process.argv[1].endsWith('install-client-hooks.mjs')) {
+if (isMainModule(import.meta.url)) {
   const argv = process.argv.slice(2);
   const valueOf = (flag) => {
     const at = argv.indexOf(flag);

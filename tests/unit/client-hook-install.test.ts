@@ -22,10 +22,12 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import {
   copyFileSync,
   existsSync,
+  linkSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -92,6 +94,7 @@ describe('the tarball drops the ten copies and keeps what the installer needs', 
     for (const module of [
       'scripts/install-client-hooks.mjs',
       'scripts/lib/hook-core.mjs',
+      'scripts/lib/main-module.mjs',
       'scripts/lib/text.mjs',
     ]) {
       expect(packed).toContain(module);
@@ -252,6 +255,75 @@ describe('what the repo vendors still matches what ships', () => {
       expect(observability).toContain('// GENERATED FILE -- do not edit.');
       expect(observability).toContain('Source of truth: hooks-core/');
       expect(observability).not.toContain('TOKEN_OPTIMIZER_VERSION =');
+    }
+  });
+});
+
+describe('the published bin runs the way the docs say to run it', () => {
+  const bin: Record<string, string> = JSON.parse(
+    readFileSync(join(ROOT, 'package.json'), 'utf8')
+  ).bin;
+  const scriptBins = Object.values(bin)
+    .map((path) => path.replace(/^\.\//, ''))
+    .filter((path) => path.startsWith('scripts/'));
+
+  it('gives every script bin an interpreter line', () => {
+    // npm links a bin as a bare executable, so on POSIX the kernel needs the
+    // shebang to know what to run the file with. install-client-hooks.mjs
+    // shipped without one while all six of its neighbours had it.
+    const firstLines = scriptBins.map(
+      (path) =>
+        `${path} ${readFileSync(join(ROOT, path), 'utf8').split('\n')[0].trim()}`
+    );
+    expect(firstLines).toEqual(
+      scriptBins.map((path) => `${path} #!/usr/bin/env node`)
+    );
+  });
+
+  /**
+   * The file under the name npm gives it: a symlink where the platform allows
+   * one (npm's own shape, and what makes the realpath comparison necessary),
+   * a hardlink otherwise, which still changes the basename the guard sees.
+   */
+  const linkAs = (real: string, directory: string, name: string) => {
+    const link = join(directory, name);
+    try {
+      symlinkSync(real, link);
+      return link;
+    } catch {
+      linkSync(real, `${link}.mjs`);
+      return `${link}.mjs`;
+    }
+  };
+
+  it('writes the core when invoked under its linked bin name', () => {
+    // The regression this pins. The guard tested argv[1]'s BASENAME, which is
+    // the command name through node_modules/.bin, so the CLI block never ran:
+    // measured before the fix, exit 0, no output, 0 files written -- the same
+    // silent success the whole PR exists to remove.
+    const shipped = shippedPackage();
+    const destination = mkdtempSync(join(tmpdir(), 'to-linked-'));
+    try {
+      const linked = linkAs(
+        join(shipped, 'scripts', 'install-client-hooks.mjs'),
+        join(shipped, 'scripts'),
+        'token-optimizer-install-client'
+      );
+      const result = spawnSync(
+        process.execPath,
+        [linked, '--client', 'cursor', '--dest', destination],
+        { encoding: 'utf8', timeout: 120_000 }
+      );
+      expect(result.stderr).toBe('');
+      expect(result.status).toBe(0);
+      expect(result.stdout).toContain('installed cursor hooks: ');
+      const present = coreFiles(ROOT).filter((name) =>
+        existsSync(join(destination, 'lib', name))
+      );
+      expect(present).toEqual(coreFiles(ROOT));
+    } finally {
+      rmSync(shipped, { recursive: true, force: true });
+      rmSync(destination, { recursive: true, force: true });
     }
   });
 });
