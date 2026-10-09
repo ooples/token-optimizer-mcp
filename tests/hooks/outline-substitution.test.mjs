@@ -22,7 +22,7 @@ import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
-import { substitutionFor } from '../../hooks-core/substitute.mjs';
+import { substitutionFor, floorBytes } from '../../hooks-core/substitute.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
@@ -66,6 +66,45 @@ beforeEach(() => {
   writeFileSync(big, module_(300));
 });
 afterEach(() => rmSync(workspace, { recursive: true, force: true }));
+
+describe('the size floor over a long session (issue #478)', () => {
+  // Pricing assumed every session ends at turn 16, so from there on the floor sat
+  // at ~116 KB and ordinary source files were never outlined -- in exactly the long
+  // agent sessions where a re-read costs the most. Measured on 53 real sessions,
+  // the median calls still to come stayed at 115-125 from call 1 to call 100.
+  test('a short session is priced exactly as before, through turn 8', () => {
+    // 33000 tokens / remaining turns * 3.6 bytes per token, as the formula always was.
+    expect(floorBytes(0)).toBe(Math.round((33_000 / 16) * 3.6));
+    expect(floorBytes(4)).toBe(Math.round((33_000 / 12) * 3.6));
+    expect(floorBytes(8)).toBe(Math.round((33_000 / 8) * 3.6));
+  });
+
+  test('the floor never rises past where elapsed equals remaining', () => {
+    // The old estimate reached 118,800 bytes at turn 16 and stayed there.
+    for (const turn of [9, 16, 50, 300, 5000]) {
+      expect(floorBytes(turn)).toBeLessThanOrEqual(floorBytes(8));
+    }
+    expect(floorBytes(16)).toBeLessThan(33_000 * 3.6);
+  });
+
+  test('deep into a session it settles at the absolute floor', () => {
+    expect(floorBytes(300)).toBe(4_000);
+  });
+
+  test('a ~50 KB source file is still outlined on its first read at call 300', () => {
+    // The live failure: a 64 KB file dumped whole at this point in a session went
+    // through untouched. Whether a subagent's count included its siblings' calls
+    // no longer matters, because a larger count can only lower the floor.
+    const size = statSync(big).size;
+    expect(size).toBeGreaterThan(floorBytes(300));
+    expect(size).toBeLessThan(33_000 * 3.6);
+    expect(substitutionFor(big, { turnsSoFar: 300 })).not.toBeNull();
+  });
+
+  test('a negative position is treated as the start of a session', () => {
+    expect(floorBytes(-5)).toBe(floorBytes(0));
+  });
+});
 
 describe('the decision itself', () => {
   test('a large outlineable file is outlined on the first read', () => {
@@ -238,12 +277,27 @@ describe('a refused read is answered, not just refused', () => {
     expect(result.context).not.toContain('Call smart_read with path');
   });
 
-  test('assist is left exactly as it was', () => {
-    // Gated on refusalsEnabled() deliberately. Under assist this read is
-    // already going through untouched, and bounding it here would be new
-    // behaviour rather than a cheaper spelling of an existing refusal -- a
-    // change that would need its own measurement before it shipped.
+  test('assist answers the read with the outline too (issue #478)', () => {
+    // This used to assert the opposite: the outline was gated on
+    // refusalsEnabled(), as new behaviour to measure before shipping. Run live
+    // in the normal install (tools present, assist) that gate meant a file
+    // too small to earn a verdict WAS outlined -- through the allowed path --
+    // while every file large enough to earn one was not, so the default mode
+    // never outlined the files the mechanism exists for. Shipping it ungated
+    // was a deliberate decision; the once-per-file rule, which gives the
+    // second read the file, is what bounds its cost.
     const result = read('assist');
+    expect(result.decision).not.toBe('deny');
+    expect(result.updatedInput?.file_path).toMatch(/\.outline\.txt$/);
+    expect(result.context).toContain('replaced this read with a structural outline');
+  });
+
+  test('under assist, a file with no outline to offer is still not refused', () => {
+    // The gate that remains: assist never refuses. Ungating the outline must
+    // not have made a refusal reachable there.
+    const opaque = join(workspace, 'notes.md');
+    writeFileSync(opaque, '# Heading\n\nProse that is long enough to matter.\n\n'.repeat(4000));
+    const result = read('assist', { file: opaque });
     expect(result.decision).not.toBe('deny');
     expect(result.updatedInput).toBeNull();
   });

@@ -782,40 +782,62 @@ export function normalizeTool(name) {
  * `arguments`) and on the path key (`file_path` vs `path` vs `absolute_path`),
  * so both are resolved once here rather than in each decision branch.
  */
-export function normalizePayload(raw) {
-  // camelCase is accepted for the CONTAINER too, not just for `toolName` and
-  // `sessionId`. Accepting `toolName` but not `toolArgs` meant a client that
-  // spoke camelCase throughout had its arguments silently dropped: the payload
-  // still carried a tool name, so the hook ran, found no path and no command,
-  // and allowed every call. A total no-op with nothing in stderr and no failing
-  // check anywhere -- the worst way for an integration to be broken.
+/** The keys a client may carry a file path under, in the order they are read. */
+export const PATH_KEYS = Object.freeze(['file_path', 'path', 'absolute_path', 'filePath', 'target_file']);
+
+/** The keys a client may carry a shell command under, in the order they are read. */
+export const COMMAND_KEYS = Object.freeze(['command', 'cmd', 'script']);
+
+/**
+ * The tool's arguments exactly as the client sent them, as an object.
+ *
+ * camelCase is accepted for the CONTAINER too, not just for `toolName` and
+ * `sessionId`. Accepting `toolName` but not `toolArgs` meant a client that
+ * spoke camelCase throughout had its arguments silently dropped: the payload
+ * still carried a tool name, so the hook ran, found no path and no command,
+ * and allowed every call. A total no-op with nothing in stderr and no failing
+ * check anywhere -- the worst way for an integration to be broken.
+ *
+ * Exported because a REWRITE must be built from this, not from the normalised
+ * input: clients that validate a replacement against the tool's own schema
+ * (Qwen Code, Codex) reject the extra keys normalisation adds.
+ */
+export function rawToolInput(raw) {
   const rawInput =
-    raw.tool_input ||
-    raw.toolInput ||
-    raw.tool_args ||
-    raw.toolArgs ||
-    raw.arguments ||
-    raw.args ||
-    raw.parameters ||
+    raw?.tool_input ||
+    raw?.toolInput ||
+    raw?.tool_args ||
+    raw?.toolArgs ||
+    raw?.arguments ||
+    raw?.args ||
+    raw?.parameters ||
     {};
-  let input = rawInput;
   // Copilot CLI serializes toolArgs as a JSON string. Treating that string as
   // an object preserved the tool name but discarded every argument, so every
   // hook invocation silently allowed the call.
   if (typeof rawInput === 'string') {
     try {
-      input = JSON.parse(rawInput);
+      const parsed = JSON.parse(rawInput);
+      return parsed && typeof parsed === 'object' ? parsed : {};
     } catch {
-      input = {};
+      return {};
     }
   }
-  const filePath =
-    input.file_path ??
-    input.path ??
-    input.absolute_path ??
-    input.filePath ??
-    input.target_file;
-  const command = input.command ?? input.cmd ?? input.script;
+  return rawInput && typeof rawInput === 'object' ? rawInput : {};
+}
+
+/** The first of `keys` the input carries, or undefined. */
+export function firstKey(input, keys) {
+  // != null, as the ?? chain it replaces: a key present but null is skipped.
+  return keys.find((key) => input?.[key] != null);
+}
+
+export function normalizePayload(raw) {
+  const input = rawToolInput(raw);
+  const pathKey = firstKey(input, PATH_KEYS);
+  const filePath = pathKey === undefined ? undefined : input[pathKey];
+  const commandKey = firstKey(input, COMMAND_KEYS);
+  const command = commandKey === undefined ? undefined : input[commandKey];
 
   const cwd = raw.cwd ?? raw.workspace_root ?? process.cwd();
 
