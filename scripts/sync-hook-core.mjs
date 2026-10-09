@@ -16,8 +16,9 @@
  * diverged.
  */
 
-import { readFileSync, readdirSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { contentMatches, readIfExists, writeIfChanged } from './lib/text.mjs';
+import { ALL_TARGETS, composeCoreFile, coreFiles } from './lib/hook-core.mjs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -26,21 +27,6 @@ const SOURCE = join(ROOT, 'hooks-core');
 const PACKAGE_VERSION = JSON.parse(
   readFileSync(join(ROOT, 'package.json'), 'utf8')
 ).version;
-
-/** Every directory that must hold an identical copy of the core. */
-const TARGETS = [
-  join(ROOT, 'plugin', 'hooks', 'lib'),
-  join(ROOT, 'integrations', 'codex', 'hooks', 'lib'),
-  join(ROOT, 'integrations', 'codex', 'plugin', 'hooks', 'lib'),
-  join(ROOT, 'integrations', 'gemini', 'hooks', 'lib'),
-  join(ROOT, 'integrations', 'opencode', 'hooks', 'lib'),
-  join(ROOT, 'integrations', 'qwen', 'hooks', 'lib'),
-  join(ROOT, 'integrations', 'copilot', '.github', 'hooks', 'lib'),
-  join(ROOT, 'integrations', 'cline', 'hooks', 'token-optimizer', 'lib'),
-  join(ROOT, 'integrations', 'cursor', 'hooks', 'lib'),
-  join(ROOT, 'integrations', 'windsurf', 'hooks', 'lib'),
-  join(ROOT, 'integrations', 'kilo', 'hooks', 'lib'),
-];
 
 const check = process.argv.includes('--check');
 
@@ -64,36 +50,7 @@ const check = process.argv.includes('--check');
  * check and before the tarball is built.
  */
 const stamp = process.argv.includes('--stamp');
-const files = readdirSync(SOURCE).filter((f) => f.endsWith('.mjs'));
-
-const banner = (name) =>
-  `// GENERATED FILE -- do not edit.\n` +
-  `// Source of truth: hooks-core/${name}. Regenerate with \`npm run sync:hooks\`.\n` +
-  (stamp && name === 'observability.mjs'
-    ? `process.env.TOKEN_OPTIMIZER_VERSION = '${PACKAGE_VERSION}';\n`
-    : '');
-
-/**
- * Banners a core file, keeping any hashbang on line one.
- *
- * NODE ACCEPTS A HASHBANG ONLY AT BYTE ZERO. Anywhere else it is a syntax
- * error, so prepending the banner to an executable core file produced a
- * vendored copy that cannot parse at all -- and harvest-worker.mjs is spawned
- * detached with stdio ignored, which means the failure is completely silent.
- * The harvest would have gone on not running, for exactly the reason it was
- * not running before, with a green suite on either side of it.
- *
- * Handled here rather than by deleting the hashbang, because the next
- * executable added to the core would hit this again and the failure mode is
- * invisible by construction.
- */
-function withBanner(name, source) {
-  const text = String(source);
-  if (!text.startsWith('#!')) return banner(name) + text;
-  const newline = text.indexOf(String.fromCharCode(10));
-  if (newline === -1) return text + String.fromCharCode(10) + banner(name);
-  return text.slice(0, newline + 1) + banner(name) + text.slice(newline + 1);
-}
+const files = coreFiles(ROOT);
 
 // The EOL-safe comparison this file used to carry locally now lives in
 // scripts/lib/text.mjs, because it was needed by the other two generators and
@@ -101,10 +58,13 @@ function withBanner(name, source) {
 
 let drifted = 0;
 
-for (const target of TARGETS) {
+for (const target of ALL_TARGETS) {
   for (const name of files) {
-    const contents = withBanner(name, readFileSync(join(SOURCE, name), 'utf8'));
-    const destination = join(target, name);
+    const contents = composeCoreFile(ROOT, name, {
+      stamp,
+      version: PACKAGE_VERSION,
+    });
+    const destination = join(ROOT, target, name);
 
     if (check) {
       if (!contentMatches(readIfExists(destination), contents)) {
@@ -121,10 +81,14 @@ for (const target of TARGETS) {
 }
 
 if (check && drifted > 0) {
-  console.error(`\n${drifted} vendored hook file(s) differ from hooks-core/. Run: npm run sync:hooks`);
+  console.error(
+    `\n${drifted} vendored hook file(s) differ from hooks-core/. Run: npm run sync:hooks`
+  );
   process.exit(1);
 }
 
-console.log(check
-  ? 'hook core in sync across all client integrations'
-  : `synced ${files.length} core file(s) to ${TARGETS.length} client integration(s)`);
+console.log(
+  check
+    ? 'hook core in sync across all client integrations'
+    : `synced ${files.length} core file(s) to ${ALL_TARGETS.length} client integration(s)`
+);
