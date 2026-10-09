@@ -366,8 +366,8 @@ const packageVersion = JSON.parse(
 // not in tools/list until loaded with ToolSearch. The previous wording made the
 // tools conditional on "an exact optimizer schema is present in tools/list" and
 // otherwise said to use native operations, so every subagent was told, by this
-// server, to read files with cat and search them with grep. Measured across 34
-// workflow subagents: 2,300 shell file reads, 9 Read calls, 0 smart_read calls.
+// server, to read files with cat and search them with grep. Measured across 42
+// workflow subagents: 2,071 shell file reads, 9 Read calls, 0 smart_read calls.
 const SERVER_INSTRUCTIONS =
   'Token optimization is mandatory routing policy, not a preference: use ' +
   'smart_read for large or repeated files, smart_grep for content search, ' +

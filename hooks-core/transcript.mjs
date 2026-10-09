@@ -215,6 +215,39 @@ function writeCoverage(file, transcriptPath, offset) {
  * incremental path cannot be trusted and the caller must rebuild.
  */
 function appendNewTurns(file, transcriptPath) {
+  // EXCLUSIVE, because appending is not idempotent the way the old rewrite was:
+  // two archivers that both read the same coverage would both append the same
+  // turns, and the duplicate would stay until a rebuild. A second archiver
+  // stands down; the one holding the lock covers everything up to its end.
+  const lock = `${coveragePath(file)}.lock`;
+  let held = false;
+  try {
+    try {
+      closeSync(openSync(lock, 'wx'));
+      held = true;
+    } catch (error) {
+      if (error?.code !== 'EEXIST') return null;
+      // A lock older than any archive takes is a crashed holder's.
+      if (Date.now() - statSync(lock).mtimeMs < 30_000) return 0;
+      unlinkSync(lock);
+      closeSync(openSync(lock, 'wx'));
+      held = true;
+    }
+    return appendUnderLock(file, transcriptPath);
+  } catch {
+    return null;
+  } finally {
+    if (held) {
+      try {
+        unlinkSync(lock);
+      } catch {
+        /* already gone */
+      }
+    }
+  }
+}
+
+function appendUnderLock(file, transcriptPath) {
   try {
     if (!existsSync(file)) return null;
     const covered = JSON.parse(readFileSync(coveragePath(file), 'utf8'));

@@ -86,7 +86,11 @@ export function sessionUsage(transcriptPath, { capacity = DEFAULT_CAPACITY } = {
   // session with most of a 1M-token window left. Take the smallest known window
   // that holds what was actually sent; past every known window, there is nothing
   // honest to forecast.
-  if (used >= capacity) {
+  //
+  // STRICTLY past. A request of exactly the default size fits the default
+  // window, and that session is at compaction -- the one moment the forecast
+  // exists for -- so equality must not be read as proof of a bigger window.
+  if (used > capacity) {
     const larger = KNOWN_WINDOWS.find((window) => window > used);
     if (!larger) return null;
     capacity = larger;

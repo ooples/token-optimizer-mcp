@@ -419,9 +419,9 @@ names how to fix it. Not a dashboard, not six reports — a queue.
 
 Agents are where token spend concentrates. A long-running subagent re-sends its
 whole context on every turn, so every byte a tool adds is paid for again on each
-later turn. In one measured session, 34 workflow subagents ran 400–580 turns each
-with contexts of 450K–610K tokens. They spent 3.8M output tokens and 1.7B
-cache-read tokens. The bill is the re-reading, not the writing.
+later turn. In one measured session, 42 workflow subagents made 4,483 model
+calls. The six longest made 218–348 calls each and peaked at 336K–609K tokens of
+context. Together they spent 4.0M output tokens and 1.0B cache-read tokens. The bill is the re-reading, not the writing.
 
 ### What works with no setup
 
@@ -430,7 +430,7 @@ Nothing needs to be configured per agent.
 
 - **Whole-file reads are outlined, through `Read` and through the shell.**
   Agents mostly read files with `cat`, `type` or `Get-Content`, rarely with
-  `Read`. In the measured session that was 2,300 shell reads against 9 `Read`
+  `Read`. In the measured session that was 2,071 shell reads against 9 `Read`
   calls. On the first whole read of a large source file, either kind returns a
   line-numbered outline of its symbols instead of the file. A second whole read
   of the same file returns the file itself. A line range is never outlined:
@@ -485,9 +485,18 @@ and the size of the context it carries are set by how the work is split up:
 Each subagent writes its own transcript next to the session's, under
 `~/.claude/projects/<project>/<session>/subagents/`. The `usage` block on every
 assistant row records `input_tokens`, `output_tokens`,
-`cache_read_input_tokens` and `cache_creation_input_tokens`. Summing them over an
-agent's transcript gives that agent's cost. The ratio of turns to peak context
-shows whether the agent should have been split.
+`cache_read_input_tokens` and `cache_creation_input_tokens`.
+
+**Count each response once.** One model response is written as several
+assistant rows that share a `message.id`, and each row repeats the usage
+recorded so far. Keep the LAST row per `message.id`, which holds the final
+usage, and sum those. Summing every row overstates the cost: on the session
+above it reported 1.8B cache-read tokens instead of 1.0B. Keeping the first row
+instead understates output, at 0.5M instead of 4.0M.
+
+The number of distinct `message.id`s is the number of model calls the agent
+made. Read against its peak context, it shows whether the agent should have
+been split.
 
 ---
 

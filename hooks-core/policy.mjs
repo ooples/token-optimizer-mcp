@@ -461,7 +461,7 @@ export function loadState(sessionId, agent) {
       // (issue #473). tests/hooks/state-fields-survive-reload.test.mjs fails
       // when a written field is missing here or from saveState's merge.
       routingAdvised: Array.isArray(parsed.routingAdvised)
-        ? parsed.routingAdvised.filter((kind) => typeof kind === 'string')
+        ? parsed.routingAdvised.filter((kind) => typeof kind === 'string').slice(-200)
         : [],
       subagentBriefed: parsed.subagentBriefed === true,
       seenUrls:
@@ -831,8 +831,8 @@ export function isSubagentPayload(raw) {
  * What a subagent is told on its first tool call, or null once it has been.
  *
  * WHY THIS EXISTS (issue #473, defect 8). SessionStart fires for the main
- * session only, so its guidance reached 0 of 34 workflow subagents, and those
- * agents read files through the shell 2,300 times against 9 `Read` calls. The
+ * session only, so its guidance reached 0 of 47 workflow subagents, and those
+ * agents read files through the shell 2,071 times against 9 `Read` calls. The
  * briefing is short on purpose: it is paid for on every later turn of the agent.
  *
  * It names the optimizer tools CONDITIONALLY. A hooks-only install has no MCP

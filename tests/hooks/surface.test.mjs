@@ -100,6 +100,15 @@ describe('the session numbers come from the transcript', () => {
     expect(usage.capacity).toBe(1_000_000);
   });
 
+  test('a context exactly at the default window stays in it', () => {
+    // A 200K session holding exactly 200K is at compaction, the moment the
+    // forecast exists for. Reading equality as "must be the 1M window" would
+    // hide its zero-runway warning.
+    const usage = sessionUsage(transcript(20, 200_000));
+    expect(usage.used).toBe(200_000);
+    expect(usage.capacity).toBe(200_000);
+  });
+
   test('past every known window there is nothing honest to forecast', () => {
     expect(sessionUsage(transcript(20, 1_200_000))).toBeNull();
   });

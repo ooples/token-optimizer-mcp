@@ -787,7 +787,7 @@ function outlineSubstitution(payload) {
  * Points a whole-file shell dump at an outline of the same file.
  *
  * THE SHELL HALF OF `outlineSubstitution`, and for agents the half that matters:
- * across 34 workflow subagents in one session, 2,300 file reads went through
+ * across 42 workflow subagents in one session, 2,071 file reads went through
  * `cat`, `sed`, `head` or `Get-Content` and 9 through `Read`, so the Read-only
  * substitution almost never fired for them.
  *

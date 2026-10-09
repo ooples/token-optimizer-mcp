@@ -90,6 +90,20 @@ describe('a range the model asked for comes back whole', () => {
     expect(resultText(input, body)).toBe(body);
   });
 
+  it('a "range" longer than one page is compressed like a dump', () => {
+    // `head -n 200000` is a range in form only. Past the 2,000 lines a Read
+    // returns per call, the pass-through would ship whole dumps unfolded.
+    const bigFile = join(ROOT, 'hooks-core', 'doctor.mjs');
+    const big = readFileSync(bigFile, 'utf8')
+      .split('\n')
+      .map((line, i) => `${String(i + 1).padStart(6)}\t${line}`)
+      .join('\n');
+    expect(big.split('\n').length).toBeGreaterThan(2000);
+    expect(
+      resultText({ command: `head -n 200000 ${bigFile}`, file_path: bigFile }, big).length
+    ).toBeLessThan(big.length);
+  });
+
   it('the same 400 lines read without a range are compressed', () => {
     // The pass-through above is about the RANGE, not the size: identical
     // content from an unranged Read is folded.

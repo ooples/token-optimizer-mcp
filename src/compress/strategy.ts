@@ -391,6 +391,24 @@ function targetedToolResults(request: ProviderRequest): Set<string> {
 }
 
 /**
+ * The most lines a range is passed through whole.
+ *
+ * The host's own definition of a deliberate read: Claude Code's Read returns at
+ * most 2,000 lines per call unless told otherwise. A shell slice has no such
+ * cap -- `head -n 200000` is a range in form and a dump in effect -- so beyond
+ * one page it is compressed like any other output.
+ */
+const PAGE_LINES = 2000;
+
+function withinPage(text: string): boolean {
+  let lines = 1;
+  for (let i = text.indexOf('\n'); i !== -1; i = text.indexOf('\n', i + 1)) {
+    if (++lines > PAGE_LINES) return false;
+  }
+  return true;
+}
+
+/**
  * Whether a block is a tool result.
  *
  * Checked by `type` rather than by the presence of `content`, because a
@@ -654,7 +672,7 @@ function pathAddressed(
     const touchable =
       !messageIsSigned(message) &&
       (!respectFrontier || isAfter(at, frontier)) &&
-      !(toolUseId && targeted.has(toolUseId));
+      !(toolUseId && targeted.has(toolUseId) && withinPage(text));
     if (!touchable) {
       // NO STAMP, BECAUSE NOTHING WAS COMPRESSED. These are the original bytes
       // -- signed, or behind the cache frontier -- so they hold no marker of

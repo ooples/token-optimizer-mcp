@@ -1,6 +1,6 @@
 // GENERATED FILE -- do not edit.
 // Source of truth: hooks-core/decide.mjs. Regenerate with `npm run sync:hooks`.
-﻿/**
+/**
  * The routing decision, as a pure function.
  *
  * Deliberately free of process, stdin, and exit codes so it can be unit tested
@@ -89,7 +89,7 @@ const WHOLE_DUMP_HEAD = /^(?:cat|type|Get-Content|gc)$/i;
  * The single file a command prints in full, when that is ALL it does.
  *
  * THE SHELL HALF OF READ SUBSTITUTION. Subagents read files through the shell far
- * more than through `Read`: across 34 workflow agents in one session, 2,300 reads
+ * more than through `Read`: across 42 workflow agents in one session, 2,071 reads
  * went through `cat`, `sed`, `head` or `Get-Content` and 9 through `Read`. The
  * outline substitution only ever saw `Read`, so for an agent it almost never
  * fired.
@@ -1154,7 +1154,7 @@ function advisoryClass(key) {
  *
  * ONCE PER SESSION PER CLASS. An advisory delivered alongside a call that runs
  * anyway cannot save that call, and repeating it only adds context the model
- * has already learned to skip. Measured across 34 workflow subagents: the
+ * has already learned to skip. Measured across 42 workflow subagents: the
  * recursive-search advisory was injected 798 times and followed 17 times, and
  * the main session received it 609 times. Every repeat is re-read on every later
  * turn, so the cost of a noisy advisory grows with the length of the session.

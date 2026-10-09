@@ -10,9 +10,13 @@
  */
 
 import { mkdtempSync, rmSync, writeFileSync, appendFileSync, readFileSync, existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
+import { spawn } from 'node:child_process';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { archive } from '../../hooks-core/transcript.mjs';
+
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
 let root;
 beforeEach(() => {
@@ -74,6 +78,37 @@ test('a transcript that shrank is rebuilt rather than appended to', () => {
   const text = archived(join(root, 'inc'));
   expect(text).toContain('question 100');
   expect(text).not.toContain('question 0');
+});
+
+test('concurrent archivers do not append the same turns twice', async () => {
+  // Appending is not idempotent the way the old rewrite was. Measured before
+  // the lock existed: eight processes archiving the same growth wrote 10.7 MB
+  // where the rebuild is 2.1 MB -- every new turn appended about five times.
+  const transcript = join(root, 'session.jsonl');
+  writeFileSync(transcript, lines(0, 200));
+  const dir = wiki('inc');
+  archive(dir, transcript, { sessionId: 's1' });
+  appendFileSync(transcript, lines(200, 2000));
+
+  const moduleUrl = pathToFileURL(join(ROOT, 'hooks-core', 'transcript.mjs')).href;
+  const script =
+    `import(${JSON.stringify(moduleUrl)}).then(({ archive }) => ` +
+    `archive(${JSON.stringify(dir)}, ${JSON.stringify(transcript)}, { sessionId: 's1' }))`;
+  await Promise.all(
+    Array.from(
+      { length: 8 },
+      () =>
+        new Promise((resolve) => {
+          spawn(process.execPath, ['--input-type=module', '-e', script], { stdio: 'ignore' }).on(
+            'close',
+            resolve
+          );
+        })
+    )
+  );
+
+  archive(wiki('full'), transcript, { sessionId: 's1' });
+  expect(archived(join(root, 'inc'))).toBe(archived(join(root, 'full')));
 });
 
 test('an archive written before coverage existed is rebuilt once, then extended', () => {

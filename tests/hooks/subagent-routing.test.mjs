@@ -1,8 +1,8 @@
 /**
  * What a subagent actually does, routed through the packaged Claude Code entry.
  *
- * Every regression here was measured on the transcripts of 34 workflow subagents
- * from one long session (issue #473): 2,300 file reads went through the shell
+ * Every regression here was measured on the transcripts of 42 workflow subagents
+ * from one long session (issue #473): 2,071 file reads went through the shell
  * and 9 through `Read`, the recursive-search advisory was injected 798 times and
  * followed 17 times, and a paged `Read` was answered with an outline it could not
  * page through. Each test pins the behaviour that was missing, through the
@@ -188,5 +188,41 @@ describe('advisories are said once', () => {
     expect(adviseOnce(state, { key: 'bash:/a.py' })).toBe(true);
     expect(adviseOnce(state, { key: 'bash:/b.py' })).toBe(true);
     expect(adviseOnce(state, { key: 'bash:/a.py' })).toBe(false);
+  });
+
+  test('"once" holds across hook processes, not just within one', () => {
+    // Every hook call is a new process, so the record must survive saveState
+    // and loadState. It did not: routingAdvised was missing from both, and an
+    // in-process test like the two above passed while the advisory repeated on
+    // every real call. Two separate processes are the only honest check.
+    const session = `twice-${randomUUID()}`;
+    const stateDir = join(workspace, 'state');
+    const post = (command) => {
+      const result = spawnSync(process.execPath, [join(ROOT, 'plugin/hooks/post-tool.mjs')], {
+        input: JSON.stringify({
+          hook_event_name: 'PostToolUse',
+          session_id: session,
+          transcript_path: join(workspace, `${session}.jsonl`),
+          cwd: workspace,
+          tool_name: 'Bash',
+          tool_input: { command },
+          tool_response: { stdout: 'x', stderr: '' },
+        }),
+        encoding: 'utf8',
+        env: {
+          ...process.env,
+          TOKEN_OPTIMIZER_STATE_DIR: stateDir,
+          TOKEN_OPTIMIZER_LOG_DIR: join(workspace, 'logs'),
+          TOKEN_OPTIMIZER_MCP_CAPABILITIES:
+            'mcp__plugin_token-optimizer_token-optimizer__smart_grep',
+        },
+      });
+      const out = result.stdout.trim() ? JSON.parse(result.stdout.trim()) : {};
+      return String(out.hookSpecificOutput?.additionalContext ?? '');
+    };
+    // The positive control: the first search IS advised, so the second
+    // being silent means the record was kept, not that nothing ever fires.
+    expect(post('grep -rn foo .')).toMatch(/Recursive shell searches/);
+    expect(post('grep -rn bar src')).not.toMatch(/Recursive shell searches/);
   });
 });
