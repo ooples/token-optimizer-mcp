@@ -150,6 +150,16 @@ function writeAtomic(path, contents) {
  * before importing, so "adapter.mjs exists" has to mean "the whole core landed"
  * rather than "a write was in progress". Ordering it last is what makes that
  * check honest at no cost.
+ *
+ * `destination` WRITES ELSEWHERE AND CONFIGURES NOTHING. This command composes
+ * a directory; the client's own config -- `hooks.json`, `settings.json`, an
+ * extension manifest -- is what points the client at one, and nothing here
+ * edits it. A destination the client does not already read leaves the hooks
+ * installed and unused, which looks exactly like a successful install. So it
+ * has to be the path that config names: the registry default for the clients
+ * that have one, and for `gemini`, `qwen` and `codex-plugin` -- which resolve
+ * their hook directory at runtime -- the path the user resolves it to, which
+ * is why it is required there.
  */
 export function installClientHooks({
   root = ROOT,
@@ -213,7 +223,12 @@ if (isMainModule(import.meta.url)) {
   const client = valueOf('--client');
   if (!client || argv.includes('--help')) {
     console.log(
-      `usage: token-optimizer-install-client --client <${CLIENT_KEYS.join('|')}> [--dest <dir>] [--check]`
+      [
+        `usage: token-optimizer-install-client --client <${CLIENT_KEYS.join('|')}> [--dest <dir>] [--check]`,
+        '',
+        '--dest writes to another directory. It changes no client config, so it',
+        "has to be the directory that client's own config already reads.",
+      ].join('\n')
     );
     process.exit(client ? 0 : 1);
   }

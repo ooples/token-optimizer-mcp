@@ -1855,8 +1855,11 @@ copies the entry points AND composes the shared core beside them, which a plain
 npx -y @ooples/token-optimizer-mcp@latest token-optimizer-install-client --client copilot
 ```
 
-It writes `.github/hooks/` by default; pass `--dest <dir>` for another path and
-`--check` to see what it would write without writing it.
+It writes `.github/hooks/` by default, and `--check` reports what it would
+write without writing it. `--dest <dir>` writes to another directory but
+changes no client configuration, so it has to be the directory the client's own
+config already reads -- which is why the clients that resolve that directory at
+runtime (Gemini, Qwen, the Codex plugin) require it.
 
 The hooks inject optimization guidance at `sessionStart`. Under `TOKEN_OPTIMIZER_MODE=enforce` they deny a large built-in `view` so Copilot retries with `smart_read`; the default `assist` leaves the call alone. Partial reads and files below 25 KB always pass through unchanged, and `TOKEN_OPTIMIZER_MODE=advise` gives recommendations without vetoes. Repository hooks work without overwriting user-level files; global hooks can instead be placed in `~/.copilot/hooks/` with their script paths adjusted for that directory.
 
