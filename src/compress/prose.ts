@@ -196,10 +196,43 @@ export function score(
   return value;
 }
 
-/** Recognises prose rather than structured content. */
+/**
+ * Lines whose POSITION is part of their meaning, not just their words.
+ *
+ * A line number, a comment marker, a bullet. Prose elision drops sentences, and
+ * a sentence here is a whole line, so a drop silently renumbers the body or
+ * removes a step from a list.
+ */
+const LINE_ORIENTED = /^\s*(?:\d+\s*[|:\t]|\/\/|\/\*|\*\s|#\s|--\s|[-+]\s)/;
+
+/**
+ * Recognises prose rather than structured content.
+ *
+ * DECLINES LINE-ORIENTED CONTENT, which by word count reads exactly like prose
+ * and is the one shape this engine must not touch (#469). A comment block, a
+ * numbered listing and a bulleted list all clear the wordiness bar -- a dense
+ * block of `//` lines is wordier than most paragraphs -- while their lines are
+ * the unit of meaning rather than their sentences.
+ *
+ * WHY THIS IS A CORRECTNESS FIX AND NOT A TUNING CHOICE. The reported session
+ * read source through this path, got comment lines elided out of the middle of
+ * a region, and built exact-text edits from what came back; every anchor
+ * missed, because the lines it was anchored to had been removed from the view
+ * and not from the file. A `12 lower-signal sentences removed` marker is an
+ * honest report for a passage of prose and a corrupted one for a listing whose
+ * reader is about to match it against the file it came from. The same goes for
+ * a numbered listing, where dropping line 7 leaves 6 and 8 adjacent and every
+ * line number after it meaningless.
+ *
+ * The cost is real and accepted: comment-dense and bulleted content stops being
+ * elided, so some reduction is given up. A compression that makes an edit fail
+ * is not a saving.
+ */
 export function looksLikeProse(text: string): boolean {
   const lines = text.split('\n').filter((l) => l.trim());
   if (lines.length < 2) return false;
+  const oriented = lines.filter((l) => LINE_ORIENTED.test(l)).length;
+  if (oriented / lines.length > 0.5) return false;
   const wordy = lines.filter((l) => l.split(/\s+/).length > 8).length;
   return wordy / lines.length > 0.5;
 }
