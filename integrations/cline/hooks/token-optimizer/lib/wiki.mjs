@@ -1035,6 +1035,41 @@ export function wikiDisabled() {
 
 }
 
+/**
+ * The graph's FINDING nodes only, for a caller that filters findings first.
+ *
+ * Every tool call asks "does any finding apply to this command", and answering it
+ * with load() parsed the whole log: on an 8.6 MB graph -- 11,433 symbol nodes and
+ * 33,628 edges around 194 findings -- that was 109 ms of a 147 ms PreToolUse
+ * (issue #473, defect 9). A line is a finding only if it carries an unescaped
+ * `"kind":"finding"`, which JSON can produce only as the node's own field, so the
+ * test is a substring search and the parser never sees the rest.
+ *
+ * `partial` is set so a caller that goes on to need anchors, edges or symbols
+ * knows to load() the full graph -- which, once findings are filtered, it does
+ * for a few calls in a hundred rather than for every one.
+ */
+export function loadFindings(dir) {
+  const nodes = new Map();
+  const graph = { nodes, edges: [], partial: true };
+  if (wikiDisabled()) return graph;
+  const path = logPath(dir);
+  if (!existsSync(path)) return graph;
+  for (const line of readFileSync(path, 'utf8').split('\n')) {
+    if (!line.includes('"kind":"finding"')) continue;
+    let record;
+    try {
+      record = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    if (!readable(record)) continue;
+    record = upcast(record);
+    if (record.t === 'n' && record.kind === 'finding') nodes.set(record.id, record);
+  }
+  return graph;
+}
+
 export function load(dir, { snapshots = false } = {}) {
   const nodes = new Map();
   const edges = [];

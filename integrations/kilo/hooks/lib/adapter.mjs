@@ -32,6 +32,7 @@ import {
   withEscape,
 } from './policy.mjs';
 import {
+  adviseOnce,
   commandProjectRoot,
   decide,
   isContentDump,
@@ -53,6 +54,7 @@ import {
   contentHash,
   harvest,
   load,
+  loadFindings,
   wikiDir,
   projectRootFor,
   unrootedRoot,
@@ -1058,7 +1060,7 @@ function observeAndInject(payload, state, episode, features, authored = false) {
     if (command) {
       const root = commandProjectRoot(payload, payload.cwd);
       const dir = registerRoot(root);
-      const local = forCommand(dir, load(dir), command, {
+      const local = forCommand(dir, loadFindings(dir), command, {
         sessionId: payload.session_id,
         alreadyInjected,
         episode,
@@ -1705,9 +1707,13 @@ async function runHook(clientName, event, invocation) {
   } catch {
     // Delivery is an optimization. Fail open.
   }
+  // A verdict that reached this point is advice, not a refusal: the call runs (or
+  // has already run) either way. Say it once per session per kind -- see
+  // adviseOnce -- rather than on every matching call.
+  const advisory = verdict && adviseOnce(state, verdict) ? verdict.reason : null;
   saveState(payload.session_id, state, agentScope);
 
-  const context = [verdict?.reason, graphContext, recordingContext]
+  const context = [advisory, graphContext, recordingContext]
     .filter(Boolean)
     .join('\n\n');
   if (context) {

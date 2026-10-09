@@ -476,6 +476,26 @@ function applyRecords(dir, graph, records) {
 }
 
 /**
+ * Whether a drain would have anything to apply -- the queue, or a claim a killed
+ * drainer left behind.
+ *
+ * A drain resolves each written file's anchors through the graph it is handed,
+ * and CONSUMES the queue either way. Handed a findings-only graph (loadFindings),
+ * it would find no anchors and discard the record, losing the staleness signal.
+ * A caller holding a partial graph asks this first and loads the full one when
+ * the answer is yes. Errs toward yes: a wasted full load costs milliseconds, a
+ * dropped invalidation serves a stale finding as current.
+ */
+export function hasPendingInvalidations(dir) {
+  try {
+    if (existsSync(queuePath(dir))) return true;
+    return readdirSync(dir).some((name) => CLAIM_NAME.test(name));
+  } catch (error) {
+    return error?.code !== 'ENOENT';
+  }
+}
+
+/**
  * Applies every queued invalidation and clears the queue.
  *
  * Returns the number of findings marked, so the caller knows whether its

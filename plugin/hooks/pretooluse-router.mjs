@@ -24,6 +24,8 @@ import {
   mode,
   MODE_OFF,
   MODE_ASSIST,
+  precedeWith,
+  subagentBriefing,
 } from './lib/policy.mjs';
 import {
   decide,
@@ -33,6 +35,7 @@ import {
   touchedFiles,
   isContentDump,
   commandProjectRoot,
+  wholeFileDump,
 } from './lib/decide.mjs';
 import { recordRead, fingerprint } from './lib/metrics.mjs';
 import { maybeSurface } from './lib/surface.mjs';
@@ -40,6 +43,7 @@ import { recordingNudge, isSubstantive } from './lib/recording.mjs';
 import {
   wikiDir,
   load,
+  loadFindings,
   harvest,
   projectRootFor,
   contentHash,
@@ -60,7 +64,7 @@ import {
   boundNotice,
   isOutputHeavy,
 } from './lib/rewrite.mjs';
-import { isFsSafePath } from './lib/paths.mjs';
+import { isFsSafePath, canonicalPath } from './lib/paths.mjs';
 // Aliased: the staleness path already exports a substitutionFor, and the two
 // mean different things -- that one swaps a stale claim, this one swaps a
 // large read for an outline of the same file.
@@ -182,6 +186,13 @@ try {
   const state = loadState(payload.session_id, agentScope);
   const toolEvidence = optimizerToolsForHook(raw, state);
   rememberOptimizerTools(state, toolEvidence);
+  // A subagent never sees SessionStart, so its first tool call carries the
+  // guidance instead, on whichever exit this call takes.
+  const briefing = subagentBriefing(raw, state);
+  if (briefing) {
+    precedeWith(briefing);
+    saveState(payload.session_id, state, agentScope);
+  }
   const ucrGuardVerdict = evaluateUcrGuards(
     payload,
     touchedFiles(payload).map((item) => item.path)
@@ -305,7 +316,7 @@ try {
           // there never fired -- no injection, no metrics row, no error.
           const root = commandProjectRoot(payload, payload.cwd);
           const dir = wikiDir(root);
-          const note = forCommand(dir, load(dir), command, {
+          const note = forCommand(dir, loadFindings(dir), command, {
             sessionId: payload.session_id,
             alreadyInjected,
             episode,
@@ -553,6 +564,21 @@ ${nudge}`
       }
     }
 
+    // The same substitution for a whole-file dump through the shell, which is how
+    // agents read files. See shellOutlineSubstitution.
+    if (payload.tool_name === 'Bash') {
+      const shellOutline = shellOutlineSubstitution(
+        payload,
+        raw?.tool_name ?? raw?.toolName ?? raw?.tool
+      );
+      if (shellOutline) {
+        allowWithRewrite(
+          { ...payload.tool_input, command: shellOutline.command },
+          [context, shellOutline.notice].filter(Boolean).join('\n\n')
+        );
+      }
+    }
+
     if (payload.tool_name === 'Bash' && isOutputHeavy(payload.tool_input?.command)) {
       const command = payload.tool_input.command;
       // First run of this command goes through untouched -- see seenPath.
@@ -721,6 +747,17 @@ function outlineSubstitution(payload) {
   const filePath = payload.tool_input?.file_path;
   if (!filePath) return null;
 
+  // A PAGED READ IS NEVER OUTLINED. `decide()` already passes one through ("a
+  // paged read is already a deliberate act of token economy"), but both call
+  // sites here substituted it anyway and kept the offset and limit -- so they
+  // were applied to the OUTLINE file, and the model got "the file is shorter
+  // than the provided offset" about a file it never asked for. The outline's own
+  // notice says "read the original with offset and limit", which is exactly the
+  // call that was being rewritten, so following the advice looped. Observed on
+  // the first paged read of a 1,062-line file in a live session.
+  const input = payload.tool_input || {};
+  if (input.offset != null || input.limit != null) return null;
+
   // THE RECORD ALREADY EXISTED, it was simply never read. The outline we serve
   // is written to a path keyed by session and file, so that file's presence is
   // itself the evidence that this session has already been handed an outline
@@ -744,6 +781,57 @@ function outlineSubstitution(payload) {
     // Nowhere to write means no substitution, never a broken read.
     return null;
   }
+}
+
+/**
+ * Points a whole-file shell dump at an outline of the same file.
+ *
+ * THE SHELL HALF OF `outlineSubstitution`, and for agents the half that matters:
+ * across 42 workflow subagents in one session, 2,071 file reads went through
+ * `cat`, `sed`, `head` or `Get-Content` and 9 through `Read`, so the Read-only
+ * substitution almost never fired for them.
+ *
+ * Only a command that prints exactly one file and nothing else is rewritten --
+ * `wholeFileDump` refuses pipelines, chains, redirects, flags and slices -- and
+ * the decision and the one-outline-per-file-per-session record are SHARED with
+ * `Read`: both go through `outlineSubstitution` with the same canonical path, so
+ * an outline served to `cat f` counts for a later `Read f` and vice versa, and
+ * the second whole read of a file always gets the file.
+ *
+ * Returns `{ command, notice }`, or null to leave the command alone.
+ */
+function shellOutlineSubstitution(payload, rawToolName) {
+  const dump = wholeFileDump(payload.tool_input?.command, payload.cwd);
+  if (!dump) return null;
+  const powershell = /powershell|pwsh/i.test(String(rawToolName || ''));
+  // `type` prints a file only in PowerShell and cmd. In a POSIX shell it is the
+  // builtin that describes a command, so rewriting it would change its meaning.
+  if (!powershell && !/^cat$/i.test(dump.head)) return null;
+  const filePath = canonicalPath(dump.path, payload.cwd);
+  const substitution = outlineSubstitution({
+    ...payload,
+    tool_input: { file_path: filePath },
+  });
+  if (!substitution) return null;
+
+  // The rewrite has to be valid in the shell that runs it. PowerShell takes a
+  // single-quoted literal path with '' as the escape; a POSIX shell takes a
+  // single-quoted path with '\'' as the escape, and Git Bash on Windows accepts
+  // a drive-letter path written with forward slashes.
+  // The outline is written as UTF-8 without a BOM, which Windows PowerShell 5
+  // would otherwise read as the ANSI code page.
+  const command = powershell
+    ? `Get-Content -LiteralPath '${substitution.target.replace(/'/g, "''")}' -Encoding UTF8`
+    : `cat '${substitution.target.replace(/\\/g, '/').replace(/'/g, "'\\''")}'`;
+
+  const notice =
+    `token-optimizer replaced this command's output with a structural outline of ` +
+    `${dump.operand} (${substitution.found.lines} lines, ` +
+    `${Math.round(substitution.found.bytes / 1024)}KB). Every symbol is listed ` +
+    `with its line number; print a line range of the original (sed -n 'A,Bp', or ` +
+    `Get-Content with Select-Object -Skip/-First) or Read it with offset and limit ` +
+    `for any region you need in full. Printing the whole file again returns it in full.`;
+  return { command, notice };
 }
 
 function commandKey(sessionId, command) {
@@ -923,6 +1011,22 @@ function compactorFor(sessionId, command) {
       allowWithRewrite(
         { ...payload.tool_input, file_path: substitution.target },
         [reason, outlineNotice(payload, substitution)].filter(Boolean).join('\n\n')
+      );
+    }
+  }
+
+  // And for a whole-file shell dump on this path too: a dump large enough to earn
+  // a verdict is exactly the dump worth outlining, so wiring it only to the
+  // allowed path would repeat the half-shipped defect described above.
+  if (payload.tool_name === 'Bash' && refusalsEnabled()) {
+    const shellOutline = shellOutlineSubstitution(
+      payload,
+      raw?.tool_name ?? raw?.toolName ?? raw?.tool
+    );
+    if (shellOutline) {
+      allowWithRewrite(
+        { ...payload.tool_input, command: shellOutline.command },
+        [reason, shellOutline.notice].filter(Boolean).join('\n\n')
       );
     }
   }

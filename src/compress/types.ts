@@ -126,6 +126,13 @@ export interface EngineContext {
    */
   readonly sourcePath?: string;
   /**
+   * The file line number of each line of this content, when it is a numbered
+   * read whose numbers the router stripped. Without it a range cited against
+   * `sourcePath` would be counted from the start of the RESULT, which is not the
+   * start of the file for any read with an offset.
+   */
+  readonly sourceLines?: readonly number[];
+  /**
    * Compresses content found INSIDE a string value, when the caller has a
    * router to route it with.
    *

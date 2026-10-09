@@ -18,7 +18,7 @@
 
 import {
   readFileSync, writeFileSync, existsSync, mkdirSync, chmodSync, readdirSync, statSync,
-  unlinkSync, openSync, readSync, closeSync,
+  unlinkSync, openSync, readSync, closeSync, appendFileSync,
 } from 'node:fs';
 import { join } from 'node:path';
 import { redact } from './redact.mjs';
@@ -50,13 +50,15 @@ export function safeName(sessionId) {
  * hold the conversation, not a second copy of the repository.
  */
 export function readTurns(transcriptPath) {
-  let lines;
   try {
-    lines = readFileSync(transcriptPath, 'utf8').split('\n');
+    return turnsFromLines(readFileSync(transcriptPath, 'utf8').split('\n'));
   } catch {
     return [];
   }
+}
 
+/** The turns in a run of transcript lines; each line stands on its own. */
+function turnsFromLines(lines) {
   const turns = [];
   for (const line of lines) {
     if (!line.trim()) continue;
@@ -110,14 +112,23 @@ export function readTurns(transcriptPath) {
 /**
  * Appends this session's turns to the project archive.
  *
- * Idempotent per session by rewriting that session's file, so a Stop hook firing
- * repeatedly does not multiply the record.
+ * INCREMENTAL, because Stop fires on every turn and the transcript only grows.
+ * Rebuilding the archive from the whole transcript each time made every Stop cost
+ * O(transcript): measured on a 45.6 MB session transcript, 1.0-1.1 s per Stop, 76%
+ * of it in this function, and the plugin's own hook log shows Stop at p50 997 ms
+ * and a maximum of 130 s over 610 calls (issue #473, defect 9). A sidecar records
+ * how many transcript bytes the archive already covers, and only the bytes after
+ * that are parsed and appended.
+ *
+ * The result is byte-identical to a full rebuild, because a transcript is
+ * append-only and every line is turned into turns on its own. Anything that
+ * breaks that assumption -- a shorter transcript, a different path, a missing
+ * archive or sidecar -- falls back to the full rebuild, which is what this
+ * function always did.
  */
 export function archive(dir, transcriptPath, { sessionId } = {}) {
-  const turns = readTurns(transcriptPath);
-  if (!turns.length) return 0;
-
   const root = transcriptDir(dir);
+  const file = join(root, `${safeName(sessionId)}.jsonl`);
   try {
     mkdirSync(root, { recursive: true, mode: 0o700 });
     try {
@@ -129,19 +140,168 @@ export function archive(dir, transcriptPath, { sessionId } = {}) {
     return 0;
   }
 
-  const file = join(root, `${safeName(sessionId)}.jsonl`);
+  // EVERYTHING BELOW HOLDS THE LOCK, the append AND the rebuild. Appending is
+  // not idempotent the way the old rewrite was: two archivers that read the
+  // same coverage both append the same turns (eight of them wrote 10.7 MB where
+  // the rebuild is 2.1 MB). And a rebuild running beside an append either
+  // duplicates turns or records coverage the archive does not hold -- which no
+  // later call repairs, because the coverage still looks valid. So an archiver
+  // that cannot take the lock does nothing: the holder covers everything up to
+  // its end, and whatever arrives after it is covered by the next Stop.
+  const lock = `${coveragePath(file)}.lock`;
+  if (!takeArchiveLock(lock)) return 0;
   try {
-    // Truncate-and-write rather than append: Stop fires many times per session
-    // and the transcript is cumulative, so appending would store the early turns
-    // once per firing.
-    const payload = turns.map((t) => JSON.stringify(t)).join('\n') + '\n';
-    writeFileSync(file, payload, { mode: 0o600 });
+    const appended = appendNewTurns(file, transcriptPath);
+    if (appended !== null) return appended;
+
+    // The end is fixed BEFORE reading: the client keeps appending, and coverage
+    // recorded after a read would claim lines that arrived during it.
+    const end = completeLinesEnd(transcriptPath);
+    const turns = turnsBetween(transcriptPath, 0, end);
+    if (!turns.length) return 0;
+    try {
+      // Truncate-and-write rather than append: the transcript is cumulative, so
+      // appending the full set would store the early turns once per firing.
+      const payload = turns.map((t) => JSON.stringify(t)).join('\n') + '\n';
+      writeFileSync(file, payload, { mode: 0o600 });
+      writeCoverage(file, transcriptPath, end);
+    } catch {
+      return 0;
+    }
+    prune(root);
+    return turns.length;
+  } finally {
+    try {
+      unlinkSync(lock);
+    } catch {
+      /* already gone */
+    }
+  }
+}
+
+/** A lock older than any archive takes is a crashed holder's. */
+const ARCHIVE_LOCK_STALE_MS = 30_000;
+
+/**
+ * Takes the archive lock, or reports that someone else holds it.
+ *
+ * Every failure is "not taken", never "proceed without it": a holder that
+ * released between our two calls, or a second process that also found the
+ * lock stale and won the re-create, both mean another archiver is active.
+ */
+function takeArchiveLock(lock) {
+  try {
+    closeSync(openSync(lock, 'wx'));
+    return true;
+  } catch (error) {
+    if (error?.code !== 'EEXIST') return false;
+  }
+  try {
+    if (Date.now() - statSync(lock).mtimeMs < ARCHIVE_LOCK_STALE_MS) return false;
+    unlinkSync(lock);
+    closeSync(openSync(lock, 'wx'));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Where the record of how much of the transcript an archive covers is kept. */
+const coveragePath = (file) => file.replace(/\.jsonl$/, '.covered');
+
+/**
+ * The byte offset just past the transcript's last complete line.
+ *
+ * A Stop can fire while the client is mid-write, and a half-written last line
+ * fails to parse -- the full rebuild drops it and picks it up next time. The
+ * coverage must stop at the same place, or that line would never be read.
+ */
+function completeLinesEnd(transcriptPath) {
+  let fd;
+  try {
+    const size = statSync(transcriptPath).size;
+    fd = openSync(transcriptPath, 'r');
+    const window = Buffer.alloc(Math.min(size, 1 << 16));
+    for (let end = size; end > 0; ) {
+      const start = Math.max(0, end - window.length);
+      const length = end - start;
+      readSync(fd, window, 0, length, start);
+      const newline = window.subarray(0, length).lastIndexOf(10);
+      if (newline >= 0) return start + newline + 1;
+      end = start;
+    }
+    return 0;
   } catch {
     return 0;
+  } finally {
+    if (fd !== undefined) {
+      try {
+        closeSync(fd);
+      } catch {
+        /* already closed */
+      }
+    }
   }
+}
 
-  prune(root);
-  return turns.length;
+function writeCoverage(file, transcriptPath, offset) {
+  writeFileSync(
+    coveragePath(file),
+    JSON.stringify({ transcript: String(transcriptPath), offset }),
+    { mode: 0o600 }
+  );
+}
+
+/**
+ * Appends the turns in the transcript bytes the archive does not yet cover.
+ * The caller holds the archive lock.
+ *
+ * Returns how many turns were appended, or null when the incremental path
+ * cannot be trusted and the caller must rebuild.
+ */
+function appendNewTurns(file, transcriptPath) {
+  try {
+    if (!existsSync(file)) return null;
+    const covered = JSON.parse(readFileSync(coveragePath(file), 'utf8'));
+    if (covered?.transcript !== String(transcriptPath)) return null;
+    const from = Number(covered.offset);
+    const end = completeLinesEnd(transcriptPath);
+    if (!Number.isInteger(from) || from < 0 || end < from) return null;
+    if (end === from) return 0;
+
+    const turns = turnsBetween(transcriptPath, from, end);
+    if (turns.length) {
+      appendFileSync(file, turns.map((t) => JSON.stringify(t)).join('\n') + '\n', {
+        mode: 0o600,
+      });
+    }
+    writeCoverage(file, transcriptPath, end);
+    return turns.length;
+  } catch {
+    return null;
+  }
+}
+
+/** The turns in transcript bytes [from, end), which must start and end on a line boundary. */
+function turnsBetween(transcriptPath, from, end) {
+  if (end <= from) return [];
+  let fd;
+  try {
+    fd = openSync(transcriptPath, 'r');
+    const buffer = Buffer.alloc(end - from);
+    readSync(fd, buffer, 0, buffer.length, from);
+    return turnsFromLines(buffer.toString('utf8').split('\n'));
+  } catch {
+    return [];
+  } finally {
+    if (fd !== undefined) {
+      try {
+        closeSync(fd);
+      } catch {
+        /* already closed */
+      }
+    }
+  }
 }
 
 /**
@@ -180,6 +340,11 @@ export function prune(root, budget = archiveBudget()) {
       unlinkSync(e.full);
       total -= e.size;
       dropped += 1;
+      try {
+        unlinkSync(coveragePath(e.full));
+      } catch {
+        /* an archive written before coverage existed has none */
+      }
     } catch {
       /* leave it; a locked file must not stop the rest */
     }

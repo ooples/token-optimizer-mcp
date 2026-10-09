@@ -26,7 +26,7 @@ import {
 } from './wiki.mjs';
 import { basename } from 'node:path';
 import { serve, diffLines } from './staleness.mjs';
-import { drainInvalidations } from './pending.mjs';
+import { drainInvalidations, hasPendingInvalidations } from './pending.mjs';
 import { inHoldout, record, indexBudget } from './metrics.mjs';
 import { canonicalPath, resolvableCandidates } from './paths.mjs';
 import { safeLine } from './safe-text.mjs';
@@ -252,6 +252,15 @@ const drainedDirs = new Set();
  */
 function withPendingApplied(dir, graph) {
   try {
+    // A drain needs the anchors a findings-only graph does not hold, and it
+    // consumes the queue whether or not it finds them. So a findings-only graph
+    // is NEVER drained: with nothing pending it returns as it is, and a write
+    // queued after this check waits for the next drain instead of being
+    // consumed against a graph that cannot apply it.
+    if (graph.partial) {
+      if (!hasPendingInvalidations(dir)) return graph;
+      graph = load(dir);
+    }
     const key = canonicalPath(dir);
     // The drain runs EVERY time. It is one stat when there is nothing to do,
     // and running it unconditionally is what keeps the memo from encoding an
@@ -452,9 +461,21 @@ export function forTouch(
  * mentions a command it is not about).
  *
  * With no trigger, a `command` or `failure` finding still qualifies on a weaker
- * test: the command mentions a distinctive token from the claim. That keeps the
- * findings already in existing graphs useful without a migration, while new
- * ones can be precise.
+ * test: the claim names an ACT the command performs -- a program with its
+ * subcommand, such as `npx jest` or `dotnet build`. That keeps the findings
+ * already in existing graphs useful without a migration, while new ones can be
+ * precise.
+ *
+ * WHY ACTS AND NOT WORDS (issue #473, defect 7). The previous test admitted a
+ * finding when ANY claim word of three or more letters appeared in the command.
+ * A finding's claim is a paragraph and a PowerShell command is a script, so they
+ * almost always share a word: replaying the 3,022 shell commands of one session
+ * against the graphs their cwd resolved to admitted 14,950 untriggered findings
+ * on 1,926 commands -- "build" pulled a disk-space finding into every build,
+ * "git" pulled every git finding into every git call. Requiring two shared words,
+ * or a rare one, still admitted 4,637, because the graphs are too small (60 and
+ * 160 findings) for word rarity to mean anything. Matching the act admitted 71,
+ * and every sampled one was about the command being run.
  */
 function appliesToCommand(finding, command) {
   const text = String(command || '');
@@ -478,50 +499,69 @@ function appliesToCommand(finding, command) {
   // Untriggered findings only qualify if they are about doing something.
   if (finding.type !== 'command' && finding.type !== 'failure') return false;
 
-  // Distinctive tokens, matched as WHOLE WORDS.
-  //
-  // The floor is three characters because the tokens that carry the meaning are
-  // short: jest, npm, git, ssh, tsc. A five-character floor -- the first
-  // attempt -- excluded "jest" from the very finding this feature exists to
-  // deliver, which the tests caught. Whole-word matching is what makes the low
-  // floor safe: without it "npm" would fire on any path containing "npm", and
-  // every claim mentioning a common word would match every command.
   const claim = String(finding.claim || '');
-  const tokens = [
-    ...new Set(
-      (claim.match(/[a-z][a-z0-9._-]{2,}/gi) || [])
-        .map((t) => t.toLowerCase().replace(/[._-]+$/, ''))
-        .filter((t) => t.length >= 3 && !STOPWORDS.has(t))
-    ),
-  ];
-
-  return tokens.some((t) => {
-    const escaped = t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    try {
-      return new RegExp(`(^|[^a-z0-9])${escaped}([^a-z0-9]|$)`, 'i').test(text);
-    } catch {
-      return false;
-    }
-  });
+  return actsOf(text).some((act) => namesAct(claim, act));
 }
 
 /**
- * Words common enough that matching on them would fire on every command.
+ * The acts a command performs: each simple command's program and subcommand.
+ *
+ * `cd x && npx jest a | tail -5` performs `npx jest`; `$f = git show HEAD:a`
+ * performs `git show`. A program alone is not an act -- `git`, `node` and
+ * `dotnet` occur in a finding's prose about anything -- and neither is a pair
+ * of function words, which is what a segment of a here-string or of an
+ * embedded script looks like. Here-string bodies are dropped first because a
+ * commit message is prose, not commands.
+ */
+export function actsOf(command) {
+  const acts = new Set();
+  const code = String(command || '')
+    .replace(/@'[\s\S]*?\n'@/g, '')
+    .replace(/@"[\s\S]*?\n"@/g, '')
+    .replace(/<<-?\s*'?(\w+)'?[\s\S]*?\n\1\b/g, '');
+  for (const segment of code.split(/\r?\n|;|&&|\|\||\||\{|\}/)) {
+    const words = segment
+      .trim()
+      .replace(/^\$[\w:]+\s*=\s*/, '')
+      .replace(/^[&.]\s+/, '')
+      .split(/\s+/);
+    const program = (words[0] || '')
+      .replace(/^.*[\\/]/, '')
+      .replace(/\.(exe|cmd|ps1)$/i, '')
+      .toLowerCase();
+    const sub = (words[1] || '').toLowerCase();
+    if (!/^[a-z][a-z0-9._-]+$/.test(program) || !/^[a-z][a-z0-9-]+$/.test(sub)) continue;
+    if (NOT_A_PROGRAM.has(program) || NOT_A_PROGRAM.has(sub)) continue;
+    acts.add(`${program} ${sub}`);
+  }
+  return [...acts];
+}
+
+/** Does the claim name this act, as consecutive whole words? */
+function namesAct(claim, act) {
+  const [program, sub] = act.split(' ').map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  return new RegExp(`(^|[^a-z0-9-])${program}\\s+${sub}([^a-z0-9-]|$)`, 'i').test(claim);
+}
+
+/**
+ * Words that start a segment of prose or of script syntax, never a program.
  * Deliberately small: this is a noise floor, not a language model.
  */
-const STOPWORDS = new Set([
-  // Long enough to pass the length floor, common enough to match anything.
+const NOT_A_PROGRAM = new Set([
+  // Script syntax that opens a segment once a command is split on separators.
+  'foreach', 'while', 'switch', 'else', 'elseif', 'try', 'catch', 'finally',
+  'return', 'param', 'function', 'throw', 'if', 'in', 'is', 'it', 'of', 'on',
+  'or', 'so', 'to', 'up', 'we', 'as', 'at', 'be', 'by', 'do',
+  // English that opens a line of prose. `run`, `use`, `add` and `log` are NOT
+  // here: they are the subcommands of `npm run`, `nvm use`, `git add`, `git log`.
   'about', 'after', 'again', 'against', 'because', 'before', 'being', 'between',
   'could', 'every', 'first', 'instead', 'other', 'rather', 'should', 'since',
   'their', 'there', 'these', 'thing', 'those', 'through', 'where', 'which',
-  'while', 'would', 'without', 'project', 'always', 'never',
-  // Short words that only became candidates once the floor dropped to three,
-  // which it had to so that the tool names that matter -- jest, npm, git, ssh
-  // -- are matchable at all.
+  'would', 'without', 'project', 'always', 'never',
   'and', 'are', 'but', 'for', 'from', 'has', 'have', 'into', 'its', 'not',
   'one', 'only', 'our', 'out', 'same', 'some', 'such', 'than', 'that', 'the',
-  'them', 'then', 'they', 'this', 'too', 'use', 'used', 'very', 'was', 'were',
-  'what', 'when', 'will', 'with', 'you', 'your', 'run', 'runs', 'way', 'why',
+  'them', 'then', 'they', 'this', 'too', 'very', 'was', 'were',
+  'what', 'when', 'will', 'with', 'you', 'your', 'way', 'why',
 ]);
 
 /**
@@ -565,6 +605,10 @@ export function forCommand(
     candidates.push(node);
   }
   if (!candidates.length) return null;
+
+  // Chosen from findings alone (loadFindings); serving them reads anchors and
+  // edges, so the rest of the graph is parsed only now that something matched.
+  if (graph.partial) graph = load(dir);
 
   // Highest confidence first, so a tight budget keeps the most trustworthy.
   // AN EXPLICIT TRIGGER BEATS AN INCIDENTAL WORD, before confidence is even

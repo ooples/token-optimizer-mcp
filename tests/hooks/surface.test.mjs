@@ -90,6 +90,47 @@ describe('the session numbers come from the transcript', () => {
   test('a missing transcript is null rather than a throw', () => {
     expect(sessionUsage(join(workspace, 'nope.jsonl'))).toBeNull();
   });
+
+  // A request carrying more than the default window could only have gone to a
+  // larger one. Measuring against the default reported "~0 turns to compaction"
+  // for a session with most of a 1M-token window left (issue #473).
+  test('a context past the default window is measured against the next window', () => {
+    const usage = sessionUsage(transcript(20, 450_000));
+    expect(usage.used).toBe(450_000);
+    expect(usage.capacity).toBe(1_000_000);
+  });
+
+  test('a context exactly at the default window stays in it', () => {
+    // A 200K session holding exactly 200K is at compaction, the moment the
+    // forecast exists for. Reading equality as "must be the 1M window" would
+    // hide its zero-runway warning.
+    const usage = sessionUsage(transcript(20, 200_000));
+    expect(usage.used).toBe(200_000);
+    expect(usage.capacity).toBe(200_000);
+  });
+
+  test('past every known window there is nothing honest to forecast', () => {
+    expect(sessionUsage(transcript(20, 1_200_000))).toBeNull();
+  });
+});
+
+describe('a runway of zero counts as shown', () => {
+  // `previous?.shown ? ... : null` read a stored 0 as "never shown", so a panel
+  // at "~0 turns" was re-shown on every throttle window (397 times in one
+  // session). The stored zero must suppress the repeat like any other value.
+  test('a stored shown of 0 is compared against, not ignored', () => {
+    seedArms();
+    const path = transcript(20, 199_000);
+    const first = maybeSurface(dir, { transcriptPath: path, sessionId: 'zero', state: {}, now: 5_000 });
+    expect(first.text).not.toBeNull();
+    const again = maybeSurface(dir, {
+      transcriptPath: path,
+      sessionId: 'zero',
+      state: { forecast: { checkedAt: 5_000, shown: 0 } },
+      now: 5_000 + SURFACE_INTERVAL_MS + 1,
+    });
+    expect(again.text).toBeNull();
+  });
 });
 
 describe('the cost is bounded before anything is opened', () => {
