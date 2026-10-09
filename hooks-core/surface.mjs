@@ -50,6 +50,9 @@ export const SURFACE_INTERVAL_MS =
 export const DEFAULT_CAPACITY =
   Number(process.env.TOKEN_OPTIMIZER_CONTEXT_CAPACITY) || 200_000;
 
+/** Context windows a session can be running against, smallest first. */
+const KNOWN_WINDOWS = [200_000, 1_000_000];
+
 /**
  * What the session has spent, read from its own transcript.
  *
@@ -73,6 +76,19 @@ export function sessionUsage(transcriptPath, { capacity = DEFAULT_CAPACITY } = {
   const last = turns[turns.length - 1];
   const used = (last.read || 0) + (last.written || 0) + (last.input || 0);
   if (!used) return null;
+
+  // A CONTEXT ALREADY PAST THE ASSUMED WINDOW PROVES THE WINDOW IS LARGER. The
+  // ceiling is not in the transcript, so it is defaulted -- but a request that
+  // carried more than the default could only have been sent to a bigger window.
+  // Measuring against the default then reports "~0 turns to compaction" for a
+  // session with most of a 1M-token window left. Take the smallest known window
+  // that holds what was actually sent; past every known window, there is nothing
+  // honest to forecast.
+  if (used >= capacity) {
+    const larger = KNOWN_WINDOWS.find((window) => window > used);
+    if (!larger) return null;
+    capacity = larger;
+  }
 
   return { used, capacity, turns: turns.length };
 }
@@ -179,7 +195,14 @@ export function maybeSurface(dir, {
   // worthSurfacing compares against the last panel that was actually SHOWN, not the last one
   // computed. Comparing against the last computed panel would let the runway drift down past the
   // threshold one throttle window at a time and never trip the "crossed it" test.
-  const shown = previous?.shown ? { parts: { runway: { withGraph: previous.shown } } } : null;
+  //
+  // ZERO IS A RUNWAY THAT WAS SHOWN. `previous?.shown ? ... : null` read a stored
+  // runway of 0 as "nothing shown yet", so a session sitting at "~0 turns to
+  // compaction" was re-shown that panel on every throttle window for the rest of
+  // its life -- 397 times in one main session and 340 times across its
+  // subagents, each copy re-read on every later turn.
+  const shown =
+    previous?.shown != null ? { parts: { runway: { withGraph: previous.shown } } } : null;
   if (!worthSurfacing(panel, shown)) {
     return { text: null, state: { ...previous, checkedAt: now } };
   }

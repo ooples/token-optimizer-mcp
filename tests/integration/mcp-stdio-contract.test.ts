@@ -241,6 +241,10 @@ describe('the server answers over stdio at all', () => {
       'use a bounded native operation'
     );
     expect(initializeResult?.instructions).toContain('unlisted schema');
+    // Deferred tools (always the case for subagents) must be loaded, not skipped:
+    // the old wording told every subagent to fall back to cat and grep.
+    expect(initializeResult?.instructions).toContain('listed as deferred');
+    expect(initializeResult?.instructions).toContain('ToolSearch');
   });
 
   it('lists its tools', async () => {

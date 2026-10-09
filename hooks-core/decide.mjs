@@ -73,6 +73,79 @@ export function isContentDump(command) {
   );
 }
 
+/**
+ * Commands whose stdout is one whole file, verbatim.
+ *
+ * `head`, `tail`, `more`, `less` and `bat` are deliberately absent: head and tail
+ * bound their own output, the pagers are interactive, and bat decorates. Only a
+ * command that prints exactly the file can be answered with an outline of that
+ * file without changing what the model asked for.
+ */
+const WHOLE_DUMP_HEAD = /^(?:cat|type|Get-Content|gc)$/i;
+
+/**
+ * The single file a command prints in full, when that is ALL it does.
+ *
+ * THE SHELL HALF OF READ SUBSTITUTION. Subagents read files through the shell far
+ * more than through `Read`: across 34 workflow agents in one session, 2,300 reads
+ * went through `cat`, `sed`, `head` or `Get-Content` and 9 through `Read`. The
+ * outline substitution only ever saw `Read`, so for an agent it almost never
+ * fired.
+ *
+ * STRICT ON PURPOSE. A rewrite that changes what a command means is far worse
+ * than a missed saving, so anything other than one plain dump of one file is
+ * left alone: a pipeline (`cat f | jq`), a chain (`cat f && make`), a redirect, a
+ * heredoc, a subshell, a glob or variable, any flag but PowerShell's `-Raw`, or
+ * more than one operand. `cat -n f` numbers lines and `Get-Content -TotalCount`
+ * bounds them, so neither is a whole-file dump either.
+ *
+ * Returns `{ head, operand, path }` -- the command word, the operand as written,
+ * and the path that resolved on disk -- or null.
+ */
+export function wholeFileDump(command, cwd) {
+  if (typeof command !== 'string' || !command.trim()) return null;
+  // A heredoc, a redirect, a subshell or a substitution means the command does
+  // more than print a file.
+  if (stripHeredocs(command) !== command) return null;
+  if (/[<>`]|\$\(|[()]/.test(command)) return null;
+
+  const segments = shellSegments(command).filter((s) => s.trim());
+  if (segments.length !== 1) return null;
+  // `shellSegments` splits on `|`, `;`, `&` and newlines; a single segment can
+  // still have been joined by `&&` with an empty side, which the filter dropped.
+  if (/[|;&\n]/.test(command.replace(/"[^"]*"|'[^']*'/g, ''))) return null;
+
+  const tokens = segments[0].trim().match(/(?:"[^"]*"|'[^']*'|[^\s]+)/g) || [];
+  if (!tokens.length) return null;
+  const head = tokens[0].replace(/^.*[/\\]/, '');
+  if (!WHOLE_DUMP_HEAD.test(head)) return null;
+  const powershell = /^(?:Get-Content|gc)$/i.test(head);
+
+  const operands = [];
+  for (let i = 1; i < tokens.length; i++) {
+    const token = tokens[i];
+    if (powershell && /^-Raw$/i.test(token)) continue;
+    if (powershell && /^-(?:LiteralPath|Path)$/i.test(token)) {
+      if (i + 1 >= tokens.length) return null;
+      operands.push(tokens[++i]);
+      continue;
+    }
+    if (token.startsWith('-') || (token.startsWith('/') && /^\/[A-Za-z]$/.test(token))) return null;
+    operands.push(token);
+  }
+  if (operands.length !== 1) return null;
+
+  const operand = operands[0].replace(/^(['"])(.*)\1$/, '$2');
+  if (!operand || /[*?$]/.test(operand)) return null;
+
+  for (const path of candidatePaths(operand, cwd)) {
+    if (fileSize(path) > 0 && !isBinaryPath(path) && !isMachineOwned(path)) {
+      return { head, operand, path };
+    }
+  }
+  return null;
+}
+
 /** Command segments, split on the operators that end one command's stdout. */
 function segmentsOf(command) {
   return String(command)
@@ -216,17 +289,33 @@ export function isRecursiveSearch(command) {
       i++;
     if (i >= tokens.length) continue;
 
-    // `/usr/bin/grep` is grep; `git grep` is grep with a word in front.
+    // `/usr/bin/grep` is grep. `git grep` searches the whole tracked tree by
+    // default, so it recurses with no flag at all.
     let head = tokens[i].replace(/^.*[/\\]/, '');
-    if (head === 'git' && tokens[i + 1] === 'grep') {
-      head = 'grep';
-      i++;
-    }
+    if (head === 'git' && tokens[i + 1] === 'grep') return true;
     if (!SEARCH_TOOL.test(head)) continue;
 
     if (RECURSES_BY_DEFAULT.test(head)) return true;
 
     const flags = tokens.slice(i + 1);
+
+    // POWERSHELL PARAMETERS ARE WORDS, NOT CLUSTERED SHORT FLAGS. The POSIX test
+    // below asks whether any `-xyz` token contains an `r`, and `-Pattern`, `-Path`
+    // and `-Raw` all do, so every single-file `Select-String -Path f -Pattern p`
+    // was reported as an unbounded recursive search. Select-String has no recurse
+    // switch of its own: it recurses only when it is fed by a recursive listing,
+    // and that lives in an EARLIER segment of the same command.
+    if (/^(?:Select-String|sls)$/i.test(head)) {
+      if (listsRecursively(command)) return true;
+      continue;
+    }
+
+    // findstr spells recursion `/s`.
+    if (/^findstr$/i.test(head)) {
+      if (flags.some((t) => /^\/[a-z]*s[a-z]*$/i.test(t))) return true;
+      continue;
+    }
+
     if (
       flags.some(
         (t) => t === '--recursive' || /^-[A-Za-z]*[rR][A-Za-z]*$/.test(t)
@@ -235,6 +324,25 @@ export function isRecursiveSearch(command) {
       return true;
   }
 
+  return false;
+}
+
+/**
+ * Does any segment of this command list a directory tree recursively?
+ *
+ * `Get-ChildItem -Recurse | Select-String foo` is the PowerShell spelling of
+ * `grep -r foo`, and it is the only way Select-String recurses.
+ */
+function listsRecursively(command) {
+  for (const segment of shellSegments(stripHeredocs(command))) {
+    const tokens = segment.match(/(?:"[^"]*"|'[^']*'|[^\s]+)/g) || [];
+    if (!tokens.length) continue;
+    const head = tokens[0].replace(/^.*[/\\]/, '');
+    if (!/^(?:Get-ChildItem|gci|ls|dir)$/i.test(head)) continue;
+    // `-Recurse` (PowerShell), `-R` (POSIX `ls`; lowercase `-r` there means
+    // reverse order) and `/s` (cmd's `dir`).
+    if (tokens.slice(1).some((t) => /^-Recurse$/i.test(t) || t === '-R' || /^\/s$/i.test(t))) return true;
+  }
   return false;
 }
 
@@ -440,8 +548,11 @@ const DUMP_HEAD = /^(?:cat|bat|head|tail|more|less|type|Get-Content|gc)$/i;
  */
 function largeDumpedOperand(command, cwd) {
   const threshold = largeFileBytes();
+  const runnable = stripHeredocs(command);
+  const segments = shellSegments(runnable);
 
-  for (const segment of shellSegments(stripHeredocs(command))) {
+  for (let s = 0; s < segments.length; s++) {
+    const segment = segments[s];
     const tokens = segment.match(/(?:"[^"]*"|'[^']*'|[^\s]+)/g) || [];
 
     let i = 0;
@@ -451,7 +562,21 @@ function largeDumpedOperand(command, cwd) {
     )
       i++;
     if (i >= tokens.length) continue;
-    if (!DUMP_HEAD.test(tokens[i].replace(/^.*[/\\]/, ''))) continue;
+    const head = tokens[i].replace(/^.*[/\\]/, '');
+    if (!DUMP_HEAD.test(head)) continue;
+
+    // A BOUNDED SLICE IS NOT A DUMP of the file, and saying "this command prints
+    // <file> (969 KB) into the context" about it is false. `head` and `tail`
+    // print ten lines by default and a stated count otherwise, and Get-Content's
+    // count parameters bound it the same way. Observed live: the advisory fired
+    // on `Get-Content f | Select-Object -Index (100..160)`, which prints 61 lines.
+    if (/^(?:head|tail)$/i.test(head)) continue;
+    if (
+      /^(?:Get-Content|gc)$/i.test(head) &&
+      tokens.slice(i + 1).some((t) => /^-(?:TotalCount|Tail|Head|First|Last)$/i.test(t))
+    )
+      continue;
+    if (pipesIntoFilter(runnable, segment, segments[s + 1])) continue;
 
     // Only THIS segment's operands, and only from the dump command onwards.
     for (const operand of fileOperands(tokens.slice(i).join(' '))) {
@@ -465,6 +590,28 @@ function largeDumpedOperand(command, cwd) {
   }
 
   return null;
+}
+
+/**
+ * Commands that, fed a file on stdin, print a bounded or filtered part of it.
+ */
+const FILTER_HEAD = /^(?:head|tail|grep|egrep|fgrep|rg|sed|awk|wc|sort|uniq|cut|Select-Object|select|Select-String|sls|Measure-Object|measure|findstr)$/i;
+
+/**
+ * Is `segment` piped (a single `|`, not `||`) into a filter?
+ *
+ * `shellSegments` splits on `|`, `;`, `&` and newlines alike, so the operator
+ * that ended this segment is recovered from the command text.
+ */
+function pipesIntoFilter(command, segment, next) {
+  if (!next) return false;
+  const at = command.indexOf(segment);
+  if (at < 0) return false;
+  const after = command.slice(at + segment.length);
+  if (!/^\s*\|(?!\|)/.test(after)) return false;
+  const tokens = next.match(/(?:"[^"]*"|'[^']*'|[^\s]+)/g) || [];
+  if (!tokens.length) return false;
+  return FILTER_HEAD.test(tokens[0].replace(/^.*[/\\]/, ''));
 }
 
 /** Resolves the first operand that is a real file over the size threshold. */
@@ -982,6 +1129,43 @@ export function decide(payload, state, availableTools = undefined) {
   }
 
   return null;
+}
+
+/**
+ * The class a routing advisory belongs to, for saying it once.
+ *
+ * Search advisories are keyed by their pattern or command, so no two of them
+ * share a key and a per-key memory never suppresses one. They say the same
+ * sentence every time, so they are remembered by kind. A per-file advisory
+ * names the file, so it keeps its own key.
+ */
+function advisoryClass(key) {
+  const text = String(key || '');
+  if (text.startsWith('bash:search:')) return 'bash:search';
+  if (text.startsWith('grep:')) return 'grep';
+  if (text.startsWith('glob:')) return 'glob';
+  return text;
+}
+
+/**
+ * Should a routing advisory that is NOT a refusal be delivered this time?
+ *
+ * ONCE PER SESSION PER CLASS. An advisory delivered alongside a call that runs
+ * anyway cannot save that call, and repeating it only adds context the model
+ * has already learned to skip. Measured across 34 workflow subagents: the
+ * recursive-search advisory was injected 798 times and followed 17 times, and
+ * the main session received it 609 times. Every repeat is re-read on every later
+ * turn, so the cost of a noisy advisory grows with the length of the session.
+ *
+ * Records the delivery on `state`, which the caller persists.
+ */
+export function adviseOnce(state, verdict) {
+  if (!verdict?.key || !state) return Boolean(verdict);
+  const kind = advisoryClass(verdict.key);
+  const told = Array.isArray(state.routingAdvised) ? state.routingAdvised : [];
+  if (told.includes(kind)) return false;
+  state.routingAdvised = [...told, kind].slice(-200);
+  return true;
 }
 
 /**

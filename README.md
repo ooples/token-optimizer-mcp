@@ -415,6 +415,70 @@ names how to fix it. Not a dashboard, not six reports — a queue.
 
 ---
 
+## Subagents and workflows
+
+Agents are where token spend concentrates. A long-running subagent re-sends its
+whole context on every turn, so every byte a tool adds is paid for again on each
+later turn. In one measured session, 34 workflow subagents ran 400–580 turns each
+with contexts of 450K–610K tokens. They spent 3.8M output tokens and 1.7B
+cache-read tokens. The bill is the re-reading, not the writing.
+
+### What works with no setup
+
+The plugin's hooks run for subagents exactly as they do for the main session.
+Nothing needs to be configured per agent.
+
+- **Whole-file reads are outlined, through `Read` and through the shell.**
+  Agents mostly read files with `cat`, `type` or `Get-Content`, rarely with
+  `Read`. In the measured session that was 2,300 shell reads against 9 `Read`
+  calls. On the first whole read of a large source file, either kind returns a
+  line-numbered outline of its symbols instead of the file. A second whole read
+  of the same file returns the file itself. A line range is never outlined:
+  `sed -n 'A,Bp'`, `head`, `Get-Content -TotalCount` and a paged `Read` all pass
+  through untouched.
+- **Advisories are said once.** A routing hint such as "use smart_grep" appears
+  at most once per session for each kind of call, not on every matching command.
+- **Repeated build and test output is bounded**, as it is in the main session.
+
+### What to add when you brief an agent
+
+Claude Code gives subagents MCP tools as *deferred* tools: the schemas are not
+loaded until the agent asks for them. An agent that never loads them falls back
+to shell commands. Put this in the agent's prompt:
+
+```text
+Before your first file read or search, load the token-optimizer tools:
+ToolSearch("smart_read smart_grep smart_glob").
+Use smart_read for files (it returns a diff on re-reads), smart_grep for
+searching, and smart_glob for finding files. Do not print whole files or search
+the tree through the shell. When you need part of a file, read a line range.
+```
+
+The server's own instructions now say the same thing to every client, deferred
+or not.
+
+### Keep agents short
+
+The plugin can only shrink what enters an agent's context. The number of turns
+and the size of the context it carries are set by how the work is split up:
+
+- **One bounded task per agent.** Several short agents cost less than one agent
+  that runs for hundreds of turns, because each starts from a small context.
+- **Give the agent the facts it needs** (paths, line numbers, the exact
+  question) instead of asking it to rediscover them.
+- **Ask for a structured result** so the agent stops when it has the answer.
+
+### Measuring an agent
+
+Each subagent writes its own transcript next to the session's, under
+`~/.claude/projects/<project>/<session>/subagents/`. The `usage` block on every
+assistant row records `input_tokens`, `output_tokens`,
+`cache_read_input_tokens` and `cache_creation_input_tokens`. Summing them over an
+agent's transcript gives that agent's cost. The ratio of turns to peak context
+shows whether the agent should have been split.
+
+---
+
 ## The knowledge graph — the part nothing else has
 
 Every agent session ends the same way: the reasoning evaporates. The next

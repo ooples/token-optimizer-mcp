@@ -420,7 +420,9 @@ export function worthSurfacing(current, previous) {
   if (now > ACTIONABLE_RUNWAY) return false;
   if (!previous?.parts?.runway) return true;
 
-  // Crossed the threshold, or halved since last time it was shown.
+  // Crossed the threshold, or halved since last time it was shown. Halving has to
+  // be a real fall: at 0 turns, `0 <= floor(0 / 2)` is true forever, so a runway
+  // that had already reached zero was "halved" again on every throttle window.
   const before = previous.parts.runway.withGraph;
-  return before > ACTIONABLE_RUNWAY || now <= Math.floor(before / 2);
+  return before > ACTIONABLE_RUNWAY || (now < before && now <= Math.floor(before / 2));
 }

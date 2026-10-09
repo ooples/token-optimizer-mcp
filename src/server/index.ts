@@ -361,14 +361,26 @@ const packageVersion = JSON.parse(
 // that expose no native lifecycle hook. It is deliberately capability-aware:
 // the model must route through optimizer schemas that tools/list actually
 // exposes, while a reduced/failed profile keeps bounded native tools usable.
+// DEFERRED IS NOT ABSENT. Claude Code defers MCP tools -- always for subagents,
+// and for the main session when many tools are installed -- so their schemas are
+// not in tools/list until loaded with ToolSearch. The previous wording made the
+// tools conditional on "an exact optimizer schema is present in tools/list" and
+// otherwise said to use native operations, so every subagent was told, by this
+// server, to read files with cat and search them with grep. Measured across 34
+// workflow subagents: 2,300 shell file reads, 9 Read calls, 0 smart_read calls.
 const SERVER_INSTRUCTIONS =
-  'Token optimization is mandatory routing policy, not a preference. When an ' +
-  'exact optimizer schema is present in tools/list, use smart_read for large or ' +
-  'repeated files, smart_grep for content search, smart_glob for file discovery, ' +
-  'smart_edit for large edits, optimize_session when context is tight, and ' +
-  'wiki_write for durable non-obvious conclusions. Never call or redirect to an ' +
-  'unlisted schema; use a bounded native operation when the required optimizer ' +
-  'tool is absent.';
+  'Token optimization is mandatory routing policy, not a preference: use ' +
+  'smart_read for large or repeated files, smart_grep for content search, ' +
+  'smart_glob for file discovery, smart_edit for large edits, optimize_session ' +
+  'when context is tight, and wiki_write for durable non-obvious conclusions. ' +
+  'If these tools are listed as deferred (their schemas not yet loaded, as in ' +
+  'subagents), load the ones you need with ToolSearch -- a keyword search such ' +
+  'as ToolSearch("smart_read smart_grep smart_glob") finds them whatever ' +
+  'prefix this install gives them -- before your first ' +
+  'file read or search, and prefer them to printing files or searching through ' +
+  'the shell. Never call or redirect to an unlisted schema; use a bounded native ' +
+  'operation (a line range, a count, a filtered search) only when the required ' +
+  'optimizer tool is neither listed nor deferred.';
 
 const server = new Server(
   {
