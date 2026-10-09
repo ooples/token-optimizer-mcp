@@ -129,14 +129,6 @@ function turnsFromLines(lines) {
 export function archive(dir, transcriptPath, { sessionId } = {}) {
   const root = transcriptDir(dir);
   const file = join(root, `${safeName(sessionId)}.jsonl`);
-  const appended = appendNewTurns(file, transcriptPath);
-  if (appended !== null) return appended;
-
-  // The end is fixed BEFORE reading: the client keeps appending, and coverage
-  // recorded after a read would claim lines that arrived during it.
-  const end = completeLinesEnd(transcriptPath);
-  const turns = turnsBetween(transcriptPath, 0, end);
-  if (!turns.length) return 0;
   try {
     mkdirSync(root, { recursive: true, mode: 0o700 });
     try {
@@ -148,18 +140,70 @@ export function archive(dir, transcriptPath, { sessionId } = {}) {
     return 0;
   }
 
+  // EVERYTHING BELOW HOLDS THE LOCK, the append AND the rebuild. Appending is
+  // not idempotent the way the old rewrite was: two archivers that read the
+  // same coverage both append the same turns (eight of them wrote 10.7 MB where
+  // the rebuild is 2.1 MB). And a rebuild running beside an append either
+  // duplicates turns or records coverage the archive does not hold -- which no
+  // later call repairs, because the coverage still looks valid. So an archiver
+  // that cannot take the lock does nothing: the holder covers everything up to
+  // its end, and whatever arrives after it is covered by the next Stop.
+  const lock = `${coveragePath(file)}.lock`;
+  if (!takeArchiveLock(lock)) return 0;
   try {
-    // Truncate-and-write rather than append: the transcript is cumulative, so
-    // appending the full set would store the early turns once per firing.
-    const payload = turns.map((t) => JSON.stringify(t)).join('\n') + '\n';
-    writeFileSync(file, payload, { mode: 0o600 });
-    writeCoverage(file, transcriptPath, end);
-  } catch {
-    return 0;
-  }
+    const appended = appendNewTurns(file, transcriptPath);
+    if (appended !== null) return appended;
 
-  prune(root);
-  return turns.length;
+    // The end is fixed BEFORE reading: the client keeps appending, and coverage
+    // recorded after a read would claim lines that arrived during it.
+    const end = completeLinesEnd(transcriptPath);
+    const turns = turnsBetween(transcriptPath, 0, end);
+    if (!turns.length) return 0;
+    try {
+      // Truncate-and-write rather than append: the transcript is cumulative, so
+      // appending the full set would store the early turns once per firing.
+      const payload = turns.map((t) => JSON.stringify(t)).join('\n') + '\n';
+      writeFileSync(file, payload, { mode: 0o600 });
+      writeCoverage(file, transcriptPath, end);
+    } catch {
+      return 0;
+    }
+    prune(root);
+    return turns.length;
+  } finally {
+    try {
+      unlinkSync(lock);
+    } catch {
+      /* already gone */
+    }
+  }
+}
+
+/** A lock older than any archive takes is a crashed holder's. */
+const ARCHIVE_LOCK_STALE_MS = 30_000;
+
+/**
+ * Takes the archive lock, or reports that someone else holds it.
+ *
+ * Every failure is "not taken", never "proceed without it": a holder that
+ * released between our two calls, or a second process that also found the
+ * lock stale and won the re-create, both mean another archiver is active.
+ */
+function takeArchiveLock(lock) {
+  try {
+    closeSync(openSync(lock, 'wx'));
+    return true;
+  } catch (error) {
+    if (error?.code !== 'EEXIST') return false;
+  }
+  try {
+    if (Date.now() - statSync(lock).mtimeMs < ARCHIVE_LOCK_STALE_MS) return false;
+    unlinkSync(lock);
+    closeSync(openSync(lock, 'wx'));
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /** Where the record of how much of the transcript an archive covers is kept. */
@@ -210,44 +254,12 @@ function writeCoverage(file, transcriptPath, offset) {
 
 /**
  * Appends the turns in the transcript bytes the archive does not yet cover.
+ * The caller holds the archive lock.
  *
- * Returns how many turns the archive now holds a record for, or null when the
- * incremental path cannot be trusted and the caller must rebuild.
+ * Returns how many turns were appended, or null when the incremental path
+ * cannot be trusted and the caller must rebuild.
  */
 function appendNewTurns(file, transcriptPath) {
-  // EXCLUSIVE, because appending is not idempotent the way the old rewrite was:
-  // two archivers that both read the same coverage would both append the same
-  // turns, and the duplicate would stay until a rebuild. A second archiver
-  // stands down; the one holding the lock covers everything up to its end.
-  const lock = `${coveragePath(file)}.lock`;
-  let held = false;
-  try {
-    try {
-      closeSync(openSync(lock, 'wx'));
-      held = true;
-    } catch (error) {
-      if (error?.code !== 'EEXIST') return null;
-      // A lock older than any archive takes is a crashed holder's.
-      if (Date.now() - statSync(lock).mtimeMs < 30_000) return 0;
-      unlinkSync(lock);
-      closeSync(openSync(lock, 'wx'));
-      held = true;
-    }
-    return appendUnderLock(file, transcriptPath);
-  } catch {
-    return null;
-  } finally {
-    if (held) {
-      try {
-        unlinkSync(lock);
-      } catch {
-        /* already gone */
-      }
-    }
-  }
-}
-
-function appendUnderLock(file, transcriptPath) {
   try {
     if (!existsSync(file)) return null;
     const covered = JSON.parse(readFileSync(coveragePath(file), 'utf8'));

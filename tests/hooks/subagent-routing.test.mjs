@@ -239,6 +239,12 @@ describe('advisories are said once', () => {
             'mcp__plugin_token-optimizer_token-optimizer__smart_grep',
         },
       });
+      // A process that crashed prints nothing, which would read as "not
+      // advised" and pass the second assertion for the wrong reason.
+      expect({ status: result.status, stderr: result.stderr }).toEqual({
+        status: 0,
+        stderr: expect.any(String),
+      });
       const out = result.stdout.trim() ? JSON.parse(result.stdout.trim()) : {};
       return String(out.hookSpecificOutput?.additionalContext ?? '');
     };
