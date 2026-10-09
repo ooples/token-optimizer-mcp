@@ -895,6 +895,10 @@ export const CLIENT_CAPABILITIES = Object.freeze({
     semanticHarvest: 'stop-continuation',
     canDeny: true,
     denyStyle: 'permission',
+    // PreToolUse updatedInput, applied only with permissionDecision 'allow' --
+    // without it Codex rejects the hook response and runs the original call
+    // (openai/codex#46664). Shell only: Codex reads files through its shell.
+    inputRewrite: 'allow',
     stopDecision: 'block',
   }),
   copilot: native({
@@ -920,6 +924,10 @@ export const CLIENT_CAPABILITIES = Object.freeze({
     semanticHarvest: 'stop-continuation',
     canDeny: true,
     denyStyle: 'permission',
+    // PreToolUse hookSpecificOutput.updatedInput, a whole-object replacement
+    // validated against the tool's schema (QwenLM/qwen-code docs; applied since
+    // #12922/#13442). Older Qwen builds ignore it and run the original call.
+    inputRewrite: 'allow',
     stopDecision: 'block',
   }),
   cursor: native({

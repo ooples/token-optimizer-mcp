@@ -35,7 +35,6 @@ import {
   touchedFiles,
   isContentDump,
   commandProjectRoot,
-  wholeFileDump,
 } from './lib/decide.mjs';
 import { recordRead, fingerprint } from './lib/metrics.mjs';
 import { maybeSurface } from './lib/surface.mjs';
@@ -64,12 +63,12 @@ import {
   boundNotice,
   isOutputHeavy,
 } from './lib/rewrite.mjs';
-import { isFsSafePath, canonicalPath } from './lib/paths.mjs';
+import { isFsSafePath } from './lib/paths.mjs';
 // Aliased: the staleness path already exports a substitutionFor, and the two
 // mean different things -- that one swaps a stale claim, this one swaps a
 // large read for an outline of the same file.
-import { substitutionFor as outlineFor } from './lib/substitute.mjs';
-import { readFileSync, statSync, mkdirSync, writeFileSync, existsSync } from 'node:fs';
+import { outlineRead, outlineShell, readNotice } from './lib/outline-rewrite.mjs';
+import { readFileSync, statSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -704,135 +703,40 @@ ${nudge}`
  * which degrades to the client's own behaviour rather than to ours.
  */
 /**
- * How many tool calls this agent has made, for pricing a substitution.
+ * Outline substitution, through the shared module every client uses.
  *
- * READ FROM THE AGENT'S STATE (issue #478). It used to count files in the marker
- * directory whose names began with the session id -- but those files are named
- * by a hash of session and command, so the filter matched nothing and every
- * session priced itself as if at its first call. The counter in state is per
- * agent, so a subagent is not charged for its parent's and siblings' calls.
+ * The implementation moved to hooks-core/outline-rewrite.mjs so the native
+ * adapter can outline too (issue #478); these wrappers keep the router's call
+ * sites and its payload shapes unchanged.
  */
-function turnsSoFar(state) {
-  return Number(state?.toolCalls) || 0;
-}
-
-/**
- * Points a large Read at an outline of the same file.
- *
- * The model asked to read something; it gets a structural view of that same
- * thing, with line numbers so the follow-up read is targeted rather than a
- * guess. No tool, no rules file, no schema -- the substitution happens inside a
- * call it already made, which is why it costs nothing on the short tasks where
- * a fixed setup cost would sink us.
- */
-/**
- * What the model is told when its read is answered with an outline.
- *
- * ONE WORDING FOR BOTH PATHS. The allowed path and the refusal path now both
- * substitute, and two copies of this sentence would drift -- which matters more
- * than usual here, because an unannounced rewrite is the failure mode
- * `allowWithRewrite` documents: a model that distrusts its output re-reads, and
- * spends the exact turn the substitution exists to save.
- */
-function outlineNotice(payload, substitution) {
-  return (
-    `token-optimizer replaced this read with a structural outline of ` +
-    `${payload.tool_input.file_path} (${substitution.found.lines} lines, ` +
-    `${Math.round(substitution.found.bytes / 1024)}KB). Every symbol is ` +
-    `listed with its line number; read the original with offset and limit ` +
-    `for any region you need in full.`
-  );
-}
-
 function outlineSubstitution(payload, state) {
-  const filePath = payload.tool_input?.file_path;
-  if (!filePath) return null;
-
-  // A PAGED READ IS NEVER OUTLINED. `decide()` already passes one through ("a
-  // paged read is already a deliberate act of token economy"), but both call
-  // sites here substituted it anyway and kept the offset and limit -- so they
-  // were applied to the OUTLINE file, and the model got "the file is shorter
-  // than the provided offset" about a file it never asked for. The outline's own
-  // notice says "read the original with offset and limit", which is exactly the
-  // call that was being rewritten, so following the advice looped. Observed on
-  // the first paged read of a 1,062-line file in a live session.
   const input = payload.tool_input || {};
-  if (input.offset != null || input.limit != null) return null;
-
-  // THE RECORD ALREADY EXISTED, it was simply never read. The outline we serve
-  // is written to a path keyed by session and file, so that file's presence is
-  // itself the evidence that this session has already been handed an outline
-  // of this file. Consulting it is what makes `alreadyRead` mean something.
-  const target = join(
-    stateDir(),
-    `${commandKey(payload.session_id || '', filePath)}.outline.txt`
-  );
-
-  const found = outlineFor(filePath, {
-    turnsSoFar: turnsSoFar(state),
-    alreadyRead: existsSync(target),
+  return outlineRead({
+    sessionId: payload.session_id || '',
+    filePath: input.file_path,
+    offset: input.offset,
+    limit: input.limit,
+    state,
   });
-  if (!found) return null;
+}
 
-  try {
-    mkdirSync(stateDir(), { recursive: true });
-    writeFileSync(target, found.outline);
-    return { target, found };
-  } catch {
-    // Nowhere to write means no substitution, never a broken read.
-    return null;
-  }
+function outlineNotice(payload, substitution) {
+  return readNotice(payload.tool_input.file_path, substitution.found);
 }
 
 /**
- * Points a whole-file shell dump at an outline of the same file.
- *
- * THE SHELL HALF OF `outlineSubstitution`, and for agents the half that matters:
- * across 42 workflow subagents in one session, 2,071 file reads went through
- * `cat`, `sed`, `head` or `Get-Content` and 9 through `Read`, so the Read-only
- * substitution almost never fired for them.
- *
- * Only a command that prints exactly one file and nothing else is rewritten --
- * `wholeFileDump` refuses pipelines, chains, redirects, flags and slices -- and
- * the decision and the one-outline-per-file-per-session record are SHARED with
- * `Read`: both go through `outlineSubstitution` with the same canonical path, so
- * an outline served to `cat f` counts for a later `Read f` and vice versa, and
- * the second whole read of a file always gets the file.
- *
- * Returns `{ command, notice }`, or null to leave the command alone.
+ * The shell half: a command that prints one whole file gets its outline.
+ * Claude Code's Bash tool is a POSIX shell (Git Bash on Windows), and its
+ * PowerShell tool is named as such.
  */
 function shellOutlineSubstitution(payload, rawToolName, state) {
-  const dump = wholeFileDump(payload.tool_input?.command, payload.cwd);
-  if (!dump) return null;
-  const powershell = /powershell|pwsh/i.test(String(rawToolName || ''));
-  // `type` prints a file only in PowerShell and cmd. In a POSIX shell it is the
-  // builtin that describes a command, so rewriting it would change its meaning.
-  if (!powershell && !/^cat$/i.test(dump.head)) return null;
-  const filePath = canonicalPath(dump.path, payload.cwd);
-  const substitution = outlineSubstitution(
-    { ...payload, tool_input: { file_path: filePath } },
-    state
-  );
-  if (!substitution) return null;
-
-  // The rewrite has to be valid in the shell that runs it. PowerShell takes a
-  // single-quoted literal path with '' as the escape; a POSIX shell takes a
-  // single-quoted path with '\'' as the escape, and Git Bash on Windows accepts
-  // a drive-letter path written with forward slashes.
-  // The outline is written as UTF-8 without a BOM, which Windows PowerShell 5
-  // would otherwise read as the ANSI code page.
-  const command = powershell
-    ? `Get-Content -LiteralPath '${substitution.target.replace(/'/g, "''")}' -Encoding UTF8`
-    : `cat '${substitution.target.replace(/\\/g, '/').replace(/'/g, "'\\''")}'`;
-
-  const notice =
-    `token-optimizer replaced this command's output with a structural outline of ` +
-    `${dump.operand} (${substitution.found.lines} lines, ` +
-    `${Math.round(substitution.found.bytes / 1024)}KB). Every symbol is listed ` +
-    `with its line number; print a line range of the original (sed -n 'A,Bp', or ` +
-    `Get-Content with Select-Object -Skip/-First) or Read it with offset and limit ` +
-    `for any region you need in full. Printing the whole file again returns it in full.`;
-  return { command, notice };
+  return outlineShell({
+    sessionId: payload.session_id || '',
+    command: payload.tool_input?.command,
+    cwd: payload.cwd,
+    shell: /powershell|pwsh/i.test(String(rawToolName || '')) ? 'powershell' : 'posix',
+    state,
+  });
 }
 
 function commandKey(sessionId, command) {

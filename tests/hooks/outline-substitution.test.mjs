@@ -277,12 +277,27 @@ describe('a refused read is answered, not just refused', () => {
     expect(result.context).not.toContain('Call smart_read with path');
   });
 
-  test('assist is left exactly as it was', () => {
-    // Gated on refusalsEnabled() deliberately. Under assist this read is
-    // already going through untouched, and bounding it here would be new
-    // behaviour rather than a cheaper spelling of an existing refusal -- a
-    // change that would need its own measurement before it shipped.
+  test('assist answers the read with the outline too (issue #478)', () => {
+    // This used to assert the opposite: the outline was gated on
+    // refusalsEnabled(), as new behaviour to measure before shipping. Run live
+    // in the normal install (tools present, assist) that gate meant a file
+    // too small to earn a verdict WAS outlined -- through the allowed path --
+    // while every file large enough to earn one was not, so the default mode
+    // never outlined the files the mechanism exists for. Shipping it ungated
+    // was a deliberate decision; the once-per-file rule, which gives the
+    // second read the file, is what bounds its cost.
     const result = read('assist');
+    expect(result.decision).not.toBe('deny');
+    expect(result.updatedInput?.file_path).toMatch(/\.outline\.txt$/);
+    expect(result.context).toContain('replaced this read with a structural outline');
+  });
+
+  test('under assist, a file with no outline to offer is still not refused', () => {
+    // The gate that remains: assist never refuses. Ungating the outline must
+    // not have made a refusal reachable there.
+    const opaque = join(workspace, 'notes.md');
+    writeFileSync(opaque, '# Heading\n\nProse that is long enough to matter.\n\n'.repeat(4000));
+    const result = read('assist', { file: opaque });
     expect(result.decision).not.toBe('deny');
     expect(result.updatedInput).toBeNull();
   });

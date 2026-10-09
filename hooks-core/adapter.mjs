@@ -31,6 +31,10 @@ import {
 } from './policy.mjs';
 import {
   adviseOnce,
+  rawToolInput,
+  firstKey,
+  PATH_KEYS,
+  COMMAND_KEYS,
   commandProjectRoot,
   decide,
   isContentDump,
@@ -39,6 +43,7 @@ import {
   readCostBytes,
   touchedFiles,
 } from './decide.mjs';
+import { outlineRead, outlineShell, readNotice } from './outline-rewrite.mjs';
 import {
   record,
   recordRead,
@@ -103,6 +108,60 @@ import { evaluateUcrGuards } from './ucr-guard.mjs';
 import { beginHookInvocation, noteHookOutput } from './observability.mjs';
 import { registerProject, registeredProjects } from './projects.mjs';
 import { runStopHarvest } from './stop-harvest.mjs';
+
+/**
+ * An outline rewrite for this call, in the client's own input shape, or null.
+ *
+ * BUILT FROM THE RAW INPUT, NOT THE NORMALISED ONE. Qwen Code and Codex take
+ * `updatedInput` as a whole replacement and validate it against the tool's own
+ * schema, so it must carry exactly the keys the client sent -- `absolute_path`
+ * for Qwen's read_file, say -- with only the path or command swapped. The keys
+ * normalisation adds (`file_path`, `raw_file_path`) would fail that validation.
+ *
+ * A shell dump is rewritten only where the shell can be named: a tool called
+ * PowerShell, or a POSIX platform. On Windows a generic shell tool may be cmd,
+ * PowerShell or bash, and a command quoted for the wrong one is broken.
+ */
+function outlineRewrite(raw, payload, state, clientName) {
+  // A Codex code-mode envelope orchestrates several operations; rewriting one
+  // would discard the rest, the same reason the refusal path leaves it alone.
+  if (clientName === 'codex' && payload.tool_input?.code_mode_envelope) return null;
+  const input = rawToolInput(raw);
+  const sessionId = payload.session_id || '';
+
+  if (payload.tool_name === 'Read') {
+    const key = firstKey(input, PATH_KEYS);
+    if (key === undefined) return null;
+    const outline = outlineRead({
+      sessionId,
+      filePath: payload.tool_input?.file_path,
+      offset: payload.tool_input?.offset,
+      limit: payload.tool_input?.limit,
+      state,
+    });
+    if (!outline) return null;
+    return {
+      input: { ...input, [key]: outline.target },
+      notice: readNotice(payload.tool_input.file_path, outline.found),
+    };
+  }
+
+  if (payload.tool_name === 'Bash') {
+    const key = firstKey(input, COMMAND_KEYS);
+    if (key === undefined || typeof input[key] !== 'string') return null;
+    const toolName = String(raw?.tool_name ?? raw?.toolName ?? raw?.tool ?? '');
+    const shell = /powershell|pwsh/i.test(toolName)
+      ? 'powershell'
+      : process.platform === 'win32'
+        ? null
+        : 'posix';
+    const outline = outlineShell({ sessionId, command: input[key], cwd: payload.cwd, shell, state });
+    if (!outline) return null;
+    return { input: { ...input, [key]: outline.command }, notice: outline.notice };
+  }
+
+  return null;
+}
 
 /**
  * Per-client capability.
@@ -1614,6 +1673,34 @@ async function runHook(clientName, event, invocation) {
     verdict && event === 'pre-tool' && !verdict.persistent
       ? alreadyDenied(state, verdict.key)
       : false;
+
+  if (event === 'pre-tool') {
+    // This agent's position in its session, which prices an outline.
+    state.toolCalls = (Number(state.toolCalls) || 0) + 1;
+  }
+
+  // A WHOLE-FILE READ IS ANSWERED WITH ITS OUTLINE, for every client whose
+  // PreToolUse can rewrite the call (issue #478). This used to exist only in the
+  // Claude Code router, so no other client was ever outlined. It comes before
+  // the refusal: a rewritten call goes through, so there is no turn to pay.
+  if (event === 'pre-tool' && client.inputRewrite) {
+    const rewrite = outlineRewrite(raw, payload, state, clientName);
+    if (rewrite) {
+      const told = verdict && adviseOnce(state, verdict) ? verdict.reason : null;
+      remember(payload, state);
+      saveState(payload.session_id, state, agentScope);
+      emit({
+        hookSpecificOutput: {
+          hookEventName: eventName,
+          // Codex applies updatedInput only alongside an explicit allow.
+          permissionDecision: 'allow',
+          updatedInput: rewrite.input,
+          additionalContext: withEscape([told, rewrite.notice].filter(Boolean).join('\n\n')),
+        },
+      });
+      process.exit(0);
+    }
+  }
 
   // A post-tool hook has already paid for the call, so a denial would cost a
   // turn and save nothing. It advises about the NEXT one instead.
