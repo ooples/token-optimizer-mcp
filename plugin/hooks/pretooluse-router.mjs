@@ -57,6 +57,7 @@ import {
   forRepeatedAct,
 } from './lib/inject.mjs';
 import { indexFile } from './lib/staleness.mjs';
+import { annotatedSkeleton } from './lib/skeleton.mjs';
 import { isArchived } from './lib/transcript.mjs';
 import {
   boundedRewrite,
@@ -615,6 +616,62 @@ ${nudge}`
   remember(payload, state);
   saveState(payload.session_id, state, agentScope);
 
+  // ANSWER A WHOLE-FILE READ WITH ITS OUTLINE, which is where the turn actually goes.
+  //
+  // `outlineSubstitution` was reachable only from the allowed path above, and a
+  // Read large enough to be worth outlining is precisely a Read that earns a
+  // verdict -- so the substitution was unreachable for every file it was built
+  // for. Measured on a 156 KB Python file with smart_read registered: the
+  // router answered `deny` with no `updatedInput`, while `substitutionFor` on
+  // that same path offered an 8,379-character outline, 5.2% of the file. The
+  // cheaper answer existed and was never consulted.
+  //
+  // This is the same shape as the two defects already recorded in this file --
+  // the output bound wired only to the refusal branch, and the advisory wired
+  // only to the allowed one. A capability reachable from one branch is not
+  // shipped; it is half shipped, on whichever side nobody measured.
+  //
+  // WHY IT PAYS. A refusal costs about one extra turn, and turns are the whole
+  // measured deficit: on the 16 THOL tasks with complete data, enforce ran 20.0
+  // turns against control's 14.4 for a median cost of 1.724x, and the extra
+  // turns track the MCP redirects at 0.90 turns per redirected call. A rewrite
+  // delivers the same substitution for none of that.
+  //
+  // NOT GATED ON REFUSALS (issue #478). It was, on the reasoning that under
+  // assist this read goes through untouched and an outline would be new
+  // behaviour. But the allowed path above already outlines under assist -- so
+  // a file too small to earn a verdict was outlined and a file large enough to
+  // earn one was not: in the default mode, with the optimizer tools installed,
+  // every file the outline was built for got only the after-the-fact advisory.
+  // An outline is not a refusal; it is offered once per file per session, and
+  // the second read of the file gets the file, which is what bounds its cost.
+  //
+  // BEFORE THE REFUSAL'S ANSWER IS BUILT, not after it. This ran below the
+  // block that follows, so every outline carried the annotated skeleton that
+  // block builds for a refusal: the file's structure a second time (4,885
+  // characters beside a 300-function outline), and a `substitute` row in the
+  // balance sheet for a skeleton that never replaced anything. The outline
+  // carries only what it cannot say itself: findings, and a cold file's history.
+  //
+  // NEVER PAST A UCR GUARD: a guard's verdict is a refusal that must stand, and
+  // an outline rewrite allows the call. Nor ahead of the decision's own rewrite,
+  // which is preferred over every refusal below.
+  if (
+    payload.tool_name === 'Read' &&
+    !ucrGuardVerdict &&
+    !(verdict.rewrite && refusalsEnabled())
+  ) {
+    const substitution = outlineSubstitution(payload, state);
+    if (substitution) {
+      allowWithRewrite(
+        { ...payload.tool_input, file_path: substitution.target },
+        [knownBesideOutline(payload), outlineNotice(payload, substitution)]
+          .filter(Boolean)
+          .join('\n\n')
+      );
+    }
+  }
+
   // CARRY THE ANSWER IN THE REFUSAL where we can. A refusal that only redirects
   // costs the model a whole turn to get what we already have; one that carries
   // the diff or the annotated skeleton costs nothing and is often more useful
@@ -721,7 +778,36 @@ function outlineSubstitution(payload, state) {
 }
 
 function outlineNotice(payload, substitution) {
-  return readNotice(payload.tool_input.file_path, substitution.found);
+  // Named as the caller spelled it, so the model can match the notice to its call.
+  return readNotice(
+    payload.tool_input.raw_file_path ?? payload.tool_input.file_path,
+    substitution.found
+  );
+}
+
+/**
+ * What is known about a file that its outline cannot say, or null.
+ *
+ * The outline lists every symbol with its line; this adds the findings anchored
+ * to the file and, for a file nothing has been learned about, its git history.
+ * It is NOT a substitution and records none: the outline is what replaced the
+ * file. Indexing on this read is kept from the refusal path it stands in for,
+ * so the next touch of the file is annotated.
+ */
+function knownBesideOutline(payload) {
+  try {
+    const path = payload.tool_input.file_path;
+    const dir = wikiDir(projectRootFor(path, payload.cwd));
+    const source = readFileSync(path, 'utf8');
+    indexFile(dir, path, source);
+    // The CANONICAL path: annotatedSkeleton looks findings up by it, and a
+    // relative spelling would resolve against this process's cwd, not the
+    // session's, and miss them.
+    return annotatedSkeleton(load(dir), path, source, { outlined: true }).text;
+  } catch {
+    // Knowledge beside an outline is a courtesy; the outline stands without it.
+    return null;
+  }
 }
 
 /**
@@ -886,49 +972,8 @@ function compactorFor(sessionId, command) {
     }
   }
 
-  // AND THE SAME FOR A READ, which is where the turn actually goes.
-  //
-  // `outlineSubstitution` was reachable only from the allowed path above, and a
-  // Read large enough to be worth outlining is precisely a Read that earns a
-  // verdict -- so the substitution was unreachable for every file it was built
-  // for. Measured on a 156 KB Python file with smart_read registered: the
-  // router answered `deny` with no `updatedInput`, while `substitutionFor` on
-  // that same path offered an 8,379-character outline, 5.2% of the file. The
-  // cheaper answer existed and was never consulted.
-  //
-  // This is the same shape as the two defects already recorded in this file --
-  // the output bound wired only to the refusal branch, and the advisory wired
-  // only to the allowed one. A capability reachable from one branch is not
-  // shipped; it is half shipped, on whichever side nobody measured.
-  //
-  // WHY IT PAYS. A refusal costs about one extra turn, and turns are the whole
-  // measured deficit: on the 16 THOL tasks with complete data, enforce ran 20.0
-  // turns against control's 14.4 for a median cost of 1.724x, and the extra
-  // turns track the MCP redirects at 0.90 turns per redirected call. A rewrite
-  // delivers the same substitution for none of that.
-  //
-  // NOT GATED ON REFUSALS (issue #478). It was, on the reasoning that under
-  // assist this read goes through untouched and an outline would be new
-  // behaviour. But the allowed path above already outlines under assist -- so
-  // a file too small to earn a verdict was outlined and a file large enough to
-  // earn one was not: in the default mode, with the optimizer tools installed,
-  // every file the outline was built for got only the after-the-fact advisory.
-  // An outline is not a refusal; it is offered once per file per session, and
-  // the second read of the file gets the file, which is what bounds its cost.
-  //
-  // NEVER PAST A UCR GUARD: a guard's verdict is a refusal that must stand, and
-  // an outline rewrite allows the call.
-  if (payload.tool_name === 'Read' && !ucrGuardVerdict) {
-    const substitution = outlineSubstitution(payload, state);
-    if (substitution) {
-      allowWithRewrite(
-        { ...payload.tool_input, file_path: substitution.target },
-        [reason, outlineNotice(payload, substitution)].filter(Boolean).join('\n\n')
-      );
-    }
-  }
-
-  // And for a whole-file shell dump on this path too: a dump large enough to earn
+  // A whole-file READ on this path is outlined above, before the refusal's
+  // skeleton is built. And for a whole-file shell dump on this path too: a dump large enough to earn
   // a verdict is exactly the dump worth outlining, so wiring it only to the
   // allowed path would repeat the half-shipped defect described above. Not gated
   // on refusals either, for the reason given for Read. Never past a UCR guard.

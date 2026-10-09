@@ -116,6 +116,67 @@ describe('the substitution carries knowledge, not just fewer bytes', () => {
   });
 });
 
+describe('beside an outline, only what the outline cannot say', () => {
+  // The outline already lists every symbol with its line, so repeating the bare
+  // list paid for the structure twice.
+  test('a symbol with a finding is kept, with the finding beneath it', () => {
+    addFinding('verify', 'compares exp against the local clock');
+    const { text } = annotatedSkeleton(load(dir), target, source, { git: false, outlined: true });
+    const lines = text.split('\n');
+    const at = lines.findIndex((l) => l.includes('verify  (line'));
+    expect(at).toBeGreaterThan(-1);
+    expect(lines[at + 1]).toContain('local clock');
+  });
+
+  test('bare symbols are left to the outline', () => {
+    // Asserted against the default mode on the same graph, so a fixture that
+    // never listed them could not pass this vacuously.
+    addFinding('verify', 'compares exp against the local clock');
+    const full = annotatedSkeleton(load(dir), target, source, { git: false }).text;
+    const beside = annotatedSkeleton(load(dir), target, source, { git: false, outlined: true }).text;
+    expect(full).toContain('Session  (line');
+    expect(full).toContain('evict  (line');
+    expect(beside).not.toContain('Session  (line');
+    expect(beside).not.toContain('evict  (line');
+    expect(beside).not.toContain('more symbols');
+  });
+
+  test('a file-level finding is kept', () => {
+    const id = putNode(dir, { kind: 'finding', key: 'file-level', claim: 'generated from schema.json; edit that instead', confidence: 0.9, type: 'decision' });
+    putEdge(dir, id, 'derived_from', nodeId('file', canonicalPath(target)));
+    const { text } = annotatedSkeleton(load(dir), target, source, { git: false, outlined: true });
+    expect(text).toContain('edit that instead');
+  });
+
+  test('it never redirects to another tool: the read is being answered', () => {
+    addFinding('verify', 'compares exp against the local clock');
+    const { text } = annotatedSkeleton(load(dir), target, source, { git: false, outlined: true });
+    // Pinned positively first, so a null or a throw cannot pass the negatives.
+    expect(text).toContain('What is known about it, beside its outline.');
+    expect(text).toContain('local clock');
+    expect(text).not.toContain('smart_read');
+    expect(text).not.toContain('instead of the file');
+  });
+
+  test('nothing known is null, not a header over an empty section', () => {
+    const result = annotatedSkeleton(load(dir), target, source, { git: false, outlined: true });
+    expect(result.text).toBeNull();
+    expect(result.tokens).toBe(0);
+  });
+
+  test("a cold file's history is kept", () => {
+    execFileSync('git', ['init', '-q'], { cwd: workspace, windowsHide: true });
+    execFileSync('git', ['config', 'user.email', 't@t'], { cwd: workspace, windowsHide: true });
+    execFileSync('git', ['config', 'user.name', 't'], { cwd: workspace, windowsHide: true });
+    execFileSync('git', ['add', 'auth.ts'], { cwd: workspace, windowsHide: true });
+    execFileSync('git', ['commit', '-qm', 'add auth'], { cwd: workspace, windowsHide: true });
+    const { text } = annotatedSkeleton(load(dir), target, source, { outlined: true });
+    expect(text).toContain('From its history');
+    expect(text).toContain('add auth');
+    expect(text).not.toContain('verify  (line');
+  });
+});
+
 describe('a cold file is not knowledge-free', () => {
   test('a revert-then-redo history is reported as a dead end', () => {
     const entries = [

@@ -119,8 +119,14 @@ function similar(a, b) {
  * @param {string} rawPath As the caller spelled it -- shown back to them.
  * @param {string} source  File contents.
  * @param {number} budget  Token ceiling for the whole substitution.
+ * @param {boolean} outlined The read is being answered with an outline, which
+ *   already lists every symbol with its line. Only what the outline cannot say
+ *   is built then -- findings, and history for a cold file -- and the text is
+ *   null when there is none. Sending the bare symbol list beside the outline
+ *   paid for the file's structure twice: measured on a 300-function file, 4,885
+ *   characters of context rode along with an outline listing the same names.
  */
-export function annotatedSkeleton(graph, rawPath, source, { budget = 1200, git = true } = {}) {
+export function annotatedSkeleton(graph, rawPath, source, { budget = 1200, git = true, outlined = false } = {}) {
   const path = canonicalPath(rawPath);
   const symbols = extractSymbols(path, source);
 
@@ -162,8 +168,13 @@ export function annotatedSkeleton(graph, rawPath, source, { budget = 1200, git =
   };
 
   const kb = Math.round(source.length / 1024);
-  push(`${rawPath} -- ${kb} KB. Structure and what is known about it, instead of the file.`);
+  push(
+    outlined
+      ? `${rawPath} -- ${kb} KB. What is known about it, beside its outline.`
+      : `${rawPath} -- ${kb} KB. Structure and what is known about it, instead of the file.`
+  );
   push('');
+  const header = lines.length;
 
   // Symbols carrying findings first: the most-studied parts of the file are the
   // parts that survive the budget.
@@ -173,6 +184,8 @@ export function annotatedSkeleton(graph, rawPath, source, { budget = 1200, git =
   let shown = 0;
   for (const symbol of ranked) {
     const notes = bySymbol.get(symbol.name) || [];
+    // Ranked noted-first, so beside an outline the first bare symbol ends it.
+    if (outlined && !notes.length) break;
     if (!push(`  ${symbol.name}  (line ${symbol.line})`)) break;
     shown++;
     for (const note of notes) {
@@ -180,7 +193,7 @@ export function annotatedSkeleton(graph, rawPath, source, { budget = 1200, git =
       if (!push(`      ${mark}${note.claim}`)) break;
     }
   }
-  if (shown < symbols.length) push(`  ... ${symbols.length - shown} more symbols`);
+  if (shown < symbols.length && !outlined) push(`  ... ${symbols.length - shown} more symbols`);
 
   if (fileLevel.length) {
     push('');
@@ -204,6 +217,13 @@ export function annotatedSkeleton(graph, rawPath, source, { budget = 1200, git =
         if (!push(`    ${entry.when}: ${entry.subject}`)) break;
       }
     }
+  }
+
+  if (outlined) {
+    // No redirect: the read is already being answered. And nothing to say is
+    // null, so the caller sends no header announcing an empty section.
+    const known = lines.length > header;
+    return { text: known ? lines.join('\n') : null, tokens: known ? spent : 0, findings: served.length, symbols: symbols.length };
   }
 
   push('');

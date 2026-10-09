@@ -64,6 +64,7 @@ const preTool = (client, toolName, toolInput, sessionId = randomUUID()) => {
     env: {
       ...process.env,
       TOKEN_OPTIMIZER_STATE_DIR: join(workspace, 'state'),
+      TOKEN_OPTIMIZER_WIKI_DIR: join(workspace, 'wiki'),
       TOKEN_OPTIMIZER_HOLDOUT: '0',
       TOKEN_OPTIMIZER_MODE: 'assist',
     },
@@ -158,6 +159,7 @@ describe('an outline never overrides a UCR guard', () => {
       env: {
         ...process.env,
         TOKEN_OPTIMIZER_STATE_DIR: join(workspace, 'state'),
+        TOKEN_OPTIMIZER_WIKI_DIR: join(workspace, 'wiki'),
         TOKEN_OPTIMIZER_HOLDOUT: '0',
         TOKEN_OPTIMIZER_MODE: 'enforce',
         TOKEN_OPTIMIZER_MCP_CAPABILITIES: 'smart_read,smart_grep',
@@ -197,7 +199,13 @@ describe('the once-per-file rule holds under parallel calls', () => {
         () =>
           new Promise((resolve) => {
             const child = spawn(process.execPath, [router], {
-              env: { ...process.env, TOKEN_OPTIMIZER_STATE_DIR: join(workspace, 'state'), TOKEN_OPTIMIZER_HOLDOUT: '0', TOKEN_OPTIMIZER_MODE: 'assist' },
+              env: {
+                ...process.env,
+                TOKEN_OPTIMIZER_STATE_DIR: join(workspace, 'state'),
+                TOKEN_OPTIMIZER_WIKI_DIR: join(workspace, 'wiki'),
+                TOKEN_OPTIMIZER_HOLDOUT: '0',
+                TOKEN_OPTIMIZER_MODE: 'assist',
+              },
             });
             let stdout = '';
             child.stdout.on('data', (chunk) => {

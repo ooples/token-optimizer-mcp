@@ -17,12 +17,15 @@
  */
 
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import { substitutionFor, floorBytes } from '../../hooks-core/substitute.mjs';
+import { putNode, putEdge, nodeId } from '../../hooks-core/wiki.mjs';
+import { indexFile } from '../../hooks-core/staleness.mjs';
+import { canonicalPath } from '../../hooks-core/paths.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
@@ -217,6 +220,10 @@ describe('a refused read is answered, not just refused', () => {
           ...process.env,
           TOKEN_OPTIMIZER_MODE: mode,
           TOKEN_OPTIMIZER_MCP_CAPABILITIES: capabilities,
+          // Inside the workspace: an unrooted temp file otherwise lands in the
+          // developer's own graph and balance sheet under the home directory.
+          TOKEN_OPTIMIZER_STATE_DIR: join(workspace, 'state'),
+          TOKEN_OPTIMIZER_WIKI_DIR: join(workspace, 'wiki'),
         },
       }
     );
@@ -262,19 +269,63 @@ describe('a refused read is answered, not just refused', () => {
     expect(result.context).toContain(big);
   });
 
-  test("the verdict's own reason still rides along", () => {
-    // Rewriting instead of refusing must not cost what the refusal would have
-    // carried -- the same rule the Bash bound above it follows. The verdict's
-    // own summary of the file arrives alongside the substitution.
+  test('the outline does not arrive with the structure a second time', () => {
+    // This used to assert the opposite -- that the refusal's annotated skeleton
+    // rode along as "the verdict's own summary". But that skeleton IS the
+    // file's structure: run live, a 300-function file's outline came with 4,885
+    // characters of context listing the same names again. What the outline
+    // cannot say -- findings, history -- still rides along; see below.
     //
-    // It does NOT carry the `Call smart_read with path=...` line, and that is
-    // correct rather than a gap: that sentence is appended by the refusal
-    // renderer, and telling the model to re-fetch through another tool a call
-    // that has just been answered is the redirect noise assist exists to drop.
+    // Nor the `Call smart_read with path=...` line: telling the model to
+    // re-fetch through another tool a call that has just been answered is the
+    // redirect noise assist exists to drop.
+    for (const mode of ['enforce', 'assist']) {
+      const result = read(mode);
+      expect(result.updatedInput?.file_path).toMatch(/\.outline\.txt$/);
+      expect(result.context).toContain('read the original with offset and limit');
+      expect(result.context).not.toContain('Structure and what is known about it');
+      expect(result.context).not.toContain('rule_0001  (line');
+      expect(result.context).not.toContain('Call smart_read with path');
+    }
+  });
+
+  test('an outline is not booked as a skeleton substitution', () => {
+    // The skeleton built for the refusal recorded a `substitute` row as it was
+    // built, so every outline also claimed a skeleton's saving in the balance
+    // sheet -- for a skeleton that replaced nothing.
     const result = read('enforce');
-    expect(result.context).toContain('Structure and what is known about it');
-    expect(result.context).toContain('read the original with offset and limit');
-    expect(result.context).not.toContain('Call smart_read with path');
+    expect(result.updatedInput?.file_path).toMatch(/\.outline\.txt$/);
+    const balance = join(workspace, 'wiki', 'balance.jsonl');
+    const rows = existsSync(balance)
+      ? readFileSync(balance, 'utf8').split('\n').filter(Boolean).map((line) => JSON.parse(line))
+      : [];
+    expect(rows.filter((row) => row.kind === 'substitute')).toEqual([]);
+  });
+
+  test('what the outline cannot say still rides along', () => {
+    // A finding anchored to the file is knowledge the outline has nowhere to
+    // carry, and the refusal path was the only route it had onto this read.
+    const dir = join(workspace, 'wiki');
+    indexFile(dir, big, readFileSync(big, 'utf8'));
+    const id = putNode(dir, {
+      kind: 'finding',
+      key: 'rounding',
+      claim: 'rule_0007 rounds half-even; finance expects half-up',
+      confidence: 0.9,
+    });
+    putEdge(dir, id, 'derived_from', nodeId('symbol', `${canonicalPath(big)}#rule_0007`));
+    const result = read('enforce');
+    expect(result.updatedInput?.file_path).toMatch(/\.outline\.txt$/);
+    expect(result.context).toContain('finance expects half-up');
+    expect(result.context).toContain('What is known about it, beside its outline');
+    expect(result.context).not.toContain('rule_0001  (line');
+
+    // And when the read names the file RELATIVE to the session's cwd. The hook
+    // process runs elsewhere, so a lookup by the spelling the caller used
+    // resolves against the wrong directory and finds nothing.
+    const relative = read('enforce', { file: 'rules.py' });
+    expect(relative.updatedInput?.file_path).toMatch(/\.outline\.txt$/);
+    expect(relative.context).toContain('finance expects half-up');
   });
 
   test('assist answers the read with the outline too (issue #478)', () => {
