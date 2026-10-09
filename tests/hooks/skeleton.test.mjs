@@ -151,6 +151,9 @@ describe('beside an outline, only what the outline cannot say', () => {
   test('it never redirects to another tool: the read is being answered', () => {
     addFinding('verify', 'compares exp against the local clock');
     const { text } = annotatedSkeleton(load(dir), target, source, { git: false, outlined: true });
+    // Pinned positively first, so a null or a throw cannot pass the negatives.
+    expect(text).toContain('What is known about it, beside its outline.');
+    expect(text).toContain('local clock');
     expect(text).not.toContain('smart_read');
     expect(text).not.toContain('instead of the file');
   });
