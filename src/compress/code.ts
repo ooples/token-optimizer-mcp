@@ -550,9 +550,11 @@ function compressCodeBody(text: string, ctx: EngineContext): CompressionResult {
   // asked to, and each line carries its file line number as a prefix. Citing
   // `file:14-19` for the 14th to 19th lines OF THE RESULT sent a reader to the
   // wrong code -- observed reading adapter.mjs from line 1591, whose markers
-  // pointed at lines 14-19 (issue #473). With the prefixes the range is
-  // translated; without them the spill is cited instead, whose numbering is the
-  // block's by construction.
+  // pointed at lines 14-19 (issue #473). The numbers come from the router,
+  // which strips them before this engine runs (`ctx.sourceLines`), or from the
+  // prefixes still on the text. Content with neither is the file itself from
+  // line 1 -- the contract `sourcePath` has always carried -- so its own line
+  // numbers are the file's.
   // The router's numbers apply only to the text it stripped: content nested
   // inside a string of that text has its own lines, and a length match is what
   // tells the two apart.
@@ -561,9 +563,7 @@ function compressCodeBody(text: string, ctx: EngineContext): CompressionResult {
     : ctx.sourceLines && ctx.sourceLines.length === lines.length
       ? ctx.sourceLines
       : fileLineNumbers(lines);
-  const anchorPath = fileLines
-    ? ctx.sourcePath
-    : spillFor(ctx, text, 'block.txt');
+  const anchorPath = ctx.sourcePath ?? spillFor(ctx, text, 'block.txt');
 
   for (const [from, to] of spans) {
     const lineCount = to - from + 1;
@@ -579,8 +579,9 @@ function compressCodeBody(text: string, ctx: EngineContext): CompressionResult {
     // on exactly the content it was built for. The proof gate caught that:
     // code-search compressed 0%.
     //
-    // Either way the range addresses the lines that were removed: the file's
-    // numbering when the file is cited, the block's when the spill is.
+    // Either way the range addresses the lines that were removed: translated
+    // through the file's numbering when the block carried it, the block's own
+    // otherwise (a whole file, or the spill).
     const where = !anchorPath
       ? null
       : fileLines

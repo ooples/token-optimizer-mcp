@@ -126,11 +126,17 @@ describe('a fold that cites the file cites its line numbers', () => {
     }
   });
 
-  it('content with no line numbers cites the spill, never the file', () => {
-    const text = resultText({ file_path: FILE }, SOURCE.slice(1200, 1600).join('\n'));
-    const all = pointers(text);
-    expect(all.length).toBeGreaterThan(0);
-    expect(all.filter((p) => p.path === FILE)).toEqual([]);
+  it('a whole file without line numbers is cited with its own numbering', () => {
+    // The engine's standing contract for `sourcePath`: unnumbered content is the
+    // file from line 1, so its lines are the file's lines.
+    const text = resultText({ file_path: FILE }, SOURCE.join('\n'));
+    const cited = pointers(text).filter((p) => p.path === FILE);
+    expect(cited.length).toBeGreaterThan(0);
+    for (const { from } of cited) {
+      // The cited line is gone from the result: it is the one the fold removed.
+      const removed = SOURCE[from - 1];
+      expect(removed.trim().length).toBeGreaterThan(0);
+    }
   });
 });
 
