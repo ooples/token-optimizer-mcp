@@ -27,6 +27,7 @@ import {
   upstreamFor,
 } from '../hooks-core/capabilities.mjs';
 import { launcherMarker } from './windows-commands.mjs';
+import { isMainModule } from './lib/main-module.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const off = (value) => /^(0|false|no|off)$/i.test(value?.trim() || '');
@@ -520,10 +521,7 @@ export async function runClient(
   }
 }
 
-if (
-  process.argv[1] &&
-  import.meta.url === pathToFileURL(resolve(process.argv[1])).href
-) {
+if (isMainModule(import.meta.url)) {
   const [client, ...args] = process.argv.slice(2);
   runClient(client, args).then(
     (code) => {

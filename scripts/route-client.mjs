@@ -25,8 +25,8 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { homedir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { isMainModule } from './lib/main-module.mjs';
+import { dirname, join } from 'node:path';
 import {
   readRoutingManifest,
   routingManifestFile,
@@ -368,10 +368,7 @@ export async function run(argv = process.argv.slice(2)) {
 }
 
 // Only when run as a command, so the pieces above stay importable by tests.
-if (
-  process.argv[1] &&
-  import.meta.url === pathToFileURL(resolve(process.argv[1])).href
-) {
+if (isMainModule(import.meta.url)) {
   run().then((code) => {
     process.exitCode = code;
   });

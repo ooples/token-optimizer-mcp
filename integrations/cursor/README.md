@@ -8,7 +8,7 @@ Tier: **native hook + rules** -- Cursor's native lifecycle bridge routes expensi
    (in this directory) into your `.cursor/mcp.json`.
 2. **Rules** -- copy `token-optimizer.mdc` (in this directory)
    to `.cursor/rules/token-optimizer.mdc` in your project.
-3. **Hooks** -- copy `hooks/` to `.cursor/hooks/token-optimizer/`, then merge `hooks.json` into `.cursor/hooks.json`.
+3. **Hooks** -- run `npx -y @ooples/token-optimizer-mcp@latest token-optimizer-install-client --client cursor` to compose `.cursor/hooks/token-optimizer`, then merge `hooks.json` into `.cursor/hooks.json`.
 
 
 Both destinations are the paths Cursor's own documentation specifies;

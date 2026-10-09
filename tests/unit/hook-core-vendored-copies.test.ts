@@ -1,40 +1,39 @@
 /**
- * THE VENDORED HOOK COPIES SHIP, AND EACH ONE IS SELF-SUFFICIENT WHERE IT RUNS.
+ * THE REPO VENDORS ELEVEN COPIES OF THE CORE; THE PACKAGE SHIPS ONE OF THEM.
  *
  * Eleven directories hold byte-identical copies of the same core -- 10.87MB of
- * tarball for 1.44MB of unique content -- so excluding the ten client ones from
- * `files` and composing each on the installed machine looks free. It is not,
- * and this file is what remains of finding that out.
+ * tarball for 1.44MB of unique content. Ten of them are the client
+ * integrations, and `files` now excludes those: the tarball carries
+ * `hooks-core/` once plus `plugin/hooks/lib`, and
+ * `scripts/install-client-hooks.mjs` composes a client's copy INTO THE
+ * DESTINATION when the user installs it.
  *
- * No client executes its hooks from inside the installed package. Each one runs
- * them from a copy the user makes, at a path that client dictates
- * (`.cursor/hooks/token-optimizer/`, `$HOME/.codex/hooks/`, `.github/hooks/`,
- * ...). A copy at such a path has no package tree above it, so composing "on
- * first use" cannot reach it, and the directory it was copied from had no
- * `lib/` to begin with. The documented install produced four entry files, no
- * core, and a pre-tool hook that printed nothing and allowed everything.
+ * Which is not the design this file was written against. That one composed "on
+ * first use" from inside the hook, and it shipped ten copies that were silently
+ * inert: no client executes its hooks from inside the installed package -- each
+ * runs them from a copy at a path the client dictates
+ * (`.cursor/hooks/token-optimizer/`, `$HOME/.codex/hooks/`,
+ * `.github/hooks/`, ...), and a copy at such a path has no package tree above
+ * it, so nothing the hook could execute was able to find the composer. The
+ * documented install produced four entry files, no core, and a pre-tool hook
+ * that printed nothing and allowed everything.
  *
- * Three claims therefore have a test here: what the repo vendors is what the
- * shared module composes, every target's whole core is in the tarball, and an
- * entry RUN FROM OUTSIDE ANY PACKAGE TREE still enforces. The third is the one
- * that failed; the earlier version of it copied `scripts/` into its sandbox and
- * so tested a shape no install ever has.
+ * So the claims left here are the ones that survive the exclusion: what the
+ * repo vendors is what the shared module composes, the committed copies carry
+ * no version stamp, `plugin/hooks/lib` still ships whole because Claude Code
+ * loads it straight out of the package, and each client copy is still COMPLETE
+ * IN THE TREE, because that tree is what the installer composes from.
+ *
+ * That an installed copy enforces where it actually runs is proved in
+ * tests/unit/client-hook-install.test.ts -- from the installer's own output,
+ * against a negative control that shows the plain copy failing open.
  */
 
 import { describe, expect, it } from '@jest/globals';
-import { execFileSync, spawnSync } from 'node:child_process';
-import {
-  copyFileSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { tmpdir } from 'node:os';
-import { randomUUID } from 'node:crypto';
 import {
   CLIENT_TARGETS,
   PLUGIN_TARGETS,
@@ -91,7 +90,7 @@ describe('what is composed equals what the repo vendors', () => {
   });
 });
 
-describe('the tarball carries every vendored copy whole', () => {
+describe('the tarball carries the core once, the tree carries every copy', () => {
   const packed: string[] = JSON.parse(
     execFileSync('npm', ['pack', '--dry-run', '--json'], {
       cwd: ROOT,
@@ -101,15 +100,35 @@ describe('the tarball carries every vendored copy whole', () => {
     })
   )[0].files.map((f: { path: string }) => posix(f.path));
 
-  it.each([...PLUGIN_TARGETS, ...CLIENT_TARGETS])(
-    'ships the whole core under %s',
+  it.each(PLUGIN_TARGETS)('ships the whole core under %s', (target) => {
+    // EVERY name, not a count and not a spot check: a `files` pattern that
+    // drops one module leaves an import that throws inside a hook whose catch
+    // block is silent, so the client advises nothing and says nothing. Claude
+    // Code loads this copy out of the installed package, so it cannot wait on
+    // any command the user has to run first.
+    const shipped = new Set(packed);
+    const missing = coreFiles(ROOT).filter(
+      (name) => !shipped.has(posix(join(target, name)))
+    );
+    expect(missing).toEqual([]);
+  });
+
+  it.each(CLIENT_TARGETS)('ships no vendored lib under %s', (target) => {
+    // The inverse of the line above, pinned per target rather than by one
+    // pattern: these are the 10.87MB the exclusion removes, and a `files`
+    // entry that let one back in would undo the shrink without failing
+    // anything else.
+    expect(packed.filter((p) => p.startsWith(`${posix(target)}/`))).toEqual([]);
+  });
+
+  it.each(CLIENT_TARGETS)(
+    'keeps the whole core in the TREE under %s',
     (target) => {
-      // EVERY name, not a count and not a spot check: a `files` pattern that
-      // drops one module leaves an import that throws inside a hook whose
-      // catch block is silent, so the client advises nothing and says nothing.
-      const shipped = new Set(packed);
+      // Not shipped is not the same as not needed: the installer composes from
+      // hooks-core/, and `npm run sync:hooks:check` compares against these
+      // committed copies, so a copy missing a module is still drift.
       const missing = coreFiles(ROOT).filter(
-        (name) => !shipped.has(posix(join(target, name)))
+        (name) => !existsSync(join(ROOT, target, name))
       );
       expect(missing).toEqual([]);
     }
@@ -119,74 +138,5 @@ describe('the tarball carries every vendored copy whole', () => {
     expect(packed.filter((p) => p.startsWith('hooks-core/')).length).toBe(
       coreFiles(ROOT).length
     );
-  });
-});
-
-describe('a client entry copied out of the package still enforces', () => {
-  it('denies a large read from a directory with no package above it', () => {
-    // THE SHAPE EVERY DOCUMENTED INSTALL PRODUCES. `capabilities.mjs` tells a
-    // Cursor user to "copy `hooks/` to `.cursor/hooks/token-optimizer/`", so
-    // what runs is a copy of this directory somewhere else entirely -- with no
-    // package.json, no scripts/ and no hooks-core/ anywhere above it.
-    const sandbox = mkdtempSync(join(tmpdir(), 'to-copied-hooks-'));
-    try {
-      const source = join('integrations', 'cursor', 'hooks');
-      const destination = join(sandbox, 'token-optimizer');
-      mkdirSync(join(destination, 'lib'), { recursive: true });
-      // Copied from the TARBALL's file list rather than from the working tree,
-      // because the bug this test exists for was a `files` pattern: the tree
-      // had every file and the package did not.
-      const shipped: string[] = JSON.parse(
-        execFileSync('npm', ['pack', '--dry-run', '--json'], {
-          cwd: ROOT,
-          encoding: 'utf8',
-          maxBuffer: 200 * 1024 * 1024,
-          shell: true,
-        })
-      )[0]
-        .files.map((f: { path: string }) => posix(f.path))
-        .filter((p: string) => p.startsWith(`${posix(source)}/`));
-      expect(shipped.length).toBeGreaterThan(coreFiles(ROOT).length);
-      for (const path of shipped) {
-        const relative = path.slice(`${posix(source)}/`.length);
-        copyFileSync(join(ROOT, path), join(destination, relative));
-      }
-
-      const big = join(sandbox, 'big.ts');
-      writeFileSync(big, 'x'.repeat(80_000));
-
-      const result = spawnSync(
-        process.execPath,
-        [join(destination, 'pre-tool.mjs')],
-        {
-          input: JSON.stringify({
-            session_id: `copied-cursor-${randomUUID()}`,
-            cwd: sandbox,
-            tool_name: 'read_file',
-            tool_input: { path: big },
-          }),
-          encoding: 'utf8',
-          env: {
-            ...process.env,
-            // The hook's own state stays inside the sandbox; a test must never
-            // write to the real home cache.
-            HOME: sandbox,
-            USERPROFILE: sandbox,
-            TOKEN_OPTIMIZER_CACHE_DIR: join(sandbox, 'cache'),
-            TOKEN_OPTIMIZER_MODE: 'enforce',
-          },
-          timeout: 120_000,
-        }
-      );
-
-      // A SILENT EXIT 0 IS THE FAILURE MODE, so the decision is pinned
-      // positively: the broken package produced empty stdout here, which any
-      // assertion phrased as "did not allow" would have passed.
-      const decision = JSON.parse(result.stdout.trim());
-      expect(decision.permission).toBe('deny');
-      expect(decision.agent_message).toContain('smart_read');
-    } finally {
-      rmSync(sandbox, { recursive: true, force: true });
-    }
   });
 });

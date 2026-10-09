@@ -92,7 +92,7 @@ const CLIENTS = [
     verified:
       'rules path, .mdc extension and alwaysApply frontmatter confirmed; project hooks use .cursor/hooks.json',
     hookInstall:
-      'copy `hooks/` to `.cursor/hooks/token-optimizer/`, then merge `hooks.json` into `.cursor/hooks.json`',
+      'run `npx -y @ooples/token-optimizer-mcp@latest token-optimizer-install-client --client cursor` to compose `.cursor/hooks/token-optimizer`, then merge `hooks.json` into `.cursor/hooks.json`',
   },
 
   // CORRECTED: `.windsurfrules` is the LEGACY single-file form. Current
@@ -110,7 +110,7 @@ const CLIENTS = [
     verified:
       'directory form is current, .windsurfrules is legacy; Cascade pre/post hook contract verified',
     hookInstall:
-      'copy `hooks/` to `.windsurf/hooks/token-optimizer/`, then merge `hooks.json` into `.windsurf/hooks.json`',
+      'run `npx -y @ooples/token-optimizer-mcp@latest token-optimizer-install-client --client windsurf` to compose `.windsurf/hooks/token-optimizer`, then merge `hooks.json` into `.windsurf/hooks.json`',
   },
 
   {
@@ -125,7 +125,7 @@ const CLIENTS = [
     verified:
       'mcpServers key confirmed; CLI reads ~/.cline/mcp.json; project hooks use .clinerules/hooks with OS-specific wrappers',
     hookInstall:
-      'copy the contents of `hooks/` to `.clinerules/hooks/`; on macOS/Linux mark the extensionless wrappers executable and enable them',
+      'run `npx -y @ooples/token-optimizer-mcp@latest token-optimizer-install-client --client cline` to compose `.clinerules/hooks`; on macOS/Linux mark the extensionless wrappers executable and enable them',
   },
 
   // Project-level .roo/mcp.json is preferred over the global mcp_settings.json:
@@ -159,7 +159,7 @@ const CLIENTS = [
     verified:
       'kilo.jsonc MCP schema confirmed; Kilo plugin tool before/after and system-transform hooks verified',
     hookInstall:
-      'copy `.kilo/plugin/token-optimizer.js` to the same project path, and copy `hooks/` to `.kilo/hooks/token-optimizer/`',
+      'copy `.kilo/plugin/token-optimizer.js` to the same project path, and run `npx -y @ooples/token-optimizer-mcp@latest token-optimizer-install-client --client kilo` to compose `.kilo/hooks/token-optimizer`',
   },
 
   // CORRECTED: Zed's current schema has no `source` key; command is a string
