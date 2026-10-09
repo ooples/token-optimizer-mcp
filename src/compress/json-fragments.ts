@@ -376,11 +376,85 @@ const PRETOKEN =
   /'(?:[sdmt]|ll|ve|re)|[^\r\n\p{L}\p{N}]?\p{L}+|\p{N}{1,3}| ?[^\s\p{L}\p{N}]+[\r\n]*|\s*[\r\n]+|\s+(?!\S)|\s+/gu;
 // Exported only so `bench/compression/pretoken-proxy.check.mjs` scores the very
 // function the encoder decides with, rather than a copy of it that can drift.
+/**
+ * MEMOISED BECAUSE THE CALLERS ASK THE SAME QUESTION OVER AND OVER.
+ *
+ * Counting pretokens is a regex walk over the whole string, and the candidate
+ * search above costs the same fragments repeatedly as it compares arms: one
+ * `compressBlock` of the gate's `relevance-probe` payload made 4,248 calls
+ * over only 520 distinct strings, so 3,728 of them re-walked a string already
+ * counted. That walk was 20.5% of the samples in that call.
+ *
+ * Safe because `tokenCost` is pure: `PRETOKEN` is module-local, its
+ * `lastIndex` is reset on entry, and nothing else observes it.
+ *
+ * Bounded on BOTH entries and bytes, and cleared wholesale rather than evicted
+ * by age: this runs inside a long-lived server process, where a map keyed by
+ * arbitrary fragments is otherwise a leak, and the byte bound is the one that
+ * matters because a few large fragments retain far more than many small ones.
+ * Clearing costs nothing amortised -- one payload's working set sits well under
+ * the cap -- and a cold cache only pays the walk this function would have done
+ * anyway.
+ */
+const TOKEN_COST_CACHE = new Map<string, number>();
+const TOKEN_COST_CACHE_ENTRIES = 8192;
+const TOKEN_COST_CACHE_BYTES = 4 * 1024 * 1024;
+let tokenCostCacheBytes = 0;
+
 export function tokenCost(text: string): number {
+  const memo = TOKEN_COST_CACHE.get(text);
+  if (memo !== undefined) return memo;
   let n = 0;
   PRETOKEN.lastIndex = 0;
   while (PRETOKEN.exec(text) !== null) n += 1;
+  // WHAT THE MAP RETAINS, which is the quantity the byte bound is about.
+  // `text.length` is UTF-16 code units, not bytes, so a run of CJK counts
+  // half what it occupies; two bytes per unit is the upper bound on retention,
+  // since V8 may store a latin1 string at one byte per unit. Deliberately NOT
+  // `Buffer.byteLength`: that is an O(n) scan over the hot path this function
+  // exists to keep cheap, and the bound only needs to be an honest ceiling.
+  const retained = text.length * 2;
+
+  // A FRAGMENT THAT CANNOT FIT ALONE IS NEVER CACHED. Clearing to make room
+  // for it would evict a working set that is paying for itself and still leave
+  // occupancy above the declared maximum -- one 5MB string measured 5,242,880
+  // bytes retained against a 4,194,304 ceiling before this guard existed.
+  if (retained > TOKEN_COST_CACHE_BYTES) return n;
+
+  if (
+    TOKEN_COST_CACHE.size >= TOKEN_COST_CACHE_ENTRIES ||
+    tokenCostCacheBytes + retained > TOKEN_COST_CACHE_BYTES
+  ) {
+    TOKEN_COST_CACHE.clear();
+    tokenCostCacheBytes = 0;
+  }
+  TOKEN_COST_CACHE.set(text, n);
+  tokenCostCacheBytes += retained;
   return n;
+}
+
+/**
+ * How much the cache above is holding.
+ *
+ * Exported for the same reason `tokenCost` itself is: so the gate scores the
+ * real thing rather than a copy. The bound is an invariant, and the first
+ * attempt to test it compared `process.memoryUsage().heapUsed` either side of
+ * the loop, which passed alone and failed inside the full suite -- with no
+ * forced collection that delta measures whatever else the worker was doing.
+ * Occupancy is the quantity the bound is actually about.
+ */
+export function tokenCostCacheOccupancy(): {
+  entries: number;
+  bytes: number;
+  maxEntries: number;
+  maxBytes: number;
+} {
+  return {
+    entries: TOKEN_COST_CACHE.size,
+    bytes: tokenCostCacheBytes,
+    maxEntries: TOKEN_COST_CACHE_ENTRIES,
+    maxBytes: TOKEN_COST_CACHE_BYTES,
+  };
 }
 
 /** The records of one adjacent run, grouped by shape and keeping their places. */
