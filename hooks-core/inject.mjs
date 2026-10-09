@@ -251,8 +251,14 @@ const drainedDirs = new Set();
 function withPendingApplied(dir, graph) {
   try {
     // A drain needs the anchors a findings-only graph does not hold, and it
-    // consumes the queue whether or not it finds them.
-    if (graph.partial && hasPendingInvalidations(dir)) graph = load(dir);
+    // consumes the queue whether or not it finds them. So a findings-only graph
+    // is NEVER drained: with nothing pending it returns as it is, and a write
+    // queued after this check waits for the next drain instead of being
+    // consumed against a graph that cannot apply it.
+    if (graph.partial) {
+      if (!hasPendingInvalidations(dir)) return graph;
+      graph = load(dir);
+    }
     const key = canonicalPath(dir);
     // The drain runs EVERY time. It is one stat when there is nothing to do,
     // and running it unconditionally is what keeps the memo from encoding an

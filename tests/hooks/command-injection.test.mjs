@@ -280,7 +280,7 @@ describe('relevance ordering', () => {
       key: 'targeted',
       claim: 'Capture the exit code before piping; a pipe reports the last command status.',
       type: 'failure',
-      trigger: '\|\s*(tail|head)\b',
+      trigger: String.raw`\|\s*(tail|head)\b`,
       confidence: 0.95,
     });
 
@@ -304,6 +304,13 @@ describe('relevance ordering', () => {
     expect(out.indexOf('CI turns warnings into errors')).toBeGreaterThan(
       out.indexOf('Capture the exit code')
     );
+
+    // The trigger is a real pattern, not one that matches everything: written
+    // as a plain string its escapes collapsed to a leading empty alternative,
+    // so it fired on every command and this ordering held vacuously.
+    const unpiped = forCommand(dir, load(dir), 'dotnet build App.csproj', { sessionId: 's2' });
+    expect(unpiped).toContain('CI turns warnings into errors');
+    expect(unpiped).not.toContain('Capture the exit code');
   });
 
   it('does not deliver a finding that only shares a word with the command', () => {

@@ -31,9 +31,19 @@ function writtenFields() {
       .map((f) => join(ROOT, 'plugin', 'hooks', f)),
   ];
   const fields = new Set();
-  const write = /\bstate\.([A-Za-z_]+)(?:\[[^\]]*\])?\s*(?:=(?!=)|\+\+|\+=|\.push\(|\.add\()/g;
+  const writes = [
+    // state.field = / ++ / += / .push( / .add(, including state.field[key] = ...
+    /\bstate\.([A-Za-z_]+)(?:\[[^\]]*\])?\s*(?:=(?!=)|\+\+|\+=|\.push\(|\.add\()/g,
+    // state['field'] = ...
+    /\bstate\[\s*['"]([A-Za-z_]+)['"]\s*\](?:\[[^\]]*\])?\s*=(?!=)/g,
+    // A helper handed the state and a field NAME, e.g. stampTool(state, 'x', ...)
+    // -- the route optimizerToolAbsentAt and optimizerToolOkAt are written by,
+    // which the first pattern could not see.
+    /\(\s*state\s*,\s*['"]([A-Za-z_]+)['"]/g,
+  ];
   for (const file of sources) {
-    for (const match of readFileSync(file, 'utf8').matchAll(write)) fields.add(match[1]);
+    const text = readFileSync(file, 'utf8');
+    for (const write of writes) for (const match of text.matchAll(write)) fields.add(match[1]);
   }
   return [...fields].sort();
 }
@@ -54,7 +64,14 @@ afterAll(() => {
 test('the scan finds the fields it exists to protect', () => {
   // A scan that matched nothing would pass every assertion below vacuously.
   expect(writtenFields()).toEqual(
-    expect.arrayContaining(['seen', 'routingAdvised', 'seenUrls', 'subagentBriefed'])
+    expect.arrayContaining([
+      'seen',
+      'routingAdvised',
+      'seenUrls',
+      'subagentBriefed',
+      'optimizerToolAbsentAt',
+      'optimizerToolOkAt',
+    ])
   );
 });
 
@@ -87,5 +104,18 @@ test('every written state field round-trips through saveState and loadState', as
   const reloaded = loadState(session, null);
   for (const [field, value] of Object.entries(marked)) {
     expect({ field, value: reloaded[field] }).toEqual({ field, value });
+  }
+
+  // INDEPENDENT OF THE SCAN: whatever saveState puts on disk must come back.
+  // A field merged on save but missing from loadState is lost on the next load
+  // however it was written, so this holds even for a write route no pattern
+  // above recognises.
+  const files = readdirSync(stateRoot).filter((name) => name.endsWith('.json'));
+  expect(files.length).toBeGreaterThan(0);
+  for (const name of files) {
+    const onDisk = JSON.parse(readFileSync(join(stateRoot, name), 'utf8'));
+    for (const [field, value] of Object.entries(onDisk)) {
+      expect({ field, value: reloaded[field] }).toEqual({ field, value });
+    }
   }
 });

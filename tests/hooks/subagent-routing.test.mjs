@@ -14,7 +14,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, rmSync, statSync, writeFileSync, readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import {
   wholeFileDump,
@@ -143,6 +143,28 @@ describe('a whole-file shell dump is outlined like a Read', () => {
       command: build(big.replace(/\\/g, '/')),
     });
     expect(out.updatedInput).toBeUndefined();
+  });
+});
+
+describe('the subagent briefing rides on every exit', () => {
+  // The router marks a subagent briefed before it knows which exit it will
+  // take, so an emitter that drops the preceding context loses the briefing for
+  // good. advise() did: enforce() uses it in advise mode and on a repeated
+  // denial. Each emitter is driven in its own process because each one exits.
+  test.each([
+    ['allow', 'p.allow()'],
+    ['allowWithContext', "p.allowWithContext('REASON')"],
+    ['allowWithRewrite', "p.allowWithRewrite({ command: 'x' }, 'REASON')"],
+    ['deny', "p.deny('REASON')"],
+    ['advise', "p.advise('REASON')"],
+  ])('%s', (_, call) => {
+    const policy = pathToFileURL(join(ROOT, 'hooks-core', 'policy.mjs')).href;
+    const result = spawnSync(
+      process.execPath,
+      ['--input-type=module', '-e', `import(${JSON.stringify(policy)}).then((p) => { p.precedeWith('BRIEFING'); ${call}; })`],
+      { encoding: 'utf8' }
+    );
+    expect(result.stdout).toContain('BRIEFING');
   });
 });
 

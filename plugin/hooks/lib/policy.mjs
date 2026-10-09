@@ -383,6 +383,8 @@ function emptyState() {
     routingAdvised: [],
     subagentBriefed: false,
     seenUrls: {},
+    optimizerToolAbsentAt: {},
+    optimizerToolOkAt: {},
     optimizerTools: [],
     optimizerToolsObservedAt: 0,
   };
@@ -469,6 +471,21 @@ export function loadState(sessionId, agent) {
       seenUrls:
         parsed.seenUrls && typeof parsed.seenUrls === 'object' && !Array.isArray(parsed.seenUrls)
           ? parsed.seenUrls
+          : {},
+      // Written through stampTool (capabilities.mjs) and merged by saveState,
+      // but never read back, so #469's availability timestamps were lost on
+      // every reload.
+      optimizerToolAbsentAt:
+        parsed.optimizerToolAbsentAt &&
+        typeof parsed.optimizerToolAbsentAt === 'object' &&
+        !Array.isArray(parsed.optimizerToolAbsentAt)
+          ? parsed.optimizerToolAbsentAt
+          : {},
+      optimizerToolOkAt:
+        parsed.optimizerToolOkAt &&
+        typeof parsed.optimizerToolOkAt === 'object' &&
+        !Array.isArray(parsed.optimizerToolOkAt)
+          ? parsed.optimizerToolOkAt
           : {},
       advised: Array.isArray(parsed.advised)
         ? parsed.advised.filter((f) => typeof f === 'string')
@@ -1013,7 +1030,7 @@ export function advise(context) {
   const output = {
     hookSpecificOutput: {
       hookEventName: 'PreToolUse',
-      additionalContext: context,
+      additionalContext: withPreceding(context),
     },
   };
   const serialized = JSON.stringify(output);
