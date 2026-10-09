@@ -1,37 +1,52 @@
 /**
  * The single composition of hooks-core into a vendored copy.
  *
- * WHY THIS IS SHARED RATHER THAN DUPLICATED: there are now two callers that
- * must produce byte-identical output -- `sync-hook-core.mjs`, which writes the
- * copies committed to git, and `rehydrate-client-hooks.mjs`, which writes them
- * into an installed package where the tarball no longer carries them. Two
- * copies of this logic would drift, and drift between vendored hook copies is
- * the exact failure `sync-hook-core.mjs` was written to end.
+ * WHY THIS IS SHARED RATHER THAN DUPLICATED: two consumers must agree
+ * byte-for-byte -- `sync-hook-core.mjs`, which WRITES the copies committed to
+ * git, and the gate in tests/unit/hook-core-vendored-copies.test.ts, which
+ * recomposes them and compares. A second copy of this logic would let the
+ * writer and the gate drift together and agree about the wrong bytes, which is
+ * a vacuous gate rather than a loud one.
  */
 
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
 /**
- * Vendored copies that the PACKAGE SHIPS and must therefore always be present.
- *
- * `plugin/hooks/lib` is loaded straight out of the installed package by Claude
- * Code, so it cannot depend on a lifecycle script having run: package-manager
- * policy is actively disabling those, and a plugin that needs a repair command
- * before it works is broken on arrival.
+ * The copy Claude Code loads straight out of the installed package.
  */
-export const SHIPPED_TARGETS = Object.freeze([join('plugin', 'hooks', 'lib')]);
+export const PLUGIN_TARGETS = Object.freeze([join('plugin', 'hooks', 'lib')]);
 
 /**
- * Vendored copies REHYDRATED AFTER INSTALL instead of shipped.
+ * The ten client integrations' vendored copies. EVERY ONE OF THESE SHIPS.
  *
- * These ten held byte-identical copies of the same core: 518 files carrying 96
- * distinct blobs, 10.87MB of tarball for 1.44MB of unique content, in a package
- * whose size is what sits in npm's publish queue. A client only needs its own
- * directory, and composing it on the installed machine costs nothing that
- * shipping ten copies to everyone was buying.
+ * THIS IS THE EXPENSIVE PART OF THE PACKAGE AND IT CANNOT BE COMPOSED AWAY.
+ * They are byte-identical copies of the same core -- 518 files carrying 96
+ * distinct blobs, 10.87MB of tarball for 1.44MB of unique content -- so
+ * excluding them from `files` and composing each one on the installed machine
+ * looks free. It was tried (#477) and it is not: it shipped a package in which
+ * all ten integrations were silently inert.
+ *
+ * WHY, measured rather than reasoned. Not one of these directories is executed
+ * from inside the installed package. Every client runs its hooks from a copy
+ * the user makes, at a path that client dictates:
+ *
+ *   cursor    .cursor/hooks/token-optimizer/      windsurf  .windsurf/hooks/...
+ *   qwen      $QWEN_PROJECT_DIR/.qwen/hooks/...   cline     .clinerules/hooks/
+ *   kilo      .kilo/hooks/token-optimizer/        copilot   .github/hooks/
+ *   codex     $HOME/.codex/hooks/                 gemini    ${extensionPath}/hooks/
+ *   codex plugin  ${PLUGIN_ROOT}/hooks/           opencode  its plugin directory
+ *
+ * A copy at any of those paths has no package tree above it, so a self-repair
+ * step that walks up looking for the composer finds nothing -- and the copy it
+ * was made from had no `lib/` either. The documented install then yields four
+ * entry files and no core. Reproduced end to end from a real tarball: the
+ * copied `pre-tool.mjs` printed nothing and exited 0 under
+ * TOKEN_OPTIMIZER_MODE=enforce, where the in-place entry answered
+ * `"permission":"deny"`. tests/unit/hook-core-vendored-copies.test.ts holds
+ * that line now, by running an entry from a directory outside any package.
  */
-export const REHYDRATED_TARGETS = Object.freeze([
+export const CLIENT_TARGETS = Object.freeze([
   join('integrations', 'codex', 'hooks', 'lib'),
   join('integrations', 'codex', 'plugin', 'hooks', 'lib'),
   join('integrations', 'gemini', 'hooks', 'lib'),
@@ -46,8 +61,8 @@ export const REHYDRATED_TARGETS = Object.freeze([
 
 /** Every directory that must hold an identical copy of the core. */
 export const ALL_TARGETS = Object.freeze([
-  ...SHIPPED_TARGETS,
-  ...REHYDRATED_TARGETS,
+  ...PLUGIN_TARGETS,
+  ...CLIENT_TARGETS,
 ]);
 
 /** The core files, in a stable order. */
