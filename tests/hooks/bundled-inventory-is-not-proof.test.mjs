@@ -460,3 +460,50 @@ describe('the Stop hook stops asking for a tool the session cannot call', () => 
     expect(JSON.stringify(output ?? {})).not.toContain('wiki_write');
   });
 });
+
+describe('review findings on #470', () => {
+  it('an unknown instant is the OLDEST, so a re-read refusal cannot outrank a success', () => {
+    // THE BUG THIS FIX EXISTS FOR. stampTool read `Number(at) || Date.now()`,
+    // so a transcript refusal carrying `at` 0 -- which is what the reader
+    // returns when the entry has no parsable timestamp -- was stamped at the
+    // CURRENT time on every hook event. The same old refusal therefore
+    // outranked every later success and a repaired install never came back.
+    // The original test passed only because it supplied an explicit instant.
+    const state = {};
+    markOptimizerToolAbsent(state, 'mcp__token-optimizer__wiki_write', 0);
+    expect([...unreachableOptimizerTools(state)]).toEqual(['wiki_write']);
+
+    observeOptimizerToolCall(state, 'mcp__token-optimizer__wiki_write', {
+      ok: true,
+      at: 5000,
+    });
+    expect([...unreachableOptimizerTools(state)]).toEqual([]);
+
+    // The transcript is re-scanned on every later event and hands back the
+    // SAME untimestamped refusal. It must not re-suppress the tool.
+    for (let event = 0; event < 3; event += 1) {
+      markOptimizerToolAbsent(state, 'mcp__token-optimizer__wiki_write', 0);
+    }
+    expect([...unreachableOptimizerTools(state)]).toEqual([]);
+  });
+
+  it('"is not available" alone does not mark a tool absent', () => {
+    // The loosest alternative in TOOL_ABSENT was also the most expensive one to
+    // get wrong: a match suppresses a working tool for the whole session.
+    expect(isToolAbsentMessage('File is not available at that path')).toBe(
+      false
+    );
+    expect(isToolAbsentMessage('the requested resource is not available')).toBe(
+      false
+    );
+
+    // THE POSITIVE CONTROL: qualified by tool or server, it still matches, so
+    // narrowing the phrase did not simply delete the alternative.
+    expect(
+      isToolAbsentMessage('tool mcp__token-optimizer__wiki_write is not available')
+    ).toBe(true);
+    expect(isToolAbsentMessage('server token-optimizer is not available')).toBe(
+      true
+    );
+  });
+});

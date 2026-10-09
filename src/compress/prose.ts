@@ -203,7 +203,11 @@ export function score(
  * a sentence here is a whole line, so a drop silently renumbers the body or
  * removes a step from a list.
  */
-const LINE_ORIENTED = /^\s*(?:\d+\s*[|:\t]|\/\/|\/\*|\*\s|#\s|--\s|[-+]\s)/;
+// `1.` and `1)` are included: a numbered list written with a period is exactly
+// as line-oriented as one written with a pipe, and the trailing space keeps a
+// decimal like `3.5 ms` at the start of a line from matching.
+const LINE_ORIENTED =
+  /^\s*(?:\d+\s*[|:\t]|\d+[.)]\s|\/\/|\/\*|\*\s|#\s|--\s|[-+]\s)/;
 
 /**
  * Recognises prose rather than structured content.

@@ -184,7 +184,11 @@ export function optimizerToolEvidence(raw = {}, env = process.env) {
  * subsystem on the first ordinary error. Only "there is no such tool" counts.
  */
 const TOOL_ABSENT =
-  /no such tool|tool not found|unknown tool|no tool named|not a registered tool|is not available|method not found|-32601|server not connected|mcp server .* not (?:found|connected|running)/i;
+  // `is not available` is QUALIFIED deliberately. On its own it matched
+  // ordinary failures -- "File is not available" -- and a match suppresses a
+  // working tool for the rest of the session, so the loosest alternative in
+  // this pattern was also the most expensive one to get wrong.
+  /no such tool|tool not found|unknown tool|no tool named|not a registered tool|(?:tool|server)[^.\n]{0,80}?is not available|method not found|-32601|server not connected|mcp server .* not (?:found|connected|running)/i;
 
 /**
  * Whether a failed call's message means THE TOOL DOES NOT EXIST.
@@ -239,9 +243,18 @@ export function observeOptimizerToolCall(
 /** Per-name instant maps, created lazily so an untouched state stays clean. */
 function stampTool(state, field, name, at) {
   const stamps = { ...(state[field] || {}) };
-  const when = Number(at) || Date.now();
-  // MONOTONIC. A transcript entry with no parsable timestamp arrives as 0 and
-  // must not pull a later observation backwards.
+  // AN UNKNOWN INSTANT IS THE OLDEST ONE, NOT THE NEWEST.
+  //
+  // This read `Number(at) || Date.now()`, which defeated the whole mechanism:
+  // a transcript refusal carries `at` 0 when its entry has no parsable
+  // timestamp, and the transcript is re-scanned on EVERY hook event, so the
+  // same old refusal was re-stamped at the current time again and again and
+  // always outranked a later success. A repaired install could never come back.
+  // The comment below claimed monotonicity while the code did the opposite.
+  const parsed = Number(at);
+  const when = parsed > 0 ? parsed : 1;
+  // MONOTONIC per name, so re-reading an older observation cannot pull a later
+  // one backwards.
   stamps[name] = Math.max(Number(stamps[name]) || 0, when);
   state[field] = stamps;
   return state;

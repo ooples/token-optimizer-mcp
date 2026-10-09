@@ -79,3 +79,32 @@ describe('prose elision declines line-oriented content', () => {
     expect(looksLikeProse(mixed)).toBe(true);
   });
 });
+
+describe('numbered lists are line-oriented however they are numbered', () => {
+  // Review thread on #470: `1.` and `2.` prefixes did not match LINE_ORIENTED,
+  // so a wordy numbered list still reached prose elision and could lose items.
+  const numbered = (separator: string) =>
+    Array.from(
+      { length: 10 },
+      (_, index) =>
+        `${index + 1}${separator} the waiter reports a pending publish separately from a broken one`
+    ).join('\n');
+
+  it.each([['.'], [')'], ['|'], [':']])(
+    'declines a list numbered with "%s"',
+    (separator) => {
+      expect(looksLikeProse(numbered(separator))).toBe(false);
+    }
+  );
+
+  it('still claims prose whose lines open with a decimal measurement', () => {
+    // THE BOUNDARY the trailing space buys. `3.5 ms` is a number, not an item
+    // marker, so these lines stay compressible.
+    const readings = [
+      '3.5 ms was the median transform time across three passes of the comparator',
+      '28.7 ms was their tenth percentile, which is the bar the latency rows compare against',
+      '0.4 ms is what the move-whole arm costs when the store is already warm',
+    ].join('\n');
+    expect(looksLikeProse(readings)).toBe(true);
+  });
+});
