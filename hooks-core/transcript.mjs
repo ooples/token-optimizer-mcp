@@ -22,6 +22,7 @@ import {
 } from 'node:fs';
 import { join } from 'node:path';
 import { redact } from './redact.mjs';
+import { isToolAbsentMessage } from './capabilities.mjs';
 
 /** Where a project's transcripts live, under the graph it belongs to. */
 export const transcriptDir = (dir) => join(dir, 'transcripts');
@@ -226,6 +227,20 @@ export function readArchive(dir, sessionId) {
 const FAILED_SCAN_BYTES = () =>
   Number(process.env.TOKEN_OPTIMIZER_TRANSCRIPT_SCAN_BYTES) || 8 * 1024 * 1024;
 
+/**
+ * A much smaller tail for the absence scan, which runs on the HOT PATH.
+ *
+ * `failedResultsFromTranscript` reads 8 MB because it feeds a detector that
+ * wants a session's whole failure history. This one answers a single question
+ * -- has a call already come back "no such tool" -- whose answer is persisted
+ * in session state the first time it is seen, so only the recent tail can ever
+ * contain news. Eight megabytes of JSON parsed before every tool call to
+ * re-learn a fact already on disk is a latency bill with no return.
+ */
+const ABSENCE_SCAN_BYTES = () =>
+  Number(process.env.TOKEN_OPTIMIZER_TRANSCRIPT_ABSENCE_SCAN_BYTES) ||
+  256 * 1024;
+
 /** Failed results kept, most recent first. The pairing detector needs a handful. */
 const FAILED_MAX = 50;
 
@@ -429,4 +444,95 @@ export function failedResultsFromTranscript(transcriptPath, options = {}) {
   // The MOST RECENT `max`, keeping chronological order. A session that failed
   // two hundred times teaches its last lessons, not its first.
   return failures.slice(-max);
+}
+
+/**
+ * The optimizer MCP tools a call in this session proved do NOT exist.
+ *
+ * WHY THIS READER EXISTS, and why the post-tool event cannot do the job: the
+ * header above `failedResultsFromTranscript` records the measurement -- Claude
+ * Code fires no PostToolUse for a failed tool call, 2,238 of 2,238 live events
+ * carried `success: true`. A call to a tool the host never registered is the
+ * most complete failure there is, so on the primary client it produces no hook
+ * event at all. The transcript is the only place it exists.
+ *
+ * That is exactly the gap behind #469. The hooks advertised 19 optimizer tools
+ * on an install-time default, the host had registered none of them, every call
+ * came back "No such tool available", and nothing in the hook pipeline could
+ * ever learn it -- so the next hook recommended the same tool again, and the
+ * Stop hook went on blocking the turn on a `wiki_write` that could not be
+ * called.
+ *
+ * RETURNS NAMES AND NOTHING ELSE. The classifier runs here, against text that
+ * stays in this function, and what comes back is a list of tool names drawn
+ * from the assistant's own `tool_use` blocks. No transcript text, no tool
+ * input, no result body and no path is returned, stored or logged, so this adds
+ * nothing to what the archive already holds and crosses no disclosure boundary.
+ *
+ * @returns {Array<{name: string, at: number}>} raw tool names with the instant
+ *   the refusal was recorded, deduplicated to the LATEST refusal per name, in
+ *   first-seen order. `at` is 0 when the entry carries no parsable timestamp.
+ */
+export function absentToolsFromTranscript(transcriptPath, options = {}) {
+  const { scanBytes = ABSENCE_SCAN_BYTES() } = options || {};
+  if (!transcriptPath) return [];
+  const text = readTail(transcriptPath, scanBytes);
+  if (!text) return [];
+
+  // tool_use_id -> the NAME that was attempted. Same exact join as the failure
+  // reader: a result block carries no name of its own, only the id.
+  const attempted = new Map();
+  const absent = new Map();
+
+  for (const line of text.split('\n')) {
+    if (!line.trim()) continue;
+    let entry;
+    try {
+      entry = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    const message = entry.message || entry;
+    const role = message.role || entry.type;
+    const content = message.content;
+    if (!Array.isArray(content)) continue;
+
+    if (role === 'assistant') {
+      for (const block of content) {
+        if (!block || block.type !== 'tool_use' || !block.id) continue;
+        if (typeof block.name !== 'string' || !block.name) continue;
+        attempted.set(String(block.id), block.name);
+      }
+      continue;
+    }
+
+    if (role !== 'user') continue;
+    for (const block of content) {
+      if (!block || block.type !== 'tool_result' || block.is_error !== true)
+        continue;
+      const name = attempted.get(String(block.tool_use_id || ''));
+      if (!name) continue;
+      // A structured body is accepted here, unlike in the exit-code reader: a
+      // host that reports "no such tool" as an MCP content block is reporting
+      // the same fact, and the test below is a fixed phrase match rather than
+      // a parse of the body's shape.
+      const body =
+        typeof block.content === 'string'
+          ? block.content
+          : Array.isArray(block.content)
+            ? block.content
+                .map((part) => (typeof part?.text === 'string' ? part.text : ''))
+                .join('\n')
+            : '';
+      if (!isToolAbsentMessage(body)) continue;
+      // THE INSTANT MATTERS, not just the name: a user who repairs an install
+      // mid-session produces a later successful call, and the consumer decides
+      // between the two by which came last. Without this the first failure in
+      // a transcript would suppress the tool for the rest of the session.
+      const at = Date.parse(entry.timestamp || '') || 0;
+      absent.set(name, Math.max(absent.get(name) || 0, at));
+    }
+  }
+
+  return [...absent].map(([name, at]) => ({ name, at }));
 }

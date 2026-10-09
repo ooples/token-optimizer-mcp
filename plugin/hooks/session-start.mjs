@@ -74,7 +74,11 @@ import {
 // so an explicitly EMPTY value survives -- which is how a benchmark arm, a host
 // or a user says "there is no server here" without disabling the default for
 // installs that do ship one.
-process.env.TOKEN_OPTIMIZER_MCP_CAPABILITIES ??= HOOK_MCP_TOOLS.join(',');
+// Install-time default: contributes names, never proof. See #469. THESE TWO
+// ENTRY POINTS ARE HAND-WRITTEN, so the generator's change does not reach
+// them -- and they are the Claude Code plugin's SessionStart and PreToolUse
+// hooks, which is to say the exact path the issue was reported from.
+process.env.TOKEN_OPTIMIZER_MCP_CAPABILITIES_BUNDLED ??= HOOK_MCP_TOOLS.join(',');
 
 const invocation = beginHookInvocation('claude-code', 'session-start');
 

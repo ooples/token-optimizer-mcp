@@ -535,6 +535,27 @@ export function saveState(sessionId, state, agent) {
         }
         return out;
       })(),
+      // PER-KEY MAX, for the same concurrency reason as actCounts (#469). These
+      // two maps record, per optimizer MCP tool, when a call last proved it
+      // absent from the host's registry and when one last succeeded; whichever
+      // instant is later decides whether the tool is offered. A field dropped
+      // from this merge is a field that does not persist at all, which is what
+      // this merge shape makes easy to miss -- the absence mark was invisible
+      // in the state file until it was added here.
+      optimizerToolAbsentAt: (() => {
+        const out = { ...(current.optimizerToolAbsentAt || {}) };
+        for (const [k, v] of Object.entries(state.optimizerToolAbsentAt || {})) {
+          out[k] = Math.max(Number(out[k]) || 0, Number(v) || 0);
+        }
+        return out;
+      })(),
+      optimizerToolOkAt: (() => {
+        const out = { ...(current.optimizerToolOkAt || {}) };
+        for (const [k, v] of Object.entries(state.optimizerToolOkAt || {})) {
+          out[k] = Math.max(Number(out[k]) || 0, Number(v) || 0);
+        }
+        return out;
+      })(),
       // LATEST CHECK WINS, which is the opposite direction from the fields above and correct for
       // this one. `seen`, `denied`, `injected` and `actCounts` are all append-only, so a union or
       // a max is the safe merge. The forecast throttle is a POINT IN TIME: taking the older of two

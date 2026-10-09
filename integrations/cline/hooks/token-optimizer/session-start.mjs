@@ -38,7 +38,8 @@
 // NOTE FOR EDITORS: this whole block is inside a template literal. A backtick
 // here terminates the string and the generator dies with a SyntaxError far from
 // the cause -- which is exactly what happened writing this comment.
-process.env.TOKEN_OPTIMIZER_MCP_CAPABILITIES ??= 'smart_read,smart_write,smart_edit,smart_glob,smart_grep,optimize_session,get_optimization_report,wiki_write,wiki_query';
+// Install-time default: contributes names, never proof. See #469.
+process.env.TOKEN_OPTIMIZER_MCP_CAPABILITIES_BUNDLED ??= 'smart_read,smart_write,smart_edit,smart_glob,smart_grep,optimize_session,get_optimization_report,wiki_write,wiki_query';
 try {
   const { run } = await import('./lib/adapter.mjs');
   await run('cline', 'session-start');

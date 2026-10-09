@@ -114,7 +114,11 @@ import { beginHookInvocation } from './lib/observability.mjs';
 // survives. A benchmark arm measuring the hooks with no server sets
 // TOKEN_OPTIMIZER_MCP_CAPABILITIES='' and gets that, without breaking installs
 // that genuinely ship the server beside these hooks.
-process.env.TOKEN_OPTIMIZER_MCP_CAPABILITIES ??= HOOK_MCP_TOOLS.join(',');
+// Install-time default: contributes names, never proof. See #469. THESE TWO
+// ENTRY POINTS ARE HAND-WRITTEN, so the generator's change does not reach
+// them -- and they are the Claude Code plugin's SessionStart and PreToolUse
+// hooks, which is to say the exact path the issue was reported from.
+process.env.TOKEN_OPTIMIZER_MCP_CAPABILITIES_BUNDLED ??= HOOK_MCP_TOOLS.join(',');
 
 /**
  * Largest file the hook will read to index. Above this the touch is still
