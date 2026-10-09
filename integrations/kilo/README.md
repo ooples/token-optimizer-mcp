@@ -8,7 +8,7 @@ Tier: **native hook + rules** -- Kilo's native lifecycle bridge routes expensive
    (in this directory) into your `.kilo/kilo.jsonc`.
 2. **Rules** -- copy `token-optimizer.md` (in this directory)
    to `.kilo/rules/token-optimizer.md` in your project.
-3. **Hooks** -- copy `.kilo/plugin/token-optimizer.js` to the same project path, and copy `hooks/` to `.kilo/hooks/token-optimizer/`.
+3. **Hooks** -- copy `.kilo/plugin/token-optimizer.js` to the same project path, and run `npx -y @ooples/token-optimizer-mcp@latest token-optimizer-install-client --client kilo` to compose `.kilo/hooks/token-optimizer`.
 
 
 Both destinations are the paths Kilo's own documentation specifies;

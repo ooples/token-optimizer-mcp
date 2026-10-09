@@ -8,7 +8,7 @@ Tier: **native hook + rules** -- Cline's native lifecycle bridge routes expensiv
    (in this directory) into your `mcp.json`.
 2. **Rules** -- copy `token-optimizer.md` (in this directory)
    to `.clinerules/token-optimizer.md` in your project.
-3. **Hooks** -- copy the contents of `hooks/` to `.clinerules/hooks/`; on macOS/Linux mark the extensionless wrappers executable and enable them.
+3. **Hooks** -- run `npx -y @ooples/token-optimizer-mcp@latest token-optimizer-install-client --client cline` to compose `.clinerules/hooks`; on macOS/Linux mark the extensionless wrappers executable and enable them.
 
 
 Both destinations are the paths Cline's own documentation specifies;

@@ -8,7 +8,7 @@ Tier: **native hook + rules** -- Windsurf's native lifecycle bridge routes expen
    (in this directory) into your `mcp_config.json`.
 2. **Rules** -- copy `token-optimizer.md` (in this directory)
    to `.windsurf/rules/token-optimizer.md` in your project.
-3. **Hooks** -- copy `hooks/` to `.windsurf/hooks/token-optimizer/`, then merge `hooks.json` into `.windsurf/hooks.json`.
+3. **Hooks** -- run `npx -y @ooples/token-optimizer-mcp@latest token-optimizer-install-client --client windsurf` to compose `.windsurf/hooks/token-optimizer`, then merge `hooks.json` into `.windsurf/hooks.json`.
 
 
 Both destinations are the paths Windsurf's own documentation specifies;
