@@ -244,20 +244,8 @@ describe('what the installer writes enforces, and a plain copy does not', () => 
   });
 });
 
-describe('what the repo vendors still matches what ships', () => {
-  it('keeps the version stamp out of the committed copies', () => {
-    for (const client of CLIENT_KEYS) {
-      const spec = specFor(client);
-      const observability = readFileSync(
-        join(ROOT, spec.source, spec.lib, 'observability.mjs'),
-        'utf8'
-      );
-      expect(observability).toContain('// GENERATED FILE -- do not edit.');
-      expect(observability).toContain('Source of truth: hooks-core/');
-      expect(observability).not.toContain('TOKEN_OPTIMIZER_VERSION =');
-    }
-  });
-});
+// The committed copies' stamp and composition parity are pinned once, in
+// tests/unit/hook-core-vendored-copies.test.ts, which owns the vendored tree.
 
 describe('the published bin runs the way the docs say to run it', () => {
   const bin: Record<string, string> = JSON.parse(
