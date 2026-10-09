@@ -52,6 +52,7 @@ import {
   contentHash,
   harvest,
   load,
+  loadFindings,
   wikiDir,
   projectRootFor,
   unrootedRoot,
@@ -1057,7 +1058,7 @@ function observeAndInject(payload, state, episode, features, authored = false) {
     if (command) {
       const root = commandProjectRoot(payload, payload.cwd);
       const dir = registerRoot(root);
-      const local = forCommand(dir, load(dir), command, {
+      const local = forCommand(dir, loadFindings(dir), command, {
         sessionId: payload.session_id,
         alreadyInjected,
         episode,

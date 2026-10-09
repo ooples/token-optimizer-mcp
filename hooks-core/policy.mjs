@@ -378,6 +378,9 @@ function emptyState() {
     // says is worse than staying silent, because a block the model has learned
     // to skip costs tokens and buys nothing.
     advised: [],
+    routingAdvised: [],
+    subagentBriefed: false,
+    seenUrls: {},
     optimizerTools: [],
     optimizerToolsObservedAt: 0,
   };
@@ -452,6 +455,19 @@ export function loadState(sessionId, agent) {
         ? parsed.harvestedEdits
         : 0,
       recordingNudged: parsed.recordingNudged === true,
+      // Every hook call is a new process, so a field left out of this list is
+      // forgotten between calls: that is how "said once" kept being said on
+      // every search, and how a repeated WebFetch was never recognised
+      // (issue #473). tests/hooks/state-fields-survive-reload.test.mjs fails
+      // when a written field is missing here or from saveState's merge.
+      routingAdvised: Array.isArray(parsed.routingAdvised)
+        ? parsed.routingAdvised.filter((kind) => typeof kind === 'string')
+        : [],
+      subagentBriefed: parsed.subagentBriefed === true,
+      seenUrls:
+        parsed.seenUrls && typeof parsed.seenUrls === 'object' && !Array.isArray(parsed.seenUrls)
+          ? parsed.seenUrls
+          : {},
       advised: Array.isArray(parsed.advised)
         ? parsed.advised.filter((f) => typeof f === 'string')
         : [],
@@ -602,6 +618,14 @@ export function saveState(sessionId, state, agent) {
       advised: [
         ...new Set([...(current.advised || []), ...(state.advised || [])]),
       ].slice(0, ADVISED_CAP),
+      // Once-records, so a UNION: a sibling process that also advised must not
+      // un-advise this one. Leaving them out of this merge forgot them on every
+      // save, exactly as leaving them out of loadState did (issue #473).
+      routingAdvised: [
+        ...new Set([...(current.routingAdvised || []), ...(state.routingAdvised || [])]),
+      ].slice(-200),
+      subagentBriefed: Boolean(current.subagentBriefed || state.subagentBriefed),
+      seenUrls: { ...(current.seenUrls || {}), ...(state.seenUrls || {}) },
       // An inventory is a point-in-time observation, not an append-only set.
       // Union would resurrect a tool after a newer host payload explicitly
       // reported an empty or reduced catalog. Latest evidence wins, including
@@ -771,8 +795,64 @@ export function alreadyDenied(state, key) {
  * Hook responses
  * ------------------------------------------------------------------ */
 
+/**
+ * Context that rides on whatever this invocation emits, set at most once.
+ *
+ * A subagent's briefing has to arrive on its FIRST tool call, and the router has
+ * a dozen exits -- allow, rewrite, deny, each from a different branch. Carrying
+ * it here means every one of them delivers it, rather than the one branch that
+ * happened to be edited.
+ */
+let precedingContext = null;
+
+/** Puts `text` ahead of anything this invocation emits. */
+export function precedeWith(text) {
+  precedingContext = text || null;
+}
+
+function withPreceding(text) {
+  return [precedingContext, text].filter(Boolean).join('\n\n') || null;
+}
+
+/**
+ * Whether the payload comes from a subagent rather than the main session.
+ *
+ * Claude Code keeps a subagent's transcript under `<session>/subagents/`, and
+ * newer versions also send `agent_id`. Either is enough; neither means the main
+ * session, where SessionStart has already said everything.
+ */
+export function isSubagentPayload(raw) {
+  if (raw?.agent_id || raw?.agentId) return true;
+  const transcript = String(raw?.transcript_path ?? raw?.transcriptPath ?? '');
+  return /[\\/]subagents[\\/]/.test(transcript);
+}
+
+/**
+ * What a subagent is told on its first tool call, or null once it has been.
+ *
+ * WHY THIS EXISTS (issue #473, defect 8). SessionStart fires for the main
+ * session only, so its guidance reached 0 of 34 workflow subagents, and those
+ * agents read files through the shell 2,300 times against 9 `Read` calls. The
+ * briefing is short on purpose: it is paid for on every later turn of the agent.
+ *
+ * It names the optimizer tools CONDITIONALLY. A hooks-only install has no MCP
+ * server, and telling a model to call tools that do not exist cost a measured
+ * turn per task when SessionStart did it.
+ */
+export function subagentBriefing(raw, state) {
+  if (!isSubagentPayload(raw) || state.subagentBriefed) return null;
+  state.subagentBriefed = true;
+  return [
+    'Token Optimizer (shown once to this agent). Everything you read stays in context and is paid for again on every later turn, so:',
+    '- If smart_read, smart_grep or smart_glob appear in your tools or deferred tools, load them once with ToolSearch("smart_read smart_grep smart_glob") and use them for large files and searches.',
+    '- Otherwise read with Read and an offset/limit for the region you need, and search with Grep/Glob, rather than cat, grep -r or Get-Content of whole files.',
+    '- Keep your final report short: it is the only part your caller reads.',
+  ].join('\n');
+}
+
 /** Emits nothing and exits 0 -- the normal permission flow proceeds. */
 export function allow() {
+  if (precedingContext) allowWithContext(null);
   process.exit(0);
 }
 
@@ -793,6 +873,7 @@ export function allow() {
  * exit(0).
  */
 export function allowWithContext(context) {
+  context = withPreceding(context);
   if (context) {
     const output = {
       hookSpecificOutput: {
@@ -870,6 +951,7 @@ function emitAndExit(serialized) {
 }
 
 export function allowWithRewrite(updatedInput, notice) {
+  notice = withPreceding(notice);
   const output = {
     hookSpecificOutput: {
       hookEventName: 'PreToolUse',
@@ -892,6 +974,7 @@ export function allowWithRewrite(updatedInput, notice) {
  * says "use the optimized tool" gets met with a retry of the same call.
  */
 export function deny(reason) {
+  reason = withPreceding(reason);
   const output = {
     hookSpecificOutput: {
       hookEventName: 'PreToolUse',

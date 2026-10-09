@@ -11,7 +11,7 @@
  * These tests pin the trigger path that closes that gap.
  */
 import { describe, it, expect, beforeEach, afterEach, afterAll } from '@jest/globals';
-import { forCommand } from '../../hooks-core/inject.mjs';
+import { forCommand, actsOf } from '../../hooks-core/inject.mjs';
 import { load, putNodeWithEdges, putNode, nodeId } from '../../hooks-core/wiki.mjs';
 import { mkdtempSync, rmSync, writeFileSync, readFileSync } from 'fs';
 import { join } from 'path';
@@ -271,17 +271,11 @@ describe('a model-supplied trigger cannot hang the hook', () => {
 });
 
 describe('relevance ordering', () => {
-  it('prefers a finding whose own trigger matched over one that matched a word', () => {
+  it('prefers a finding whose own trigger matched over one inferred from its claim', () => {
     // Observed live: `dotnet build App.csproj | tail -20` surfaced a finding
-    // about stale MCP processes instead of the one about pipes hiding exit
-    // codes. Both were confident; only one was about this command.
-    seed({
-      key: 'incidental',
-      claim: 'The MCP server serves the build it LOADED, not what is on disk.',
-      type: 'failure',
-      trigger: undefined,
-      confidence: 0.95,
-    });
+    // about stale MCP processes ahead of the one about pipes hiding exit codes.
+    // An explicit trigger is the author saying when a finding applies, so it
+    // outranks an act inferred from the prose.
     seed({
       key: 'targeted',
       claim: 'Capture the exit code before piping; a pipe reports the last command status.',
@@ -290,18 +284,57 @@ describe('relevance ordering', () => {
       confidence: 0.95,
     });
 
+    seed({
+      key: 'act',
+      claim: 'Run dotnet build with -warnaserror off locally; CI turns warnings into errors.',
+      type: 'failure',
+      trigger: undefined,
+      confidence: 0.95,
+    });
+
     const out = forCommand(dir, load(dir), 'dotnet build App.csproj | tail -20', {
       sessionId: 's1',
     });
 
-    // Assert the ORDER rather than exclusion: a tight budget would also depend
+    // Assert the ORDER among what qualifies: a tight budget would also depend
     // on how staleness renders, which is a different concern. What matters is
     // that the targeted finding is ranked first, so a tight budget keeps it.
     expect(out).toBeTruthy();
     expect(out.indexOf('Capture the exit code')).toBeGreaterThanOrEqual(0);
-    expect(out.indexOf('serves the build it LOADED')).toBeGreaterThanOrEqual(0);
-    expect(out.indexOf('Capture the exit code')).toBeLessThan(
-      out.indexOf('serves the build it LOADED')
+    expect(out.indexOf('CI turns warnings into errors')).toBeGreaterThan(
+      out.indexOf('Capture the exit code')
     );
+  });
+
+  it('does not deliver a finding that only shares a word with the command', () => {
+    // The incidental finding above shares "build" with `dotnet build` and
+    // nothing else. Word overlap admitted 15,452 findings on 3,030 commands of
+    // one replayed session (issue #473, defect 7); it is not relevance.
+    seed({
+      key: 'incidental',
+      claim: 'The MCP server serves the build it LOADED, not what is on disk.',
+      type: 'failure',
+      trigger: undefined,
+      confidence: 0.95,
+    });
+
+    expect(
+      forCommand(dir, load(dir), 'dotnet build App.csproj | tail -20', { sessionId: 's1' })
+    ).toBeNull();
+  });
+});
+
+describe('actsOf', () => {
+  it.each([
+    ['npx jest tests/unit/foo.test.ts', ['npx jest']],
+    ['cd /x && npm run build -- --watch | tail -5', ['npm run']],
+    ['$f = git show origin/master:src/A.cs; "lines $($f.Count)"', ['git show']],
+    ['foreach ($n in 1,2) { gh issue view $n --json body }', ['gh issue']],
+    ["git commit -F - @'\nfix(nn): trace cannot see the tape\n'@", ['git commit']],
+    ["git commit -F - <<'EOF'\nfix: the cause was elsewhere\nEOF", ['git commit']],
+    ['Set-Location C:\\repo; git status --short', ['git status']],
+    ['ls -la', []],
+  ])('%s', (command, expected) => {
+    expect(actsOf(command)).toEqual(expected);
   });
 });

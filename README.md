@@ -436,9 +436,21 @@ Nothing needs to be configured per agent.
   of the same file returns the file itself. A line range is never outlined:
   `sed -n 'A,Bp'`, `head`, `Get-Content -TotalCount` and a paged `Read` all pass
   through untouched.
+- **Each subagent is briefed once.** A subagent never sees the SessionStart
+  guidance, so its first tool call carries a four-line briefing instead: load
+  the optimizer tools if they are listed, read ranges rather than whole files,
+  and keep the final report short. The tools are named only conditionally, so a
+  hooks-only install is never told to call something it does not have.
 - **Advisories are said once.** A routing hint such as "use smart_grep" appears
-  at most once per session for each kind of call, not on every matching command.
+  at most once per agent for each kind of call, not on every matching command.
+- **Past findings arrive only when they name what you are running.** A finding
+  with no explicit trigger is delivered with a command only when its claim names
+  that command's program and subcommand, such as `npx jest` or `dotnet build`,
+  not when the two merely share a word.
 - **Repeated build and test output is bounded**, as it is in the main session.
+- **Through the proxy, a range you asked for comes back whole.** A paged `Read`
+  or a shell slice is never folded, and a fold inside a whole-file read points at
+  the file's own line numbers.
 
 ### What to add when you brief an agent
 

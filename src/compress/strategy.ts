@@ -345,6 +345,51 @@ function toolResultPaths(request: ProviderRequest): Map<string, string> {
   return paths;
 }
 
+/** A shell command that prints a chosen range of a file rather than all of it. */
+const SLICE_COMMAND = [
+  /\bsed\s+-n\s+['"]?\$?\d+(?:,\s*\$?\d*)?p/,
+  /\b(?:head|tail)\s+(?:-n\s*)?[-+]?\d+\b/,
+  /\bGet-Content\b[^|;\n]*\s-(?:TotalCount|Tail|Head|First|Last)\b/i,
+  /\bSelect-Object\b[^|;\n]*\s-(?:First|Last|Skip|Index)\b/i,
+  /\[\s*-?\d+\s*\.\.\s*-?\d+\s*\]/,
+  /\bawk\s+['"][^'"]*\bNR\s*[<>=]/,
+];
+
+/**
+ * The tool calls whose result is a range the model chose, keyed by call id.
+ *
+ * A paged read (`offset`/`limit`) or a shell slice (`sed -n 10,40p`, `head -50`,
+ * `Get-Content -TotalCount`, `$l[100..160]`) is a request for exactly those
+ * lines. Folding a body out of it hands back less than was asked for, and the
+ * model's only recourse is another call: in issue #473 (defect 10) folded output
+ * regularly cost an extra Read turn to recover a body or a status line, and a
+ * turn costs more than the bytes the fold saved, because it re-sends the whole
+ * context. A deliberate range is therefore passed through whole.
+ */
+function targetedToolResults(request: ProviderRequest): Set<string> {
+  const targeted = new Set<string>();
+  for (const message of request.messages ?? []) {
+    const content = message?.content;
+    if (!Array.isArray(content)) continue;
+    for (const raw of content) {
+      const block = raw as ToolUseBlock;
+      if (
+        block?.type !== 'tool_use' ||
+        typeof block.id !== 'string' ||
+        !block.input
+      )
+        continue;
+      const { offset, limit, command } = block.input;
+      const paged = typeof offset === 'number' || typeof limit === 'number';
+      const sliced =
+        typeof command === 'string' &&
+        SLICE_COMMAND.some((pattern) => pattern.test(command));
+      if (paged || sliced) targeted.add(block.id);
+    }
+  }
+  return targeted;
+}
+
 /**
  * Whether a block is a tool result.
  *
@@ -601,11 +646,15 @@ function pathAddressed(
   // referent a later repeat can point at -- it is guaranteed to arrive
   // byte-identical.
   const sourcePaths = toolResultPaths(request);
+  const targeted = targetedToolResults(request);
   mapBlocks(request, (text, at, message, toolUseId) => {
     // #3456: a signed message is untouchable. Rewriting it poisons the
-    // conversation permanently, not just this turn.
+    // conversation permanently, not just this turn. A range the model asked
+    // for is passed through whole for the reason on targetedToolResults.
     const touchable =
-      !messageIsSigned(message) && (!respectFrontier || isAfter(at, frontier));
+      !messageIsSigned(message) &&
+      (!respectFrontier || isAfter(at, frontier)) &&
+      !(toolUseId && targeted.has(toolUseId));
     if (!touchable) {
       // NO STAMP, BECAUSE NOTHING WAS COMPRESSED. These are the original bytes
       // -- signed, or behind the cache frontier -- so they hold no marker of

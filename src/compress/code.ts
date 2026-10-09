@@ -114,6 +114,33 @@ const EXT_LANGUAGE: Record<string, string> = {
   hpp: 'c',
 };
 
+/** A reader's line-number prefix: `   12\t` (Claude Code) or `12→` (older form). */
+const LINE_NUMBER_PREFIX = /^\s*(\d+)(?:\t|→)/;
+
+/**
+ * The file line number of every line of a numbered read, or null when any
+ * non-empty line lacks one -- in which case the block cannot be mapped onto the
+ * file and must not be cited as if it could.
+ */
+export function fileLineNumbers(lines: readonly string[]): number[] | null {
+  const numbers: number[] = [];
+  let last = 0;
+  let numbered = 0;
+  for (const line of lines) {
+    const match = LINE_NUMBER_PREFIX.exec(line);
+    if (match) {
+      last = Number(match[1]);
+      numbered += 1;
+    } else if (line.trim()) {
+      return null;
+    }
+    // A blank line (the trailing newline) keeps the previous number, so an index
+    // past the last numbered line still resolves to a line in the file.
+    numbers.push(last);
+  }
+  return numbered > 0 ? numbers : null;
+}
+
 function extensionOf(path?: string): string {
   if (!path) return '';
   const base = path.split(/[/\\]/).pop() || '';
@@ -517,7 +544,26 @@ function compressCodeBody(text: string, ctx: EngineContext): CompressionResult {
   // the empty-string check and the one-path-per-content memo, which is how the
   // same file read three times in one request became three spill files and
   // three round trips.
-  const anchorPath = ctx.sourcePath ?? spillFor(ctx, text, 'block.txt');
+  //
+  // THE FILE IS CITED ONLY WITH THE FILE'S OWN LINE NUMBERS. A tool result is
+  // rarely the file from line 1: a read with an offset starts wherever it was
+  // asked to, and each line carries its file line number as a prefix. Citing
+  // `file:14-19` for the 14th to 19th lines OF THE RESULT sent a reader to the
+  // wrong code -- observed reading adapter.mjs from line 1591, whose markers
+  // pointed at lines 14-19 (issue #473). With the prefixes the range is
+  // translated; without them the spill is cited instead, whose numbering is the
+  // block's by construction.
+  // The router's numbers apply only to the text it stripped: content nested
+  // inside a string of that text has its own lines, and a length match is what
+  // tells the two apart.
+  const fileLines = !ctx.sourcePath
+    ? null
+    : ctx.sourceLines && ctx.sourceLines.length === lines.length
+      ? ctx.sourceLines
+      : fileLineNumbers(lines);
+  const anchorPath = fileLines
+    ? ctx.sourcePath
+    : spillFor(ctx, text, 'block.txt');
 
   for (const [from, to] of spans) {
     const lineCount = to - from + 1;
@@ -533,9 +579,15 @@ function compressCodeBody(text: string, ctx: EngineContext): CompressionResult {
     // on exactly the content it was built for. The proof gate caught that:
     // code-search compressed 0%.
     //
-    // Either way the line numbers are the ORIGINAL block's, so a range means
-    // the same thing whether it points at the real file or at the spill.
-    const where = anchorPath ? span(anchorPath, from, to) : null;
+    // Either way the range addresses the lines that were removed: the file's
+    // numbering when the file is cited, the block's when the spill is.
+    const where = !anchorPath
+      ? null
+      : fileLines
+        ? fileLines[from - 1] >= 1
+          ? span(anchorPath, fileLines[from - 1], fileLines[to - 1])
+          : null
+        : span(anchorPath, from, to);
     if (!where) continue;
 
     for (let line = from; line <= to; line += 1) elided.add(line);

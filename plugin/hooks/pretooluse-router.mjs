@@ -24,6 +24,8 @@ import {
   mode,
   MODE_OFF,
   MODE_ASSIST,
+  precedeWith,
+  subagentBriefing,
 } from './lib/policy.mjs';
 import {
   decide,
@@ -41,6 +43,7 @@ import { recordingNudge, isSubstantive } from './lib/recording.mjs';
 import {
   wikiDir,
   load,
+  loadFindings,
   harvest,
   projectRootFor,
   contentHash,
@@ -183,6 +186,13 @@ try {
   const state = loadState(payload.session_id, agentScope);
   const toolEvidence = optimizerToolsForHook(raw, state);
   rememberOptimizerTools(state, toolEvidence);
+  // A subagent never sees SessionStart, so its first tool call carries the
+  // guidance instead, on whichever exit this call takes.
+  const briefing = subagentBriefing(raw, state);
+  if (briefing) {
+    precedeWith(briefing);
+    saveState(payload.session_id, state, agentScope);
+  }
   const ucrGuardVerdict = evaluateUcrGuards(
     payload,
     touchedFiles(payload).map((item) => item.path)
@@ -306,7 +316,7 @@ try {
           // there never fired -- no injection, no metrics row, no error.
           const root = commandProjectRoot(payload, payload.cwd);
           const dir = wikiDir(root);
-          const note = forCommand(dir, load(dir), command, {
+          const note = forCommand(dir, loadFindings(dir), command, {
             sessionId: payload.session_id,
             alreadyInjected,
             episode,

@@ -397,7 +397,10 @@ export function compressBlock(
   // see readNumbering, where the measurement is recorded.
   const numbering = readNumbering(text);
   if (numbering) {
-    const inner = routed(numbering.stripped, stamped);
+    const inner = routed(numbering.stripped, {
+      ...stamped,
+      sourceLines: numbering.lineNumbers,
+    });
     if (inner.text === numbering.stripped) return carry(unchanged(text));
     // Only exact inserted markers may be unnumbered; rewrites fail closed.
     const restored = numbering.restore(inner.text, inner.insertedLines);

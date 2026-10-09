@@ -54,6 +54,11 @@ export interface Numbering {
   /** The content with its line numbers removed. */
   readonly stripped: string;
   /**
+   * The removed number of each stripped line. An unnumbered line -- a trailing
+   * blank, a truncation notice -- carries the number before it, 0 at the start.
+   */
+  readonly lineNumbers: readonly number[];
+  /**
    * Puts the original numbers back on the lines that survived.
    *
    * Exact inserted marker lines are the only unmatched lines permitted.
@@ -82,9 +87,14 @@ export function readNumbering(text: string): Numbering | null {
 
   const bare = parsed.map((m, i) => (m ? m[3] : lines[i]));
   const labels = parsed.map((m) => (m ? `${m[1]}${m[2]}\t` : ''));
+  let previous = 0;
+  const lineNumbers = parsed.map((m) =>
+    m ? (previous = Number(m[2])) : previous
+  );
 
   return {
     stripped: bare.join('\n'),
+    lineNumbers,
     restore(
       compressed: string,
       insertedLines: readonly string[] = []
