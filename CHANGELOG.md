@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.4.3](https://github.com/ooples/token-optimizer-mcp/compare/v7.4.2...v7.4.3) (2026-10-09)
+
+
+### Bug Fixes
+
+* **ci:** tell a slow npm queue apart from a broken release ([#468](https://github.com/ooples/token-optimizer-mcp/issues/468)) ([2a41117](https://github.com/ooples/token-optimizer-mcp/commit/2a41117ae276fb74ab57aa97e79e976ef49c5297))
+* **hooks:** an outline carries what it cannot say, not the structure again ([#483](https://github.com/ooples/token-optimizer-mcp/issues/483)) ([5ffc9ba](https://github.com/ooples/token-optimizer-mcp/commit/5ffc9bad61f55040610ac3ef80e2c3253e71d3fb))
+* **hooks:** count each pre-tool call, rather than keeping the larger snapshot ([#481](https://github.com/ooples/token-optimizer-mcp/issues/481)) ([9c05f11](https://github.com/ooples/token-optimizer-mcp/commit/9c05f11a2a4516c4f966fc89f5c671fe5f390e49))
+* **hooks:** outline large reads in assist mode and price long sessions correctly ([#479](https://github.com/ooples/token-optimizer-mcp/issues/479)) ([42e698a](https://github.com/ooples/token-optimizer-mcp/commit/42e698adf557250d5aa79a603b73de868ab96d98))
+* **hooks:** subagents get read substitution, paged reads pass through, advisories said once ([#474](https://github.com/ooples/token-optimizer-mcp/issues/474)) ([cfc5915](https://github.com/ooples/token-optimizer-mcp/commit/cfc59155efe483a77080a1af0f7c9c0c7b815d1d))
+* stop claiming proof for a bundled optimizer tool inventory ([#470](https://github.com/ooples/token-optimizer-mcp/issues/470)) ([07362fe](https://github.com/ooples/token-optimizer-mcp/commit/07362fe02a6e7887a0cc8d6d22835948eee095ee))
+
+
+### Performance
+
+* cache structural ranges so a repeated log line is scanned once ([#475](https://github.com/ooples/token-optimizer-mcp/issues/475)) ([a57c802](https://github.com/ooples/token-optimizer-mcp/commit/a57c802838efa9f9462dfbca105aca2fa8179319)), closes [#441](https://github.com/ooples/token-optimizer-mcp/issues/441) [#436](https://github.com/ooples/token-optimizer-mcp/issues/436)
+* memoise token cost so the json engine stops recounting the same fragments ([#472](https://github.com/ooples/token-optimizer-mcp/issues/472)) ([2b8ed91](https://github.com/ooples/token-optimizer-mcp/commit/2b8ed91acc561bde186953f8be8f8318a6465bee))
+* ship the hook core once and compose each client copy into its destination ([#480](https://github.com/ooples/token-optimizer-mcp/issues/480)) ([1e40f56](https://github.com/ooples/token-optimizer-mcp/commit/1e40f564d100e88a501099ce7bbfce3515146940))
+
+
+### Refactoring
+
+* compose vendored hook copies through the shared module ([#476](https://github.com/ooples/token-optimizer-mcp/issues/476)) ([0077661](https://github.com/ooples/token-optimizer-mcp/commit/00776613ea980b18a38736fab92ab171c3baf10c))
+
 ## [7.4.2](https://github.com/ooples/token-optimizer-mcp/compare/v7.4.1...v7.4.2) (2026-10-08)
 
 
