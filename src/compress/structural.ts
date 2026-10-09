@@ -203,7 +203,82 @@ export function isSecretLike(token: string): boolean {
  * Ranges rather than tokens because callers need to ask "does this match
  * overlap something protected", which is a position question.
  */
+/**
+ * CACHED BECAUSE THIS RUNS ONCE PER LINE AND THE LINES REPEAT.
+ *
+ * A build log asks the same question about the same text over and over: one
+ * `compressBlock` of the gate's `raw-build-log` payload made 2,697 calls over
+ * 1,536 distinct lines, so 1,161 of them re-scanned a line already scanned,
+ * and `codebase-exploration` 838 over 453. The scan is a regex sweep plus an
+ * entropy score per candidate identifier, and it profiles at 24.9% of the
+ * samples in that call -- the largest single item on that payload.
+ *
+ * EVERY HIT IS COPIED OUT, tuples and all. Callers treat the result as their
+ * own: `variableSpans` in log.ts appends to it and sorts it in place (log.ts
+ * says so in as many words), and the merge below mutates `last[1]` while it
+ * runs. Handing back the stored array would let the first caller rewrite what
+ * every later caller is told, which is a wrong-output bug rather than a
+ * crash. A line carries a handful of ranges, so the copy is nothing beside the
+ * scan it replaces.
+ *
+ * Bounded on entries and on retained key bytes (two per UTF-16 code unit),
+ * cleared wholesale, and a key too large to fit the bound alone is answered
+ * without being stored -- the same contract as `tokenCost`'s cache.
+ */
+const RANGES_CACHE = new Map<
+  string,
+  ReadonlyArray<readonly [number, number]>
+>();
+const RANGES_CACHE_ENTRIES = 8192;
+const RANGES_CACHE_BYTES = 4 * 1024 * 1024;
+let rangesCacheBytes = 0;
+
+function copyRanges(
+  ranges: ReadonlyArray<readonly [number, number]>
+): Array<[number, number]> {
+  const out: Array<[number, number]> = [];
+  for (const r of ranges) out.push([r[0], r[1]]);
+  return out;
+}
+
+/** The cache's occupancy, exported so its bound is testable as an invariant. */
+export function structuralRangesCacheOccupancy(): {
+  entries: number;
+  bytes: number;
+  maxEntries: number;
+  maxBytes: number;
+} {
+  return {
+    entries: RANGES_CACHE.size,
+    bytes: rangesCacheBytes,
+    maxEntries: RANGES_CACHE_ENTRIES,
+    maxBytes: RANGES_CACHE_BYTES,
+  };
+}
+
 export function structuralRanges(text: string): Array<[number, number]> {
+  const memo = RANGES_CACHE.get(text);
+  if (memo !== undefined) return copyRanges(memo);
+
+  const computed = computeStructuralRanges(text);
+
+  const retained = text.length * 2;
+  if (retained > RANGES_CACHE_BYTES) return computed;
+  if (
+    RANGES_CACHE.size >= RANGES_CACHE_ENTRIES ||
+    rangesCacheBytes + retained > RANGES_CACHE_BYTES
+  ) {
+    RANGES_CACHE.clear();
+    rangesCacheBytes = 0;
+  }
+  // Stored as its own copy, so the array handed to this caller is theirs to
+  // mutate without reaching what the next caller is told.
+  RANGES_CACHE.set(text, copyRanges(computed));
+  rangesCacheBytes += retained;
+  return computed;
+}
+
+function computeStructuralRanges(text: string): Array<[number, number]> {
   // NO TOKEN, NO SHAPE. Every pattern in SHAPES needs an unbroken run of at
   // least eight characters from TOKEN's own class -- a UUID is 36 of them, the
   // shortest vendor key 14, a bare hex id 32, and even a JWT opens with
