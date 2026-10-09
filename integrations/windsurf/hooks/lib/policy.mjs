@@ -351,6 +351,27 @@ const stateRoot = () =>
  * must keep sharing one state, or the once-per-session gates would reset on
  * every tool call.
  */
+/**
+ * What `toolCalls` held when a snapshot was handed out, per snapshot.
+ *
+ * WHY A COUNT NEEDS THIS AND A TALLY DOES NOT. Every other count here merges by
+ * `Math.max`, which is right when being low costs a late reminder. This one
+ * prices an outline: two hooks that each load a session at n, each count their
+ * own call, and each save n+1 leave it at n+1, so a call is forgotten and the
+ * next hook prices from a stale position.
+ *
+ * Knowing what the snapshot STARTED at turns the save into "add what this
+ * caller counted" instead of "keep the larger number", so concurrent callers
+ * sum. A WeakMap keyed on the snapshot, because the unit that counts is one
+ * loaded state: a module-level number would make two snapshots in one process
+ * share a claim, and a field on the state would be a field that does not
+ * survive a reload -- which is the one thing session state may not have
+ * (tests/hooks/state-fields-survive-reload.test.mjs).
+ *
+ * Nothing is persisted and nothing is held: an entry dies with its snapshot.
+ */
+const loadedCalls = new WeakMap();
+
 function statePath(sessionId, agent) {
   // Session ids come from the harness and are uuid-shaped, but they land in a
   // file path, so anything that could traverse is stripped rather than trusted.
@@ -401,13 +422,19 @@ function emptyState() {
  * have been "enforcement silently stops working for this session", which is
  * exactly the kind of quiet failure that never gets reported.
  */
+/** Remembers a snapshot's starting count and returns it. */
+function tracked(state) {
+  loadedCalls.set(state, Number(state.toolCalls) || 0);
+  return state;
+}
+
 export function loadState(sessionId, agent) {
   try {
     const parsed = JSON.parse(
       readFileSync(statePath(sessionId, agent), 'utf8')
     );
-    if (!parsed || typeof parsed !== 'object') return emptyState();
-    return {
+    if (!parsed || typeof parsed !== 'object') return tracked(emptyState());
+    return tracked({
       seen: parsed.seen && typeof parsed.seen === 'object' ? parsed.seen : {},
       denied:
         parsed.denied && typeof parsed.denied === 'object' ? parsed.denied : {},
@@ -501,9 +528,9 @@ export function loadState(sessionId, agent) {
       optimizerToolsObservedAt: Number.isFinite(parsed.optimizerToolsObservedAt)
         ? parsed.optimizerToolsObservedAt
         : 0,
-    };
+    });
   } catch {
-    return emptyState();
+    return tracked(emptyState());
   }
 }
 
@@ -523,6 +550,12 @@ export function loadState(sessionId, agent) {
  * but it turns "last writer wins" into "union of writers", which is the
  * behaviour the two maps actually want, since both are append-only sets.
  */
+/** How many calls this snapshot counted since it was loaded. */
+function countedBy(state) {
+  if (!loadedCalls.has(state)) return 0;
+  return Math.max(0, (Number(state.toolCalls) || 0) - loadedCalls.get(state));
+}
+
 export function saveState(sessionId, state, agent) {
   let lock = null;
   try {
@@ -646,9 +679,18 @@ export function saveState(sessionId, state, agent) {
         ...new Set([...(current.routingAdvised || []), ...(state.routingAdvised || [])]),
       ].slice(-200),
       subagentBriefed: Boolean(current.subagentBriefed || state.subagentBriefed),
-      // A count, so the larger wins: two processes that each counted one more call
-      // must not move it backwards.
-      toolCalls: Math.max(Number(current.toolCalls) || 0, Number(state.toolCalls) || 0),
+      // ADDED, NOT MAXED: what this caller counted goes on top of what the
+      // locked read found, so a concurrent hook's call is not forgotten. See
+      // `loadedCalls` above for why this one count is merged differently.
+      //
+      // Floored by the snapshot, so the count stays monotonic if the state file
+      // was cleared between load and save; and a snapshot this module never
+      // handed out contributes nothing, which keeps a hand-built state (every
+      // caller in the tests) behaving exactly as it did.
+      toolCalls: Math.max(
+        (Number(current.toolCalls) || 0) + countedBy(state),
+        Number(state.toolCalls) || 0
+      ),
       seenUrls: { ...(current.seenUrls || {}), ...(state.seenUrls || {}) },
       // An inventory is a point-in-time observation, not an append-only set.
       // Union would resurrect a tool after a newer host payload explicitly
@@ -681,6 +723,12 @@ export function saveState(sessionId, state, agent) {
     const temporary = `${target}.${process.pid}.tmp`;
     writeFileSync(temporary, JSON.stringify(merged), { mode: 0o600 });
     renameSync(temporary, target);
+    // Counted and persisted, so the second save of one pre-tool call -- the
+    // router saves for a subagent briefing and again for its verdict -- adds
+    // nothing. After the rename, because a throw above leaves the delta owed.
+    if (loadedCalls.has(state)) {
+      loadedCalls.set(state, Number(state.toolCalls) || 0);
+    }
   } catch {
     // State is an optimization, not a requirement. Losing it degrades re-read
     // detection to size-only -- the old behaviour -- and never blocks anyone.

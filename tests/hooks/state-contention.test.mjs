@@ -108,3 +108,53 @@ describe('a held lock', () => {
     expect(existsSync(lockPath(session))).toBe(false);
   });
 });
+
+describe('the pre-tool count under contention', () => {
+  /** What a pre-tool hook does to its snapshot before it saves. */
+  const countOneCall = (state) => {
+    state.toolCalls = (Number(state.toolCalls) || 0) + 1;
+    return state;
+  };
+
+  it('adds each writer call rather than keeping the larger snapshot', () => {
+    // TWO HOOK PROCESSES, ONE POSITION. Both load the session at 0 -- which is
+    // what parallel tool calls do -- and both count their own call. A merge
+    // that took the larger snapshot kept 1, so the session forgot a call and
+    // the next hook priced its outline from a stale position.
+    const first = countOneCall(loadState(session));
+    const second = countOneCall(loadState(session));
+
+    saveState(session, first);
+    saveState(session, second);
+
+    expect(loadState(session).toolCalls).toBe(2);
+  });
+
+  it('counts one call once even when the same hook saves twice', () => {
+    // The router saves for a subagent briefing and again for its verdict, both
+    // for ONE pre-tool call, so the claim has to be settled by the first write.
+    const state = countOneCall(loadState(session));
+    saveState(session, state);
+    saveState(session, state);
+
+    expect(loadState(session).toolCalls).toBe(1);
+  });
+
+  it('keeps the count monotonic when the state file is gone', () => {
+    // A cleared or rolled-back state file must not reopen a session at zero:
+    // the snapshot is still the floor.
+    const state = countOneCall(loadState(session));
+    state.toolCalls = 7;
+    saveState(session, state);
+
+    expect(loadState(session).toolCalls).toBe(7);
+  });
+
+  it('adds nothing for a state this module never handed out', () => {
+    // Every other caller in these tests builds its own object, and a hook that
+    // assigns a count without loading one has counted nothing to add. The
+    // snapshot is still the floor, so the number it names is what lands.
+    saveState(session, { seen: {}, denied: {}, toolCalls: 4 });
+    expect(loadState(session).toolCalls).toBe(4);
+  });
+});
