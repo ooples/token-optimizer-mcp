@@ -115,16 +115,29 @@ describe('the cache is bounded', () => {
   it('refuses to cache a fragment that cannot fit the bound on its own', () => {
     // REVIEW FINDING ON #472, AND A REAL ONE. The guard used to clear and then
     // insert regardless, so a single oversized key sat in a long-lived server
-    // with occupancy above its own declared ceiling: a 5MB string measured
-    // 5,242,880 bytes retained against a 4,194,304 maximum. Every key in the
-    // test above is 1KB, which is why none of them caught it.
-    const oversized = 'x'.repeat(5 * 1024 * 1024);
-    expect(tokenCost(oversized)).toBe(walkCost(oversized));
-    const held = tokenCostCacheOccupancy();
-    expect(held.bytes).toBeLessThanOrEqual(held.maxBytes);
+    // with occupancy above its own declared ceiling. Every key in the test
+    // above is 1KB, which is why none of them caught it.
+    //
+    // BUILT FROM MANY SHORT TOKENS, and sized from `maxBytes` rather than a
+    // hardcoded number. A first version used `'x'.repeat(5 * 1024 * 1024)`,
+    // which the pretoken pattern matches as ONE multi-million-character match:
+    // that overflowed the regex backtracking stack under coverage and failed
+    // all four CI Node shards with `Maximum call stack size exceeded` while
+    // passing under a bare `jest` run locally.
+    const bound = tokenCostCacheOccupancy().maxBytes;
+    const oversized = 'word '.repeat(Math.ceil(bound / 2 / 5) + 1);
+    expect(oversized.length * 2).toBeGreaterThan(bound);
+
+    const expected = walkCost(oversized);
+    const before = tokenCostCacheOccupancy();
+    expect(tokenCost(oversized)).toBe(expected);
+    const after = tokenCostCacheOccupancy();
+    // Refused outright: nothing stored, and nothing evicted to make room.
+    expect(after.bytes).toBe(before.bytes);
+    expect(after.entries).toBe(before.entries);
+    expect(after.bytes).toBeLessThanOrEqual(after.maxBytes);
     // Still answers correctly on the way back out, uncached.
-    expect(tokenCost(oversized)).toBe(walkCost(oversized));
-    expect(tokenCostCacheOccupancy().bytes).toBeLessThanOrEqual(held.maxBytes);
+    expect(tokenCost(oversized)).toBe(expected);
   });
 
   it('accounts a multibyte fragment at two bytes per code unit', () => {
@@ -146,15 +159,18 @@ describe('the cache is bounded', () => {
   });
 
   it('refuses a multibyte fragment whose retention exceeds the bound', () => {
-    // 3M code units is under the 4MiB ceiling counted as a raw length and over
-    // it counted as retention, which is the case the measure above exists for.
-    const huge = '\u6f22'.repeat(3 * 1024 * 1024);
-    // MEASURED AS A DELTA, not against total occupancy: the tests above leave
-    // a working set behind, so an absolute reading here would be about them.
+    // The case the measure exists for: counted as code units this fits under
+    // the ceiling, counted as retention it does not. Short tokens again, for
+    // the stack reason given above.
+    const bound = tokenCostCacheOccupancy().maxBytes;
+    const units = Math.ceil(bound / 2 / 3) + 1;
+    const huge = '\u6f22\u5b57 '.repeat(units);
+    expect(huge.length).toBeLessThan(bound);
+    expect(huge.length * 2).toBeGreaterThan(bound);
+
     const before = tokenCostCacheOccupancy();
     expect(tokenCost(huge)).toBe(walkCost(huge));
     const after = tokenCostCacheOccupancy();
-    // Refused outright, so nothing is stored AND nothing is evicted for it.
     expect(after.bytes).toBe(before.bytes);
     expect(after.entries).toBe(before.entries);
     expect(after.bytes).toBeLessThanOrEqual(after.maxBytes);
