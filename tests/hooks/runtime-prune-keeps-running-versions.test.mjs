@@ -41,6 +41,7 @@ const LAUNCHER = pathToFileURL(
 
 let runtime;
 let versionsDir;
+let shellProfiles = [];
 
 /** A pid that is not running: claimed at the top of the pid space. */
 const DEAD_PID = 0x7ffffffe;
@@ -84,6 +85,11 @@ function pruneInFreshProcess(keepVersion, keepCount, alsoKeep) {
     ...process.env,
     TOKEN_OPTIMIZER_LAUNCH_IMPORT_ONLY: '1',
     TOKEN_OPTIMIZER_RUNTIME: runtime,
+    // Every place a managed launcher can name a version, inside this case's
+    // own directory, so the operator's real launchers never pin anything here.
+    TOKEN_OPTIMIZER_HOME: join(runtime, 'home'),
+    TOKEN_OPTIMIZER_SHELL_PROFILES: JSON.stringify(shellProfiles),
+    TOKEN_OPTIMIZER_SETTINGS: join(runtime, 'settings.json'),
   };
   if (keepCount === undefined) delete env.TOKEN_OPTIMIZER_RUNTIME_KEEP;
   else env.TOKEN_OPTIMIZER_RUNTIME_KEEP = String(keepCount);
@@ -106,7 +112,12 @@ beforeEach(() => {
   runtime = mkdtempSync(join(tmpdir(), 'runtime-prune-'));
   versionsDir = join(runtime, 'versions');
   mkdirSync(versionsDir, { recursive: true });
+  shellProfiles = [];
 });
+
+/** The path a managed launcher embeds for `version`, as the installer writes it. */
+const runClientPath = (version) =>
+  `C:/Users/someone/.token-optimizer/runtime/versions/${version}/node_modules/@ooples/token-optimizer-mcp/scripts/run-client.mjs`;
 
 afterEach(() => {
   try {
@@ -290,6 +301,75 @@ it('is not confused by an in-flight atomic write', () => {
     const left = pruneInFreshProcess('6.0.3', 2);
 
     expect(left.sort()).toEqual(['6.0.2', '6.0.3']);
+  }, 60_000);
+
+  it('keeps a version a managed launcher still names, with nothing running', () => {
+    // THE 2026-10-12 REGRESSION. `codex.cmd` was written by 7.3.0 and never
+    // repointed (repair is not enabled on the stable channel). When 7.4.4 made
+    // a fourth version, retention dropped 7.3.0 and every `codex` launch failed
+    // on `Cannot find module ...\versions\7.3.0\...\run-client.mjs`.
+    makeVersion('7.3.0', 40_000);
+    makeVersion('7.4.2', 6_000);
+    makeVersion('7.4.3', 1_500);
+    makeVersion('7.4.4', 1);
+    const bin = join(runtime, 'home', 'bin');
+    mkdirSync(bin, { recursive: true });
+    writeFileSync(
+      join(bin, 'codex.cmd'),
+      `@echo off\r\nrem token-optimizer managed launcher v1\r\n"C:\\node.exe" "${runClientPath('7.3.0')}" codex %*\r\n`
+    );
+
+    const left = pruneInFreshProcess('7.4.4', undefined, '7.4.3');
+
+    expect(left.sort()).toEqual(['7.3.0', '7.4.2', '7.4.3', '7.4.4']);
+  }, 60_000);
+
+  it('keeps a version a shell profile or a Claude hook command names', () => {
+    makeVersion('6.0.0', 9_000);
+    makeVersion('6.0.1', 8_000);
+    makeVersion('6.0.2', 30);
+    makeVersion('6.0.3', 20);
+    makeVersion('6.0.4', 10);
+    const profile = join(runtime, 'profile.ps1');
+    writeFileSync(profile, `function codex { & node '${runClientPath('6.0.0')}' codex @args }\n`);
+    shellProfiles = [profile];
+    writeFileSync(
+      join(runtime, 'settings.json'),
+      JSON.stringify({
+        hooks: {
+          Stop: [
+            {
+              hooks: [
+                {
+                  type: 'command',
+                  command: `node "C:/x/.token-optimizer/runtime/versions/6.0.1/node_modules/@ooples/token-optimizer-mcp/plugin/hooks/stop.mjs" --token-optimizer-hook`,
+                },
+              ],
+            },
+          ],
+        },
+      })
+    );
+
+    const left = pruneInFreshProcess('6.0.4');
+
+    expect(left.sort()).toEqual(['6.0.0', '6.0.1', '6.0.2', '6.0.3', '6.0.4']);
+  }, 60_000);
+
+  it('still prunes an old version once no launcher names it (control)', () => {
+    // The same layout as the launcher case, with the launcher repointed: the
+    // retention count applies again, so pinning is not hoarding.
+    makeVersion('7.3.0', 40_000);
+    makeVersion('7.4.2', 6_000);
+    makeVersion('7.4.3', 1_500);
+    makeVersion('7.4.4', 1);
+    const bin = join(runtime, 'home', 'bin');
+    mkdirSync(bin, { recursive: true });
+    writeFileSync(join(bin, 'codex.cmd'), `"C:\\node.exe" "${runClientPath('7.4.4')}" codex %*\r\n`);
+
+    const left = pruneInFreshProcess('7.4.4', undefined, '7.4.3');
+
+    expect(left.sort()).toEqual(['7.4.2', '7.4.3', '7.4.4']);
   }, 60_000);
 
   it('survives a versions directory that is not there', () => {
