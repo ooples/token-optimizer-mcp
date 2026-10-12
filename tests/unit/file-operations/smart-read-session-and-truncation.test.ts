@@ -180,19 +180,68 @@ describe('#489 truncation keeps the top, and chunkIndex pages a file over maxSiz
     expect(content).not.toContain('[truncated]');
   });
 
-  it('holds a paged chunk to maxSize when one line is longer than chunkSize', async () => {
-    // Chunks break at lines, so a one-line minified file is a single chunk --
-    // and paging a file over maxSize would otherwise return all of it.
+  it('pages every byte of a one-line file, each reply within maxSize', async () => {
+    // Chunks break at lines, so a one-line minified file used to be one chunk:
+    // cut to maxSize it read "chunk 1 of 1" and the rest was unreachable.
     const { dir, cache } = workspace();
     const file = join(dir, 'bundle.min.js');
-    writeFileSync(file, 'var a=1;'.repeat(50_000)); // 400 KB on one line
-    const { content } = await reader(cache).read(file, {
+    const body = Array.from({ length: 50_000 }, (_, i) => `v${i % 10}=1;`).join(
+      ''
+    ); // ~250 KB
+    writeFileSync(file, body);
+    const tool = reader(cache);
+    const footer =
+      /\n\n\/\/ \[chunk (\d+) of (\d+)\. Call smart_read again with chunkIndex=<n> for another\.\]$/;
+
+    const first = await tool.read(file, {
       maxSize: 10_000,
       chunkSize: 4_000,
       chunkIndex: 0,
     });
-    expect(content.length).toBeLessThanOrEqual(10_000 + 200); // + the chunk footer
-    expect(content).toContain('[chunk 1 of 1');
+    const total = Number(footer.exec(first.content)?.[2]);
+    expect(total).toBeGreaterThan(1);
+
+    let reassembled = '';
+    for (let i = 0; i < total; i++) {
+      const { content } = await tool.read(file, {
+        maxSize: 10_000,
+        chunkSize: 4_000,
+        chunkIndex: i,
+      });
+      expect(content.length).toBeLessThanOrEqual(10_000);
+      const match = footer.exec(content);
+      expect(Number(match?.[1])).toBe(i + 1);
+      reassembled += content.slice(
+        0,
+        content.length - (match?.[0].length ?? 0)
+      );
+    }
+    expect(reassembled).toBe(body);
+  });
+
+  it('counts the chunk footer inside maxSize', async () => {
+    const { dir, cache } = workspace();
+    const file = join(dir, 'lines.txt');
+    writeFileSync(file, notes);
+    // chunkSize equal to maxSize: the footer used to be added on top of a full chunk.
+    for (const chunkIndex of [0, 1, 2]) {
+      const { content } = await reader(cache).read(file, {
+        maxSize: 4_000,
+        chunkSize: 4_000,
+        chunkIndex,
+      });
+      expect(content.length).toBeLessThanOrEqual(4_000);
+      expect(content).toContain(`[chunk ${chunkIndex + 1} of`);
+    }
+  });
+
+  it('refuses to page when maxSize cannot hold the footer, rather than overrunning it', async () => {
+    const { dir, cache } = workspace();
+    const file = join(dir, 'tiny.txt');
+    writeFileSync(file, notes);
+    await expect(
+      reader(cache).read(file, { maxSize: 50, chunkSize: 40, chunkIndex: 0 })
+    ).rejects.toThrow(/cannot page within maxSize=50/);
   });
 
   it('never returns more than maxSize, even when every line is structural', () => {

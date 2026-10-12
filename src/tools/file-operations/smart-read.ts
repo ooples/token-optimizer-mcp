@@ -46,6 +46,14 @@ import {
   isMinified,
 } from '../shared/syntax-utils.js';
 
+/** The navigation line appended to a chunk. Counted in its maxSize budget. */
+function chunkFooter(index: number, count: number): string {
+  return (
+    `\n\n// [chunk ${index + 1} of ${count}. ` +
+    `Call smart_read again with chunkIndex=<n> for another.]`
+  );
+}
+
 export interface SmartReadOptions {
   // Cache options
   enableCache?: boolean;
@@ -358,7 +366,23 @@ export class SmartReadTool {
     ) {
       // Only chunk if file fits within maxSize but is larger than chunkSize
       // This allows for structured navigation of medium-sized files
-      const allChunks = chunkBySyntax(rawContent, chunkSize).chunks;
+      // THE REPLY, FOOTER INCLUDED, FITS maxSize (#489 review). The footer was
+      // appended after the chunk was sized, so a chunk near the limit went over
+      // it. Room for the longest footer this can emit is reserved first, and
+      // the chunks are cut to what is left -- with long lines split, so every
+      // chunk fits and no byte is unreachable. A maxSize too small to hold a
+      // footer and any content cannot page at all, and says so.
+      const bodyBudget = maxSize - chunkFooter(999_999, 1_000_000).length;
+      if (bodyBudget < 1) {
+        throw new Error(
+          `smart_read cannot page within maxSize=${maxSize}: the chunk footer alone needs ` +
+            `${chunkFooter(999_999, 1_000_000).length} characters. Pass a larger maxSize.`
+        );
+      }
+      const allChunks = chunkBySyntax(
+        rawContent,
+        Math.min(chunkSize, bodyBudget)
+      ).chunks;
       chunked = true;
       chunkCount = allChunks.length;
 
@@ -376,21 +400,8 @@ export class SmartReadTool {
           ? requested
           : 0;
 
-      // A CHUNK CAN STILL OVERRUN maxSize: chunks break at lines, so one line
-      // longer than chunkSize -- a minified bundle -- is a chunk of its own.
-      // Now that a file over maxSize can be paged, that chunk would be the whole
-      // file, so it is held to maxSize like any other reply.
-      const chunk = allChunks[chunkIndex];
-      const body =
-        chunk.length > maxSize
-          ? truncateContent(chunk, maxSize, { keepTop: 100, keepBottom: 50 })
-              .truncated
-          : chunk;
-      if (body !== chunk) truncated = true;
       finalContent =
-        body +
-        `\n\n// [chunk ${chunkIndex + 1} of ${allChunks.length}. ` +
-        `Call smart_read again with chunkIndex=<n> for another.]`;
+        allChunks[chunkIndex] + chunkFooter(chunkIndex, allChunks.length);
     }
     // Advance the read base after an edit too. Leaving a cache hit pinned to
     // its old bytes would return the same diff on every subsequent read.

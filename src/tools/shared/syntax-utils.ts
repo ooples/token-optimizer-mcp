@@ -63,7 +63,30 @@ export function chunkBySyntax(
   content: string,
   maxChunkSize: number = 4000
 ): ChunkResult {
-  const lines = content.split('\n');
+  const sourceLines = content.split('\n');
+
+  // A LINE LONGER THAN A CHUNK IS SPLIT ACROSS CHUNKS (#489 review). Chunks
+  // break at lines, so one minified line used to be a single chunk of any
+  // size: either over the limit the caller set, or -- once cut down to it --
+  // a "chunk 1 of 1" whose remaining bytes no chunkIndex could reach. Each
+  // full-size piece fills a chunk of its own, so no newline is invented inside
+  // a chunk; a boundary between chunks never claims one. `lineOf` keeps the
+  // metadata's line numbers those of the file.
+  const size = Math.max(1, Math.floor(maxChunkSize));
+  const lines: string[] = [];
+  const lineOf: number[] = [];
+  sourceLines.forEach((line, index) => {
+    if (line.length <= size) {
+      lines.push(line);
+      lineOf.push(index);
+      return;
+    }
+    for (let at = 0; at < line.length; at += size) {
+      lines.push(line.slice(at, at + size));
+      lineOf.push(index);
+    }
+  });
+
   const chunks: string[] = [];
   const metadata: ChunkMetadata[] = [];
   let currentChunk: string[] = [];
@@ -82,8 +105,8 @@ export function chunkBySyntax(
       chunks.push(chunkContent);
       metadata.push({
         index: chunkIndex++,
-        startLine,
-        endLine: i - 1,
+        startLine: lineOf[startLine],
+        endLine: lineOf[i - 1],
         size: currentSize,
         type: detectLineType(currentChunk[0]),
       });
@@ -104,8 +127,8 @@ export function chunkBySyntax(
     chunks.push(chunkContent);
     metadata.push({
       index: chunkIndex,
-      startLine,
-      endLine: lines.length - 1,
+      startLine: lineOf[startLine],
+      endLine: sourceLines.length - 1,
       size: currentSize,
       type: detectLineType(currentChunk[0]),
     });
