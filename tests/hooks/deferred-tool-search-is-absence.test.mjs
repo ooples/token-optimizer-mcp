@@ -106,6 +106,17 @@ describe('a tool search is evidence about the tools it looked for', () => {
     ]);
   });
 
+  test('an overlong announced name is not a pattern subject', () => {
+    // A search pattern is run against each announced name, and the quantifier
+    // limit is only safe for a short subject; real names are under 70 characters.
+    const long = `mcp__${'s'.repeat(120)}__wiki_write`;
+    const path = transcript([
+      announced([long]),
+      regexSearch('s1', `${'s'.repeat(120)}__wiki_write$`, [], { limit: 1 }),
+    ]);
+    expect(toolSearchOutcomesFromTranscript(path)).toEqual({ missed: [], loaded: [] });
+  });
+
   test('a search that does not cover the tool says nothing about it', () => {
     const path = transcript([
       regexSearch('s1', '^(WebSearch|WebFetch)$', [], { limit: 5 }),

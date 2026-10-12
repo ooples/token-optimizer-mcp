@@ -709,6 +709,9 @@ export function absentToolsFromTranscript(transcriptPath, options = {}) {
   return [...absent].map(([name, at]) => ({ name, at }));
 }
 
+/** The longest announced tool name a search pattern is tested against. */
+const MAX_CANDIDATE_NAME = 96;
+
 /** Search tools whose result names the deferred tools they loaded (#484). */
 const TOOL_SEARCH_NAMES = /^(?:tool_search_tool_\w+|ToolSearch)$/;
 
@@ -836,7 +839,12 @@ export function toolSearchOutcomesFromTranscript(transcriptPath, options = {}) {
     if (entry.attachment?.type === 'deferred_tools_delta' && Array.isArray(announced)) {
       for (const qualified of announced) {
         const name = optimizerToolName(qualified);
-        if (name) candidates.set(String(qualified), name);
+        // BOUNDED, because a search pattern runs against it: the quantifier
+        // limit in safeTrigger is safe only for a short subject, and a server
+        // can be named anything. Real qualified names are under 70 characters.
+        if (name && String(qualified).length <= MAX_CANDIDATE_NAME) {
+          candidates.set(String(qualified), name);
+        }
       }
       continue;
     }
