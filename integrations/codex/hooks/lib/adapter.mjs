@@ -1551,9 +1551,10 @@ async function runHook(clientName, event, invocation) {
   invocation.bind(raw, payload, input.bytes);
   if (!payload.tool_name) {
     // An optimizer tool routing has no alias for (wiki_write, wiki_query,
-    // optimize_session, ...) still answered or failed a call, and that is the
-    // only success the hooks can observe for it: without this the exit below
-    // dropped it, so a session's `optimizerToolOkAt` never filled in (#484).
+    // optimize_session, ...) still answered or failed a call; without this the
+    // exit below dropped it (#484). This serves the clients that send every
+    // post-tool event. Claude Code's matcher never sends these at all, so there
+    // the transcript reader records the call instead.
     if (event === 'post-tool' && optimizerToolName(raw.tool_name ?? raw.toolName ?? raw.tool)) {
       const scope = payload.transcript_path || null;
       const graded = loadState(payload.session_id, scope);

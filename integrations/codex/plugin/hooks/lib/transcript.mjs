@@ -29,6 +29,7 @@ import {
   isToolAbsentMessage,
   optimizerToolName,
 } from './capabilities.mjs';
+import { safeTrigger } from './safe-text.mjs';
 
 /** Where a project's transcripts live, under the graph it belongs to. */
 export const transcriptDir = (dir) => join(dir, 'transcripts');
@@ -708,6 +709,9 @@ export function absentToolsFromTranscript(transcriptPath, options = {}) {
   return [...absent].map(([name, at]) => ({ name, at }));
 }
 
+/** The longest announced tool name a search pattern is tested against. */
+const MAX_CANDIDATE_NAME = 96;
+
 /** Search tools whose result names the deferred tools they loaded (#484). */
 const TOOL_SEARCH_NAMES = /^(?:tool_search_tool_\w+|ToolSearch)$/;
 
@@ -716,12 +720,11 @@ function optimizerNamesSearched(input, candidates) {
   const asked = new Set();
   const pattern = typeof input?.pattern === 'string' ? input.pattern : null;
   if (pattern) {
-    let regex = null;
-    try {
-      regex = new RegExp(pattern, 'i');
-    } catch {
-      return asked;
-    }
+    // MODEL-WRITTEN, RUN ON EVERY HOOK EVENT: a backtracking pattern would hang
+    // each later hook in the session, so it is refused before it is run. A
+    // refused pattern asks for nothing, which only forgoes the evidence.
+    const regex = safeTrigger(pattern);
+    if (!regex) return asked;
     for (const [qualified, name] of candidates) {
       if (regex.test(qualified)) asked.add(name);
     }
@@ -769,8 +772,16 @@ function optimizerNamesLoaded(content) {
  * three times. A search whose pattern or query covers a tool's name and whose
  * result does not include it is that refusal, one step earlier.
  *
- * A search that DID return the tool is reported too, so a later successful load
- * revokes an earlier miss the same way a later successful call does.
+ * A search that DID return the tool is reported as loaded, and so is a call to
+ * it that answered, so a later load or call revokes an earlier miss.
+ *
+ * KNOWN FALSE ABSENCE, accepted. A search only finds DEFERRED tools: one the
+ * host registered directly comes back "No matching deferred tools found" even
+ * though it is callable. Requiring the host's deferred announcement first would
+ * prevent that, but the announcement is at the start of the session and falls
+ * out of the scanned tail, so the fix would stop working in long sessions. The
+ * cost is asymmetric: a false absence only withholds a nudge, while the false
+ * presence this replaces blocked the turn.
  *
  * A failed search (an invalid pattern, a search-tool error) proves nothing about
  * the tool and is skipped. Names and instants only leave this function.
@@ -794,6 +805,7 @@ export function toolSearchOutcomesFromTranscript(transcriptPath, options = {}) {
     ])
   );
   const searches = new Map();
+  const calls = new Map();
   const missed = new Map();
   const loaded = new Map();
   const stamp = (map, name, at) => map.set(name, Math.max(map.get(name) || 0, at));
@@ -827,7 +839,12 @@ export function toolSearchOutcomesFromTranscript(transcriptPath, options = {}) {
     if (entry.attachment?.type === 'deferred_tools_delta' && Array.isArray(announced)) {
       for (const qualified of announced) {
         const name = optimizerToolName(qualified);
-        if (name) candidates.set(String(qualified), name);
+        // BOUNDED, because a search pattern runs against it: the quantifier
+        // limit in safeTrigger is safe only for a short subject, and a server
+        // can be named anything. Real qualified names are under 70 characters.
+        if (name && String(qualified).length <= MAX_CANDIDATE_NAME) {
+          candidates.set(String(qualified), name);
+        }
       }
       continue;
     }
@@ -835,7 +852,14 @@ export function toolSearchOutcomesFromTranscript(transcriptPath, options = {}) {
     if (!Array.isArray(content)) continue;
     for (const block of content) {
       if (!block || (!block.id && !block.tool_use_id)) continue;
-      if (
+      const called = block.type === 'tool_use' ? optimizerToolName(block.name) : null;
+      if (called) {
+        // A CALL THAT ANSWERED proves the tool is loaded, and on Claude Code the
+        // transcript is the only place that is recorded: the PostToolUse matcher
+        // covers smart_edit and smart_write alone, so a wiki_write or smart_read
+        // call never reaches a post-tool hook.
+        calls.set(String(block.id), called);
+      } else if (
         (block.type === 'server_tool_use' || block.type === 'tool_use') &&
         TOOL_SEARCH_NAMES.test(String(block.name || ''))
       ) {
@@ -848,7 +872,9 @@ export function toolSearchOutcomesFromTranscript(transcriptPath, options = {}) {
         if (block.content?.type !== 'tool_search_tool_search_result') continue;
         settle(block.tool_use_id, block.content, at);
       } else if (block.type === 'tool_result' && block.is_error !== true) {
-        settle(block.tool_use_id, block.content, at);
+        const answered = calls.get(String(block.tool_use_id || ''));
+        if (answered) stamp(loaded, answered, at);
+        else settle(block.tool_use_id, block.content, at);
       }
     }
   }

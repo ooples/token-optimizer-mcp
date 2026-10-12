@@ -31,6 +31,7 @@
 
 import { ORIGIN_HARVESTED, ORIGIN_HUMAN } from './curate.mjs';
 import { safeTrigger } from './inject.mjs';
+import { COMMAND_MAX_QUANTIFIERS } from './safe-text.mjs';
 import { isFsSafePath } from './paths.mjs';
 
 /** Lessons longer than this are prose, not instructions. */
@@ -246,7 +247,8 @@ export function validateLessons(raw, turns, { knownFiles = null } = {}) {
     // metrics record, and can never surface for the rest of its life. Both rejection shapes are
     // realistic from the extraction prompt: a long alternation over test runners passes 200
     // characters easily, and `(\w+\s*)+\.csproj` is the kind of thing a model emits unprompted.
-    if (!safeTrigger(trigger)) {
+    // With the command limit, so a trigger stored here is one the injector will run as a regex.
+    if (!safeTrigger(trigger, { maxQuantifiers: COMMAND_MAX_QUANTIFIERS })) {
       rejected.push({ reason: 'bad-trigger-regex', trigger });
       continue;
     }

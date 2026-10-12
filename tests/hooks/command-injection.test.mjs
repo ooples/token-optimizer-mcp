@@ -222,6 +222,113 @@ describe('a model-supplied trigger cannot hang the hook', () => {
     expect(safeTrigger(String.raw`(a*)*b`)).toBeNull();
     expect(safeTrigger(String.raw`(?:ab+)+c`)).toBeNull();
     expect(safeTrigger(String.raw`(\d+)*$`)).toBeNull();
+    // Quantified alternation whose branches overlap: no inner quantifier, the
+    // same blow-up (`(.|.)*x` ran over ten seconds on a 29-character name).
+    expect(safeTrigger(String.raw`(.|.)*x`)).toBeNull();
+    expect(safeTrigger(String.raw`(a|ab)+c`)).toBeNull();
+    // One more pair of parentheses hid the inner group from the old regex
+    // checks, which read only up to the first `)`.
+    expect(safeTrigger(String.raw`((a+))+`)).toBeNull();
+    expect(safeTrigger(String.raw`((.*))*x`)).toBeNull();
+    expect(safeTrigger(String.raw`((.|.))*x`)).toBeNull();
+    expect(safeTrigger(String.raw`(?:(?:a|b)c)+`)).toBeNull();
+  });
+
+  it('refuses a long run of unbounded quantifiers, and the run it allows is fast', async () => {
+    const { safeTrigger } = await import('../../hooks-core/inject.mjs');
+    // Polynomial, not exponential, but to the power of the count: eight `\w*`
+    // before a `!` ran past fifteen seconds on a tool name.
+    expect(safeTrigger(String.raw`\w*\w*\w*\w*\w*!`)).toBeNull();
+    expect(safeTrigger(String.raw`a{2,}b{2,}c{2,}d{2,}e{2,}`)).toBeNull();
+    // `?` and bounded braces repeat too: eight `\w{0,60}` ran past fifteen
+    // seconds, twenty `\w?` over a second, and `(\w?){20}` nearly six.
+    expect(safeTrigger('\\w?'.repeat(20) + '\\w'.repeat(20) + '!')).toBeNull();
+    expect(safeTrigger('\\w{0,60}'.repeat(8) + '!')).toBeNull();
+    expect(safeTrigger(String.raw`(\w?){20}!`)).toBeNull();
+
+    // THE BOUND HAS TO HOLD, not just exist: the worst allowed pattern of each
+    // kind runs in a child with a deadline against the longest tool name.
+    const allowed = [
+      String.raw`\w*\w*\w*\w*!`,
+      String.raw`\w{0,60}\w{0,60}\w{0,60}\w{0,60}!`,
+      String.raw`\w?\w*\w{0,60}\w+!`,
+    ];
+    const { spawnSync } = await import('node:child_process');
+    const name = 'mcp__plugin_token-optimizer_token-optimizer__get_optimization_report';
+    for (const pattern of allowed) {
+      expect(safeTrigger(pattern)).not.toBeNull();
+      const result = spawnSync(
+        process.execPath,
+        ['-e', `new RegExp(${JSON.stringify(pattern)}, 'i').test(${JSON.stringify(name)})`],
+        { timeout: 5_000 }
+      );
+      expect(result.signal).toBeNull();
+      expect(result.status).toBe(0);
+    }
+  });
+
+  it('matches a command in bounded time, whatever its length', async () => {
+    const { triggerMatchesCommand, COMMAND_MATCH_CHARS } = await import(
+      '../../hooks-core/safe-text.mjs'
+    );
+    // The command is unbounded, and cost grows as its length to the power of
+    // (quantifiers + 1): `.*.*!` took 2.3 s on 2,000 characters, `.*.*.*!`
+    // never finished on 512. The worst trigger a command allows runs against a
+    // 2,000-character command in a child with a deadline.
+    const { spawnSync } = await import('node:child_process');
+    const module = new URL('../../hooks-core/safe-text.mjs', import.meta.url).href;
+    const command = 'npm run build '.padEnd(2_000, 'x');
+    const result = spawnSync(
+      process.execPath,
+      [
+        '--input-type=module',
+        '-e',
+        `const m = await import(${JSON.stringify(module)}); process.stdout.write(String(m.triggerMatchesCommand('.*.*!', ${JSON.stringify(command)})));`,
+      ],
+      { encoding: 'utf8', timeout: 2_000 }
+    );
+    expect(result.signal).toBeNull();
+    expect(result.stdout).toBe('false');
+
+    // Three quantifiers in one branch are refused for a command, so the trigger
+    // degrades to a literal search of its source, which cannot backtrack.
+    expect(triggerMatchesCommand('.*.*.*!', command)).toBe(false);
+    expect(triggerMatchesCommand(String.raw`\bnpm\s+run\b`, command)).toBe(true);
+
+    // A match past the bounded prefix is missed -- withholding a finding, which
+    // is the accepted cost of never hanging.
+    expect(triggerMatchesCommand('tail', 'x'.repeat(COMMAND_MATCH_CHARS) + ' | tail')).toBe(false);
+  });
+
+  it('counts quantifiers per top-level alternative, since those are tried one at a time', async () => {
+    const { safeTrigger, COMMAND_MAX_QUANTIFIERS } = await import('../../hooks-core/safe-text.mjs');
+    const limit = { maxQuantifiers: COMMAND_MAX_QUANTIFIERS };
+    // A trigger stored in a real local graph: three branches, one `.*` each.
+    expect(
+      safeTrigger(String.raw`claude.*--plugin-dir|codex.*exec|live.*(?:Claude|Codex)`, limit)
+    ).not.toBeNull();
+    // Inside a group the alternatives still run in sequence with what follows.
+    expect(safeTrigger(String.raw`(?:a.*|b.*).*!`, limit)).toBeNull();
+    expect(safeTrigger(String.raw`.*.*.*!`, limit)).toBeNull();
+    expect(safeTrigger(String.raw`.*.*.*!`)).not.toBeNull(); // a tool name is short
+  });
+
+  it('does not count a group modifier or a lazy suffix as a quantifier', async () => {
+    const { safeTrigger } = await import('../../hooks-core/inject.mjs');
+    // Four quantifiers, each made lazy: the `?` after them repeats nothing.
+    expect(safeTrigger(String.raw`a+?b*?c+?d*?`)).not.toBeNull();
+    // `(?:` `(?=` `(?!` open groups; the `?` there is no quantifier.
+    expect(safeTrigger(String.raw`(?:a)(?=b)(?!c)(?:d)(?:e)x`)).not.toBeNull();
+  });
+
+  it('reads escapes and character classes as literal, not as structure', async () => {
+    const { safeTrigger } = await import('../../hooks-core/inject.mjs');
+    // A `(` or `|` inside a class or after a backslash opens nothing.
+    expect(safeTrigger(String.raw`[(|]+x`)).not.toBeNull();
+    expect(safeTrigger(String.raw`\(a\|b\)+`)).not.toBeNull();
+    expect(safeTrigger(String.raw`(wiki|smart)_write`)).not.toBeNull();
+    expect(safeTrigger(String.raw`(ab)+c`)).not.toBeNull();
+    expect(safeTrigger(String.raw`__wiki_write$`)).not.toBeNull();
   });
 
   it('refuses an absurdly long pattern', async () => {

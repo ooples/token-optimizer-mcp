@@ -106,6 +106,17 @@ describe('a tool search is evidence about the tools it looked for', () => {
     ]);
   });
 
+  test('an overlong announced name is not a pattern subject', () => {
+    // A search pattern is run against each announced name, and the quantifier
+    // limit is only safe for a short subject; real names are under 70 characters.
+    const long = `mcp__${'s'.repeat(120)}__wiki_write`;
+    const path = transcript([
+      announced([long]),
+      regexSearch('s1', `${'s'.repeat(120)}__wiki_write$`, [], { limit: 1 }),
+    ]);
+    expect(toolSearchOutcomesFromTranscript(path)).toEqual({ missed: [], loaded: [] });
+  });
+
   test('a search that does not cover the tool says nothing about it', () => {
     const path = transcript([
       regexSearch('s1', '^(WebSearch|WebFetch)$', [], { limit: 5 }),
@@ -141,6 +152,50 @@ describe('a tool search is evidence about the tools it looked for', () => {
       missed: [],
       loaded: [{ name: 'wiki_write', at: Date.parse('2026-10-12T14:00:00.000Z') }],
     });
+  });
+
+  test('a call that answered proves the tool loaded, and a later empty search does not undo it', () => {
+    const path = transcript([
+      {
+        type: 'assistant',
+        timestamp: '2026-10-12T14:00:00.000Z',
+        message: { role: 'assistant', content: [{ type: 'tool_use', id: 'w1', name: QUALIFIED, input: {} }] },
+      },
+      {
+        type: 'user',
+        timestamp: '2026-10-12T14:00:01.000Z',
+        message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'w1', content: 'recorded' }] },
+      },
+      regexSearch('s1', 'wiki_write', [], { limit: 2, timestamp: '2026-10-12T14:05:00.000Z' }),
+    ]);
+    expect(toolSearchOutcomesFromTranscript(path)).toEqual({
+      missed: [],
+      loaded: [{ name: 'wiki_write', at: Date.parse('2026-10-12T14:00:01.000Z') }],
+    });
+  });
+
+  test('a backtracking pattern is refused rather than run', () => {
+    // Run in a child with a deadline: a pattern like these does not throw, it
+    // never returns, and a hung regex freezes jest's own timer with it.
+    const path = transcript([
+      regexSearch('s1', '(.*)*x', [], { limit: 5 }),
+      regexSearch('s2', '(.|.)*x', [], { limit: 5 }),
+      // The same shapes one parenthesis deeper, which the first guard missed.
+      regexSearch('s3', '((.*))*x', [], { limit: 5 }),
+      regexSearch('s4', '((.|.))*x', [], { limit: 5 }),
+    ]);
+    const module = join(ROOT, 'hooks-core', 'transcript.mjs').replace(/\\/g, '/');
+    const result = spawnSync(
+      process.execPath,
+      [
+        '--input-type=module',
+        '-e',
+        `const m = await import('file:///${module}'); console.log(JSON.stringify(m.toolSearchOutcomesFromTranscript(${JSON.stringify(path)})));`,
+      ],
+      { encoding: 'utf8', timeout: 10_000 }
+    );
+    expect(result.signal).toBeNull();
+    expect(JSON.parse(result.stdout)).toEqual({ missed: [], loaded: [] });
   });
 
   test('a search that returns the tool reports it loaded', () => {
@@ -340,6 +395,31 @@ describe('the Stop hook stops asking for a tool the session could not load', () 
     ]);
     const output = editThenStop('stop-called', path, hookEnv);
     const state = stateOf(hookEnv, 'stop-called');
+    expect(Object.keys(state.optimizerToolOkAt ?? {})).toEqual(['wiki_write']);
+    expect(state.optimizerToolAbsentAt?.wiki_write).toBeUndefined();
+    expect(JSON.stringify(output)).toContain('wiki_write');
+  });
+
+  test('a successful call seen only in the transcript keeps the tool, as on Claude Code', () => {
+    // Claude Code's PostToolUse matcher never sends a wiki_write call to the
+    // hooks, so no post-tool event is run here: the transcript is all there is.
+    const path = transcript([
+      announced([QUALIFIED]),
+      {
+        type: 'assistant',
+        timestamp: '2026-10-12T14:00:00.000Z',
+        message: { role: 'assistant', content: [{ type: 'tool_use', id: 'w1', name: QUALIFIED, input: {} }] },
+      },
+      {
+        type: 'user',
+        timestamp: '2026-10-12T14:00:01.000Z',
+        message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'w1', content: 'recorded' }] },
+      },
+      regexSearch('s1', 'wiki_write', [], { limit: 2, timestamp: '2026-10-12T14:05:00.000Z' }),
+    ]);
+    const hookEnv = env();
+    const output = editThenStop('stop-transcript-call', path, hookEnv);
+    const state = stateOf(hookEnv, 'stop-transcript-call');
     expect(Object.keys(state.optimizerToolOkAt ?? {})).toEqual(['wiki_write']);
     expect(state.optimizerToolAbsentAt?.wiki_write).toBeUndefined();
     expect(JSON.stringify(output)).toContain('wiki_write');

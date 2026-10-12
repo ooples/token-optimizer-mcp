@@ -72,38 +72,9 @@ function commandKey(command) {
 /** Most findings considered for one command before the budget decides. */
 const MAX_COMMAND_CANDIDATES = 20;
 
-/**
- * Compiles a finding's trigger, or returns null if it is not safe to run.
- *
- * TRIGGERS ARE MODEL-SUPPLIED. The harvest writes them, and a model asked for a
- * regex can produce `(a+)+b` as readily as `\bnpx\b` -- a pattern whose
- * backtracking is exponential in the input length. That would execute on the
- * PreToolUse path against a command the user is waiting on, so a single bad
- * trigger would hang every subsequent tool call in the session. Neither a
- * try/catch nor a timeout helps: catastrophic backtracking does not throw, it
- * simply does not return.
- *
- * So the pattern is rejected before it is ever run. The test is deliberately
- * conservative -- nested quantifiers are the shape that causes this, and no
- * legitimate trigger for a command needs one.
- */
-export function safeTrigger(source) {
-  const raw = String(source || '');
-  if (!raw || raw.length > 200) return null;
-
-  // A quantifier applied to a group that itself contains a quantifier: (a+)+,
-  // (a*)*, (\d+)*, (?:ab+)+ and so on. This is the classic ReDoS shape.
-  if (/\([^)]*[+*}][^)]*\)\s*[+*{]/.test(raw)) return null;
-
-  // Stacked quantifiers outside a group, e.g. `a+*` or `.*+`.
-  if (/[+*}]\s*[+*]/.test(raw)) return null;
-
-  try {
-    return new RegExp(raw, 'i');
-  } catch {
-    return null;
-  }
-}
+// Moved to safe-text.mjs so the transcript reader can share it without this module's imports.
+import { safeTrigger, triggerMatchesCommand } from './safe-text.mjs';
+export { safeTrigger };
 const estimate = (text) => Math.ceil(String(text || '').length / 4);
 
 /**
@@ -481,20 +452,9 @@ function appliesToCommand(finding, command) {
   const text = String(command || '');
   if (!text) return false;
 
-  if (finding.trigger) {
-    const pattern = safeTrigger(finding.trigger);
-    if (pattern) {
-      try {
-        return pattern.test(text);
-      } catch {
-        return false;
-      }
-    }
-    // Rejected as unsafe or malformed: fall back to a literal search, which
-    // cannot backtrack. A bad trigger degrades to a substring match rather
-    // than taking the hook down or hanging it.
-    return text.toLowerCase().includes(String(finding.trigger).toLowerCase());
-  }
+  // Bounded in time, with the literal fallback for an unsafe trigger: see
+  // triggerMatchesCommand.
+  if (finding.trigger) return triggerMatchesCommand(finding.trigger, text);
 
   // Untriggered findings only qualify if they are about doing something.
   if (finding.type !== 'command' && finding.type !== 'failure') return false;
@@ -622,7 +582,12 @@ export function forCommand(
   // about mergeStateStatus. Both had the same confidence as the right answer,
   // so confidence alone could not separate them -- and a tight budget then kept
   // the wrong one.
-  const explicit = (n) => (n.trigger && safeTrigger(n.trigger)?.test(command) ? 1 : 0);
+  const matched = new Map();
+  const explicit = (n) => {
+    // Cached: the comparator calls this O(n log n) times, and each is a regex run.
+    if (!matched.has(n)) matched.set(n, n.trigger && triggerMatchesCommand(n.trigger, command) ? 1 : 0);
+    return matched.get(n);
+  };
   candidates.sort(
     (a, b) => explicit(b) - explicit(a) || (b.confidence ?? 0.5) - (a.confidence ?? 0.5)
   );
@@ -965,7 +930,12 @@ export function forSharedCommand(
     // Explicit trigger first, then confidence -- the same ordering the local
     // command path uses, for the same reason: a finding whose author wrote a
     // pattern that matches this command is about this command.
-    const explicit = (n) => (n.trigger && safeTrigger(n.trigger)?.test(command) ? 1 : 0);
+    const matched = new Map();
+    const explicit = (n) => {
+      // Cached: the comparator calls this O(n log n) times, and each is a regex run.
+      if (!matched.has(n)) matched.set(n, n.trigger && triggerMatchesCommand(n.trigger, command) ? 1 : 0);
+      return matched.get(n);
+    };
     candidates.sort(
       (a, b) => explicit(b) - explicit(a) || (b.confidence ?? 0.5) - (a.confidence ?? 0.5)
     );
