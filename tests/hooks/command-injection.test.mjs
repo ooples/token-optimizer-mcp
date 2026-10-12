@@ -240,20 +240,39 @@ describe('a model-supplied trigger cannot hang the hook', () => {
     // before a `!` ran past fifteen seconds on a tool name.
     expect(safeTrigger(String.raw`\w*\w*\w*\w*\w*!`)).toBeNull();
     expect(safeTrigger(String.raw`a{2,}b{2,}c{2,}d{2,}e{2,}`)).toBeNull();
-    const allowed = String.raw`\w*\w*\w*\w*!`;
-    expect(safeTrigger(allowed)).not.toBeNull();
+    // `?` and bounded braces repeat too: eight `\w{0,60}` ran past fifteen
+    // seconds, twenty `\w?` over a second, and `(\w?){20}` nearly six.
+    expect(safeTrigger('\\w?'.repeat(20) + '\\w'.repeat(20) + '!')).toBeNull();
+    expect(safeTrigger('\\w{0,60}'.repeat(8) + '!')).toBeNull();
+    expect(safeTrigger(String.raw`(\w?){20}!`)).toBeNull();
 
-    // THE BOUND HAS TO HOLD, not just exist: the worst allowed pattern runs in
-    // a child with a deadline against the longest optimizer tool name.
+    // THE BOUND HAS TO HOLD, not just exist: the worst allowed pattern of each
+    // kind runs in a child with a deadline against the longest tool name.
+    const allowed = [
+      String.raw`\w*\w*\w*\w*!`,
+      String.raw`\w{0,60}\w{0,60}\w{0,60}\w{0,60}!`,
+      String.raw`\w?\w*\w{0,60}\w+!`,
+    ];
     const { spawnSync } = await import('node:child_process');
     const name = 'mcp__plugin_token-optimizer_token-optimizer__get_optimization_report';
-    const result = spawnSync(
-      process.execPath,
-      ['-e', `new RegExp(${JSON.stringify(allowed)}, 'i').test(${JSON.stringify(name)})`],
-      { timeout: 5_000 }
-    );
-    expect(result.signal).toBeNull();
-    expect(result.status).toBe(0);
+    for (const pattern of allowed) {
+      expect(safeTrigger(pattern)).not.toBeNull();
+      const result = spawnSync(
+        process.execPath,
+        ['-e', `new RegExp(${JSON.stringify(pattern)}, 'i').test(${JSON.stringify(name)})`],
+        { timeout: 5_000 }
+      );
+      expect(result.signal).toBeNull();
+      expect(result.status).toBe(0);
+    }
+  });
+
+  it('does not count a group modifier or a lazy suffix as a quantifier', async () => {
+    const { safeTrigger } = await import('../../hooks-core/inject.mjs');
+    // Four quantifiers, each made lazy: the `?` after them repeats nothing.
+    expect(safeTrigger(String.raw`a+?b*?c+?d*?`)).not.toBeNull();
+    // `(?:` `(?=` `(?!` open groups; the `?` there is no quantifier.
+    expect(safeTrigger(String.raw`(?:a)(?=b)(?!c)(?:d)(?:e)x`)).not.toBeNull();
   });
 
   it('reads escapes and character classes as literal, not as structure', async () => {

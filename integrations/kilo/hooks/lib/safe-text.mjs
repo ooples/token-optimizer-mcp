@@ -151,63 +151,87 @@ export function safeRecord(record) {
   return out;
 }
 
-const QUANTIFIERS = new Set(['*', '+', '{']);
-const MAX_UNBOUNDED = 4;
+// Repetition in sequence backtracks polynomially, to the power of the count:
+// eight `\w*` before a `!` ran past fifteen seconds on a tool name, and so did
+// eight `\w{0,60}`; twenty `\w?` took over a second. Four `\w*` took 18 ms, and
+// ordinary patterns (`wiki.*write`, `\bnpx?\s+jest\b`) use one or two.
+const MAX_QUANTIFIERS = 4;
 
-/** The next character after `index` that is not whitespace. */
-function nextSignificant(raw, index) {
+/** The length of the quantifier token at `index`: `*`, `+`, `?`, `{n}`, `{n,}`, `{n,m}`; 0 if none. */
+function quantifierLength(raw, index) {
+  const ch = raw[index];
+  if (ch === '*' || ch === '+' || ch === '?') return 1;
+  if (ch === '{') return /^\{\d+(?:,\d*)?\}/.exec(raw.slice(index))?.[0].length ?? 0;
+  return 0;
+}
+
+/** Whether the token after a closing group repeats it: `*`, `+` or a brace quantifier. */
+function repeatsGroup(raw, index) {
   let i = index;
   while (i < raw.length && /\s/.test(raw[i])) i++;
-  return raw[i];
+  return raw[i] !== '?' && quantifierLength(raw, i) > 0;
 }
 
 /**
- * Whether a quantifier applies to a group that repeats or branches inside it.
+ * Whether a pattern can backtrack catastrophically.
  *
- * THE SHAPE OF CATASTROPHIC BACKTRACKING: a group that can match the same text
- * more than one way -- because it contains a quantifier (`(a+)+`) or
- * alternatives (`(.|.)*x`, ran over ten seconds on a 29-character tool name)
- * -- under a quantifier of its own, so every split is retried.
+ * Two shapes. A QUANTIFIED GROUP THAT REPEATS OR BRANCHES INSIDE: a group that
+ * can match the same text more than one way -- a quantifier in it (`(a+)+`,
+ * `(\w?){20}`) or alternatives (`(.|.)*x`, over ten seconds on a 29-character
+ * tool name) -- under a quantifier of its own, so every split is retried. And
+ * TOO MANY QUANTIFIERS IN ALL, polynomial to the power of their count.
  *
  * A SCANNER, NOT A REGEX OVER THE SOURCE. The regexes this replaced read only
  * up to the first `)`, so one more pair of parentheses hid the inner group:
  * `((a+))+` and `((.|.))*x` both passed. Here each group's frame records
  * whether anything inside it, at any depth, repeats or branches, and a closing
- * group hands that to its parent -- so the nesting depth cannot hide it.
- * Escapes and character classes are skipped, since a `(`, `|` or `+` there is
- * literal. Deliberately conservative: a false refusal only forgoes a pattern.
+ * group hands that to its parent. Every quantifier counts, `?` and bounded
+ * braces included: `?` after `(` is a group modifier and `?` after a
+ * quantifier makes it lazy, and neither repeats anything. Escapes and character
+ * classes are literal. Deliberately conservative: a false refusal only forgoes
+ * a pattern.
  */
 function hasNestedRepetition(raw) {
   const frames = [];
   let inClass = false;
-  // Unbounded quantifiers in sequence backtrack polynomially, to the power of
-  // their count: eight `\w*` before a `!` ran past fifteen seconds on a tool
-  // name, four took 18 ms. Ordinary patterns (`wiki.*write`) use one or two.
-  let unbounded = 0;
+  let quantifiers = 0;
+  let afterQuantifier = false;
   for (let i = 0; i < raw.length; i++) {
     const ch = raw[i];
     if (ch === '\\') {
       i++;
+      afterQuantifier = false;
       continue;
     }
     if (inClass) {
       if (ch === ']') inClass = false;
       continue;
     }
+    if (ch === '?' && afterQuantifier) {
+      afterQuantifier = false; // lazy suffix
+      continue;
+    }
+    const length = quantifierLength(raw, i);
+    if (length > 0) {
+      if (++quantifiers > MAX_QUANTIFIERS) return true;
+      if (frames.length) frames[frames.length - 1] = true;
+      afterQuantifier = true;
+      i += length - 1;
+      continue;
+    }
+    afterQuantifier = false;
     if (ch === '[') {
       inClass = true;
     } else if (ch === '(') {
       frames.push(false);
+      if (raw[i + 1] === '?') i++; // (?: (?= (?! (?<= (?<name> -- a modifier
     } else if (ch === ')') {
       const inner = frames.pop() === true;
-      const quantified = QUANTIFIERS.has(nextSignificant(raw, i + 1));
-      if (inner && quantified) return true;
-      if ((inner || quantified) && frames.length) frames[frames.length - 1] = true;
-    } else if (QUANTIFIERS.has(ch) || ch === '|') {
-      if (ch === '*' || ch === '+' || (ch === '{' && /^\{\d*,\}/.test(raw.slice(i)))) {
-        if (++unbounded > MAX_UNBOUNDED) return true;
-      }
-      if (frames.length) frames[frames.length - 1] = true;
+      const repeated = repeatsGroup(raw, i + 1);
+      if (inner && repeated) return true;
+      if ((inner || repeated) && frames.length) frames[frames.length - 1] = true;
+    } else if (ch === '|' && frames.length) {
+      frames[frames.length - 1] = true;
     }
   }
   return false;
