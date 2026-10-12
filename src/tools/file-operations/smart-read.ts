@@ -403,6 +403,20 @@ export class SmartReadTool {
       finalContent =
         allChunks[chunkIndex] + chunkFooter(chunkIndex, allChunks.length);
     }
+
+    // maxSize HOLDS ON A RE-READ TOO. Every size check above is gated on
+    // `!isDiff`, and a changed file whose diff was not worth sending sets
+    // `isDiff` while returning the whole file -- so re-reading a 179 KB file
+    // after an edit returned all of it against a maxSize of 20,000. A diff
+    // larger than maxSize is held to it the same way. A chunk already fits.
+    if (!chunked && finalContent.length > maxSize) {
+      finalContent = truncateContent(finalContent, maxSize, {
+        keepTop: 100,
+        keepBottom: 50,
+        preserveStructure,
+      }).truncated;
+      truncated = true;
+    }
     // Advance the read base after an edit too. Leaving a cache hit pinned to
     // its old bytes would return the same diff on every subsequent read.
     if (enableCache && (!fromCache || ownCached !== rawContent)) {

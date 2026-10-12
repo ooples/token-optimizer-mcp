@@ -244,6 +244,28 @@ describe('#489 truncation keeps the top, and chunkIndex pages a file over maxSiz
     ).rejects.toThrow(/cannot page within maxSize=50/);
   });
 
+  it('holds a re-read of a changed file to maxSize', async () => {
+    // Found in review: every size check was gated on `!isDiff`, and a changed
+    // file whose diff was not worth sending returned the whole file.
+    const { dir, cache } = workspace();
+    const file = join(dir, 'changing.md');
+    const lines = (tag: string) =>
+      Array.from(
+        { length: 3_000 },
+        (_, i) => `- line ${i} ${tag} ${'x'.repeat(40)}`
+      ).join('\n');
+    process.env.TOKEN_OPTIMIZER_SESSION_ID = 'session-one';
+    const tool = reader(cache);
+    writeFileSync(file, lines('first'));
+    expect(
+      (await tool.read(file, { maxSize: 20_000 })).content.length
+    ).toBeLessThanOrEqual(20_000);
+    writeFileSync(file, lines('second')); // every line changed
+    const again = await tool.read(file, { maxSize: 20_000 });
+    expect(again.content.length).toBeLessThanOrEqual(20_000);
+    expect(again.content.startsWith('- line 0 second')).toBe(true);
+  });
+
   it('never returns more than maxSize, even when every line is structural', () => {
     // Every line is an `export`, so the structure filter alone would keep the
     // whole file; long top lines would overrun it the same way.
