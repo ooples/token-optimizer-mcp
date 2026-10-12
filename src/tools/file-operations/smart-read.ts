@@ -44,6 +44,8 @@ import {
   truncateContent,
   detectFileType,
   isMinified,
+  prefixWithinBytes,
+  utf8Length,
 } from '../shared/syntax-utils.js';
 
 /** The navigation line appended to a chunk. Counted in its maxSize budget. */
@@ -248,6 +250,8 @@ export class SmartReadTool {
 
     // Read file content
     const rawContent = readFileSync(filePath, encoding);
+    // maxSize and chunkSize are UTF-8 bytes, as the schema says (see utf8Length).
+    const rawBytes = utf8Length(rawContent);
 
     let finalContent = rawContent;
     let isDiff = false;
@@ -340,13 +344,14 @@ export class SmartReadTool {
     const chunkRequested = options.chunkIndex !== undefined;
 
     // Handle large files - prioritize maxSize over chunking
-    if (!isDiff && rawContent.length > maxSize && !chunkRequested) {
+    if (!isDiff && rawBytes > maxSize && !chunkRequested) {
       // Check if file is minified
       if (isMinified(rawContent)) {
         // For minified files, just truncate with a warning
         const truncationMsg = '\n// [TRUNCATED: Minified file]';
-        const actualMaxSize = maxSize - truncationMsg.length;
-        finalContent = rawContent.substring(0, actualMaxSize) + truncationMsg;
+        const actualMaxSize = maxSize - utf8Length(truncationMsg);
+        finalContent =
+          prefixWithinBytes(rawContent, actualMaxSize) + truncationMsg;
         truncated = true;
       } else {
         // If file is larger than maxSize, truncate it
@@ -361,8 +366,8 @@ export class SmartReadTool {
     } else if (
       !isDiff &&
       paginationRequested &&
-      rawContent.length > chunkSize &&
-      (rawContent.length <= maxSize || chunkRequested)
+      rawBytes > chunkSize &&
+      (rawBytes <= maxSize || chunkRequested)
     ) {
       // Only chunk if file fits within maxSize but is larger than chunkSize
       // This allows for structured navigation of medium-sized files
@@ -372,7 +377,7 @@ export class SmartReadTool {
       // the chunks are cut to what is left -- with long lines split, so every
       // chunk fits and no byte is unreachable. A maxSize too small to hold a
       // footer and any content cannot page at all, and says so.
-      const bodyBudget = maxSize - chunkFooter(999_999, 1_000_000).length;
+      const bodyBudget = maxSize - utf8Length(chunkFooter(999_999, 1_000_000));
       if (bodyBudget < 1) {
         throw new Error(
           `smart_read cannot page within maxSize=${maxSize}: the chunk footer alone needs ` +
@@ -409,7 +414,7 @@ export class SmartReadTool {
     // `isDiff` while returning the whole file -- so re-reading a 179 KB file
     // after an edit returned all of it against a maxSize of 20,000. A diff
     // larger than maxSize is held to it the same way. A chunk already fits.
-    if (!chunked && finalContent.length > maxSize) {
+    if (!chunked && utf8Length(finalContent) > maxSize) {
       finalContent = truncateContent(finalContent, maxSize, {
         keepTop: 100,
         keepBottom: 50,

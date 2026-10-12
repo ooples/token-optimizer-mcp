@@ -57,7 +57,64 @@ export function detectFileType(filePath: string): string {
 }
 
 /**
- * Split content into chunks of at most `maxChunkSize` characters, at line
+ * SIZES ARE UTF-8 BYTES. `maxSize` is documented as a byte limit, and a
+ * JavaScript string's length counts UTF-16 units: a line of CJK text or emoji
+ * is up to twice as many bytes as its length says, so a reply sized by length
+ * could exceed the budget it claimed to honour (#490 review). These measure
+ * and cut in bytes, and only ever at a code-point boundary, so what they
+ * return is always valid text.
+ */
+export function utf8Length(text: string): number {
+  return Buffer.byteLength(text, 'utf8');
+}
+
+const codePointBytes = (codePoint: number): number =>
+  codePoint < 0x80 ? 1 : codePoint < 0x800 ? 2 : codePoint < 0x10000 ? 3 : 4;
+
+/** The longest prefix of `text` within `maxBytes` UTF-8 bytes. */
+export function prefixWithinBytes(text: string, maxBytes: number): string {
+  if (maxBytes <= 0) return '';
+  let bytes = 0;
+  let end = 0;
+  for (const char of text) {
+    const size = codePointBytes(char.codePointAt(0) ?? 0);
+    if (bytes + size > maxBytes) break;
+    bytes += size;
+    end += char.length;
+  }
+  return text.slice(0, end);
+}
+
+/** The longest suffix of `text` within `maxBytes` UTF-8 bytes. */
+export function suffixWithinBytes(text: string, maxBytes: number): string {
+  if (maxBytes <= 0) return '';
+  const chars = Array.from(text);
+  let bytes = 0;
+  let count = 0;
+  for (let i = chars.length - 1; i >= 0; i--) {
+    const size = codePointBytes(chars[i].codePointAt(0) ?? 0);
+    if (bytes + size > maxBytes) break;
+    bytes += size;
+    count += chars[i].length;
+  }
+  return count > 0 ? text.slice(text.length - count) : '';
+}
+
+/** `text` cut into consecutive pieces of at most `maxBytes` UTF-8 bytes each. */
+function splitWithinBytes(text: string, maxBytes: number): string[] {
+  const pieces: string[] = [];
+  let rest = text;
+  while (rest.length > 0) {
+    // A single code point wider than the budget still has to go somewhere.
+    const piece = prefixWithinBytes(rest, maxBytes) || Array.from(rest)[0];
+    pieces.push(piece);
+    rest = rest.slice(piece.length);
+  }
+  return pieces;
+}
+
+/**
+ * Split content into chunks of at most `maxChunkSize` UTF-8 bytes, at line
  * boundaries where a line fits.
  *
  * THE CHUNKS ARE THE FILE, CONCATENATED. Each line carries its own newline into
@@ -77,13 +134,21 @@ export function chunkBySyntax(
   maxChunkSize: number = 4000
 ): ChunkResult {
   const sourceLines = content.split('\n');
+  // In UTF-8 bytes, like maxSize (see utf8Length), and cut at code points.
   const size = Math.max(1, Math.floor(maxChunkSize));
   const pieces: string[] = [];
+  const pieceBytes: number[] = [];
   const lineOf: number[] = [];
   sourceLines.forEach((line, index) => {
     const text = index < sourceLines.length - 1 ? `${line}\n` : line;
-    for (let at = 0; at < text.length; at += size) {
-      pieces.push(text.slice(at, at + size));
+    const bytes = utf8Length(text);
+    for (const piece of bytes <= size
+      ? text
+        ? [text]
+        : []
+      : splitWithinBytes(text, size)) {
+      pieces.push(piece);
+      pieceBytes.push(piece === text ? bytes : utf8Length(piece));
       lineOf.push(index);
     }
   });
@@ -106,14 +171,14 @@ export function chunkBySyntax(
   };
 
   pieces.forEach((piece, i) => {
-    if (currentSize + piece.length > size && current.length > 0) {
+    if (currentSize + pieceBytes[i] > size && current.length > 0) {
       flush(i - 1);
       current = [];
       currentSize = 0;
       first = i;
     }
     current.push(piece);
-    currentSize += piece.length;
+    currentSize += pieceBytes[i];
   });
   if (current.length > 0) flush(pieces.length - 1);
   // An empty file is one empty chunk, as it always was.
@@ -179,17 +244,16 @@ function assembleKept(lines: string[], kept: Set<number>): string {
   return parts.join('\n');
 }
 
-/** The start and end of `content` by characters, joined by a marker, within `maxSize`. */
+/** The start and end of `content`, joined by a marker, within `maxSize` UTF-8 bytes. */
 function headAndTail(content: string, maxSize: number): string {
-  const room = maxSize - TRUNCATION_MARKER.length;
-  if (room <= 0) return content.slice(0, Math.max(0, maxSize));
-  const head = Math.ceil((room * 2) / 3);
-  const tail = room - head;
-  return (
-    content.slice(0, head) +
-    TRUNCATION_MARKER +
-    (tail > 0 ? content.slice(-tail) : '')
+  const room = maxSize - utf8Length(TRUNCATION_MARKER);
+  if (room <= 0) return prefixWithinBytes(content, maxSize);
+  const head = prefixWithinBytes(content, Math.ceil((room * 2) / 3));
+  const tail = suffixWithinBytes(
+    content.slice(head.length),
+    room - utf8Length(head)
   );
+  return head + TRUNCATION_MARKER + tail;
 }
 
 /**
@@ -206,7 +270,7 @@ export function truncateContent(
 ): TruncationResult {
   const { keepTop = 100, keepBottom = 50, preserveStructure = true } = options;
 
-  if (content.length <= maxSize) {
+  if (utf8Length(content) <= maxSize) {
     return {
       truncated: content,
       original: content,
@@ -263,10 +327,10 @@ export function truncateContent(
   // them. Over budget, the structural lines go first; if the top and bottom
   // alone still overrun it, a head and tail of the file by characters remain,
   // so the top of the file is never what gets dropped.
-  if (truncated.length > maxSize) {
+  if (utf8Length(truncated) > maxSize) {
     truncated = assembleKept(lines, new Set([...keep, ...bottom]));
   }
-  if (truncated.length > maxSize) {
+  if (utf8Length(truncated) > maxSize) {
     truncated = headAndTail(content, maxSize);
   }
 

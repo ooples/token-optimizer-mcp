@@ -246,6 +246,84 @@ describe('#489 truncation keeps the top, and chunkIndex pages a file over maxSiz
     }
   });
 
+  describe('maxSize is UTF-8 bytes, as the schema says', () => {
+    // 3-byte CJK and 4-byte emoji (a surrogate pair in UTF-16): a length
+    // check under-counts both, by a third and by half.
+    const multibyte = Array.from(
+      { length: 2_000 },
+      (_, i) => `${i} 日本語のテキスト行です 😀🚀 ${'界'.repeat(20)}`
+    ).join('\n');
+    const bytes = (text: string) => Buffer.byteLength(text, 'utf8');
+    // A lone surrogate is what a cut through an emoji leaves behind.
+    const wellFormed = (text: string) =>
+      !/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/.test(
+        text
+      );
+
+    it('truncateContent holds the result to maxSize bytes, cut at code points', () => {
+      for (const maxSize of [100, 999, 20_000]) {
+        const { truncated } = truncateContent(multibyte, maxSize, {
+          keepTop: 100,
+          keepBottom: 50,
+        });
+        expect(bytes(truncated)).toBeLessThanOrEqual(maxSize);
+        expect(wellFormed(truncated)).toBe(true);
+      }
+    });
+
+    it('chunkBySyntax pages within the byte size and reassembles exactly', () => {
+      const oneLine = '😀界a'.repeat(3_000);
+      for (const content of [multibyte, oneLine]) {
+        const { chunks } = chunkBySyntax(content, 1_000);
+        expect(chunks.join('')).toBe(content);
+        for (const chunk of chunks) {
+          expect(bytes(chunk)).toBeLessThanOrEqual(1_000);
+          expect(wellFormed(chunk)).toBe(true);
+        }
+      }
+    });
+
+    it('smart_read holds a first read, a changed re-read and every page to maxSize bytes', async () => {
+      const { dir, cache } = workspace();
+      const file = join(dir, 'multibyte.md');
+      writeFileSync(file, multibyte);
+      process.env.TOKEN_OPTIMIZER_SESSION_ID = 'session-one';
+      const tool = reader(cache);
+      const first = await tool.read(file, { maxSize: 20_000 });
+      expect(bytes(first.content)).toBeLessThanOrEqual(20_000);
+      expect(wellFormed(first.content)).toBe(true);
+
+      writeFileSync(file, multibyte.replace(/テキスト/g, '文章')); // every line changed
+      const again = await tool.read(file, { maxSize: 20_000 });
+      expect(bytes(again.content)).toBeLessThanOrEqual(20_000);
+      expect(wellFormed(again.content)).toBe(true);
+
+      const current = multibyte.replace(/テキスト/g, '文章');
+      const footer =
+        /\n\n\/\/ \[chunk (\d+) of (\d+)\. Call smart_read again with chunkIndex=<n> for another\.\]$/;
+      const page = async (chunkIndex: number) =>
+        (
+          await tool.read(file, {
+            maxSize: 8_000,
+            chunkSize: 4_000,
+            chunkIndex,
+          })
+        ).content;
+      const total = Number(footer.exec(await page(0))?.[2]);
+      expect(total).toBeGreaterThan(1);
+      let reassembled = '';
+      for (let i = 0; i < total; i++) {
+        const content = await page(i);
+        expect(bytes(content)).toBeLessThanOrEqual(8_000);
+        reassembled += content.slice(
+          0,
+          content.length - (footer.exec(content)?.[0].length ?? 0)
+        );
+      }
+      expect(reassembled).toBe(current);
+    });
+  });
+
   it('counts the chunk footer inside maxSize', async () => {
     const { dir, cache } = workspace();
     const file = join(dir, 'lines.txt');
