@@ -24,7 +24,11 @@ import {
 } from 'node:fs';
 import { join } from 'node:path';
 import { redact } from './redact.mjs';
-import { isToolAbsentMessage } from './capabilities.mjs';
+import {
+  HOOK_MCP_TOOLS,
+  isToolAbsentMessage,
+  optimizerToolName,
+} from './capabilities.mjs';
 
 /** Where a project's transcripts live, under the graph it belongs to. */
 export const transcriptDir = (dir) => join(dir, 'transcripts');
@@ -702,4 +706,150 @@ export function absentToolsFromTranscript(transcriptPath, options = {}) {
   }
 
   return [...absent].map(([name, at]) => ({ name, at }));
+}
+
+/** Search tools whose result names the deferred tools they loaded (#484). */
+const TOOL_SEARCH_NAMES = /^(?:tool_search_tool_\w+|ToolSearch)$/;
+
+/** The schema names a search asked for: by regex, a `select:` list, or a name in its query. */
+function optimizerNamesSearched(input, candidates) {
+  const asked = new Set();
+  const pattern = typeof input?.pattern === 'string' ? input.pattern : null;
+  if (pattern) {
+    let regex = null;
+    try {
+      regex = new RegExp(pattern, 'i');
+    } catch {
+      return asked;
+    }
+    for (const [qualified, name] of candidates) {
+      if (regex.test(qualified)) asked.add(name);
+    }
+    return asked;
+  }
+  const query = typeof input?.query === 'string' ? input.query : '';
+  const select = /^\s*select:(.*)$/i.exec(query);
+  if (select) {
+    for (const item of select[1].split(',')) {
+      const name = optimizerToolName(item);
+      if (name) asked.add(name);
+    }
+    return asked;
+  }
+  const lowered = query.toLowerCase();
+  for (const name of HOOK_MCP_TOOLS) {
+    if (lowered.includes(name)) asked.add(name);
+  }
+  return asked;
+}
+
+/** The optimizer schema names a search result loaded, and how many tools it loaded in all. */
+function optimizerNamesLoaded(content) {
+  const refs = Array.isArray(content?.tool_references)
+    ? content.tool_references
+    : Array.isArray(content)
+      ? content.filter((part) => part?.type === 'tool_reference')
+      : [];
+  const loaded = new Set();
+  for (const ref of refs) {
+    const name = optimizerToolName(ref?.tool_name);
+    if (name) loaded.add(name);
+  }
+  return { loaded, total: refs.length };
+}
+
+/**
+ * What the session's tool searches established about the optimizer tools (#484).
+ *
+ * A host that DEFERS MCP schemas lists the tool as registered and makes the
+ * model load it with a search before it can be called. When that search comes
+ * back without the tool, no call is ever made, so `absentToolsFromTranscript`
+ * -- which reads the reply to a call -- never sees a refusal, and the Stop hook
+ * went on asking for a `wiki_write` the session had already failed to load
+ * three times. A search whose pattern or query covers a tool's name and whose
+ * result does not include it is that refusal, one step earlier.
+ *
+ * A search that DID return the tool is reported too, so a later successful load
+ * revokes an earlier miss the same way a later successful call does.
+ *
+ * A failed search (an invalid pattern, a search-tool error) proves nothing about
+ * the tool and is skipped. Names and instants only leave this function.
+ *
+ * @returns {{missed: Array<{name: string, at: number}>, loaded: Array<{name: string, at: number}>}}
+ *   schema names, each with the LATEST instant it was missed or loaded.
+ */
+export function toolSearchOutcomesFromTranscript(transcriptPath, options = {}) {
+  const { scanBytes = ABSENCE_SCAN_BYTES() } = options || {};
+  const none = { missed: [], loaded: [] };
+  if (!transcriptPath) return none;
+  const text = readTail(transcriptPath, scanBytes);
+  if (!text) return none;
+
+  // The names a pattern is tested against: the host's own qualified names when
+  // it announced its deferred tools, and the common qualified form otherwise.
+  const candidates = new Map(
+    HOOK_MCP_TOOLS.flatMap((name) => [
+      [`mcp__token-optimizer__${name}`, name],
+      [name, name],
+    ])
+  );
+  const searches = new Map();
+  const missed = new Map();
+  const loaded = new Map();
+  const stamp = (map, name, at) => map.set(name, Math.max(map.get(name) || 0, at));
+  const settle = (id, content, at) => {
+    const search = searches.get(String(id || ''));
+    if (!search || search.asked.size === 0) return;
+    const { loaded: found, total } = optimizerNamesLoaded(content);
+    // A FULL PAGE PROVES NOTHING about what it left out: a broad pattern can
+    // match more tools than the search returns. Only a result with room to
+    // spare -- empty, or under its own limit -- shows the tool was not there.
+    const complete = total === 0 || (search.limit > 0 && total < search.limit);
+    for (const name of search.asked) {
+      if (found.has(name)) stamp(loaded, name, at);
+      else if (complete) stamp(missed, name, at);
+    }
+  };
+
+  for (const line of text.split('\n')) {
+    if (!line.trim()) continue;
+    let entry;
+    try {
+      entry = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    const at = Date.parse(entry.timestamp || '') || 0;
+    const announced = entry.attachment?.addedNames;
+    if (entry.attachment?.type === 'deferred_tools_delta' && Array.isArray(announced)) {
+      for (const qualified of announced) {
+        const name = optimizerToolName(qualified);
+        if (name) candidates.set(String(qualified), name);
+      }
+      continue;
+    }
+    const content = (entry.message || entry).content;
+    if (!Array.isArray(content)) continue;
+    for (const block of content) {
+      if (!block || (!block.id && !block.tool_use_id)) continue;
+      if (
+        (block.type === 'server_tool_use' || block.type === 'tool_use') &&
+        TOOL_SEARCH_NAMES.test(String(block.name || ''))
+      ) {
+        searches.set(String(block.id), {
+          asked: optimizerNamesSearched(block.input, candidates),
+          limit: Number(block.input?.limit ?? block.input?.max_results) || 0,
+        });
+      } else if (block.type === 'tool_search_tool_result') {
+        // An error result is about the search, not about the tool.
+        if (block.content?.type !== 'tool_search_tool_search_result') continue;
+        settle(block.tool_use_id, block.content, at);
+      } else if (block.type === 'tool_result' && block.is_error !== true) {
+        settle(block.tool_use_id, block.content, at);
+      }
+    }
+  }
+
+  const list = (map) => [...map].map(([name, at]) => ({ name, at }));
+  return { missed: list(missed), loaded: list(loaded) };
 }

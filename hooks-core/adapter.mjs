@@ -86,6 +86,7 @@ import {
   absentToolsFromTranscript,
   archive,
   isArchived,
+  toolSearchOutcomesFromTranscript,
 } from './transcript.mjs';
 import { harvestMode } from './harvest.mjs';
 import { canonicalPath, isFsSafePath } from './paths.mjs';
@@ -98,6 +99,7 @@ import {
   HOOK_MCP_TOOLS,
   nativeClientProfiles,
   markOptimizerToolAbsent,
+  markOptimizerToolOk,
   observeOptimizerToolCall,
   optimizerToolEvidence,
   optimizerToolsForHook,
@@ -821,6 +823,16 @@ function gradeObservedTools(state, event, payload, raw) {
     const transcriptPath = payload?.transcript_path ?? payload?.transcriptPath;
     for (const { name, at } of absentToolsFromTranscript(transcriptPath)) {
       markOptimizerToolAbsent(state, name, at);
+    }
+    // A DEFERRED TOOL THE SESSION COULD NOT LOAD never reaches a call, so the
+    // read above has nothing to find (#484). Its tool searches are the signal:
+    // a miss marks it absent, and a later load revokes that like a later call.
+    const searched = toolSearchOutcomesFromTranscript(transcriptPath);
+    for (const { name, at } of searched.missed) {
+      markOptimizerToolAbsent(state, name, at);
+    }
+    for (const { name, at } of searched.loaded) {
+      markOptimizerToolOk(state, name, at);
     }
     // And the event itself, for the ten clients that do report a failed call.
     if (event === 'post-tool') {
