@@ -15,6 +15,7 @@ import { join, resolve } from 'node:path';
 import { createHash } from 'node:crypto';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { activateWindowsCommands } from '../../scripts/windows-commands.mjs';
+import { activateShells } from '../../scripts/managed-shell.mjs';
 import { repairManagedInstall } from '../../scripts/repair-managed-install.mjs';
 import {
   FORWARDER_NAME,
@@ -186,6 +187,79 @@ describe('what a launcher names', () => {
       expect(run()).toEqual({ version: '7.4.5', args: ['codex', 'a b'] });
     }
   );
+});
+
+describe('shell profiles', () => {
+  it('recognises an unedited legacy block and moves it onto the forwarder', () => {
+    // Older installs wrote a checksum-free block naming the package's own
+    // run-client. It is recognised by exact text, so building that text with
+    // the forwarder's invocation would call it a user edit and refuse.
+    const { runtime } = runtimeWith(['7.4.4'], '7.4.4');
+    const root = packageRoot(runtime, '7.4.4');
+    const profile = join(runtime, '.bashrc');
+    const q = (text) => `'${text.replaceAll("'", "'\\''")}'`;
+    const old = `${q(process.execPath)} ${q(join(root, 'scripts', 'run-client.mjs'))}`;
+    const legacy = [
+      '# >>> token-optimizer managed clients >>>',
+      ...['claude', 'codex', 'opencode'].map((c) => `${c}() { ${old} ${c} "$@"; }`),
+      '# <<< token-optimizer managed clients <<<',
+    ].join('\n');
+    fs.writeFileSync(profile, `export KEEP=1\n${legacy}\n`);
+
+    expect(() =>
+      activateShells({
+        root,
+        clients: ['codex'],
+        env: {
+          TOKEN_OPTIMIZER_SHELL_PROFILES: JSON.stringify([profile]),
+          TOKEN_OPTIMIZER_RUNTIME: runtime,
+        },
+      })
+    ).not.toThrow();
+    const after = fs.readFileSync(profile, 'utf8');
+    expect(after).toContain('export KEEP=1');
+    expect(after).toContain(q(join(runtime, FORWARDER_NAME)));
+    expect(after).not.toContain('run-client.mjs');
+  });
+});
+
+(process.platform === 'win32' ? describe.skip : describe)('signals through the forwarder', () => {
+  /** A runtime whose run-client either waits, or ends itself with `signal`. */
+  function signalRuntime(body) {
+    const { runtime } = runtimeWith(['7.4.4'], '7.4.4');
+    fs.writeFileSync(join(packageRoot(runtime, '7.4.4'), 'scripts', 'run-client.mjs'), body);
+    const forwarder = join(runtime, FORWARDER_NAME);
+    fs.copyFileSync(FORWARDER_SOURCE, forwarder);
+    return { runtime, forwarder };
+  }
+
+  it('passes a SIGINT sent to the forwarder on to the client', async () => {
+    const { runtime, forwarder } = signalRuntime(
+      `import fs from 'node:fs';\n` +
+        `process.on('SIGINT', () => { fs.writeFileSync(${JSON.stringify(join(runtime, 'got-sigint'))}, ''); process.exit(130); });\n` +
+        `fs.writeFileSync(${JSON.stringify(join(runtime, 'ready'))}, '');\n` +
+        `setInterval(() => {}, 1000);\n`
+    );
+    const { spawn } = await import('node:child_process');
+    const child = spawn(process.execPath, [forwarder], { stdio: 'ignore' });
+    const deadline = Date.now() + 10_000;
+    while (!fs.existsSync(join(runtime, 'ready')) && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    child.kill('SIGINT');
+    const code = await new Promise((resolve) => child.on('exit', (c) => resolve(c)));
+    expect(fs.existsSync(join(runtime, 'got-sigint'))).toBe(true);
+    expect(code).toBe(130);
+  });
+
+  it("ends with the client's signal, not an ordinary exit status", () => {
+    const { forwarder } = signalRuntime(`process.kill(process.pid, 'SIGTERM');\nsetInterval(() => {}, 1000);\n`);
+    const env = { ...process.env };
+    delete env.TOKEN_OPTIMIZER_RUNTIME;
+    const result = spawnSync(process.execPath, [forwarder], { env, timeout: 10_000 });
+    expect(result.signal).toBe('SIGTERM');
+    expect(result.status).toBeNull();
+  });
 });
 
 describe('the refresh runs the launcher repair', () => {

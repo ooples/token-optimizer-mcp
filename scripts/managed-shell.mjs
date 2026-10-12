@@ -12,7 +12,7 @@ import {
 } from './managed-clients.mjs';
 import { launcherEntry, runtimeDirectory } from './launch-entry.mjs';
 
-const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const begin = '# >>> token-optimizer managed clients >>>';
 const end = '# <<< token-optimizer managed clients <<<';
 const quoteSh = (text) => `'${text.replaceAll("'", "'\\''")}'`;
@@ -58,6 +58,8 @@ export function activateShells({
   apply = true,
   env = process.env,
   clients = launcherCommands({ env }),
+  // The package the functions run; tests name a managed-runtime one.
+  root = packageRoot,
 } = {}) {
   const changed = [];
   const plans = [];
@@ -84,12 +86,17 @@ export function activateShells({
     // The stable forwarder when this package is in the managed runtime, so the function follows
     // `current` instead of pinning this version (see launch-entry.mjs).
     const invocation = `${quote(process.execPath)} ${quote(launcherEntry(root, { runtime: runtimeDirectory(env), install: apply && !remove && clients.length > 0 }))}`;
-    const define = (names) =>
+    // What earlier versions wrote: this package's own run-client, never the forwarder. The legacy
+    // blocks below are recognised by exact text, so they must be built with THIS invocation --
+    // built with the forwarder's, an unedited legacy block reads as a user edit and activation
+    // refuses to touch the profile (#493 review).
+    const legacyInvocation = `${quote(process.execPath)} ${quote(join(root, 'scripts', 'run-client.mjs'))}`;
+    const define = (names, through = invocation) =>
       names
         .map((client) =>
           powershell
-            ? `function global:${client} { & ${invocation} ${client} @args }`
-            : `${client}() { ${invocation} ${client} "$@"; }`
+            ? `function global:${client} { & ${through} ${client} @args }`
+            : `${client}() { ${through} ${client} "$@"; }`
         )
         .join('\n');
     const functions = define(clients);
@@ -98,7 +105,7 @@ export function activateShells({
     // text. That text is the CLIENTS THEY WRAPPED, not whatever this machine wraps today: deriving
     // it from `functions` would stop recognising our own old block the moment the list changed, and
     // the user would be told their profile had been edited by hand.
-    const previous = define(LEGACY_LAUNCHER_COMMANDS);
+    const previous = define(LEGACY_LAUNCHER_COMMANDS, legacyInvocation);
     const legacy = `${begin}\n${previous}\n${end}`;
     const legacyTwoClients = `${begin}\n${previous.split('\n').slice(0, 2).join('\n')}\n${end}`;
     // No client on this machine means no block: an empty one would define nothing and still have to

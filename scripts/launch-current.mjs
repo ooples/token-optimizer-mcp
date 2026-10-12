@@ -17,6 +17,7 @@
  */
 import { spawn } from 'node:child_process';
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import os from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -73,21 +74,34 @@ if (!script) {
 const child = spawn(process.execPath, [script, ...process.argv.slice(2)], {
   stdio: 'inherit',
 });
-// The terminal delivers Ctrl+C to the client directly; this process only waits
-// for it to finish. A termination aimed at this process is passed on, so the
-// client is not left running without the wrapper that started it.
-process.on('SIGINT', () => {});
-for (const signal of ['SIGTERM', 'SIGHUP']) {
-  process.on(signal, () => {
-    try {
-      child.kill(signal);
-    } catch {
-      // Already gone.
-    }
-  });
-}
+// A signal aimed at this process is passed on, so the client is not left
+// running without the wrapper that started it -- SIGINT included, as
+// run-client.mjs already does for the client it starts one level down.
+const forwarded = ['SIGINT', 'SIGTERM', 'SIGHUP'];
+const pass = (signal) => {
+  try {
+    child.kill(signal);
+  } catch {
+    // Already gone.
+  }
+};
+for (const signal of forwarded) process.on(signal, pass);
 child.on('error', (error) => {
   console.error(`token-optimizer: could not start ${script}: ${error.message}`);
   process.exit(1);
 });
-child.on('exit', (code, signal) => process.exit(code ?? (signal ? 1 : 0)));
+// THE CHILD'S OUTCOME IS THIS PROCESS'S OUTCOME. An exit code is returned as
+// is; a signal is re-raised on this process with its handler removed, so a
+// caller sees the same termination -- cancellation stays distinguishable from
+// failure. Where a signal cannot be re-raised (Windows), the shell's 128+n.
+child.on('exit', (code, signal) => {
+  if (code !== null) process.exit(code);
+  for (const name of forwarded) process.off(name, pass);
+  try {
+    process.kill(process.pid, signal);
+  } catch {
+    // Not deliverable here; fall through to the conventional code.
+  }
+  const number = signal ? (os.constants.signals[signal] ?? 0) : 0;
+  setTimeout(() => process.exit(128 + number), 1_000);
+});
