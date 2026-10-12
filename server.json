@@ -6,12 +6,12 @@
     "url": "https://github.com/ooples/token-optimizer-mcp",
     "source": "github"
   },
-  "version": "7.4.3",
+  "version": "7.4.4",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "@ooples/token-optimizer-mcp",
-      "version": "7.4.3",
+      "version": "7.4.4",
       "transport": {
         "type": "stdio"
       },

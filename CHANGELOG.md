@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.4.4](https://github.com/ooples/token-optimizer-mcp/compare/v7.4.3...v7.4.4) (2026-10-12)
+
+
+### Bug Fixes
+
+* **hooks:** a deferred tool the session could not load is absent ([#484](https://github.com/ooples/token-optimizer-mcp/issues/484)) ([#485](https://github.com/ooples/token-optimizer-mcp/issues/485)) ([d8de493](https://github.com/ooples/token-optimizer-mcp/commit/d8de493ab968ad496d56e84862a178e07afd97ef))
+* **hooks:** read answered calls from the transcript and refuse backtracking search patterns ([#486](https://github.com/ooples/token-optimizer-mcp/issues/486)) ([b2f7a40](https://github.com/ooples/token-optimizer-mcp/commit/b2f7a4076f4c16deac417e277a8ccf0fe8b786c4))
+
 ## [7.4.3](https://github.com/ooples/token-optimizer-mcp/compare/v7.4.2...v7.4.3) (2026-10-09)
 
 
