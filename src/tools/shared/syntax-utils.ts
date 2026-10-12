@@ -57,80 +57,74 @@ export function detectFileType(filePath: string): string {
 }
 
 /**
- * Smart chunking based on syntax boundaries
+ * Split content into chunks of at most `maxChunkSize` characters, at line
+ * boundaries where a line fits.
+ *
+ * THE CHUNKS ARE THE FILE, CONCATENATED. Each line carries its own newline into
+ * the chunk it ends in, counted in that chunk's size, so joining every chunk
+ * gives back the file byte for byte -- a caller paging through it loses no
+ * separator at a page boundary. Lines used to be joined inside a chunk and the
+ * newline between two chunks was dropped, so `ABCD\nz` paged at 2 read back as
+ * `ABCDz` (#489 review).
+ *
+ * A LINE LONGER THAN A CHUNK IS SPLIT ACROSS CHUNKS. One minified line used to
+ * be a single chunk of any size: over the caller's limit, or -- once cut down
+ * to it -- a "chunk 1 of 1" whose remaining bytes no chunkIndex could reach.
+ * `lineOf` keeps the metadata's line numbers those of the file.
  */
 export function chunkBySyntax(
   content: string,
   maxChunkSize: number = 4000
 ): ChunkResult {
   const sourceLines = content.split('\n');
-
-  // A LINE LONGER THAN A CHUNK IS SPLIT ACROSS CHUNKS (#489 review). Chunks
-  // break at lines, so one minified line used to be a single chunk of any
-  // size: either over the limit the caller set, or -- once cut down to it --
-  // a "chunk 1 of 1" whose remaining bytes no chunkIndex could reach. Each
-  // full-size piece fills a chunk of its own, so no newline is invented inside
-  // a chunk; a boundary between chunks never claims one. `lineOf` keeps the
-  // metadata's line numbers those of the file.
   const size = Math.max(1, Math.floor(maxChunkSize));
-  const lines: string[] = [];
+  const pieces: string[] = [];
   const lineOf: number[] = [];
   sourceLines.forEach((line, index) => {
-    if (line.length <= size) {
-      lines.push(line);
-      lineOf.push(index);
-      return;
-    }
-    for (let at = 0; at < line.length; at += size) {
-      lines.push(line.slice(at, at + size));
+    const text = index < sourceLines.length - 1 ? `${line}\n` : line;
+    for (let at = 0; at < text.length; at += size) {
+      pieces.push(text.slice(at, at + size));
       lineOf.push(index);
     }
   });
 
   const chunks: string[] = [];
   const metadata: ChunkMetadata[] = [];
-  let currentChunk: string[] = [];
+  let current: string[] = [];
   let currentSize = 0;
-  let startLine = 0;
-  let chunkIndex = 0;
+  let first = 0;
 
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    const lineSize = line.length + 1; // +1 for newline
-
-    // Check if adding this line would exceed the chunk size
-    if (currentSize + lineSize > maxChunkSize && currentChunk.length > 0) {
-      // Save current chunk
-      const chunkContent = currentChunk.join('\n');
-      chunks.push(chunkContent);
-      metadata.push({
-        index: chunkIndex++,
-        startLine: lineOf[startLine],
-        endLine: lineOf[i - 1],
-        size: currentSize,
-        type: detectLineType(currentChunk[0]),
-      });
-
-      // Start new chunk
-      currentChunk = [line];
-      currentSize = lineSize;
-      startLine = i;
-    } else {
-      currentChunk.push(line);
-      currentSize += lineSize;
-    }
-  }
-
-  // Add remaining chunk
-  if (currentChunk.length > 0) {
-    const chunkContent = currentChunk.join('\n');
-    chunks.push(chunkContent);
+  const flush = (last: number) => {
+    chunks.push(current.join(''));
     metadata.push({
-      index: chunkIndex,
-      startLine: lineOf[startLine],
-      endLine: sourceLines.length - 1,
+      index: chunks.length - 1,
+      startLine: lineOf[first],
+      endLine: lineOf[last],
       size: currentSize,
-      type: detectLineType(currentChunk[0]),
+      type: detectLineType(current[0]),
+    });
+  };
+
+  pieces.forEach((piece, i) => {
+    if (currentSize + piece.length > size && current.length > 0) {
+      flush(i - 1);
+      current = [];
+      currentSize = 0;
+      first = i;
+    }
+    current.push(piece);
+    currentSize += piece.length;
+  });
+  if (current.length > 0) flush(pieces.length - 1);
+  // An empty file is one empty chunk, as it always was.
+  if (chunks.length === 0) {
+    chunks.push('');
+    metadata.push({
+      index: 0,
+      startLine: 0,
+      endLine: 0,
+      size: 0,
+      type: 'other',
     });
   }
 

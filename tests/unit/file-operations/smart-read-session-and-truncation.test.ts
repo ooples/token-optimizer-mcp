@@ -8,7 +8,10 @@ import { SmartConfigReadTool } from '../../../src/tools/configuration/smart-conf
 import { CacheEngine } from '../../../src/core/cache-engine.js';
 import { TokenCounter } from '../../../src/core/token-counter.js';
 import { MetricsCollector } from '../../../src/core/metrics.js';
-import { truncateContent } from '../../../src/tools/shared/syntax-utils.js';
+import {
+  chunkBySyntax,
+  truncateContent,
+} from '../../../src/tools/shared/syntax-utils.js';
 
 /**
  * #488: a session's first read of a file is the file, never `// No changes`.
@@ -185,9 +188,16 @@ describe('#489 truncation keeps the top, and chunkIndex pages a file over maxSiz
     // cut to maxSize it read "chunk 1 of 1" and the rest was unreachable.
     const { dir, cache } = workspace();
     const file = join(dir, 'bundle.min.js');
-    const body = Array.from({ length: 50_000 }, (_, i) => `v${i % 10}=1;`).join(
-      ''
-    ); // ~250 KB
+    // Long minified lines AND ordinary ones, so page boundaries fall both
+    // inside a line and between lines: every newline has to survive paging.
+    const body = Array.from({ length: 12 }, (_, block) =>
+      [
+        Array.from({ length: 2_500 }, (_, i) => `v${(i + block) % 10}=1;`).join(
+          ''
+        ),
+        ...Array.from({ length: 40 }, (_, i) => `// block ${block} line ${i}`),
+      ].join('\n')
+    ).join('\n');
     writeFileSync(file, body);
     const tool = reader(cache);
     const footer =
@@ -217,6 +227,23 @@ describe('#489 truncation keeps the top, and chunkIndex pages a file over maxSiz
       );
     }
     expect(reassembled).toBe(body);
+  });
+
+  it('chunks concatenate back to the exact input, newlines included', () => {
+    // The review's case: `ABCD\nz` at 2 paged back as `ABCDz`.
+    for (const [content, size] of [
+      ['ABCD\nz', 2],
+      ['a\nb\nc\n', 1],
+      ['line one\nline two\n\nline four', 5],
+      ['no newline at all', 4],
+      ['ends with newline\n', 3],
+      ['\n\n\n', 2],
+    ] as const) {
+      const { chunks } = chunkBySyntax(content, size);
+      expect(chunks.join('')).toBe(content);
+      for (const chunk of chunks)
+        expect(chunk.length).toBeLessThanOrEqual(size);
+    }
   });
 
   it('counts the chunk footer inside maxSize', async () => {
@@ -251,18 +278,18 @@ describe('#489 truncation keeps the top, and chunkIndex pages a file over maxSiz
     const file = join(dir, 'changing.md');
     const lines = (tag: string) =>
       Array.from(
-        { length: 3_000 },
+        { length: 600 },
         (_, i) => `- line ${i} ${tag} ${'x'.repeat(40)}`
       ).join('\n');
     process.env.TOKEN_OPTIMIZER_SESSION_ID = 'session-one';
     const tool = reader(cache);
     writeFileSync(file, lines('first'));
     expect(
-      (await tool.read(file, { maxSize: 20_000 })).content.length
-    ).toBeLessThanOrEqual(20_000);
+      (await tool.read(file, { maxSize: 5_000 })).content.length
+    ).toBeLessThanOrEqual(5_000);
     writeFileSync(file, lines('second')); // every line changed
-    const again = await tool.read(file, { maxSize: 20_000 });
-    expect(again.content.length).toBeLessThanOrEqual(20_000);
+    const again = await tool.read(file, { maxSize: 5_000 });
+    expect(again.content.length).toBeLessThanOrEqual(5_000);
     expect(again.content.startsWith('- line 0 second')).toBe(true);
   });
 
