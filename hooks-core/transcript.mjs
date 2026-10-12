@@ -805,7 +805,10 @@ export function toolSearchOutcomesFromTranscript(transcriptPath, options = {}) {
     const complete = total === 0 || (search.limit > 0 && total < search.limit);
     for (const name of search.asked) {
       if (found.has(name)) stamp(loaded, name, at);
-      else if (complete) stamp(missed, name, at);
+      // A LOADED TOOL LEAVES THE DEFERRED REGISTRY, so a later search that
+      // covers it comes back empty; that is not a miss. A miss BEFORE a load
+      // still counts, and the later load revokes it by its instant.
+      else if (complete && !loaded.has(name)) stamp(missed, name, at);
     }
   };
 

@@ -131,6 +131,18 @@ describe('a tool search is evidence about the tools it looked for', () => {
     ]);
   });
 
+  test('an empty search after a load is not a miss', () => {
+    // A loaded tool leaves the deferred registry, so searching again finds nothing.
+    const path = transcript([
+      regexSearch('s1', 'wiki_write', [QUALIFIED], { limit: 2, timestamp: '2026-10-12T14:00:00.000Z' }),
+      regexSearch('s2', 'wiki_write', [], { limit: 2, timestamp: '2026-10-12T14:05:00.000Z' }),
+    ]);
+    expect(toolSearchOutcomesFromTranscript(path)).toEqual({
+      missed: [],
+      loaded: [{ name: 'wiki_write', at: Date.parse('2026-10-12T14:00:00.000Z') }],
+    });
+  });
+
   test('a search that returns the tool reports it loaded', () => {
     const path = transcript([
       regexSearch('s1', 'wiki_write', [QUALIFIED], {
@@ -300,6 +312,37 @@ describe('the Stop hook stops asking for a tool the session could not load', () 
     expect(Object.keys(state.optimizerToolAbsentAt ?? {})).toEqual(['wiki_write']);
     expect(state.edits).toBe(1);
     expect(JSON.stringify(output ?? {})).not.toContain('wiki_write');
+  });
+
+  test('an empty search after a successful call does not take the tool away', () => {
+    // The call succeeded first (a PostToolUse for wiki_write); the later search
+    // comes back empty because the tool is no longer deferred. The load that
+    // preceded the call is outside the transcript the Stop hook reads, so only
+    // the stored success can tell the empty search apart from a miss.
+    const path = transcript([]);
+    const hookEnv = env();
+    run(
+      POST,
+      {
+        hook_event_name: 'PostToolUse',
+        session_id: 'stop-called',
+        transcript_path: path,
+        cwd: workspace,
+        tool_name: QUALIFIED,
+        tool_input: { claim: 'x' },
+        tool_response: { success: true },
+      },
+      hookEnv
+    );
+    transcript([
+      announced([QUALIFIED]),
+      regexSearch('s1', 'wiki_write', [], { limit: 2, timestamp: '2099-01-01T00:00:00.000Z' }),
+    ]);
+    const output = editThenStop('stop-called', path, hookEnv);
+    const state = stateOf(hookEnv, 'stop-called');
+    expect(Object.keys(state.optimizerToolOkAt ?? {})).toEqual(['wiki_write']);
+    expect(state.optimizerToolAbsentAt?.wiki_write).toBeUndefined();
+    expect(JSON.stringify(output)).toContain('wiki_write');
   });
 
   test('a later search that loads it brings the request back', () => {
