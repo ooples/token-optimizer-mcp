@@ -149,6 +149,68 @@ export function safeRecord(record) {
   return out;
 }
 
+const QUANTIFIERS = new Set(['*', '+', '{']);
+const MAX_UNBOUNDED = 4;
+
+/** The next character after `index` that is not whitespace. */
+function nextSignificant(raw, index) {
+  let i = index;
+  while (i < raw.length && /\s/.test(raw[i])) i++;
+  return raw[i];
+}
+
+/**
+ * Whether a quantifier applies to a group that repeats or branches inside it.
+ *
+ * THE SHAPE OF CATASTROPHIC BACKTRACKING: a group that can match the same text
+ * more than one way -- because it contains a quantifier (`(a+)+`) or
+ * alternatives (`(.|.)*x`, ran over ten seconds on a 29-character tool name)
+ * -- under a quantifier of its own, so every split is retried.
+ *
+ * A SCANNER, NOT A REGEX OVER THE SOURCE. The regexes this replaced read only
+ * up to the first `)`, so one more pair of parentheses hid the inner group:
+ * `((a+))+` and `((.|.))*x` both passed. Here each group's frame records
+ * whether anything inside it, at any depth, repeats or branches, and a closing
+ * group hands that to its parent -- so the nesting depth cannot hide it.
+ * Escapes and character classes are skipped, since a `(`, `|` or `+` there is
+ * literal. Deliberately conservative: a false refusal only forgoes a pattern.
+ */
+function hasNestedRepetition(raw) {
+  const frames = [];
+  let inClass = false;
+  // Unbounded quantifiers in sequence backtrack polynomially, to the power of
+  // their count: eight `\w*` before a `!` ran past fifteen seconds on a tool
+  // name, four took 18 ms. Ordinary patterns (`wiki.*write`) use one or two.
+  let unbounded = 0;
+  for (let i = 0; i < raw.length; i++) {
+    const ch = raw[i];
+    if (ch === '\\') {
+      i++;
+      continue;
+    }
+    if (inClass) {
+      if (ch === ']') inClass = false;
+      continue;
+    }
+    if (ch === '[') {
+      inClass = true;
+    } else if (ch === '(') {
+      frames.push(false);
+    } else if (ch === ')') {
+      const inner = frames.pop() === true;
+      const quantified = QUANTIFIERS.has(nextSignificant(raw, i + 1));
+      if (inner && quantified) return true;
+      if ((inner || quantified) && frames.length) frames[frames.length - 1] = true;
+    } else if (QUANTIFIERS.has(ch) || ch === '|') {
+      if (ch === '*' || ch === '+' || (ch === '{' && /^\{\d*,\}/.test(raw.slice(i)))) {
+        if (++unbounded > MAX_UNBOUNDED) return true;
+      }
+      if (frames.length) frames[frames.length - 1] = true;
+    }
+  }
+  return false;
+}
+
 /**
  * Compiles a finding's trigger, or returns null if it is not safe to run.
  *
@@ -168,14 +230,9 @@ export function safeTrigger(source) {
   const raw = String(source || '');
   if (!raw || raw.length > 200) return null;
 
-  // A quantifier applied to a group that itself contains a quantifier: (a+)+,
-  // (a*)*, (\d+)*, (?:ab+)+ and so on. This is the classic ReDoS shape.
-  if (/\([^)]*[+*}][^)]*\)\s*[+*{]/.test(raw)) return null;
-
-  // A quantified group of alternatives, e.g. `(.|.)*x` or `(a|ab)+`: when the
-  // branches can match the same text, every split is retried, and `(.|.)*x`
-  // ran for over ten seconds against a 29-character tool name.
-  if (/\([^)]*\|[^)]*\)\s*[+*{]/.test(raw)) return null;
+  // A quantified group that itself repeats or branches: (a+)+, (a*)*, (\d+)*,
+  // (.|.)*x, and the same one parenthesis deeper, ((a+))+. See below.
+  if (hasNestedRepetition(raw)) return null;
 
   // Stacked quantifiers outside a group, e.g. `a+*` or `.*+`.
   if (/[+*}]\s*[+*]/.test(raw)) return null;

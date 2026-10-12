@@ -169,6 +169,9 @@ describe('a tool search is evidence about the tools it looked for', () => {
     const path = transcript([
       regexSearch('s1', '(.*)*x', [], { limit: 5 }),
       regexSearch('s2', '(.|.)*x', [], { limit: 5 }),
+      // The same shapes one parenthesis deeper, which the first guard missed.
+      regexSearch('s3', '((.*))*x', [], { limit: 5 }),
+      regexSearch('s4', '((.|.))*x', [], { limit: 5 }),
     ]);
     const module = join(ROOT, 'hooks-core', 'transcript.mjs').replace(/\\/g, '/');
     const result = spawnSync(

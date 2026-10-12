@@ -226,6 +226,44 @@ describe('a model-supplied trigger cannot hang the hook', () => {
     // same blow-up (`(.|.)*x` ran over ten seconds on a 29-character name).
     expect(safeTrigger(String.raw`(.|.)*x`)).toBeNull();
     expect(safeTrigger(String.raw`(a|ab)+c`)).toBeNull();
+    // One more pair of parentheses hid the inner group from the old regex
+    // checks, which read only up to the first `)`.
+    expect(safeTrigger(String.raw`((a+))+`)).toBeNull();
+    expect(safeTrigger(String.raw`((.*))*x`)).toBeNull();
+    expect(safeTrigger(String.raw`((.|.))*x`)).toBeNull();
+    expect(safeTrigger(String.raw`(?:(?:a|b)c)+`)).toBeNull();
+  });
+
+  it('refuses a long run of unbounded quantifiers, and the run it allows is fast', async () => {
+    const { safeTrigger } = await import('../../hooks-core/inject.mjs');
+    // Polynomial, not exponential, but to the power of the count: eight `\w*`
+    // before a `!` ran past fifteen seconds on a tool name.
+    expect(safeTrigger(String.raw`\w*\w*\w*\w*\w*!`)).toBeNull();
+    expect(safeTrigger(String.raw`a{2,}b{2,}c{2,}d{2,}e{2,}`)).toBeNull();
+    const allowed = String.raw`\w*\w*\w*\w*!`;
+    expect(safeTrigger(allowed)).not.toBeNull();
+
+    // THE BOUND HAS TO HOLD, not just exist: the worst allowed pattern runs in
+    // a child with a deadline against the longest optimizer tool name.
+    const { spawnSync } = await import('node:child_process');
+    const name = 'mcp__plugin_token-optimizer_token-optimizer__get_optimization_report';
+    const result = spawnSync(
+      process.execPath,
+      ['-e', `new RegExp(${JSON.stringify(allowed)}, 'i').test(${JSON.stringify(name)})`],
+      { timeout: 5_000 }
+    );
+    expect(result.signal).toBeNull();
+    expect(result.status).toBe(0);
+  });
+
+  it('reads escapes and character classes as literal, not as structure', async () => {
+    const { safeTrigger } = await import('../../hooks-core/inject.mjs');
+    // A `(` or `|` inside a class or after a backslash opens nothing.
+    expect(safeTrigger(String.raw`[(|]+x`)).not.toBeNull();
+    expect(safeTrigger(String.raw`\(a\|b\)+`)).not.toBeNull();
+    expect(safeTrigger(String.raw`(wiki|smart)_write`)).not.toBeNull();
+    expect(safeTrigger(String.raw`(ab)+c`)).not.toBeNull();
+    expect(safeTrigger(String.raw`__wiki_write$`)).not.toBeNull();
   });
 
   it('refuses an absurdly long pattern', async () => {
