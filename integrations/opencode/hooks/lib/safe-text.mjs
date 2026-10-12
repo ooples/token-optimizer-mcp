@@ -155,7 +155,17 @@ export function safeRecord(record) {
 // eight `\w*` before a `!` ran past fifteen seconds on a tool name, and so did
 // eight `\w{0,60}`; twenty `\w?` took over a second. Four `\w*` took 18 ms, and
 // ordinary patterns (`wiki.*write`, `\bnpx?\s+jest\b`) use one or two.
+//
+// THE SUBJECT'S LENGTH IS THE OTHER HALF of that cost, roughly length to the
+// power of (count + 1). Four is safe against a tool name of about seventy
+// characters. Against a command it is not: `.*.*.*!` never finished on 512
+// characters, and even `.*.*!` took 2.3 s on 2,000. So a trigger run against a
+// command allows two and sees only the command's first COMMAND_MATCH_CHARS
+// characters, where `.*.*!` takes 19 ms. Counted per top-level alternative:
+// `a.*|b.*|c.*` tries its branches one at a time, not in sequence.
 const MAX_QUANTIFIERS = 4;
+export const COMMAND_MAX_QUANTIFIERS = 2;
+export const COMMAND_MATCH_CHARS = 256;
 
 /** The length of the quantifier token at `index`: `*`, `+`, `?`, `{n}`, `{n,}`, `{n,m}`; 0 if none. */
 function quantifierLength(raw, index) {
@@ -191,7 +201,7 @@ function repeatsGroup(raw, index) {
  * classes are literal. Deliberately conservative: a false refusal only forgoes
  * a pattern.
  */
-function hasNestedRepetition(raw) {
+function hasNestedRepetition(raw, maxQuantifiers = MAX_QUANTIFIERS) {
   const frames = [];
   let inClass = false;
   let quantifiers = 0;
@@ -213,7 +223,7 @@ function hasNestedRepetition(raw) {
     }
     const length = quantifierLength(raw, i);
     if (length > 0) {
-      if (++quantifiers > MAX_QUANTIFIERS) return true;
+      if (++quantifiers > maxQuantifiers) return true;
       if (frames.length) frames[frames.length - 1] = true;
       afterQuantifier = true;
       i += length - 1;
@@ -230,8 +240,9 @@ function hasNestedRepetition(raw) {
       const repeated = repeatsGroup(raw, i + 1);
       if (inner && repeated) return true;
       if ((inner || repeated) && frames.length) frames[frames.length - 1] = true;
-    } else if (ch === '|' && frames.length) {
-      frames[frames.length - 1] = true;
+    } else if (ch === '|') {
+      if (frames.length) frames[frames.length - 1] = true;
+      else quantifiers = 0; // a new top-level alternative, tried on its own
     }
   }
   return false;
@@ -252,13 +263,13 @@ function hasNestedRepetition(raw) {
  * conservative -- nested quantifiers are the shape that causes this, and no
  * legitimate trigger for a command needs one.
  */
-export function safeTrigger(source) {
+export function safeTrigger(source, { maxQuantifiers = MAX_QUANTIFIERS } = {}) {
   const raw = String(source || '');
   if (!raw || raw.length > 200) return null;
 
   // A quantified group that itself repeats or branches: (a+)+, (a*)*, (\d+)*,
   // (.|.)*x, and the same one parenthesis deeper, ((a+))+. See below.
-  if (hasNestedRepetition(raw)) return null;
+  if (hasNestedRepetition(raw, maxQuantifiers)) return null;
 
   // Stacked quantifiers outside a group, e.g. `a+*` or `.*+`.
   if (/[+*}]\s*[+*]/.test(raw)) return null;
@@ -267,5 +278,28 @@ export function safeTrigger(source) {
     return new RegExp(raw, 'i');
   } catch {
     return null;
+  }
+}
+
+/**
+ * Whether a finding's trigger matches a command, in bounded time.
+ *
+ * The command is model- and user-written and unbounded, so the trigger is
+ * compiled with COMMAND_MAX_QUANTIFIERS and tested against only the first
+ * COMMAND_MATCH_CHARS characters (see MAX_QUANTIFIERS for the measurements).
+ * A trigger refused as unsafe or malformed falls back to a literal search,
+ * which cannot backtrack: a bad trigger degrades to a substring match rather
+ * than hanging the hook. A trigger whose subject sits further into a long
+ * command is missed; that only withholds a finding.
+ */
+export function triggerMatchesCommand(trigger, command) {
+  const text = String(command || '').slice(0, COMMAND_MATCH_CHARS);
+  if (!text || !trigger) return false;
+  const pattern = safeTrigger(trigger, { maxQuantifiers: COMMAND_MAX_QUANTIFIERS });
+  if (!pattern) return text.toLowerCase().includes(String(trigger).toLowerCase());
+  try {
+    return pattern.test(text);
+  } catch {
+    return false;
   }
 }

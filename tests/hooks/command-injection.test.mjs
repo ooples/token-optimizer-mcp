@@ -267,6 +267,52 @@ describe('a model-supplied trigger cannot hang the hook', () => {
     }
   });
 
+  it('matches a command in bounded time, whatever its length', async () => {
+    const { triggerMatchesCommand, COMMAND_MATCH_CHARS } = await import(
+      '../../hooks-core/safe-text.mjs'
+    );
+    // The command is unbounded, and cost grows as its length to the power of
+    // (quantifiers + 1): `.*.*!` took 2.3 s on 2,000 characters, `.*.*.*!`
+    // never finished on 512. The worst trigger a command allows runs against a
+    // 2,000-character command in a child with a deadline.
+    const { spawnSync } = await import('node:child_process');
+    const module = new URL('../../hooks-core/safe-text.mjs', import.meta.url).href;
+    const command = 'npm run build '.padEnd(2_000, 'x');
+    const result = spawnSync(
+      process.execPath,
+      [
+        '--input-type=module',
+        '-e',
+        `const m = await import(${JSON.stringify(module)}); process.stdout.write(String(m.triggerMatchesCommand('.*.*!', ${JSON.stringify(command)})));`,
+      ],
+      { encoding: 'utf8', timeout: 2_000 }
+    );
+    expect(result.signal).toBeNull();
+    expect(result.stdout).toBe('false');
+
+    // Three quantifiers in one branch are refused for a command, so the trigger
+    // degrades to a literal search of its source, which cannot backtrack.
+    expect(triggerMatchesCommand('.*.*.*!', command)).toBe(false);
+    expect(triggerMatchesCommand(String.raw`\bnpm\s+run\b`, command)).toBe(true);
+
+    // A match past the bounded prefix is missed -- withholding a finding, which
+    // is the accepted cost of never hanging.
+    expect(triggerMatchesCommand('tail', 'x'.repeat(COMMAND_MATCH_CHARS) + ' | tail')).toBe(false);
+  });
+
+  it('counts quantifiers per top-level alternative, since those are tried one at a time', async () => {
+    const { safeTrigger, COMMAND_MAX_QUANTIFIERS } = await import('../../hooks-core/safe-text.mjs');
+    const limit = { maxQuantifiers: COMMAND_MAX_QUANTIFIERS };
+    // A trigger stored in a real local graph: three branches, one `.*` each.
+    expect(
+      safeTrigger(String.raw`claude.*--plugin-dir|codex.*exec|live.*(?:Claude|Codex)`, limit)
+    ).not.toBeNull();
+    // Inside a group the alternatives still run in sequence with what follows.
+    expect(safeTrigger(String.raw`(?:a.*|b.*).*!`, limit)).toBeNull();
+    expect(safeTrigger(String.raw`.*.*.*!`, limit)).toBeNull();
+    expect(safeTrigger(String.raw`.*.*.*!`)).not.toBeNull(); // a tool name is short
+  });
+
   it('does not count a group modifier or a lazy suffix as a quantifier', async () => {
     const { safeTrigger } = await import('../../hooks-core/inject.mjs');
     // Four quantifiers, each made lazy: the `?` after them repeats nothing.
