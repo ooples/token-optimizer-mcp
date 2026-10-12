@@ -10,6 +10,7 @@ import {
   LEGACY_LAUNCHER_COMMANDS,
   launcherCommands,
 } from './managed-clients.mjs';
+import { launcherEntry, runtimeDirectory } from './launch-entry.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const begin = '# >>> token-optimizer managed clients >>>';
@@ -80,7 +81,9 @@ export function activateShells({
       );
     const powershell = path.endsWith('.ps1');
     const quote = powershell ? quotePs : quoteSh;
-    const invocation = `${quote(process.execPath)} ${quote(join(root, 'scripts', 'run-client.mjs'))}`;
+    // The stable forwarder when this package is in the managed runtime, so the function follows
+    // `current` instead of pinning this version (see launch-entry.mjs).
+    const invocation = `${quote(process.execPath)} ${quote(launcherEntry(root, { runtime: runtimeDirectory(env), install: apply && !remove && clients.length > 0 }))}`;
     const define = (names) =>
       names
         .map((client) =>

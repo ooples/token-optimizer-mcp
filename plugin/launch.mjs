@@ -724,6 +724,29 @@ export function pruneOldVersions(keepVersion, alsoKeep = null) {
   }
 }
 
+/**
+ * Run `root`'s repair-managed-install, which moves launchers that name a
+ * runtime version onto the stable forwarder. Best effort: a package without
+ * the script (older than the forwarder) or a repair that fails leaves the
+ * launchers as they were, and pruning still keeps every version they name.
+ */
+export function repairManagedLaunchers(root) {
+  const script = join(root, 'scripts', 'repair-managed-install.mjs');
+  if (!existsSync(join(root, 'scripts', 'launch-current.mjs')) || !existsSync(script)) return false;
+  try {
+    const result = spawnSync(process.execPath, [script], {
+      stdio: 'ignore',
+      windowsHide: true,
+      timeout: 120_000,
+      // Launchers only: Claude's settings stay with the full repair and its rollout.
+      env: { ...process.env, TOKEN_OPTIMIZER_REPAIR_SCOPE: 'launchers' },
+    });
+    return result.status === 0;
+  } catch {
+    return false;
+  }
+}
+
 /** --refresh: install latest for NEXT launch, flip pointer, prune. */
 function runRefresh() {
   if (!acquireLock()) return true; // another refresh is in flight
@@ -748,6 +771,14 @@ function runRefresh() {
       atomicWrite(CURRENT_FILE, version);
       log(`refreshed runtime -> ${version} (was ${prev ?? 'none'})`);
     }
+    // REPOINT THE MANAGED LAUNCHERS BEFORE PRUNING. A launcher written by an
+    // older install names that version's run-client; the new package's repair
+    // moves it to the stable forwarder that follows `current`, so it gets this
+    // update instead of pinning the old one forever. It runs here on every
+    // channel because nothing else would: the server-side repair is a beta
+    // rollout, and a stable launcher stayed on 7.3.0 until 7.3.0 was pruned
+    // under it. The repair edits only launchers it can prove it wrote.
+    repairManagedLaunchers(join(VERSIONS_DIR, version, 'node_modules', PACKAGE));
     // `prev` is what a live session is still running from, so it is named
     // explicitly rather than trusted to be among the newest by mtime.
     pruneOldVersions(version, prev);

@@ -142,6 +142,10 @@ try {
     'dist/proxy/default-routing.js',
     'scripts/install-cli.mjs',
     'scripts/run-client.mjs',
+    // The managed launchers' stable entry: a tarball without it would leave every launcher the
+    // installer writes pointing at a forwarder that was never copied (see launch-entry.mjs).
+    'scripts/launch-current.mjs',
+    'scripts/launch-entry.mjs',
     'scripts/route-client.mjs',
     'scripts/managed-clients.mjs',
     'hooks-core/capabilities.mjs',
