@@ -38,6 +38,7 @@ import {
 } from '../shared/hash-utils.js';
 import { cacheGet, cacheSet } from '../../utils/cache-helper.js';
 import { authoredBase } from './authored-base.js';
+import { sessionScope } from '../shared/session-scope.js';
 import {
   chunkBySyntax,
   truncateContent,
@@ -151,7 +152,9 @@ export class SmartReadTool {
 
     const {
       enableCache = true,
-      ttl: _ttl = 3600,
+      // The schema's default, which is what a caller is told. It was 3600 here
+      // and then never read, so every read lived forever (#488).
+      ttl = 300,
       diffMode = true,
       maxSize = 100000, // 100KB default max
       chunkSize = 4000,
@@ -182,9 +185,15 @@ export class SmartReadTool {
     const fileHash = hashFile(filePath);
     const fileType = detectFileType(filePath);
 
-    // Generate cache key
+    // Generate cache key.
+    //
+    // SCOPED TO THE SESSION (#488). The cache is a file every server process
+    // opens, and a hit here becomes `// No changes` -- which is only true for
+    // a caller that read the file before. Keyed on the path alone, a session
+    // that never read it got `// No changes` instead of the file.
     const cacheKey = generateCacheKey('smart-read', {
       path: filePath,
+      session: sessionScope(),
       options: { maxSize, chunkSize, preserveStructure },
     });
 
@@ -205,11 +214,12 @@ export class SmartReadTool {
     //     reason: `indexFile` runs on reads too, so it would have told a
     //     session that never saw a file that nothing had changed.
     //
-    //   lastWrittenKey() is PATH-SCOPED and covers only this product's own
-    //     smart_write / smart_edit, whose entries lived under a different
-    //     namespace and so were never found on a read.
+    //   lastWrittenKey() covers only this product's own smart_write /
+    //     smart_edit, whose entries lived under a different namespace and so
+    //     were never found on a read. It was path-scoped, so one session's
+    //     write became another's base; it is session-scoped now (#488).
     //
-    // Ordered session-scoped first: it is the one with a provenance argument.
+    // Ordered authoredBase first: it is the one with a provenance argument.
     // Both are only ever a BASE, never the answer, so a stale entry costs a
     // diff rather than a wrong result.
     // BOTH fallbacks are gated on enableCache. `enableCache: false` is a
@@ -314,8 +324,15 @@ export class SmartReadTool {
     const paginationRequested =
       options.chunkIndex !== undefined || options.chunkSize !== undefined;
 
+    // AN EXPLICIT chunkIndex PAGES THE FILE, WHATEVER ITS SIZE (#489). maxSize
+    // used to be checked first, so a file over it was truncated to the same
+    // head-and-tail on every call and the rest of it could not be reached at
+    // all -- exactly the file paging exists for. Without a chunkIndex, an
+    // oversized file is still truncated rather than paged unasked.
+    const chunkRequested = options.chunkIndex !== undefined;
+
     // Handle large files - prioritize maxSize over chunking
-    if (!isDiff && rawContent.length > maxSize) {
+    if (!isDiff && rawContent.length > maxSize && !chunkRequested) {
       // Check if file is minified
       if (isMinified(rawContent)) {
         // For minified files, just truncate with a warning
@@ -337,7 +354,7 @@ export class SmartReadTool {
       !isDiff &&
       paginationRequested &&
       rawContent.length > chunkSize &&
-      rawContent.length <= maxSize
+      (rawContent.length <= maxSize || chunkRequested)
     ) {
       // Only chunk if file fits within maxSize but is larger than chunkSize
       // This allows for structured navigation of medium-sized files
@@ -359,15 +376,29 @@ export class SmartReadTool {
           ? requested
           : 0;
 
+      // A CHUNK CAN STILL OVERRUN maxSize: chunks break at lines, so one line
+      // longer than chunkSize -- a minified bundle -- is a chunk of its own.
+      // Now that a file over maxSize can be paged, that chunk would be the whole
+      // file, so it is held to maxSize like any other reply.
+      const chunk = allChunks[chunkIndex];
+      const body =
+        chunk.length > maxSize
+          ? truncateContent(chunk, maxSize, { keepTop: 100, keepBottom: 50 })
+              .truncated
+          : chunk;
+      if (body !== chunk) truncated = true;
       finalContent =
-        allChunks[chunkIndex] +
+        body +
         `\n\n// [chunk ${chunkIndex + 1} of ${allChunks.length}. ` +
         `Call smart_read again with chunkIndex=<n> for another.]`;
     }
     // Advance the read base after an edit too. Leaving a cache hit pinned to
     // its old bytes would return the same diff on every subsequent read.
     if (enableCache && (!fromCache || ownCached !== rawContent)) {
-      cacheSet(this.cache, cacheKey, rawContent);
+      // A ttl that is not a positive number would reach the engine as "never
+      // expires" -- the very behaviour being fixed -- so it means the default.
+      const ttlSeconds = Number(ttl) > 0 ? Number(ttl) : 300;
+      cacheSet(this.cache, cacheKey, rawContent, { ttlSeconds });
     }
 
     // Record metrics.

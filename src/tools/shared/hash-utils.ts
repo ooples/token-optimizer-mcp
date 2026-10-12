@@ -4,6 +4,7 @@
 
 import { createHash } from 'crypto';
 import { readFileSync, statSync } from 'fs';
+import { sessionScope } from './session-scope.js';
 
 /**
  * Generate a hash for file content
@@ -72,10 +73,22 @@ export function hashFileMetadata(filePath: string): string {
  * Anything written through this key must go through `cacheSet`, not
  * `cache.set`: readers use `cacheGet`, which expects base64 gzip and treats a
  * decode failure as a miss, so raw text stored here would read back as nothing.
+ *
+ * SCOPED TO THE SESSION (#488). The cache is shared by every server process, so
+ * a path-only key let one session's write become another session's diff base,
+ * and a reader that never saw the file was answered `// No changes`. The writer
+ * and the reader of a handoff run in the same session, so both still agree.
  */
 export function lastWrittenKey(path: string): string {
-  return generateCacheKey('file-content', { path });
+  return generateCacheKey('file-content', { path, session: sessionScope() });
 }
+
+/**
+ * How long a written base is kept. A base only ever saves a resend, so it need
+ * not outlive the session that wrote it; without an expiry, a per-process
+ * session id would leave one entry per file per server process forever.
+ */
+export const LAST_WRITTEN_TTL_SECONDS = 3600;
 
 export function generateCacheKey(
   namespace: string,

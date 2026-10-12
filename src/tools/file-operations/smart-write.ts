@@ -25,7 +25,11 @@ import { bumpFsGeneration } from '../../utils/fs-generation.js';
 import { writeBackup } from '../../utils/file-backup.js';
 import { TokenCounter } from '../../core/token-counter.js';
 import { MetricsCollector } from '../../core/metrics.js';
-import { generateCacheKey, lastWrittenKey } from '../shared/hash-utils.js';
+import {
+  generateCacheKey,
+  lastWrittenKey,
+  LAST_WRITTEN_TTL_SECONDS,
+} from '../shared/hash-utils.js';
 import { cacheSet } from '../../utils/cache-helper.js';
 import { generateUnifiedDiff } from '../shared/diff-utils.js';
 import { detectFileType } from '../shared/syntax-utils.js';
@@ -271,7 +275,9 @@ export class SmartWriteTool {
         // the path alone, written through the same helper the readers use, so
         // the next smart_read diffs against what we just wrote instead of
         // resending the whole file.
-        cacheSet(this.cache, lastWrittenKey(filePath), finalContent);
+        cacheSet(this.cache, lastWrittenKey(filePath), finalContent, {
+          ttlSeconds: LAST_WRITTEN_TTL_SECONDS,
+        });
       }
 
       // Step 8: Record metrics

@@ -147,6 +147,34 @@ function detectLineType(line: string): ChunkMetadata['type'] {
   return 'other';
 }
 
+const TRUNCATION_MARKER = '\n// ... [truncated] ...\n';
+
+/** The kept lines in file order, with a marker wherever lines were dropped. */
+function assembleKept(lines: string[], kept: Set<number>): string {
+  const parts: string[] = [];
+  let previous = -1;
+  for (const index of [...kept].sort((a, b) => a - b)) {
+    if (index !== previous + 1) parts.push(TRUNCATION_MARKER);
+    parts.push(lines[index]);
+    previous = index;
+  }
+  if (previous < lines.length - 1) parts.push(TRUNCATION_MARKER);
+  return parts.join('\n');
+}
+
+/** The start and end of `content` by characters, joined by a marker, within `maxSize`. */
+function headAndTail(content: string, maxSize: number): string {
+  const room = maxSize - TRUNCATION_MARKER.length;
+  if (room <= 0) return content.slice(0, Math.max(0, maxSize));
+  const head = Math.ceil((room * 2) / 3);
+  const tail = room - head;
+  return (
+    content.slice(0, head) +
+    TRUNCATION_MARKER +
+    (tail > 0 ? content.slice(-tail) : '')
+  );
+}
+
 /**
  * Truncate file content intelligently, keeping important parts
  */
@@ -172,42 +200,57 @@ export function truncateContent(
   }
 
   const lines = content.split('\n');
-  const topLines = lines.slice(0, keepTop);
-  const bottomLines = lines.slice(-keepBottom);
 
-  let truncated: string;
+  // LINES ARE CHOSEN BY POSITION AND KEPT IN FILE ORDER (#489). The structure
+  // branch used to emit import/export and declaration lines, then the bottom,
+  // and never the top -- so a Markdown file, a log or a CSV, which has none of
+  // those lines, came back as its last fifty lines with its title gone. The
+  // top is now always kept, structural lines past it are added, and a marker
+  // stands in each gap, so the output reads in the order the file does.
+  const keep = new Set<number>();
+  for (let i = 0; i < Math.min(keepTop, lines.length); i++) keep.add(i);
+  const bottom = new Set<number>();
+  for (let i = Math.max(0, lines.length - keepBottom); i < lines.length; i++) {
+    bottom.add(i);
+  }
 
+  const structural = new Set<number>();
   if (preserveStructure) {
-    // Keep imports, exports, and structure
-    const importLines = lines.filter(
-      (l) => l.trim().startsWith('import ') || l.trim().startsWith('export ')
-    );
-    const structureLines = lines.filter((l) => {
-      const trimmed = l.trim();
-      return (
-        trimmed.startsWith('class ') ||
-        trimmed.startsWith('interface ') ||
-        trimmed.startsWith('type ') ||
-        trimmed.startsWith('function ') ||
-        trimmed.startsWith('const ') ||
-        trimmed.startsWith('let ')
-      );
+    let declarations = 0;
+    lines.forEach((line, i) => {
+      const trimmed = line.trim();
+      if (trimmed.startsWith('import ') || trimmed.startsWith('export ')) {
+        structural.add(i);
+      } else if (
+        declarations < 20 && // the first 20 declarations
+        (trimmed.startsWith('class ') ||
+          trimmed.startsWith('interface ') ||
+          trimmed.startsWith('type ') ||
+          trimmed.startsWith('function ') ||
+          trimmed.startsWith('const ') ||
+          trimmed.startsWith('let '))
+      ) {
+        structural.add(i);
+        declarations++;
+      }
     });
+  }
 
-    const kept = [
-      ...importLines,
-      ...structureLines.slice(0, 20), // Keep first 20 structure elements
-      '\n// ... [truncated] ...\n',
-      ...bottomLines,
-    ];
+  let truncated = assembleKept(
+    lines,
+    new Set([...keep, ...structural, ...bottom])
+  );
 
-    truncated = kept.join('\n');
-  } else {
-    truncated = [
-      ...topLines,
-      '\n// ... [truncated] ...\n',
-      ...bottomLines,
-    ].join('\n');
+  // maxSize IS A LIMIT ON WHAT IS RETURNED, and nothing enforced it: a file of
+  // export lines kept every line, and a hundred long top lines kept all of
+  // them. Over budget, the structural lines go first; if the top and bottom
+  // alone still overrun it, a head and tail of the file by characters remain,
+  // so the top of the file is never what gets dropped.
+  if (truncated.length > maxSize) {
+    truncated = assembleKept(lines, new Set([...keep, ...bottom]));
+  }
+  if (truncated.length > maxSize) {
+    truncated = headAndTail(content, maxSize);
   }
 
   return {

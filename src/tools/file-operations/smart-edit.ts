@@ -20,7 +20,11 @@ import { bumpFsGeneration } from '../../utils/fs-generation.js';
 import { writeBackup } from '../../utils/file-backup.js';
 import { TokenCounter } from '../../core/token-counter.js';
 import { MetricsCollector } from '../../core/metrics.js';
-import { generateCacheKey, lastWrittenKey } from '../shared/hash-utils.js';
+import {
+  generateCacheKey,
+  lastWrittenKey,
+  LAST_WRITTEN_TTL_SECONDS,
+} from '../shared/hash-utils.js';
 import { cacheSet } from '../../utils/cache-helper.js';
 import { generateUnifiedDiff } from '../shared/diff-utils.js';
 
@@ -413,7 +417,9 @@ export class SmartEditTool {
           // where readers expect base64 gzip -- the same shape of gap smart_write
           // had. This is the handoff the reader actually looks for, so a read
           // after an edit reports the edit instead of resending the file.
-          cacheSet(this.cache, lastWrittenKey(filePath), editedContent);
+          cacheSet(this.cache, lastWrittenKey(filePath), editedContent, {
+            ttlSeconds: LAST_WRITTEN_TTL_SECONDS,
+          });
         } catch {
           // The edit stands. The next read simply misses the cache.
         }
