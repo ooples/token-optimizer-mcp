@@ -222,6 +222,10 @@ describe('a model-supplied trigger cannot hang the hook', () => {
     expect(safeTrigger(String.raw`(a*)*b`)).toBeNull();
     expect(safeTrigger(String.raw`(?:ab+)+c`)).toBeNull();
     expect(safeTrigger(String.raw`(\d+)*$`)).toBeNull();
+    // Quantified alternation whose branches overlap: no inner quantifier, the
+    // same blow-up (`(.|.)*x` ran over ten seconds on a 29-character name).
+    expect(safeTrigger(String.raw`(.|.)*x`)).toBeNull();
+    expect(safeTrigger(String.raw`(a|ab)+c`)).toBeNull();
   });
 
   it('refuses an absurdly long pattern', async () => {

@@ -72,38 +72,9 @@ function commandKey(command) {
 /** Most findings considered for one command before the budget decides. */
 const MAX_COMMAND_CANDIDATES = 20;
 
-/**
- * Compiles a finding's trigger, or returns null if it is not safe to run.
- *
- * TRIGGERS ARE MODEL-SUPPLIED. The harvest writes them, and a model asked for a
- * regex can produce `(a+)+b` as readily as `\bnpx\b` -- a pattern whose
- * backtracking is exponential in the input length. That would execute on the
- * PreToolUse path against a command the user is waiting on, so a single bad
- * trigger would hang every subsequent tool call in the session. Neither a
- * try/catch nor a timeout helps: catastrophic backtracking does not throw, it
- * simply does not return.
- *
- * So the pattern is rejected before it is ever run. The test is deliberately
- * conservative -- nested quantifiers are the shape that causes this, and no
- * legitimate trigger for a command needs one.
- */
-export function safeTrigger(source) {
-  const raw = String(source || '');
-  if (!raw || raw.length > 200) return null;
-
-  // A quantifier applied to a group that itself contains a quantifier: (a+)+,
-  // (a*)*, (\d+)*, (?:ab+)+ and so on. This is the classic ReDoS shape.
-  if (/\([^)]*[+*}][^)]*\)\s*[+*{]/.test(raw)) return null;
-
-  // Stacked quantifiers outside a group, e.g. `a+*` or `.*+`.
-  if (/[+*}]\s*[+*]/.test(raw)) return null;
-
-  try {
-    return new RegExp(raw, 'i');
-  } catch {
-    return null;
-  }
-}
+// Moved to safe-text.mjs so the transcript reader can share it without this module's imports.
+import { safeTrigger } from './safe-text.mjs';
+export { safeTrigger };
 const estimate = (text) => Math.ceil(String(text || '').length / 4);
 
 /**
