@@ -473,6 +473,74 @@ function pidAlive(pid) {
 }
 
 /**
+ * Versions a managed launcher still names by path.
+ *
+ * A RUNTIME A LAUNCHER POINTS AT IS IN USE, WHETHER OR NOT ANYTHING IS RUNNING.
+ * The `codex`/`claude` launchers in `~/.token-optimizer/bin`, the managed
+ * shell-profile functions and Claude's hook commands embed one version's path
+ * (`versions/7.3.0/.../scripts/run-client.mjs`). Repointing them is the job of
+ * `repair-managed-install`, which only runs where its rollout is enabled -- so
+ * on the stable channel a launcher written by 7.3.0 still named 7.3.0 when the
+ * fourth newer runtime arrived, the retention count dropped 7.3.0, and every
+ * `codex` launch then died on `Cannot find module ...\versions\7.3.0\...\
+ * run-client.mjs`. Observed 2026-10-12 when 7.4.4 installed.
+ *
+ * Only paths of the runtime's own shape are read, so nothing else can pin a
+ * directory; the overrides are the ones the installer and repair already use.
+ */
+function launcherVersions() {
+  const pinned = new Set();
+  const home = process.env.TOKEN_OPTIMIZER_HOME || join(homedir(), '.token-optimizer');
+  const files = [];
+  try {
+    const bin = join(home, 'bin');
+    for (const name of readdirSync(bin)) files.push(join(bin, name));
+  } catch {
+    // No managed launchers on this machine.
+  }
+  let profiles;
+  try {
+    profiles = process.env.TOKEN_OPTIMIZER_SHELL_PROFILES
+      ? JSON.parse(process.env.TOKEN_OPTIMIZER_SHELL_PROFILES)
+      : null;
+  } catch {
+    profiles = null;
+  }
+  if (!Array.isArray(profiles)) {
+    const documents = [join(homedir(), 'Documents'), join(homedir(), 'OneDrive', 'Documents')];
+    profiles = [
+      join(homedir(), '.bashrc'),
+      join(homedir(), '.bash_profile'),
+      join(homedir(), '.bash_login'),
+      join(homedir(), '.profile'),
+      join(process.env.ZDOTDIR || homedir(), '.zshrc'),
+      ...documents.flatMap((dir) =>
+        ['PowerShell', 'WindowsPowerShell'].map((shell) =>
+          join(dir, shell, 'Microsoft.PowerShell_profile.ps1')
+        )
+      ),
+    ];
+  }
+  files.push(...profiles);
+  files.push(
+    process.env.TOKEN_OPTIMIZER_SETTINGS ||
+      join(process.env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude'), 'settings.json')
+  );
+
+  const shape =
+    /versions[\\/]+([^\\/"'\s]+)[\\/]+node_modules[\\/]+@ooples[\\/]+token-optimizer-mcp/g;
+  for (const file of files) {
+    try {
+      if (statSync(file).size > 4 * 1024 * 1024) continue;
+      for (const match of readFileSync(file, 'utf8').matchAll(shape)) pinned.add(match[1]);
+    } catch {
+      // Missing or unreadable: it pins nothing.
+    }
+  }
+  return pinned;
+}
+
+/**
  * Versions that a live shim is currently serving.
  *
  * Also reaps its own stale markers, so a machine that has been rebooted or has
@@ -638,6 +706,14 @@ export function pruneOldVersions(keepVersion, alsoKeep = null) {
     for (const { name } of [...dirs].sort((a, b) => b.mtimeMs - a.mtimeMs)) {
       if (keep.size >= VERSIONS_TO_KEEP) break;
       keep.add(name);
+    }
+
+    // And every runtime a managed launcher still names, running or not: a
+    // launcher pointing at a deleted directory fails on every launch. Added
+    // AFTER the count, not within it -- the count is the grace a live session
+    // gets, and a launcher written months ago must not shrink that.
+    for (const version of launcherVersions()) {
+      if (present.has(version)) keep.add(version);
     }
 
     for (const { name } of dirs) {
