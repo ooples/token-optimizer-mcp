@@ -86,6 +86,7 @@ import {
   absentToolsFromTranscript,
   archive,
   isArchived,
+  toolSearchOutcomesFromTranscript,
 } from './transcript.mjs';
 import { harvestMode } from './harvest.mjs';
 import { canonicalPath, isFsSafePath } from './paths.mjs';
@@ -98,8 +99,10 @@ import {
   HOOK_MCP_TOOLS,
   nativeClientProfiles,
   markOptimizerToolAbsent,
+  markOptimizerToolOk,
   observeOptimizerToolCall,
   optimizerToolEvidence,
+  optimizerToolName,
   optimizerToolsForHook,
   rememberOptimizerTools,
 } from './capabilities.mjs';
@@ -822,9 +825,27 @@ function gradeObservedTools(state, event, payload, raw) {
     for (const { name, at } of absentToolsFromTranscript(transcriptPath)) {
       markOptimizerToolAbsent(state, name, at);
     }
+    // A DEFERRED TOOL THE SESSION COULD NOT LOAD never reaches a call, so the
+    // read above has nothing to find (#484). Its tool searches are the signal:
+    // a miss marks it absent, and a later load revokes that like a later call.
+    // Once the tool has loaded or answered a call in this session -- possibly
+    // before the scanned tail -- it is out of the deferred registry, and an
+    // empty search can no longer say anything about it. A real refusal still
+    // reaches it through the call reader above.
+    const searched = toolSearchOutcomesFromTranscript(transcriptPath);
+    for (const { name, at } of searched.missed) {
+      if ((Number(state?.optimizerToolOkAt?.[name]) || 0) > 0) continue;
+      markOptimizerToolAbsent(state, name, at);
+    }
+    for (const { name, at } of searched.loaded) {
+      markOptimizerToolOk(state, name, at);
+    }
     // And the event itself, for the ten clients that do report a failed call.
     if (event === 'post-tool') {
-      observeOptimizerToolCall(state, payload?.tool_name, {
+      // THE NAME THE HOST SENT, not the normalised one: normalisation maps
+      // smart_read to Read and wiki_write to nothing, and neither is an
+      // optimizer name, so no call was ever recorded as having answered.
+      observeOptimizerToolCall(state, raw?.tool_name ?? raw?.toolName ?? raw?.tool ?? payload?.tool_name, {
         ok: toolSucceeded(raw),
         text: outputFrom(raw),
       });
@@ -1526,7 +1547,19 @@ async function runHook(clientName, event, invocation) {
     normalizeClientPayload(clientName, event, raw)
   );
   invocation.bind(raw, payload, input.bytes);
-  if (!payload.tool_name) process.exit(0);
+  if (!payload.tool_name) {
+    // An optimizer tool routing has no alias for (wiki_write, wiki_query,
+    // optimize_session, ...) still answered or failed a call, and that is the
+    // only success the hooks can observe for it: without this the exit below
+    // dropped it, so a session's `optimizerToolOkAt` never filled in (#484).
+    if (event === 'post-tool' && optimizerToolName(raw.tool_name ?? raw.toolName ?? raw.tool)) {
+      const scope = payload.transcript_path || null;
+      const graded = loadState(payload.session_id, scope);
+      gradeObservedTools(graded, event, payload, raw);
+      saveState(payload.session_id, graded, scope);
+    }
+    process.exit(0);
+  }
   const episode = episodeMeta({ client: clientName, raw, payload });
 
   // THE AGENT, not just the session -- the same scope the Claude Code router

@@ -62,7 +62,7 @@ const INVENTORY_CONTAINERS = new Set([
 ]);
 
 /** Convert a host-qualified MCP name back to the schema name. */
-function optimizerToolName(value) {
+export function optimizerToolName(value) {
   if (typeof value !== 'string') return null;
   const normalized = value.trim().toLowerCase();
   for (const name of HOOK_MCP_TOOLS) {
