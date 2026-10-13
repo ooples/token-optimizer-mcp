@@ -65,6 +65,8 @@ export const OWNERSHIP_FLAG = '--token-optimizer-hook';
 export const WIRING = [
   { event: 'SessionStart', file: 'session-start.mjs', matcher: null },
   { event: 'PreToolUse', file: 'pretooluse-router.mjs', matcher: 'Read|Grep|Glob|Edit|MultiEdit|Write|Bash|PowerShell|WebFetch|WebSearch' },
+  // Records which agent made each cached-file call, so the server scopes its cache per agent (#488).
+  { event: 'PreToolUse', file: 'agent-scope.mjs', matcher: 'mcp__.*__(?:smart_read|smart_config_read|smart_write|smart_edit)' },
   { event: 'PostToolUse', file: 'post-tool.mjs', matcher: 'Edit|MultiEdit|Write|Bash|PowerShell|mcp__.*__(?:smart_edit|smart_write)' },
   { event: 'PreCompact', file: 'precompact-optimize.mjs', matcher: null },
   { event: 'Stop', file: 'stop.mjs', matcher: null },
@@ -194,6 +196,11 @@ export const isOurs = (entry) => {
 export function wire(settings, hooksDir, { exists } = {}) {
   const next = { ...(settings || {}) };
   const hooks = { ...(next.hooks || {}) };
+  // AN EVENT CAN CARRY MORE THAN ONE OF OUR HOOKS (PreToolUse holds the router
+  // and the agent-scope recorder). Our previous entries are cleared once per
+  // event, before its first hook is added -- clearing per hook made the second
+  // remove the first, and an install silently lost its pre-tool router.
+  const cleared = new Set();
 
   for (const { event, file, matcher } of WIRING) {
     // A command written into settings.json outlives this process, so the file it
@@ -217,8 +224,12 @@ export function wire(settings, hooksDir, { exists } = {}) {
 
     const existing = Array.isArray(hooks[event]) ? hooks[event] : [];
     // Drop only OUR previous entries, so re-running the installer does not
-    // stack duplicates and does not touch anyone else's.
-    const theirs = existing.filter((entry) => !isOurs(entry));
+    // stack duplicates and does not touch anyone else's -- and only the first
+    // time this event is seen, so our own entries added this run survive.
+    const theirs = cleared.has(event)
+      ? existing
+      : existing.filter((entry) => !isOurs(entry));
+    cleared.add(event);
 
     const ours = {
       ...(matcher ? { matcher } : {}),

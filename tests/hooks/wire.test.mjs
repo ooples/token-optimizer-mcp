@@ -22,6 +22,8 @@ import {
 } from '../../hooks-core/wire.mjs';
 
 const HOOKS = '/home/me/.claude-global/hooks/token-optimizer';
+/** How many of our hooks an event carries: PreToolUse holds the router and the agent-scope recorder. */
+const oursOn = (event) => WIRING.filter((w) => w.event === event).length;
 
 /** A settings file with the user's own hooks and their own unrelated keys. */
 const userSettings = () => ({
@@ -43,7 +45,9 @@ const userSettings = () => ({
 describe('wiring is additive', () => {
   test('every event we need is wired', () => {
     const out = wire({}, HOOKS);
-    expect(Object.keys(out.hooks).sort()).toEqual(WIRING.map((w) => w.event).sort());
+    // Distinct events: PreToolUse carries two of our hooks (the router and the agent-scope recorder).
+    expect(Object.keys(out.hooks).sort()).toEqual([...new Set(WIRING.map((w) => w.event))].sort());
+    expect(out.hooks.PreToolUse.map((e) => e.hooks[0].command).join('\n')).toMatch(/pretooluse-router\.mjs[\s\S]*agent-scope\.mjs/);
   });
 
   test('SessionStart is among them, since that is where the policy is delivered', () => {
@@ -56,7 +60,7 @@ describe('wiring is additive', () => {
   test('a user hook on the same event survives, in its original position', () => {
     const out = wire(userSettings(), HOOKS);
     expect(out.hooks.PreToolUse[0].hooks[0].command).toBe('node /home/me/my-own-hook.mjs');
-    expect(out.hooks.PreToolUse).toHaveLength(2);
+    expect(out.hooks.PreToolUse).toHaveLength(1 + oursOn('PreToolUse'));
   });
 
   test('events we do not touch are left exactly as they were', () => {
@@ -105,7 +109,7 @@ describe('wiring is idempotent', () => {
 
   test('re-wiring to a new location replaces the old entry rather than stacking', () => {
     const moved = wire(wire({}, HOOKS), '/somewhere/else/token-optimizer');
-    expect(moved.hooks.PreToolUse).toHaveLength(1);
+    expect(moved.hooks.PreToolUse).toHaveLength(oursOn('PreToolUse'));
     expect(JSON.stringify(moved.hooks.PreToolUse)).toContain('/somewhere/else/');
   });
 
@@ -237,8 +241,8 @@ describe('a hook that merely mentions us is not ours', () => {
   });
 
   test('while ours are still recognised, so a re-install does not stack', () => {
-    expect(wiredEntries(wire(theirs(), DIR))).toHaveLength(5);
-    expect(wiredEntries(wire(wire(theirs(), DIR), DIR))).toHaveLength(5);
+    expect(wiredEntries(wire(theirs(), DIR))).toHaveLength(WIRING.length);
+    expect(wiredEntries(wire(wire(theirs(), DIR), DIR))).toHaveLength(WIRING.length);
   });
 });
 

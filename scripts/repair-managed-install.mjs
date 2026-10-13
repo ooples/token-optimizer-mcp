@@ -149,7 +149,7 @@ export function repairManagedInstall({
           if (hook.type !== 'command' || typeof hook.command !== 'string')
             continue;
           const match = hook.command.match(
-            /^node "(.+[/\\]plugin[/\\]hooks[/\\](session-start|pretooluse-router|post-tool|precompact-optimize|stop)\.mjs)" --token-optimizer-hook$/
+            /^node "(.+[/\\]plugin[/\\]hooks[/\\](session-start|pretooluse-router|agent-scope|post-tool|precompact-optimize|stop)\.mjs)" --token-optimizer-hook$/
           );
           if (!match) continue;
           // AN APOSTROPHE IS LITERAL HERE. The command written below is
