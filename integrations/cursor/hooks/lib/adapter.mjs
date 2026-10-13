@@ -575,6 +575,23 @@ const CLINE_TOOL_NAMES = {
   replace_in_file: 'Edit',
 };
 
+/**
+ * The host's own name for the tool a hook event reports, before any
+ * canonicalisation -- the name optimizer grading has to recognise.
+ *
+ * Most clients put it at the top level. Cline nests it under
+ * `postToolUse`/`preToolUse` as `toolName`, and an MCP call there may arrive as
+ * its generic `use_mcp_tool` with the real name in `parameters.tool_name`; both
+ * are read, so a successful `wiki_write` on Cline is graded as one (#485 review).
+ */
+export function hostToolName(raw) {
+  const body = raw?.postToolUse ?? raw?.preToolUse;
+  if (body?.toolName === 'use_mcp_tool') {
+    return body.parameters?.tool_name ?? body.parameters?.toolName ?? null;
+  }
+  return raw?.tool_name ?? raw?.toolName ?? raw?.tool ?? body?.toolName ?? body?.tool ?? null;
+}
+
 /** Convert client-specific lifecycle envelopes into the common tool shape. */
 function codexStringBindings(source) {
   const values = new Map();
@@ -847,7 +864,7 @@ function gradeObservedTools(state, event, payload, raw) {
       // THE NAME THE HOST SENT, not the normalised one: normalisation maps
       // smart_read to Read and wiki_write to nothing, and neither is an
       // optimizer name, so no call was ever recorded as having answered.
-      observeOptimizerToolCall(state, raw?.tool_name ?? raw?.toolName ?? raw?.tool ?? payload?.tool_name, {
+      observeOptimizerToolCall(state, hostToolName(raw) ?? payload?.tool_name, {
         ok: toolSucceeded(raw),
         text: outputFrom(raw),
       });
@@ -1555,7 +1572,7 @@ async function runHook(clientName, event, invocation) {
     // exit below dropped it (#484). This serves the clients that send every
     // post-tool event. Claude Code's matcher never sends these at all, so there
     // the transcript reader records the call instead.
-    if (event === 'post-tool' && optimizerToolName(raw.tool_name ?? raw.toolName ?? raw.tool)) {
+    if (event === 'post-tool' && optimizerToolName(hostToolName(raw))) {
       const scope = payload.transcript_path || null;
       const graded = loadState(payload.session_id, scope);
       gradeObservedTools(graded, event, payload, raw);

@@ -116,8 +116,9 @@ beforeEach(() => {
 });
 
 /** The path a managed launcher embeds for `version`, as the installer writes it. */
-const runClientPath = (version) =>
-  `C:/Users/someone/.token-optimizer/runtime/versions/${version}/node_modules/@ooples/token-optimizer-mcp/scripts/run-client.mjs`;
+/** The path a launcher embeds; `separator` lets a case use Windows' own backslashes. */
+const runClientPath = (version, separator = '/') =>
+  ['C:', 'Users', 'someone', '.token-optimizer', 'runtime', 'versions', version, 'node_modules', '@ooples', 'token-optimizer-mcp', 'scripts', 'run-client.mjs'].join(separator);
 
 afterEach(() => {
   try {
@@ -316,7 +317,7 @@ it('is not confused by an in-flight atomic write', () => {
     mkdirSync(bin, { recursive: true });
     writeFileSync(
       join(bin, 'codex.cmd'),
-      `@echo off\r\nrem token-optimizer managed launcher v1\r\n"C:\\node.exe" "${runClientPath('7.3.0')}" codex %*\r\n`
+      `@echo off\r\nrem token-optimizer managed launcher v1\r\n"C:\\node.exe" "${runClientPath('7.3.0', '\\')}" codex %*\r\n`
     );
 
     const left = pruneInFreshProcess('7.4.4', undefined, '7.4.3');
