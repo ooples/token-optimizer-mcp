@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.5.0](https://github.com/ooples/token-optimizer-mcp/compare/v7.4.4...v7.5.0) (2026-10-13)
+
+
+### Features
+
+* **launch:** managed launchers follow the current runtime instead of pinning a version ([#493](https://github.com/ooples/token-optimizer-mcp/issues/493)) ([e32e9c1](https://github.com/ooples/token-optimizer-mcp/commit/e32e9c1ee603a7d910da0335c909e844dbac8fd0))
+
+
+### Bug Fixes
+
+* **launch:** never prune a runtime a managed launcher still names ([#491](https://github.com/ooples/token-optimizer-mcp/issues/491)) ([806bb9b](https://github.com/ooples/token-optimizer-mcp/commit/806bb9bbf13b7737b729ecb84028ab4ab0665ef2))
+* **smart-read:** scope read caches to the session, honour ttl, and keep the top when truncating ([#490](https://github.com/ooples/token-optimizer-mcp/issues/490)) ([215d297](https://github.com/ooples/token-optimizer-mcp/commit/215d2978d5eeec22b8e3ba0df2cea62877b249e5))
+
 ## [7.4.4](https://github.com/ooples/token-optimizer-mcp/compare/v7.4.3...v7.4.4) (2026-10-12)
 
 
