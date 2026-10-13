@@ -34,6 +34,7 @@ import {
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { canonicalPath, isFsSafePath } from './paths.mjs';
+import { ignoreSelf } from './ignore-self.mjs';
 
 /**
  * Largest authored file kept.
@@ -85,6 +86,7 @@ export function recordAuthoredContent(projectRoot, sessionId, filePath, content)
 
     const dir = storeDir(projectRoot);
     mkdirSync(dir, { recursive: true });
+    ignoreSelf(dir);
 
     const record = JSON.stringify({
       v: 1,

@@ -32,6 +32,7 @@ import {
 import { join } from 'node:path';
 import { createHash, randomBytes } from 'node:crypto';
 import { redact } from './redact.mjs';
+import { ignoreSelf } from './ignore-self.mjs';
 
 /**
  * Read per call, not once at module load.
@@ -220,6 +221,7 @@ export function record(dir, event) {
     } catch {
       // Not POSIX, or not ours to chmod; the write still proceeds.
     }
+    ignoreSelf(dir);
     // The CALLER'S timestamp wins when it supplied one. Overwriting it made
     // `rereadWaste`'s ordering depend on write order rather than on `at`, so a
     // test that set explicit times was passing by luck.
