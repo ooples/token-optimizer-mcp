@@ -106,6 +106,16 @@ describe('a successful optimizer call on cline is graded as one (#485 review)', 
     ).toEqual(['wiki_write']);
   });
 
+  it("records nothing for another server's tool of the same name (control)", async () => {
+    expect(
+      await gradedOk({
+        toolName: 'use_mcp_tool',
+        parameters: { server_name: 'some-other-wiki', tool_name: 'wiki_write' },
+        success: true,
+      })
+    ).toEqual([]);
+  });
+
   it('records nothing for a tool that is not an optimizer tool (control)', async () => {
     expect(
       await gradedOk({

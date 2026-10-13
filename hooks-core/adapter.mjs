@@ -585,7 +585,12 @@ const CLINE_TOOL_NAMES = {
 export function hostToolName(raw) {
   const body = raw?.postToolUse ?? raw?.preToolUse;
   if (body?.toolName === 'use_mcp_tool') {
-    return body.parameters?.tool_name ?? body.parameters?.toolName ?? null;
+    // ONLY THE OPTIMIZER'S OWN SERVER. A bare `wiki_write` from any other
+    // server would otherwise be graded as an optimizer call that answered.
+    const server = String(body.parameters?.server_name ?? body.parameters?.serverName ?? '');
+    if (!/token[-_]?optimizer/i.test(server)) return null;
+    const tool = body.parameters?.tool_name ?? body.parameters?.toolName;
+    return tool ? `mcp__${server}__${tool}` : null;
   }
   return raw?.tool_name ?? raw?.toolName ?? raw?.tool ?? body?.toolName ?? body?.tool ?? null;
 }
