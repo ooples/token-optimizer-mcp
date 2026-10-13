@@ -44,6 +44,101 @@ const clinePayload = (toolName, parameters = {}) => ({
   preToolUse: { toolName, parameters },
 });
 
+describe('a successful optimizer call on cline is graded as one (#485 review)', () => {
+  /**
+   * Run the cline post-tool hook in a fresh process, as cline runs it, and
+   * return the optimizer tools its state recorded as having answered.
+   */
+  async function gradedOk(postToolUse) {
+    const { mkdtempSync, readdirSync, readFileSync, rmSync } = await import('fs');
+    const { tmpdir } = await import('os');
+    const { spawnSync } = await import('child_process');
+    const dir = mkdtempSync(join(tmpdir(), 'cline-grade-'));
+    try {
+      const payload = { taskId: 'task-grade', workspaceRoots: [dir], postToolUse };
+      const result = spawnSync(
+        process.execPath,
+        [
+          '--input-type=module',
+          '-e',
+          `const { run } = await import(${JSON.stringify(CORE('adapter.mjs'))}); await run('cline', 'post-tool');`,
+        ],
+        {
+          input: JSON.stringify(payload),
+          encoding: 'utf8',
+          env: {
+            ...process.env,
+            TOKEN_OPTIMIZER_STATE_DIR: join(dir, 'state'),
+            TOKEN_OPTIMIZER_WIKI_DIR: join(dir, 'wiki'),
+            TOKEN_OPTIMIZER_SHARED_DIR: join(dir, 'shared'),
+          },
+        }
+      );
+      expect(result.status).toBe(0);
+      let names = [];
+      try {
+        for (const file of readdirSync(join(dir, 'state')).filter((f) => f.endsWith('.json'))) {
+          const state = JSON.parse(readFileSync(join(dir, 'state', file), 'utf8'));
+          names = names.concat(Object.keys(state.optimizerToolOkAt ?? {}));
+        }
+      } catch {
+        // No state written at all: nothing was graded.
+      }
+      return names;
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+
+  it('reads the name cline nests under postToolUse', async () => {
+    expect(
+      await gradedOk({ toolName: 'mcp__token-optimizer__wiki_write', parameters: {}, success: true })
+    ).toEqual(['wiki_write']);
+  });
+
+  it('reads the real name inside a use_mcp_tool call', async () => {
+    expect(
+      await gradedOk({
+        toolName: 'use_mcp_tool',
+        parameters: { server_name: 'token-optimizer', tool_name: 'wiki_write', arguments: '{}' },
+        success: true,
+      })
+    ).toEqual(['wiki_write']);
+  });
+
+  it("records nothing for another server's tool of the same name (control)", async () => {
+    expect(
+      await gradedOk({
+        toolName: 'use_mcp_tool',
+        parameters: { server_name: 'some-other-wiki', tool_name: 'wiki_write' },
+        success: true,
+      })
+    ).toEqual([]);
+  });
+
+  it('records nothing for a server whose name only contains the optimizer\'s (control)', async () => {
+    for (const server_name of ['other-token-optimizer', 'token-optimizer-fork', 'my_token_optimizer']) {
+      expect(
+        await gradedOk({
+          toolName: 'use_mcp_tool',
+          parameters: { server_name, tool_name: 'wiki_write' },
+          success: true,
+        })
+      ).toEqual([]);
+    }
+  });
+
+  it('records nothing for a tool that is not an optimizer tool (control)', async () => {
+    expect(
+      await gradedOk({
+        toolName: 'use_mcp_tool',
+        parameters: { server_name: 'other', tool_name: 'fetch_page' },
+        success: true,
+      })
+    ).toEqual([]);
+  });
+});
+
 describe('a cline payload reaches the pipeline', () => {
   it('reads the tool from toolName, which is the field cline sends', () => {
     const payload = throughPipeline(

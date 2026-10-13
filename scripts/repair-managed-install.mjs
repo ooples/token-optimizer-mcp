@@ -7,6 +7,11 @@ import { fileURLToPath } from 'node:url';
 import { decodeProfile, replaceProfile } from './profile-file.mjs';
 import { shellProfiles } from './managed-shell.mjs';
 import { dedupeClaudePluginHooks } from './claude-hook-ownership.mjs';
+import {
+  installForwarder,
+  isManagedRuntimeRoot,
+  runtimeDirectory,
+} from './launch-entry.mjs';
 
 const digest = (text) => createHash('sha256').update(text).digest('hex');
 const json = (path) => JSON.parse(readFileSync(path, 'utf8'));
@@ -27,6 +32,10 @@ export function repairManagedInstall({
   ),
   settingsPath = env.TOKEN_OPTIMIZER_SETTINGS ||
     join(env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude'), 'settings.json'),
+  // 'launchers' repairs only the managed launchers and shell-profile functions. The runtime refresh
+  // uses it on every channel to move pinned launchers onto the forwarder; Claude's settings stay
+  // with the full repair, which remains behind its own rollout.
+  scope = env.TOKEN_OPTIMIZER_REPAIR_SCOPE === 'launchers' ? 'launchers' : 'all',
 } = {}) {
   // A version pin is an explicit choice. Do not turn it into a global migration.
   if (
@@ -61,13 +70,26 @@ export function repairManagedInstall({
     const next = join(root, suffix).replaceAll('\\', '/');
     return existsSync(next) ? next : path;
   };
+  // A launcher naming a run-client inside the managed runtime pinned that version: it served it
+  // after every refresh and broke once it was pruned. It is moved to the stable forwarder, which
+  // follows `current` (see launch-entry.mjs). Outside the runtime there is no `current` to follow,
+  // so those paths keep the version upgrade below.
+  const runtime = runtimeDirectory(env);
+  const toForwarder = (path) => {
+    const pkg = path.slice(0, -'scripts/run-client.mjs'.length);
+    if (!isManagedRuntimeRoot(root, runtime) || !isManagedRuntimeRoot(pkg, runtime))
+      return null;
+    return installForwarder(root, runtime).replaceAll('\\', '/');
+  };
   const launcher = (text) =>
     text.replace(
       /(['"])([^'"\r\n]+[/\\]scripts[/\\]run-client\.mjs)\1/g,
       (whole, quote, path) => {
         // Shell escaping is deliberately not reconstructed during automatic repair.
         if (/[%'`$]/.test(path) || /[%'`$]/.test(root)) return whole;
-        return `${quote}${upgrade(path, 'scripts/run-client.mjs')}${quote}`;
+        const forwarder = toForwarder(path);
+        if (forwarder && /[%'`$]/.test(forwarder)) return whole;
+        return `${quote}${forwarder ?? upgrade(path, 'scripts/run-client.mjs')}${quote}`;
       }
     );
   if (!/^(0|false|no|off)$/i.test(env.TOKEN_OPTIMIZER_MANAGED_CLIENTS || '')) {
@@ -134,6 +156,7 @@ export function repairManagedInstall({
     });
   }
   attempt(() => {
+    if (scope === 'launchers') return;
     if (!existsSync(settingsPath)) return;
     const before = readFileSync(settingsPath);
     const deduped = dedupeClaudePluginHooks(

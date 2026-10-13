@@ -6,6 +6,7 @@ import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { replaceProfile } from './profile-file.mjs';
 import { launcherCommands } from './managed-clients.mjs';
+import { launcherEntry, runtimeDirectory } from './launch-entry.mjs';
 
 export const launcherMarker = 'rem token-optimizer managed launcher v1';
 const digest = (bytes) => createHash('sha256').update(bytes).digest('hex');
@@ -72,6 +73,11 @@ export function activateWindowsCommands({
       ...Object.keys(previous).map((name) => name.replace(/\.cmd$/i, '')),
     ]),
   ];
+  // The stable forwarder when this package is in the managed runtime, so the launcher follows
+  // `current` instead of pinning this version (see launch-entry.mjs). Written only on a real apply.
+  const entry = remove
+    ? ''
+    : launcherEntry(root, { runtime: runtimeDirectory(env), install: apply });
   for (const client of considered) {
     const name = `${client}.cmd`;
     const file = join(directory, name);
@@ -91,7 +97,7 @@ export function activateWindowsCommands({
               '@echo off',
               launcherMarker,
               'setlocal DisableDelayedExpansion',
-              `${quote(process.execPath)} ${quote(join(root, 'scripts', 'run-client.mjs'))} ${client} %*`,
+              `${quote(process.execPath)} ${quote(entry)} ${client} %*`,
               'exit /b %errorlevel%',
               '',
             ].join('\r\n')
