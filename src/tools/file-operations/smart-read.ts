@@ -38,12 +38,23 @@ import {
 } from '../shared/hash-utils.js';
 import { cacheGet, cacheSet } from '../../utils/cache-helper.js';
 import { authoredBase } from './authored-base.js';
+import { sessionScope } from '../shared/session-scope.js';
 import {
   chunkBySyntax,
   truncateContent,
   detectFileType,
   isMinified,
+  prefixWithinBytes,
+  utf8Length,
 } from '../shared/syntax-utils.js';
+
+/** The navigation line appended to a chunk. Counted in its maxSize budget. */
+function chunkFooter(index: number, count: number): string {
+  return (
+    `\n\n// [chunk ${index + 1} of ${count}. ` +
+    `Call smart_read again with chunkIndex=<n> for another.]`
+  );
+}
 
 export interface SmartReadOptions {
   // Cache options
@@ -151,7 +162,9 @@ export class SmartReadTool {
 
     const {
       enableCache = true,
-      ttl: _ttl = 3600,
+      // The schema's default, which is what a caller is told. It was 3600 here
+      // and then never read, so every read lived forever (#488).
+      ttl = 300,
       diffMode = true,
       maxSize = 100000, // 100KB default max
       chunkSize = 4000,
@@ -182,9 +195,15 @@ export class SmartReadTool {
     const fileHash = hashFile(filePath);
     const fileType = detectFileType(filePath);
 
-    // Generate cache key
+    // Generate cache key.
+    //
+    // SCOPED TO THE SESSION (#488). The cache is a file every server process
+    // opens, and a hit here becomes `// No changes` -- which is only true for
+    // a caller that read the file before. Keyed on the path alone, a session
+    // that never read it got `// No changes` instead of the file.
     const cacheKey = generateCacheKey('smart-read', {
       path: filePath,
+      session: sessionScope(),
       options: { maxSize, chunkSize, preserveStructure },
     });
 
@@ -205,11 +224,12 @@ export class SmartReadTool {
     //     reason: `indexFile` runs on reads too, so it would have told a
     //     session that never saw a file that nothing had changed.
     //
-    //   lastWrittenKey() is PATH-SCOPED and covers only this product's own
-    //     smart_write / smart_edit, whose entries lived under a different
-    //     namespace and so were never found on a read.
+    //   lastWrittenKey() covers only this product's own smart_write /
+    //     smart_edit, whose entries lived under a different namespace and so
+    //     were never found on a read. It was path-scoped, so one session's
+    //     write became another's base; it is session-scoped now (#488).
     //
-    // Ordered session-scoped first: it is the one with a provenance argument.
+    // Ordered authoredBase first: it is the one with a provenance argument.
     // Both are only ever a BASE, never the answer, so a stale entry costs a
     // diff rather than a wrong result.
     // BOTH fallbacks are gated on enableCache. `enableCache: false` is a
@@ -230,6 +250,8 @@ export class SmartReadTool {
 
     // Read file content
     const rawContent = readFileSync(filePath, encoding);
+    // maxSize and chunkSize are UTF-8 bytes, as the schema says (see utf8Length).
+    const rawBytes = utf8Length(rawContent);
 
     let finalContent = rawContent;
     let isDiff = false;
@@ -314,14 +336,22 @@ export class SmartReadTool {
     const paginationRequested =
       options.chunkIndex !== undefined || options.chunkSize !== undefined;
 
+    // AN EXPLICIT chunkIndex PAGES THE FILE, WHATEVER ITS SIZE (#489). maxSize
+    // used to be checked first, so a file over it was truncated to the same
+    // head-and-tail on every call and the rest of it could not be reached at
+    // all -- exactly the file paging exists for. Without a chunkIndex, an
+    // oversized file is still truncated rather than paged unasked.
+    const chunkRequested = options.chunkIndex !== undefined;
+
     // Handle large files - prioritize maxSize over chunking
-    if (!isDiff && rawContent.length > maxSize) {
+    if (!isDiff && rawBytes > maxSize && !chunkRequested) {
       // Check if file is minified
       if (isMinified(rawContent)) {
         // For minified files, just truncate with a warning
         const truncationMsg = '\n// [TRUNCATED: Minified file]';
-        const actualMaxSize = maxSize - truncationMsg.length;
-        finalContent = rawContent.substring(0, actualMaxSize) + truncationMsg;
+        const actualMaxSize = maxSize - utf8Length(truncationMsg);
+        finalContent =
+          prefixWithinBytes(rawContent, actualMaxSize) + truncationMsg;
         truncated = true;
       } else {
         // If file is larger than maxSize, truncate it
@@ -336,12 +366,31 @@ export class SmartReadTool {
     } else if (
       !isDiff &&
       paginationRequested &&
-      rawContent.length > chunkSize &&
-      rawContent.length <= maxSize
+      // An explicit chunkIndex on a file over maxSize pages it whatever chunkSize says: a
+      // 2,000-byte file with maxSize 1,000 and the default chunkSize of 4,000 used to take
+      // neither branch, and the caller who asked for a page got a truncation instead.
+      ((rawBytes > chunkSize && rawBytes <= maxSize) ||
+        (chunkRequested && rawBytes > Math.min(chunkSize, maxSize)))
     ) {
       // Only chunk if file fits within maxSize but is larger than chunkSize
       // This allows for structured navigation of medium-sized files
-      const allChunks = chunkBySyntax(rawContent, chunkSize).chunks;
+      // THE REPLY, FOOTER INCLUDED, FITS maxSize (#489 review). The footer was
+      // appended after the chunk was sized, so a chunk near the limit went over
+      // it. Room for the longest footer this can emit is reserved first, and
+      // the chunks are cut to what is left -- with long lines split, so every
+      // chunk fits and no byte is unreachable. A maxSize too small to hold a
+      // footer and any content cannot page at all, and says so.
+      const bodyBudget = maxSize - utf8Length(chunkFooter(999_999, 1_000_000));
+      if (bodyBudget < 1) {
+        throw new Error(
+          `smart_read cannot page within maxSize=${maxSize}: the chunk footer alone needs ` +
+            `${chunkFooter(999_999, 1_000_000).length} characters. Pass a larger maxSize.`
+        );
+      }
+      const allChunks = chunkBySyntax(
+        rawContent,
+        Math.min(chunkSize, bodyBudget)
+      ).chunks;
       chunked = true;
       chunkCount = allChunks.length;
 
@@ -360,14 +409,29 @@ export class SmartReadTool {
           : 0;
 
       finalContent =
-        allChunks[chunkIndex] +
-        `\n\n// [chunk ${chunkIndex + 1} of ${allChunks.length}. ` +
-        `Call smart_read again with chunkIndex=<n> for another.]`;
+        allChunks[chunkIndex] + chunkFooter(chunkIndex, allChunks.length);
+    }
+
+    // maxSize HOLDS ON A RE-READ TOO. Every size check above is gated on
+    // `!isDiff`, and a changed file whose diff was not worth sending sets
+    // `isDiff` while returning the whole file -- so re-reading a 179 KB file
+    // after an edit returned all of it against a maxSize of 20,000. A diff
+    // larger than maxSize is held to it the same way. A chunk already fits.
+    if (!chunked && utf8Length(finalContent) > maxSize) {
+      finalContent = truncateContent(finalContent, maxSize, {
+        keepTop: 100,
+        keepBottom: 50,
+        preserveStructure,
+      }).truncated;
+      truncated = true;
     }
     // Advance the read base after an edit too. Leaving a cache hit pinned to
     // its old bytes would return the same diff on every subsequent read.
     if (enableCache && (!fromCache || ownCached !== rawContent)) {
-      cacheSet(this.cache, cacheKey, rawContent);
+      // A ttl that is not a positive number would reach the engine as "never
+      // expires" -- the very behaviour being fixed -- so it means the default.
+      const ttlSeconds = Number(ttl) > 0 ? Number(ttl) : 300;
+      cacheSet(this.cache, cacheKey, rawContent, { ttlSeconds });
     }
 
     // Record metrics.

@@ -73,6 +73,7 @@ function fixture(fn, command = 'claude') {
     for (const hook of [
       'session-start.mjs',
       'pretooluse-router.mjs',
+      'agent-scope.mjs',
       'post-tool.mjs',
       'precompact-optimize.mjs',
       'stop.mjs',

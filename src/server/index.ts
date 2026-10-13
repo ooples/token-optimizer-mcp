@@ -53,6 +53,7 @@ import { runSmartSecurity } from '../tools/code-analysis/smart-security.js';
 import { runSmartSymbols } from '../tools/code-analysis/lazy-tools.js';
 import { runSmartTypescript } from '../tools/code-analysis/lazy-tools.js';
 import { runSmartConfigRead } from '../tools/configuration/smart-config-read.js';
+import { callContext, toolUseIdFrom } from '../tools/shared/call-context.js';
 import { runSmartEnv } from '../tools/configuration/smart-env.js';
 import { runSmartPackageJson } from '../tools/configuration/smart-package-json.js';
 import { runSmartTsconfig } from '../tools/configuration/smart-tsconfig.js';
@@ -2074,137 +2075,141 @@ function countToolCall(toolName: string, elapsedMs: number, ok: boolean): void {
 }
 
 server.setRequestHandler(CallToolRequestSchema, async (request, extra) =>
-  observeMcpToolCall(request.params.name, async () => {
-    const operationId = `mcp:${ANALYTICS_PROCESS_ID}:${String(extra.sessionId || 'stdio')}:${String(extra.requestId)}`;
-    if (!ADVERTISED_TOOL_NAMES.has(request.params.name)) {
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify({
-              error:
-                `Tool ${request.params.name} is not available in the active MCP tool profile. ` +
-                'Set TOKEN_OPTIMIZER_TOOL_PROFILE=full before starting the server to expose the full catalog.',
-            }),
-          },
-        ],
-        isError: true,
-      };
-    }
+  // The call's toolUseId, so the read cache can be scoped to the agent that
+  // made it (see tools/shared/session-scope.ts).
+  callContext.run({ toolUseId: toolUseIdFrom(request.params._meta) }, () =>
+    observeMcpToolCall(request.params.name, async () => {
+      const operationId = `mcp:${ANALYTICS_PROCESS_ID}:${String(extra.sessionId || 'stdio')}:${String(extra.requestId)}`;
+      if (!ADVERTISED_TOOL_NAMES.has(request.params.name)) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                error:
+                  `Tool ${request.params.name} is not available in the active MCP tool profile. ` +
+                  'Set TOKEN_OPTIMIZER_TOOL_PROFILE=full before starting the server to expose the full catalog.',
+              }),
+            },
+          ],
+          isError: true,
+        };
+      }
 
-    /*
-     * The seven tools answered below never reach handleToolCall, which is where
-     * arguments were checked -- so for years they took `request.params
-     * .arguments as any` unvalidated, and none of them had a schema entry
-     * either. Both halves are fixed: every advertised tool now has a derived
-     * schema, and this path runs the same check the switch does.
-     */
-    let directArgs: unknown = request.params.arguments;
-    if (DIRECT_ANSWER_TOOLS.has(request.params.name)) {
-      const checked = checkToolArguments(
+      /*
+       * The seven tools answered below never reach handleToolCall, which is where
+       * arguments were checked -- so for years they took `request.params
+       * .arguments as any` unvalidated, and none of them had a schema entry
+       * either. Both halves are fixed: every advertised tool now has a derived
+       * schema, and this path runs the same check the switch does.
+       */
+      let directArgs: unknown = request.params.arguments;
+      if (DIRECT_ANSWER_TOOLS.has(request.params.name)) {
+        const checked = checkToolArguments(
+          request.params.name,
+          request.params.arguments
+        );
+        if (!checked.ok) return checked.response;
+        directArgs = checked.args;
+      }
+
+      // Following a pointer is handled here rather than in the tool switch, because
+      // it is not an operation on the codebase -- it is an operation on what we
+      // already said about it.
+      if (request.params.name === 'expand') {
+        return recordDirectToolResult(
+          request.params.name,
+          () => expandRef(directArgs as any),
+          operationId
+        );
+      }
+
+      // Likewise the audit: it reports on the tool log rather than operating on the
+      // codebase, and its own output must not be disclosed away.
+      if (request.params.name === 'waste_audit') {
+        return recordDirectToolResult(
+          request.params.name,
+          () => wasteAudit(directArgs as any),
+          operationId
+        );
+      }
+
+      if (request.params.name === 'cache_audit') {
+        return recordDirectToolResult(
+          request.params.name,
+          () => cacheAudit(),
+          operationId
+        );
+      }
+
+      if (request.params.name === 'model_routing') {
+        return recordDirectToolResult(
+          request.params.name,
+          () => modelRouting(directArgs as any),
+          operationId
+        );
+      }
+
+      if (request.params.name === 'token_audit') {
+        return recordDirectToolResult(
+          request.params.name,
+          () => tokenAudit(directArgs as any),
+          operationId
+        );
+      }
+
+      if (request.params.name === 'install_doctor') {
+        return recordDirectToolResult(
+          request.params.name,
+          () =>
+            installDoctor({
+              ...(directArgs as any),
+              clientName: server.getClientVersion()?.name,
+              // A runtime fact no file inspection can reach: this process may be
+              // running on an in-memory cache because the real one would not open.
+              // Nothing persists in that state and nothing outside says so.
+              cacheDegradedReason: cache.getDegradedReason(),
+            }),
+          operationId
+        );
+      }
+
+      if (request.params.name === 'fleet_audit') {
+        return recordDirectToolResult(
+          request.params.name,
+          () => fleetAudit(directArgs as any),
+          operationId
+        );
+      }
+
+      const started = Date.now();
+      const result = flagPayloadFailure(await handleToolCall(request));
+      const disclosed = (await discloseResult(
         request.params.name,
+        request.params.arguments as Record<string, unknown> | undefined,
+        result as any,
+        Date.now() - started
+      )) as any;
+      // Best-effort: feed savings into analytics so the report/breakdown tools have
+      // real data. The returned-context side is measured AFTER disclosure because
+      // that is what actually enters the client's context window.
+      await recordToolAnalytics(
+        analyticsManager,
+        request.params.name,
+        disclosed,
+        { ...(await mcpEvidence.analyticsAttribution()), operationId },
+        result,
+        // The arguments as the caller sent them, so the recorder can count the
+        // input this call stood in for instead of taking the tool's word for it.
         request.params.arguments
       );
-      if (!checked.ok) return checked.response;
-      directArgs = checked.args;
-    }
-
-    // Following a pointer is handled here rather than in the tool switch, because
-    // it is not an operation on the codebase -- it is an operation on what we
-    // already said about it.
-    if (request.params.name === 'expand') {
-      return recordDirectToolResult(
-        request.params.name,
-        () => expandRef(directArgs as any),
-        operationId
-      );
-    }
-
-    // Likewise the audit: it reports on the tool log rather than operating on the
-    // codebase, and its own output must not be disclosed away.
-    if (request.params.name === 'waste_audit') {
-      return recordDirectToolResult(
-        request.params.name,
-        () => wasteAudit(directArgs as any),
-        operationId
-      );
-    }
-
-    if (request.params.name === 'cache_audit') {
-      return recordDirectToolResult(
-        request.params.name,
-        () => cacheAudit(),
-        operationId
-      );
-    }
-
-    if (request.params.name === 'model_routing') {
-      return recordDirectToolResult(
-        request.params.name,
-        () => modelRouting(directArgs as any),
-        operationId
-      );
-    }
-
-    if (request.params.name === 'token_audit') {
-      return recordDirectToolResult(
-        request.params.name,
-        () => tokenAudit(directArgs as any),
-        operationId
-      );
-    }
-
-    if (request.params.name === 'install_doctor') {
-      return recordDirectToolResult(
-        request.params.name,
-        () =>
-          installDoctor({
-            ...(directArgs as any),
-            clientName: server.getClientVersion()?.name,
-            // A runtime fact no file inspection can reach: this process may be
-            // running on an in-memory cache because the real one would not open.
-            // Nothing persists in that state and nothing outside says so.
-            cacheDegradedReason: cache.getDegradedReason(),
-          }),
-        operationId
-      );
-    }
-
-    if (request.params.name === 'fleet_audit') {
-      return recordDirectToolResult(
-        request.params.name,
-        () => fleetAudit(directArgs as any),
-        operationId
-      );
-    }
-
-    const started = Date.now();
-    const result = flagPayloadFailure(await handleToolCall(request));
-    const disclosed = (await discloseResult(
-      request.params.name,
-      request.params.arguments as Record<string, unknown> | undefined,
-      result as any,
-      Date.now() - started
-    )) as any;
-    // Best-effort: feed savings into analytics so the report/breakdown tools have
-    // real data. The returned-context side is measured AFTER disclosure because
-    // that is what actually enters the client's context window.
-    await recordToolAnalytics(
-      analyticsManager,
-      request.params.name,
-      disclosed,
-      { ...(await mcpEvidence.analyticsAttribution()), operationId },
-      result,
-      // The arguments as the caller sent them, so the recorder can count the
-      // input this call stood in for instead of taking the tool's word for it.
-      request.params.arguments
-    );
-    // THE ONE PLACE EVERY TOOL RESULT PASSES THROUGH. Disclosing here rather than
-    // per-tool is what keeps it a single policy instead of ninety. The elapsed
-    // time is passed along because it is what later decides whether a stale
-    // artifact is worth regenerating or worth serving with a marker.
-    return disclosed;
-  })
+      // THE ONE PLACE EVERY TOOL RESULT PASSES THROUGH. Disclosing here rather than
+      // per-tool is what keeps it a single policy instead of ninety. The elapsed
+      // time is passed along because it is what later decides whether a stale
+      // artifact is worth regenerating or worth serving with a marker.
+      return disclosed;
+    })
+  )
 );
 
 // Helper to run cleanup operations with error handling

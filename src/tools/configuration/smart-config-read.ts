@@ -17,6 +17,7 @@ import { CacheEngine, resolveCacheLocation } from '../../core/cache-engine.js';
 import { TokenCounter } from '../../core/token-counter.js';
 import { MetricsCollector } from '../../core/metrics.js';
 import { hashFile, generateCacheKey } from '../shared/hash-utils.js';
+import { sessionScope } from '../shared/session-scope.js';
 import { compress } from '../shared/compression-utils.js';
 import { readCompressedJson } from '../../utils/cache-helper.js';
 import { displayPath, shortHash } from '../shared/report-shape.js';
@@ -195,9 +196,16 @@ export class SmartConfigReadTool {
     const detectedFormat = this.detectFormat(filePath, format);
 
     // Generate cache keys
+    // SCOPED TO THE SESSION, as smart_read is (#488): a hit here becomes
+    // `_status: 'unchanged'` with no config, which is only an answer for a
+    // caller that read it before. The cache is shared by every server process
+    // and this entry lives a week, so a path-and-hash key handed a fresh
+    // session "no changes" instead of its config. The schema key stays shared:
+    // a schema is derived from the content, not from who read it.
     const configCacheKey = generateCacheKey('smart-config', {
       path: filePath,
       hash: fileHash,
+      session: sessionScope(),
     });
 
     const schemaCacheKey = generateCacheKey('config-schema', {

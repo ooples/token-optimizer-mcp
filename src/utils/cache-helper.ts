@@ -3,7 +3,7 @@
  * Provides consistent caching interface across all tools
  */
 
-import { CacheEngine } from '../core/cache-engine.js';
+import { CacheEngine, type CacheSetOptions } from '../core/cache-engine.js';
 import { compress, decompress } from '../tools/shared/compression-utils.js';
 
 /**
@@ -71,7 +71,10 @@ export function readCompressedJson<T>(
 export function cacheSet(
   cache: CacheEngine,
   key: string,
-  content: string
+  content: string,
+  // Passed through to the engine, so a caller's ttl reaches `expires_at`
+  // instead of every entry living forever (#488).
+  options?: CacheSetOptions
 ): void {
   try {
     // Compress and store as base64-encoded gzip
@@ -80,7 +83,8 @@ export function cacheSet(
       key,
       result.compressed.toString('base64'),
       result.originalSize,
-      result.compressedSize
+      result.compressedSize,
+      options
     );
   } catch (error) {
     console.error('Cache compression failed:', error);
