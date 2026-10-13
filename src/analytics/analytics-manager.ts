@@ -16,6 +16,7 @@ import type { AnalyticsRollup } from './analytics-rollup.js';
 import {
   hasObservedReturnedContext,
   isVerifiedSavingsEntry,
+  verifiedReturnedTokens,
   verifiedTransportDelta,
 } from './savings-classification.js';
 
@@ -179,6 +180,26 @@ export class AnalyticsManager {
   }
 
   /**
+   * Every breakdown of ONE entry list (#498).
+   *
+   * The report used to take its breakdowns from date-range queries while its
+   * summary honoured a sessionId, so a session-scoped report showed that session's
+   * summary over the all-time ledger's tables. Aggregating the caller's own
+   * entries keeps every section on the same population.
+   */
+  aggregateEntries(entries: AnalyticsEntry[]): {
+    hook: HookAnalytics;
+    action: ActionAnalytics;
+    server: ServerAnalytics;
+  } {
+    return {
+      hook: this.aggregateByHook(entries),
+      action: this.aggregateByAction(entries),
+      server: this.aggregateByServer(entries),
+    };
+  }
+
+  /**
    * Aggregate entries by hook phase
    */
   private aggregateByHook(entries: AnalyticsEntry[]): HookAnalytics {
@@ -326,6 +347,10 @@ export class AnalyticsManager {
       (sum, e) => sum + verifiedTransportDelta(e),
       0
     );
+    const totalVerifiedReturnedTokens = entries.reduce(
+      (sum, e) => sum + verifiedReturnedTokens(e),
+      0
+    );
     const averageTokensSaved = totalTokensSaved / totalOperations;
     const savingsPercentage =
       totalOriginalTokens > 0
@@ -341,6 +366,7 @@ export class AnalyticsManager {
       totalOperations,
       totalOriginalTokens,
       totalOptimizedTokens,
+      totalVerifiedReturnedTokens,
       totalTokensSaved,
       averageTokensSaved,
       savingsPercentage,

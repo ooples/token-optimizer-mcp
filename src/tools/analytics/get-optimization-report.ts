@@ -11,8 +11,7 @@
 import type { AnalyticsManager } from '../../analytics/analytics-manager.js';
 import type { AggregatedStats } from '../../analytics/analytics-types.js';
 import {
-  hasObservedReturnedContext,
-  isVerifiedSavingsEntry,
+  verifiedReturnedTokens,
   verifiedTransportDelta,
 } from '../../analytics/savings-classification.js';
 import { priceVerifiedDelta } from '../../savings/windows.js';
@@ -324,48 +323,27 @@ export function getOptimizationReportTool(analyticsManager: AnalyticsManager) {
   }): Promise<string> => {
     try {
       const topN = args.topN && args.topN > 0 ? args.topN : 10;
-      const range = { startDate: args.startDate, endDate: args.endDate };
-
-      const [hook, action, server, totalCount, scopedEntries] =
-        await Promise.all([
-          analyticsManager.getHookAnalytics(range),
-          analyticsManager.getActionAnalytics(range),
-          analyticsManager.getServerAnalytics(range),
-          analyticsManager.count(),
-          analyticsManager.getEntries({
-            startDate: args.startDate,
-            endDate: args.endDate,
-            sessionId: args.sessionId,
-          }),
-        ]);
-
-      // If scoped to a session, recompute the summary from filtered entries.
-      let summary = action.summary;
-      let byAction = action.byAction;
-      if (args.sessionId) {
-        const entries = scopedEntries;
-        const verifiedEntries = entries.filter(isVerifiedSavingsEntry);
-        const observedEntries = entries.filter(hasObservedReturnedContext);
-        const totalOriginalTokens = verifiedEntries.reduce(
-          (s, e) => s + e.originalTokens,
+      // ONE POPULATION FOR EVERY SECTION (#498). The breakdowns used to come
+      // from date-range queries while only the summary honoured sessionId, so a
+      // session report printed the all-time ledger's tables under its summary.
+      const [totalCount, scopedEntries] = await Promise.all([
+        analyticsManager.count(),
+        analyticsManager.getEntries({
+          startDate: args.startDate,
+          endDate: args.endDate,
+          sessionId: args.sessionId,
+        }),
+      ]);
+      const { hook, action, server } =
+        analyticsManager.aggregateEntries(scopedEntries);
+      const byAction = action.byAction;
+      const summary = {
+        ...action.summary,
+        totalVerifiedReturnedTokens: scopedEntries.reduce(
+          (s, e) => s + verifiedReturnedTokens(e),
           0
-        );
-        const totalOptimizedTokens = observedEntries.reduce(
-          (s, e) => s + e.optimizedTokens,
-          0
-        );
-        const totalTokensSaved = entries.reduce(
-          (s, e) => s + verifiedTransportDelta(e),
-          0
-        );
-        summary = {
-          totalOperations: entries.length,
-          totalTokensSaved,
-          totalOriginalTokens,
-          totalOptimizedTokens,
-        };
-      }
-
+        ),
+      };
       const savingsPercentage =
         summary.totalOriginalTokens > 0
           ? (summary.totalTokensSaved / summary.totalOriginalTokens) * 100
@@ -385,7 +363,8 @@ export function getOptimizationReportTool(analyticsManager: AnalyticsManager) {
         `  ✨ Verified saved     : ${num(summary.totalTokensSaved)}`,
         `  💵 Direct API price  : ${cost.display} (${num(cost.pricedOperations)}/${num(cost.eligibleOperations)} savings operations exactly modeled)`,
         `  \u{1F4E5} Original tokens    : ${num(summary.totalOriginalTokens)}`,
-        `  \u{1F4E6} After optimization : ${num(summary.totalOptimizedTokens)}`,
+        `  \u{1F4E6} After optimization : ${num(summary.totalVerifiedReturnedTokens)}`,
+        `  \u{1F4E8} Returned context   : ${num(summary.totalOptimizedTokens)}  (every observed reply, verified or not)`,
         `  \u{1F4C9} Overall reduction  : ${pct(savingsPercentage)}  ${bar(
           savingsPercentage / 100
         )}`,
