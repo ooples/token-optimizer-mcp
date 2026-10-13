@@ -383,3 +383,49 @@ describe('the deferred tool set must not move between turns', () => {
     expect(old.distinct).toBe(LATEST.length);
   });
 });
+
+describe('the client discovery tool', () => {
+  // Claude Code's `ToolSearch` is the only route to its MCP tools, which it
+  // keeps out of the request entirely; the server search added here cannot see
+  // them. Deferring it left sub-agents unable to load any MCP tool (#496).
+  it('is never deferred, so client-deferred tools stay reachable', () => {
+    const out = deferTools(
+      req({
+        tools: [
+          tool('ToolSearch', 5000),
+          tool('PowerShell', 9000),
+          tool('Workflow', 5000),
+          tool('Monitor', 7000),
+        ],
+      }),
+      { keepRelevant: 0 }
+    );
+    const tools = (
+      out.request as unknown as { tools: Record<string, unknown>[] }
+    ).tools;
+    const search = tools.find((t) => t.name === 'ToolSearch');
+    expect(search).toBeDefined();
+    expect(search?.defer_loading).toBeUndefined();
+    // Everything else large is still deferred: this exempts one tool, it does
+    // not switch deferral off.
+    expect(out.deferredCount).toBe(3);
+    expect(tools[0]?.type).toBe(TOOL_SEARCH_TYPE);
+  });
+
+  it('is not counted among the relevant tools it would displace', () => {
+    const out = deferTools(
+      req({ tools: [tool('ToolSearch', 5000), mcp('alpha'), mcp('beta')] }),
+      { keepRelevant: 1 }
+    );
+    const tools = (
+      out.request as unknown as { tools: Record<string, unknown>[] }
+    ).tools;
+    const loaded = tools.filter(
+      (t) => typeof t.name === 'string' && t.defer_loading === undefined
+    );
+    // The added server search, ToolSearch, and exactly one ranked keep: the
+    // exemption does not use up the relevance slot.
+    expect(loaded.map((t) => t.name)).toContain('ToolSearch');
+    expect(loaded.length).toBe(3);
+  });
+});
