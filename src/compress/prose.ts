@@ -61,23 +61,56 @@ interface Sentence {
  * reader uses to navigate, and losing them is not compression.
  */
 function sentences(text: string): Sentence[] {
-  const parts = text.split(/(?<=[.!?])(\s+)(?=[A-Z(`"'\[])/);
+  const parts = text.split(BOUNDARY);
   const out: Sentence[] = [];
   // The split keeps the separator, so the array alternates sentence, gap,
-  // sentence, gap -- and the final sentence has no gap after it.
+  // sentence, gap -- and the final sentence has no gap after it. Bodies are
+  // kept byte for byte (no trim), so a line that survives whole is identical
+  // to the line it came from.
   for (let i = 0; i < parts.length; i += 2) {
-    const body = (parts[i] ?? '').trim();
-    if (!body) continue;
+    const body = parts[i] ?? '';
+    if (!body.trim()) continue;
     out.push({ text: body, after: parts[i + 1] ?? '' });
   }
   return out;
 }
 
-/** A gap that crosses a blank line is a paragraph break; anything else is a space. */
-function separator(gap: string): string {
-  return /\n\s*\n/.test(gap) ? '\n\n' : ' ';
-}
+/**
+ * Where one sentence ends and the next begins.
+ *
+ * A LINE BREAK IS A BOUNDARY UNLESS THE NEXT LINE CONTINUES THE SENTENCE (#494).
+ * Splitting only on `. X` let one "sentence" run from the tail of one line,
+ * across the newline, into the head of the next. In a listing -- one issue,
+ * one result, one record per line, none of them ending in a period -- dropping
+ * that sentence deleted the end of one record and the start of the next, and
+ * the survivors were joined onto one line: measured on a 77-line issue listing,
+ * 14 output lines existed nowhere in the input, one carrying another issue's
+ * text. So: a blank line always ends a sentence; a single newline does too,
+ * unless the next line starts lowercase, which is what hard-wrapped prose
+ * looks like mid-sentence. Within a line, the old rule stands.
+ */
+const BOUNDARY =
+  /(\r?\n(?:[ \t]*\r?\n)+[ \t]*|\r?\n(?![ \t]*[a-z])[ \t]*|(?<=[.!?])[ \t]+(?=[A-Z(`"'\[]))/;
 
+const BLANK_LINE = /\n[ \t]*\r?\n/;
+
+/**
+ * What stands between two survivors once the sentences between them are gone.
+ *
+ * THE ORIGINAL GAP, NOT A NORMALISED ONE. A run with no line break in it
+ * stays a space. A run that crossed lines keeps the last break in it, which
+ * carries the next survivor's own indentation and line ending, so that line
+ * comes out exactly as it went in; if any gap in the run was a paragraph break
+ * the result still is one.
+ */
+function rejoin(gaps: readonly string[]): string {
+  const breaks = gaps.filter((gap) => gap.includes('\n'));
+  if (breaks.length === 0) return ' ';
+  const last = breaks[breaks.length - 1];
+  if (BLANK_LINE.test(last) || !breaks.some((gap) => BLANK_LINE.test(gap)))
+    return last;
+  return (last.startsWith('\r\n') ? '\r\n' : '\n') + last;
+}
 /**
  * Weight of the one term that cannot be carried in from outside.
  *
@@ -232,11 +265,23 @@ const LINE_ORIENTED =
  * elided, so some reduction is given up. A compression that makes an edit fail
  * is not a saving.
  */
+/** A line that ends the way a sentence or a paragraph does. */
+const TERMINATED = /[.!?:;]["'`)*\]]*\s*$/;
+
 export function looksLikeProse(text: string): boolean {
   const lines = text.split('\n').filter((l) => l.trim());
   if (lines.length < 2) return false;
   const oriented = lines.filter((l) => LINE_ORIENTED.test(l)).length;
   if (oriented / lines.length > 0.5) return false;
+  // RECORDS, NOT SENTENCES (#494): a line that stops without closing
+  // punctuation and is not continued by a lowercase line is a unit of its own
+  // -- an issue, a hit, a row -- and eliding inside it strips its key. Hard-
+  // wrapped prose escapes this because its breaks are continued lowercase.
+  const records = lines.filter(
+    (line, i) =>
+      !TERMINATED.test(line) && !/^[ \t]*[a-z]/.test(lines[i + 1] ?? 'X')
+  ).length;
+  if (records / lines.length > 0.5) return false;
   const wordy = lines.filter((l) => l.split(/\s+/).length > 8).length;
   return wordy / lines.length > 0.5;
 }
@@ -335,8 +380,7 @@ function compressProseBody(
     const next = keptIndices[position + 1];
     // Every gap between this survivor and the next, including the gaps
     // around the sentences being removed.
-    const gaps = parts.slice(index, next).map((part) => separator(part.after));
-    body += gaps.includes('\n\n') ? '\n\n' : ' ';
+    body += rejoin(parts.slice(index, next).map((part) => part.after));
   });
   body += ` ${inlineMarker(
     `${count(dropped, 'lower-signal sentence')} removed`,
