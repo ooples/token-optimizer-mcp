@@ -435,6 +435,22 @@ function cachedPrefixBytes(
   });
   return bytes;
 }
+/**
+ * Text that is the conversation's own record, left whole (#495).
+ *
+ * The model's earlier replies are what it told the user; a sub-agent's
+ * completion report is the evidence the coordinating model acts on. Prose
+ * elision dropped sentences from both, so the model misquoted its own replies
+ * back to the user and acted on agent reports with their evidence removed --
+ * and its marker sent it to a spill that, re-read, was elided again. Both are
+ * small next to tool output, which is where the saving is.
+ */
+function isConversationRecord(message: Message, text: string): boolean {
+  return message?.role === 'assistant' || HARNESS_REPORT.test(text);
+}
+
+/** A background agent's completion report, as Claude Code delivers it. */
+const HARNESS_REPORT = /<task-notification>/;
 function isToolResult(block: unknown): boolean {
   return (
     typeof block === 'object' &&
@@ -671,6 +687,7 @@ function pathAddressed(
     // for is passed through whole for the reason on targetedToolResults.
     const touchable =
       !messageIsSigned(message) &&
+      !isConversationRecord(message, text) &&
       (!respectFrontier || isAfter(at, frontier)) &&
       !(toolUseId && targeted.has(toolUseId) && withinPage(text));
     if (!touchable) {
