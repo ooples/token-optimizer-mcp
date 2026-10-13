@@ -574,6 +574,15 @@ const CLINE_TOOL_NAMES = {
 };
 
 /**
+ * The names the optimizer's MCP server is registered under: every shipped
+ * client config uses `token-optimizer`, and Claude's plugin form qualifies it.
+ */
+const OPTIMIZER_SERVER_NAMES = new Set([
+  'token-optimizer',
+  'plugin_token-optimizer_token-optimizer',
+]);
+
+/**
  * The host's own name for the tool a hook event reports, before any
  * canonicalisation -- the name optimizer grading has to recognise.
  *
@@ -585,10 +594,11 @@ const CLINE_TOOL_NAMES = {
 export function hostToolName(raw) {
   const body = raw?.postToolUse ?? raw?.preToolUse;
   if (body?.toolName === 'use_mcp_tool') {
-    // ONLY THE OPTIMIZER'S OWN SERVER. A bare `wiki_write` from any other
-    // server would otherwise be graded as an optimizer call that answered.
+    // ONLY THE OPTIMIZER'S OWN SERVER, BY ITS EXACT NAME. A bare `wiki_write`
+    // from any other server would otherwise be graded as an optimizer call that
+    // answered -- and a substring test let `other-token-optimizer` through.
     const server = String(body.parameters?.server_name ?? body.parameters?.serverName ?? '');
-    if (!/token[-_]?optimizer/i.test(server)) return null;
+    if (!OPTIMIZER_SERVER_NAMES.has(server.toLowerCase())) return null;
     const tool = body.parameters?.tool_name ?? body.parameters?.toolName;
     return tool ? `mcp__${server}__${tool}` : null;
   }

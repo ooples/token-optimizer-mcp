@@ -224,24 +224,38 @@ describe('shell profiles', () => {
 });
 
 (process.platform === 'win32' ? describe.skip : describe)('signals through the forwarder', () => {
-  /** A runtime whose run-client either waits, or ends itself with `signal`. */
+  /**
+   * A runtime whose run-client is `body(runtime)`. A function, because the
+   * client needs the runtime's own path -- which does not exist until here.
+   */
   function signalRuntime(body) {
     const { runtime } = runtimeWith(['7.4.4'], '7.4.4');
-    fs.writeFileSync(join(packageRoot(runtime, '7.4.4'), 'scripts', 'run-client.mjs'), body);
+    fs.writeFileSync(
+      join(packageRoot(runtime, '7.4.4'), 'scripts', 'run-client.mjs'),
+      body(runtime)
+    );
     const forwarder = join(runtime, FORWARDER_NAME);
     fs.copyFileSync(FORWARDER_SOURCE, forwarder);
     return { runtime, forwarder };
   }
 
+  /** The environment a launcher runs in: no override pointing at another runtime. */
+  function launchEnv() {
+    const env = { ...process.env };
+    delete env.TOKEN_OPTIMIZER_RUNTIME;
+    return env;
+  }
+
   it('passes a SIGINT sent to the forwarder on to the client', async () => {
     const { runtime, forwarder } = signalRuntime(
-      `import fs from 'node:fs';\n` +
-        `process.on('SIGINT', () => { fs.writeFileSync(${JSON.stringify(join(runtime, 'got-sigint'))}, ''); process.exit(130); });\n` +
-        `fs.writeFileSync(${JSON.stringify(join(runtime, 'ready'))}, '');\n` +
+      (dir) =>
+        `import fs from 'node:fs';\n` +
+        `process.on('SIGINT', () => { fs.writeFileSync(${JSON.stringify(join(dir, 'got-sigint'))}, ''); process.exit(130); });\n` +
+        `fs.writeFileSync(${JSON.stringify(join(dir, 'ready'))}, '');\n` +
         `setInterval(() => {}, 1000);\n`
     );
     const { spawn } = await import('node:child_process');
-    const child = spawn(process.execPath, [forwarder], { stdio: 'ignore' });
+    const child = spawn(process.execPath, [forwarder], { stdio: 'ignore', env: launchEnv() });
     const deadline = Date.now() + 10_000;
     while (!fs.existsSync(join(runtime, 'ready')) && Date.now() < deadline) {
       await new Promise((resolve) => setTimeout(resolve, 50));
@@ -253,10 +267,10 @@ describe('shell profiles', () => {
   });
 
   it("ends with the client's signal, not an ordinary exit status", () => {
-    const { forwarder } = signalRuntime(`process.kill(process.pid, 'SIGTERM');\nsetInterval(() => {}, 1000);\n`);
-    const env = { ...process.env };
-    delete env.TOKEN_OPTIMIZER_RUNTIME;
-    const result = spawnSync(process.execPath, [forwarder], { env, timeout: 10_000 });
+    const { forwarder } = signalRuntime(
+      () => `process.kill(process.pid, 'SIGTERM');\nsetInterval(() => {}, 1000);\n`
+    );
+    const result = spawnSync(process.execPath, [forwarder], { env: launchEnv(), timeout: 10_000 });
     expect(result.signal).toBe('SIGTERM');
     expect(result.status).toBeNull();
   });

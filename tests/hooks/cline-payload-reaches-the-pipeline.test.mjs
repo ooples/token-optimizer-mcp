@@ -116,6 +116,18 @@ describe('a successful optimizer call on cline is graded as one (#485 review)', 
     ).toEqual([]);
   });
 
+  it('records nothing for a server whose name only contains the optimizer\'s (control)', async () => {
+    for (const server_name of ['other-token-optimizer', 'token-optimizer-fork', 'my_token_optimizer']) {
+      expect(
+        await gradedOk({
+          toolName: 'use_mcp_tool',
+          parameters: { server_name, tool_name: 'wiki_write' },
+          success: true,
+        })
+      ).toEqual([]);
+    }
+  });
+
   it('records nothing for a tool that is not an optimizer tool (control)', async () => {
     expect(
       await gradedOk({
