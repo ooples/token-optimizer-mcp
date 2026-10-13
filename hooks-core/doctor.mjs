@@ -892,7 +892,11 @@ export function probeProxy(
   ];
 }
 
-export function probeVersion({ install, crossClient } = {}) {
+export function probeVersion({
+  install,
+  crossClient,
+  pin = process.env.TOKEN_OPTIMIZER_VERSION,
+} = {}) {
   const {
     method,
     installedVersion,
@@ -926,6 +930,27 @@ export function probeVersion({ install, crossClient } = {}) {
   // nothing about whether Codex's hooks work -- and #408 is a Codex user whose report FAILED on
   // exactly that, about a client they were not using. It is still worth saying, because two
   // clients on different builds is a real split-brain, so it is a warning that names whose it is.
+  // A PIN OLDER THAN THE PLUGIN SERVES THE OLD SERVER, SILENTLY (#499).
+  //
+  // TOKEN_OPTIMIZER_VERSION is an exact pin, and the launcher honours it
+  // before the plugin's own version floor -- correctly, a pin is a pin. But a
+  // pin left behind by an old session outlives every upgrade: a 7.5.0 plugin
+  // ran a 7.0.0 server for weeks, every tool answered with 7.0.0's behaviour
+  // (smart_read paginating a 7 KB file unasked and booking the unread half as
+  // saved), and the fixes the user had installed never reached them. Checked
+  // before the early returns below, because those are about other questions.
+  const current = installedVersion || packageVersion;
+  if (pin && current && compareVersions(pin, current) < 0) {
+    checks.push(
+      bad(
+        'the served version is not pinned below the plugin',
+        `TOKEN_OPTIMIZER_VERSION=${pin} pins the MCP server, so this ${current} install runs ${pin}`,
+        'unset TOKEN_OPTIMIZER_VERSION (it may be a user-level environment variable) ' +
+          'and restart the client, or raise it to the version you mean to run'
+      )
+    );
+  }
+
   if (crossClient?.installedVersion && packageVersion) {
     checks.push(
       crossClient.installedVersion === packageVersion
