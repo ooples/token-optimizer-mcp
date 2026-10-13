@@ -324,6 +324,39 @@ describe('#489 truncation keeps the top, and chunkIndex pages a file over maxSiz
     });
   });
 
+  it('pages a file over maxSize but under chunkSize when a chunk is asked for', async () => {
+    // From review: 2,000 bytes, maxSize 1,000, default chunkSize 4,000 and a
+    // chunkIndex took neither branch, so the caller got a truncation, not a page.
+    const { dir, cache } = workspace();
+    const file = join(dir, 'mid.txt');
+    const body = Array.from(
+      { length: 40 },
+      (_, i) => `line ${i} ${'y'.repeat(40)}`
+    ).join('\n');
+    writeFileSync(file, body);
+    expect(Buffer.byteLength(body)).toBeGreaterThan(1_000);
+    expect(Buffer.byteLength(body)).toBeLessThan(4_000);
+    const tool = reader(cache);
+    const footer =
+      /\n\n\/\/ \[chunk (\d+) of (\d+)\. Call smart_read again with chunkIndex=<n> for another\.\]$/;
+    const first = (await tool.read(file, { maxSize: 1_000, chunkIndex: 0 }))
+      .content;
+    expect(first).not.toContain('[truncated]');
+    const total = Number(footer.exec(first)?.[2]);
+    expect(total).toBeGreaterThan(1);
+    let reassembled = '';
+    for (let i = 0; i < total; i++) {
+      const content = (await tool.read(file, { maxSize: 1_000, chunkIndex: i }))
+        .content;
+      expect(Buffer.byteLength(content)).toBeLessThanOrEqual(1_000);
+      reassembled += content.slice(
+        0,
+        content.length - (footer.exec(content)?.[0].length ?? 0)
+      );
+    }
+    expect(reassembled).toBe(body);
+  });
+
   it('counts the chunk footer inside maxSize', async () => {
     const { dir, cache } = workspace();
     const file = join(dir, 'lines.txt');

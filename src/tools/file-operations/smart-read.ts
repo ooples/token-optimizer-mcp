@@ -366,8 +366,11 @@ export class SmartReadTool {
     } else if (
       !isDiff &&
       paginationRequested &&
-      rawBytes > chunkSize &&
-      (rawBytes <= maxSize || chunkRequested)
+      // An explicit chunkIndex on a file over maxSize pages it whatever chunkSize says: a
+      // 2,000-byte file with maxSize 1,000 and the default chunkSize of 4,000 used to take
+      // neither branch, and the caller who asked for a page got a truncation instead.
+      ((rawBytes > chunkSize && rawBytes <= maxSize) ||
+        (chunkRequested && rawBytes > Math.min(chunkSize, maxSize)))
     ) {
       // Only chunk if file fits within maxSize but is larger than chunkSize
       // This allows for structured navigation of medium-sized files
