@@ -30,6 +30,7 @@ import {
   largeFileBytes,
   readPayloadResult,
   withEscape,
+  stateScope,
 } from './policy.mjs';
 import {
   adviseOnce,
@@ -1370,7 +1371,7 @@ async function runHook(clientName, event, invocation) {
     invocation.bind(raw, null, input.bytes);
     const sessionId =
       raw.session_id ?? raw.sessionId ?? raw.conversation_id ?? 'default';
-    const agentScope = raw.transcript_path ?? raw.transcriptPath ?? null;
+    const agentScope = stateScope(raw);
     const state = loadState(sessionId, agentScope);
     gradeObservedTools(state, event, raw, raw);
     const toolEvidence = optimizerToolsForHook(raw, state);
@@ -1588,7 +1589,7 @@ async function runHook(clientName, event, invocation) {
     // post-tool event. Claude Code's matcher never sends these at all, so there
     // the transcript reader records the call instead.
     if (event === 'post-tool' && optimizerToolName(hostToolName(raw))) {
-      const scope = payload.transcript_path || null;
+      const scope = stateScope(raw, payload.transcript_path || null);
       const graded = loadState(payload.session_id, scope);
       gradeObservedTools(graded, event, payload, raw);
       saveState(payload.session_id, graded, scope);
@@ -1604,7 +1605,7 @@ async function runHook(clientName, event, invocation) {
   // because a sibling had read it. That fix was never carried across to the four
   // clients this adapter serves. `transcript_path` is per agent; absent, this
   // falls back to session scope, which is right for a main session's own calls.
-  const agentScope = payload.transcript_path || null;
+  const agentScope = stateScope(raw, payload.transcript_path || null);
   const state = loadState(payload.session_id, agentScope);
   // GRADE THE CALL THAT JUST COMPLETED, BEFORE ANYTHING READS THE INVENTORY.
   //
