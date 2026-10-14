@@ -374,7 +374,11 @@ const SLICE_COMMAND = [
  */
 const RECORD_TOOLS = new Set(['Agent', 'Task', 'SendMessage', 'TaskOutput']);
 
-/** Where elision spills go (src/proxy/server.ts); a read of one is a recovery. */
+/**
+ * Where elision spills go (src/proxy/server.ts); a read of one is a recovery.
+ * Matched without case: Windows paths are case-insensitive, so a read through
+ * TOKEN-OPTIMIZER-SPILL reaches the same file.
+ */
 const SPILL_DIRECTORY = 'token-optimizer-spill';
 
 /**
@@ -395,7 +399,9 @@ function recordToolResults(request: ProviderRequest): Set<string> {
       const named =
         typeof block.name === 'string' && RECORD_TOOLS.has(block.name);
       const readsSpill = Object.values(block.input ?? {}).some(
-        (value) => typeof value === 'string' && value.includes(SPILL_DIRECTORY)
+        (value) =>
+          typeof value === 'string' &&
+          value.toLowerCase().includes(SPILL_DIRECTORY)
       );
       if (named || readsSpill) records.add(block.id);
     }

@@ -112,7 +112,8 @@ describe('harness record tools and spill re-reads (#495)', () => {
   const RECOVERED = rotated(2);
   const CONTROL = rotated(4);
   const SPILL_PATH =
-    'C:\\Temp\\token-optimizer-spill\\532db20f\\c0a8e9f1-prose.txt';
+    // Mixed case: Windows resolves it to the same spill file.
+    'C:\\Temp\\Token-Optimizer-SPILL\\532db20f\\c0a8e9f1-prose.txt';
   const call = (id: string, name: string, input: Record<string, unknown>) => ({
     role: 'assistant',
     content: [{ type: 'tool_use', id, name, input }],

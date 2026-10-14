@@ -1369,7 +1369,10 @@ async function runHook(clientName, event, invocation) {
     invocation.bind(raw, null, input.bytes);
     const sessionId =
       raw.session_id ?? raw.sessionId ?? raw.conversation_id ?? 'default';
-    const agentScope = stateScope(raw);
+    // The transcript FILE, for archiving and derivation; the state scope adds
+    // the agent id, which is not part of any path.
+    const transcriptPath = raw.transcript_path ?? raw.transcriptPath ?? null;
+    const agentScope = stateScope(raw, transcriptPath);
     const state = loadState(sessionId, agentScope);
     gradeObservedTools(state, event, raw, raw);
     const toolEvidence = optimizerToolsForHook(raw, state);
@@ -1426,7 +1429,7 @@ async function runHook(clientName, event, invocation) {
       // the copy that survives into later sessions.
       const cwd = raw.cwd || raw.working_directory || process.cwd();
       const dir = wikiDir(projectRootFor(join(cwd, '__session__'), cwd));
-      if (agentScope) archive(dir, agentScope, { sessionId });
+      if (transcriptPath) archive(dir, transcriptPath, { sessionId });
     } catch {
       // The archive is a record, not a result. A session still ends.
     }
@@ -1481,7 +1484,7 @@ async function runHook(clientName, event, invocation) {
       const derived = derive(dir, {
         sessionId,
         projectRoot,
-        transcriptPath: agentScope,
+        transcriptPath,
         // The hook payload's own identity, not a value a model typed.
         authoritativeSessionId: sessionId,
       });
