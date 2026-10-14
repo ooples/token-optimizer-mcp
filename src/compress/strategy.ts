@@ -518,8 +518,15 @@ function carriesHarnessReport(message: Message): boolean {
   });
 }
 
-/** A background agent's completion report, as Claude Code delivers it. */
-const HARNESS_REPORT = /<task-notification>/;
+/**
+ * Harness text that rides in a user turn and is the conversation's record, not tool output: a background agent's
+ * completion report (`<task-notification>`), a message from another session (`<cross-session-message>`), and the
+ * harness's instructions to the model (`<system-reminder>`: the project's rules, memory, hook context). Lossy
+ * elision dropped sentences from all three, so the model acted on a peer's request or a project rule with part of it
+ * missing (#495).
+ */
+const HARNESS_REPORT =
+  /<task-notification>|<cross-session-message\b|<system-reminder>/;
 function isToolResult(block: unknown): boolean {
   return (
     typeof block === 'object' &&

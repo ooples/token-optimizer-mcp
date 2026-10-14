@@ -150,3 +150,65 @@ describe('harness record tools and spill re-reads (#495)', () => {
     expect(out.messages[6].content[0].content).toContain('lower-signal');
   });
 });
+
+describe('peer messages and harness instructions in a user turn (#495)', () => {
+  const PEER = rotated(5);
+  const RULES = rotated(7);
+  const CONTROL = rotated(8);
+  const out = v1Frontier(
+    {
+      system: 'You are a coding agent.',
+      messages: [
+        { role: 'user', content: [{ type: 'text', text: 'start here' }] },
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'text',
+              text: `<cross-session-message from="yolan-48">\n${PEER}\n</cross-session-message>`,
+            },
+          ],
+        },
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'text',
+              text: `<system-reminder>\n${RULES}\n</system-reminder>`,
+            },
+          ],
+        },
+        {
+          role: 'assistant',
+          content: [
+            {
+              type: 'tool_use',
+              id: 'r1',
+              name: 'Read',
+              input: { path: 'notes.txt' },
+            },
+          ],
+        },
+        {
+          role: 'user',
+          content: [
+            { type: 'tool_result', tool_use_id: 'r1', content: CONTROL },
+          ],
+        },
+      ],
+    } as unknown as ProviderRequest,
+    { spill }
+  ).request as unknown as { messages: Msg[] };
+
+  it("leaves another session's message whole: it is a request the model acts on", () => {
+    expect(out.messages[1].content[0].text).toContain(PEER);
+  });
+
+  it("leaves the harness's instructions whole: they are the rules the model follows", () => {
+    expect(out.messages[2].content[0].text).toContain(RULES);
+  });
+
+  it('still compresses tool output beside them, the positive control', () => {
+    expect(out.messages[4].content[0].content).toContain('lower-signal');
+  });
+});
