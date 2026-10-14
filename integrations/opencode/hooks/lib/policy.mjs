@@ -719,10 +719,7 @@ export function saveState(sessionId, state, agent) {
     };
 
     // Write-then-rename so a reader never observes a half-written file.
-    const target = statePath(sessionId, agent);
-    const temporary = `${target}.${process.pid}.tmp`;
-    writeFileSync(temporary, JSON.stringify(merged), { mode: 0o600 });
-    renameSync(temporary, target);
+    writeAtomically(statePath(sessionId, agent), JSON.stringify(merged));
     // Counted and persisted, so the second save of one pre-tool call -- the
     // router saves for a subagent briefing and again for its verdict -- adds
     // nothing. After the rename, because a throw above leaves the delta owed.
@@ -761,6 +758,45 @@ export function saveState(sessionId, state, agent) {
  * Same lock and write-then-rename discipline as saveState: a reader must never see a
  * half-written file, and a missed lock skips the write rather than racing it.
  */
+/** Rename errors Windows raises, briefly, while another process has the target open. */
+const TRANSIENT_RENAME_CODES = new Set(['EPERM', 'EBUSY', 'EACCES']);
+
+/**
+ * Writes `text` to `target` through a temporary file and a rename, so a reader never sees a half-written file.
+ *
+ * WHY THE RETRY AND THE CLEANUP. Readers of a state file take no lock, and on Windows a rename onto a file another
+ * process has open fails with EPERM / EBUSY / EACCES until that reader closes it -- a few milliseconds. The callers
+ * swallow every error (state is an optimization), so one failed rename silently DROPPED that write, and its
+ * `<state>.json.<pid>.tmp` stayed on disk for good: sixteen of them had accumulated over two days in one state
+ * directory. A transient refusal is now retried with a short backoff, and the temporary file is removed on every
+ * exit path, so a write that still fails leaves nothing behind and is reported to the caller by its throw.
+ *
+ * @param {string} target the file to replace.
+ * @param {string} text its new contents.
+ * @param {{ rename?: (from: string, to: string) => void, attempts?: number }} [io] test seam; defaults to fs.
+ */
+export function writeAtomically(target, text, { rename = renameSync, attempts = 5 } = {}) {
+  const temporary = `${target}.${process.pid}.tmp`;
+  try {
+    writeFileSync(temporary, text, { mode: 0o600 });
+    for (let attempt = 1; ; attempt++) {
+      try {
+        rename(temporary, target);
+        return;
+      } catch (error) {
+        if (attempt >= attempts || !TRANSIENT_RENAME_CODES.has(error?.code)) throw error;
+        sleepSync(5 * attempt);
+      }
+    }
+  } finally {
+    try {
+      unlinkSync(temporary);
+    } catch {
+      // Renamed onto the target, or never written: nothing to remove.
+    }
+  }
+}
+
 export function clearSeen(sessionId, agent) {
   let lock = null;
   try {
@@ -771,10 +807,7 @@ export function clearSeen(sessionId, agent) {
     const current = loadState(sessionId, agent);
     const cleared = { ...current, seen: {} };
 
-    const target = statePath(sessionId, agent);
-    const temporary = `${target}.${process.pid}.tmp`;
-    writeFileSync(temporary, JSON.stringify(cleared), { mode: 0o600 });
-    renameSync(temporary, target);
+    writeAtomically(statePath(sessionId, agent), JSON.stringify(cleared));
     return true;
   } catch {
     // Same rule as saveState: state is an optimization and must never fail a
