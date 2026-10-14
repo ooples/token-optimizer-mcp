@@ -1,5 +1,5 @@
 import { describe, it, expect } from '@jest/globals';
-import { probeVersion } from '../../hooks-core/doctor.mjs';
+import { probeVersion, semverBelow } from '../../hooks-core/doctor.mjs';
 
 /**
  * #499's real cause. smart_read's unasked pagination had been fixed for days,
@@ -56,5 +56,29 @@ describe('a version pin below the plugin is reported (#499)', () => {
     ).toMatchObject({
       pass: false,
     });
+  });
+});
+
+describe('pins are ordered by SemVer precedence (#497 review)', () => {
+  it('reports a prerelease pin below its own release', () => {
+    expect(
+      named(probeVersion({ install, pin: '7.5.0-rc.1' }), LABEL)
+    ).toMatchObject({
+      pass: false,
+    });
+  });
+
+  it.each([
+    ['7.5.0-rc.1', '7.5.0', true],
+    ['7.5.0', '7.5.0-rc.1', false],
+    ['7.5.0-rc.1', '7.5.0-rc.2', true],
+    ['7.5.0-rc.2', '7.5.0-rc.10', true],
+    ['7.5.0-alpha', '7.5.0-alpha.1', true],
+    ['7.5.0-1', '7.5.0-alpha', true],
+    ['7.0.0', '7.5.0', true],
+    ['7.10.0', '7.9.0', false],
+    ['7.5.0', '7.5.0', false],
+  ])('%s below %s is %s', (a, b, below) => {
+    expect(semverBelow(a, b)).toBe(below);
   });
 });
