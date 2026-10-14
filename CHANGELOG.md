@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.5.1](https://github.com/ooples/token-optimizer-mcp/compare/v7.5.0...v7.5.1) (2026-10-14)
+
+
+### Bug Fixes
+
+* atomic hook-state writes; peer messages and system reminders stay lossless ([#503](https://github.com/ooples/token-optimizer-mcp/issues/503)) ([f305c85](https://github.com/ooples/token-optimizer-mcp/commit/f305c85d05ad60ae65a1d54a016198dfeeb1d5fd))
+* lossless agent results and spill re-reads; subagent edits out of the main harvest ([#502](https://github.com/ooples/token-optimizer-mcp/issues/502)) ([9ac6c21](https://github.com/ooples/token-optimizer-mcp/commit/9ac6c2133bf22e821aa13c7cb83aa084daa1c76a))
+* ToolSearch reachable, record-safe prose, unelided conversation, self-ignoring stores, pin warning, one-population report ([#497](https://github.com/ooples/token-optimizer-mcp/issues/497)) ([3080c56](https://github.com/ooples/token-optimizer-mcp/commit/3080c56493164bf346dcc49469be841997709fdd))
+
 ## [7.5.0](https://github.com/ooples/token-optimizer-mcp/compare/v7.4.4...v7.5.0) (2026-10-13)
 
 
