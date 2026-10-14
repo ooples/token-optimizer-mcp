@@ -35,6 +35,20 @@ describe('a version pin below the plugin is reported (#499)', () => {
     expect(named(probeVersion({ install, pin: '' }), LABEL)).toBeUndefined();
   });
 
+  it('compares against the diagnosed package when the plugin cache is a different tree', () => {
+    // An older plugin cache must not hide a pin that starves a newer package.
+    const split = {
+      method: 'plugin',
+      installedVersion: '7.0.0',
+      packageVersion: '7.5.0',
+      sameTree: false,
+    };
+    expect(
+      named(probeVersion({ install: split, pin: '7.0.0' }), LABEL)
+    ).toMatchObject({
+      pass: false,
+    });
+  });
   it('is checked for a non-plugin install too, against the package version', () => {
     const npx = { method: 'npx', packageVersion: '7.5.0' };
     expect(

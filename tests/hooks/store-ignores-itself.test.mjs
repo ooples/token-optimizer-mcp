@@ -55,3 +55,12 @@ describe('a store directory ignores itself (#500)', () => {
     expect(existsSync(join(root, '.gitignore'))).toBe(false);
   });
 });
+
+describe('a configured store that the user owns is never ignored wholesale (#497 review)', () => {
+  it('writes no marker into a pre-existing directory outside .token-optimizer', () => {
+    // TOKEN_OPTIMIZER_WIKI_DIR can name the user's own repository root.
+    record(root, { type: 'probe', at: 1 });
+    expect(existsSync(join(root, 'metrics.jsonl'))).toBe(true);
+    expect(existsSync(join(root, '.gitignore'))).toBe(false);
+  });
+});

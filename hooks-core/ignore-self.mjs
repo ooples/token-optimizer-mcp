@@ -14,11 +14,25 @@
  * Ignoring only what we create cannot reach outside the store.
  */
 import { appendFileSync, existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve, sep } from 'node:path';
 
-export function ignoreSelf(dir) {
+/**
+ * Whether `dir` is a store the plugin owns outright (#497 review).
+ *
+ * A configured store path can name a directory the user owns -- even their
+ * repository root -- and `*` there ignores everything in it. So the marker is
+ * written only where the directory is plainly ours: under a `.token-optimizer`
+ * segment, or one this write itself created.
+ */
+function dedicated(dir, created) {
+  if (created) return true;
+  return resolve(dir).split(sep).includes('.token-optimizer');
+}
+
+export function ignoreSelf(dir, { created = false } = {}) {
   const marker = join(dir, '.gitignore');
   try {
+    if (!dedicated(dir, created)) return;
     if (existsSync(marker)) return;
     appendFileSync(
       marker,

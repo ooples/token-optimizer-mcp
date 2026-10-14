@@ -771,6 +771,7 @@ function appendAll(dir, records) {
     // this shipped group- and world-readable while a test claimed otherwise.
     // (That test asserted on POSIX bits and was skipped on Windows, so it never
     // ran where it would have failed.)
+    const created = !existsSync(dir);
     mkdirSync(dir, { recursive: true, mode: 0o700 });
     try {
       chmodSync(dir, 0o700);
@@ -778,7 +779,7 @@ function appendAll(dir, records) {
       // Not POSIX, or not ours to chmod. The mkdir mode above still applies
       // where it can, and failing here must not stop the write.
     }
-    ignoreSelf(dir);
+    ignoreSelf(dir, { created });
     // ONE appendFileSync for the whole group, inside ONE lock: a caller that
     // needs several records to be observed together cannot get that by looping,
     // because every iteration is a separate crash point.

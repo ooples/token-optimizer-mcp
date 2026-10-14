@@ -61,36 +61,126 @@ interface Sentence {
  * reader uses to navigate, and losing them is not compression.
  */
 function sentences(text: string): Sentence[] {
-  const parts = text.split(BOUNDARY);
   const out: Sentence[] = [];
-  // The split keeps the separator, so the array alternates sentence, gap,
-  // sentence, gap -- and the final sentence has no gap after it. Bodies are
-  // kept byte for byte (no trim), so a line that survives whole is identical
-  // to the line it came from.
-  for (let i = 0; i < parts.length; i += 2) {
-    const body = parts[i] ?? '';
-    if (!body.trim()) continue;
-    out.push({ text: body, after: parts[i + 1] ?? '' });
+  const push = (body: string, after: string): void => {
+    if (body.trim()) out.push({ text: body, after });
+    else if (out.length > 0) {
+      // A whitespace-only piece folds into the gap before it, so no byte of
+      // the original is lost from the rejoin.
+      const last = out[out.length - 1];
+      out[out.length - 1] = {
+        text: last.text,
+        after: last.after + body + after,
+      };
+    }
+  };
+  // Paragraphs first: a blank line always ends a sentence.
+  const paragraphs = text.split(PARAGRAPH_BREAK);
+  for (let p = 0; p < paragraphs.length; p += 2) {
+    const paragraph = paragraphs[p] ?? '';
+    const breakAfter = paragraphs[p + 1] ?? '';
+    const lines = paragraph.split(LINE_BREAK);
+    if (isHardWrapped(lines)) {
+      // Wrapped prose: a sentence runs across the soft breaks, as written.
+      const parts = paragraph.split(WRAPPED_BOUNDARY);
+      for (let i = 0; i < parts.length; i += 2) {
+        const last = i + 2 >= parts.length;
+        push(parts[i] ?? '', last ? breakAfter : (parts[i + 1] ?? ''));
+      }
+      continue;
+    }
+    // Everywhere else a LINE is the outer unit (#494): no sentence crosses a
+    // newline, and a record line is never split inside, so it is kept or
+    // dropped whole. Leading indentation stays with its line, so a line that
+    // survives is byte-identical to the one it came from.
+    for (let l = 0; l < lines.length; l += 2) {
+      const line = lines[l] ?? '';
+      const lastLine = l + 2 >= lines.length;
+      const eol = lastLine ? breakAfter : (lines[l + 1] ?? '');
+      if (isRecordLine(line)) {
+        push(line, eol);
+        continue;
+      }
+      const parts = line.split(INLINE_BOUNDARY);
+      for (let i = 0; i < parts.length; i += 2) {
+        const last = i + 2 >= parts.length;
+        push(parts[i] ?? '', last ? eol : (parts[i + 1] ?? ''));
+      }
+    }
   }
   return out;
 }
 
+/** One or more blank lines, kept so the rejoin can restore them. */
+const PARAGRAPH_BREAK = /(\r?\n(?:[ \t]*\r?\n)+)/;
+
+/** A single line ending, kept; indentation stays with the next line. */
+const LINE_BREAK = /(\r?\n)/;
+
+/** A sentence end within one line. */
+const INLINE_BOUNDARY = /(?<=[.!?])([ \t]+)(?=[A-Z(`"'[])/;
+
+/** A sentence end anywhere in a hard-wrapped paragraph, line ends included. */
+const WRAPPED_BOUNDARY = /(?<=[.!?])(\s+)(?=[A-Z(`"'[])/;
+
+/** A line that ends the way a sentence or a paragraph does. */
+const TERMINATED = /[.!?:;]["'`)*\]]*\s*$/;
+
 /**
- * Where one sentence ends and the next begins.
+ * Whether a line is a record -- an issue, a hit, a row -- rather than prose.
  *
- * A LINE BREAK IS A BOUNDARY UNLESS THE NEXT LINE CONTINUES THE SENTENCE (#494).
- * Splitting only on `. X` let one "sentence" run from the tail of one line,
- * across the newline, into the head of the next. In a listing -- one issue,
- * one result, one record per line, none of them ending in a period -- dropping
- * that sentence deleted the end of one record and the start of the next, and
- * the survivors were joined onto one line: measured on a 77-line issue listing,
- * 14 output lines existed nowhere in the input, one carrying another issue's
- * text. So: a blank line always ends a sentence; a single newline does too,
- * unless the next line starts lowercase, which is what hard-wrapped prose
- * looks like mid-sentence. Within a line, the old rule stands.
+ * Outside a hard-wrapped paragraph, a line that stops without closing
+ * punctuation is a unit of its own, and eliding inside it strips its key or
+ * joins it to a neighbour (#494). Splitting it is what let `. Next` inside a
+ * record lose half the record even when the surrounding text was prose.
  */
-const BOUNDARY =
-  /(\r?\n(?:[ \t]*\r?\n)+[ \t]*|\r?\n(?![ \t]*[a-z])[ \t]*|(?<=[.!?])[ \t]+(?=[A-Z(`"'\[]))/;
+function isRecordLine(line: string): boolean {
+  return line.trim().length > 0 && !TERMINATED.test(line);
+}
+
+/**
+ * Whether a paragraph is hard-wrapped prose, the one place a sentence may run
+ * across a line break.
+ *
+ * STRONGER THAN "THE NEXT LINE STARTS LOWERCASE" (#494 review). A listing
+ * whose rows all start lowercase passed that test, so a sentence crossed from
+ * one row into the next and eliding it cut both. Wrapped prose also FILLS ITS
+ * WIDTH: every line but the last sits near the longest, because the wrap
+ * broke it there, and only because the next word would not have fitted. So all
+ * three are required -- the body lines within 70% of the widest, each break
+ * forced by the next word, and most unterminated breaks continued in lowercase
+ * -- and a paragraph that fails any is treated line by line.
+ */
+function isHardWrapped(lines: readonly string[]): boolean {
+  const text = lines.filter((_, i) => i % 2 === 0);
+  if (text.length < 2) return false;
+  const widths = text.map((line) => line.trimEnd().length);
+  const widest = Math.max(...widths);
+  if (widest < 40) return false;
+  // A lowercase line start only means "continued" in text that capitalises
+  // its sentences. Rows like `alpha ... nightly. it drops ...` do not, so their
+  // lowercase starts are no evidence of wrapping, and a layout that happens to
+  // be even cannot stand in for it. Failing here is the safe direction: the
+  // paragraph is then handled line by line, which only compresses less.
+  if (text.some((line) => /[.!?][ \t]+[a-z]/.test(line))) return false;
+  const body = widths.slice(0, -1);
+  if (body.some((w) => w < widest * 0.7)) return false;
+  // GREEDY FILL: a wrapper breaks a line only when the next word would not
+  // fit. Rows of similar length that merely happen to start lowercase fail
+  // this, because their next row's first word would have fitted.
+  for (let i = 0; i < text.length - 1; i += 1) {
+    const next = /\S+/.exec(text[i + 1])?.[0] ?? '';
+    if (widths[i] + 1 + next.length <= widest) return false;
+  }
+  let open = 0;
+  let continued = 0;
+  for (let i = 0; i < text.length - 1; i += 1) {
+    if (TERMINATED.test(text[i])) continue;
+    open += 1;
+    if (/^[ \t]*[a-z]/.test(text[i + 1])) continued += 1;
+  }
+  return open > 0 && continued * 2 > open;
+}
 
 const BLANK_LINE = /\n[ \t]*\r?\n/;
 
@@ -98,10 +188,10 @@ const BLANK_LINE = /\n[ \t]*\r?\n/;
  * What stands between two survivors once the sentences between them are gone.
  *
  * THE ORIGINAL GAP, NOT A NORMALISED ONE. A run with no line break in it
- * stays a space. A run that crossed lines keeps the last break in it, which
- * carries the next survivor's own indentation and line ending, so that line
- * comes out exactly as it went in; if any gap in the run was a paragraph break
- * the result still is one.
+ * stays a space. A run that crossed lines keeps the last break in it, so the
+ * next survivor -- which carries its own indentation -- starts a line exactly
+ * as it did; if any gap in the run was a paragraph break the result still is
+ * one.
  */
 function rejoin(gaps: readonly string[]): string {
   const breaks = gaps.filter((gap) => gap.includes('\n'));
@@ -265,22 +355,24 @@ const LINE_ORIENTED =
  * elided, so some reduction is given up. A compression that makes an edit fail
  * is not a saving.
  */
-/** A line that ends the way a sentence or a paragraph does. */
-const TERMINATED = /[.!?:;]["'`)*\]]*\s*$/;
-
 export function looksLikeProse(text: string): boolean {
   const lines = text.split('\n').filter((l) => l.trim());
   if (lines.length < 2) return false;
   const oriented = lines.filter((l) => LINE_ORIENTED.test(l)).length;
   if (oriented / lines.length > 0.5) return false;
-  // RECORDS, NOT SENTENCES (#494): a line that stops without closing
-  // punctuation and is not continued by a lowercase line is a unit of its own
-  // -- an issue, a hit, a row -- and eliding inside it strips its key. Hard-
-  // wrapped prose escapes this because its breaks are continued lowercase.
-  const records = lines.filter(
-    (line, i) =>
-      !TERMINATED.test(line) && !/^[ \t]*[a-z]/.test(lines[i + 1] ?? 'X')
-  ).length;
+  // RECORDS, NOT SENTENCES (#494): outside a hard-wrapped paragraph, a line
+  // that stops without closing punctuation is a unit of its own -- an issue,
+  // a hit, a row. Decided by the same rule the splitter uses, so the gate and
+  // the engine cannot disagree about what a record is.
+  let records = 0;
+  const paragraphs = text.split(PARAGRAPH_BREAK);
+  for (let p = 0; p < paragraphs.length; p += 2) {
+    const split = (paragraphs[p] ?? '').split(LINE_BREAK);
+    if (isHardWrapped(split)) continue;
+    records += split.filter(
+      (line, i) => i % 2 === 0 && isRecordLine(line)
+    ).length;
+  }
   if (records / lines.length > 0.5) return false;
   const wordy = lines.filter((l) => l.split(/\s+/).length > 8).length;
   return wordy / lines.length > 0.5;

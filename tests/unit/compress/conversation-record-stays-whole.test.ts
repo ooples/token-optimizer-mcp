@@ -83,3 +83,26 @@ describe('the conversation record stays whole (#495)', () => {
     expect(out.messages[4].content[0].content).toContain('lower-signal');
   });
 });
+
+describe('a harness report split across text blocks (#497 review)', () => {
+  it('keeps the body block whole when the tag is in a sibling block', () => {
+    const request = {
+      system: 'You are a coding agent.',
+      messages: [
+        { role: 'user', content: [{ type: 'text', text: 'start here' }] },
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: '<task-notification>' },
+            { type: 'text', text: REPORT },
+            { type: 'text', text: '</task-notification>' },
+          ],
+        },
+      ],
+    } as unknown as ProviderRequest;
+    const out = v1Frontier(request, { spill }).request as unknown as {
+      messages: Msg[];
+    };
+    expect(out.messages[1].content[1].text).toBe(REPORT);
+  });
+});

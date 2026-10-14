@@ -941,7 +941,12 @@ export function probeVersion({
   // (smart_read paginating a 7 KB file unasked and booking the unread half as
   // saved), and the fixes the user had installed never reached them. Checked
   // before the early returns below, because those are about other questions.
-  const current = installedVersion || packageVersion;
+  // When the plugin cache and the package are different trees, the version
+  // the pin starves is the package under examination, not the cache's.
+  const current =
+    sameTree === false && packageVersion
+      ? packageVersion
+      : installedVersion || packageVersion;
   if (pin && current && compareVersions(pin, current) < 0) {
     checks.push(
       bad(

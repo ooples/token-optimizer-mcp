@@ -170,3 +170,64 @@ describe('prose elision never joins or truncates records (#494)', () => {
     }
   });
 });
+
+/** Output lines with any trailing elision marker removed. */
+const survivors = (out: string): string[] =>
+  out
+    .split(/\r?\n/)
+    .map((line) => line.replace(/\s*\[\.\.\..*$/, ''))
+    .filter((line) => line.trim());
+
+/** A record with sentence breaks INSIDE it, the shape that could lose half itself. */
+const RICH_RECORDS = [
+  '#101 [bug] upd=10-13 | Cache misses on resume || The key omits the version. Resume then reads stale state. Fix by hashing it',
+  '#102 [perf] upd=10-12 | Join is quadratic || Each row rescans the table. Index it first. Then join once',
+  '#103 [docs] upd=10-11 | Install guide drift || Step four names a removed flag. Users copy it. Nothing warns them',
+];
+
+describe('records stay whole inside prose (#494 review)', () => {
+  it('keeps every surviving record line byte-identical, even inside prose-majority text', () => {
+    const mixed = [PARAGRAPHS, ...RICH_RECORDS, PARAGRAPHS].join('\n');
+    const out = compressProse(mixed, { spill }).text;
+    const inputLines = new Set(mixed.split('\n'));
+    for (const line of survivors(out).filter((l) => l.startsWith('#'))) {
+      expect({ line, exact: inputLines.has(line) }).toEqual({
+        line,
+        exact: true,
+      });
+    }
+  });
+
+  it('does not let a sentence cross between lowercase-starting rows', () => {
+    const rows = [
+      'alpha service restarts nightly. it drops the cache on every restart',
+      'beta worker retries forever. it never backs off under load at all',
+      'gamma queue loses ordering. it reorders on every rebalance of shards',
+      'delta store compacts hourly. it blocks writers for the whole window',
+      'epsilon proxy logs bodies. it leaks tokens into the shared log files',
+      'zeta index rebuilds weekly. it doubles disk use while it is running',
+    ];
+    const text = rows.join('\n');
+    expect(looksLikeProse(text)).toBe(false);
+    const out = compressProse(`${PARAGRAPHS}\n${text}\n${PARAGRAPHS}`, {
+      spill,
+    }).text;
+    const inputLines = new Set(
+      `${PARAGRAPHS}\n${text}\n${PARAGRAPHS}`.split('\n')
+    );
+    for (const line of survivors(out).filter((l) => /^[a-z]/.test(l)))
+      expect({ line, exact: inputLines.has(line) }).toEqual({
+        line,
+        exact: true,
+      });
+  });
+
+  it('keeps the indentation of a record that survives after removed lines', () => {
+    const indented = [PARAGRAPHS, ...RICH_RECORDS.map((r) => `    ${r}`)].join(
+      '\n'
+    );
+    const out = compressProse(indented, { spill }).text;
+    for (const line of survivors(out).filter((l) => l.includes('#10')))
+      expect(line.startsWith('    #10')).toBe(true);
+  });
+});

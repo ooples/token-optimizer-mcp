@@ -446,7 +446,28 @@ function cachedPrefixBytes(
  * small next to tool output, which is where the saving is.
  */
 function isConversationRecord(message: Message, text: string): boolean {
-  return message?.role === 'assistant' || HARNESS_REPORT.test(text);
+  return (
+    message?.role === 'assistant' ||
+    HARNESS_REPORT.test(text) ||
+    carriesHarnessReport(message)
+  );
+}
+
+/**
+ * Whether ANY text block of the message opens a harness report (#497 review).
+ *
+ * A client may put the `<task-notification>` tag in one text block and the
+ * report body in the next; judged block by block, the body block carries no
+ * tag and was compressed lossily. The message is the unit the report lives in.
+ */
+function carriesHarnessReport(message: Message): boolean {
+  const content = message?.content;
+  if (typeof content === 'string') return HARNESS_REPORT.test(content);
+  if (!Array.isArray(content)) return false;
+  return content.some((block) => {
+    const text = (block as { text?: unknown })?.text;
+    return typeof text === 'string' && HARNESS_REPORT.test(text);
+  });
 }
 
 /** A background agent's completion report, as Claude Code delivers it. */
