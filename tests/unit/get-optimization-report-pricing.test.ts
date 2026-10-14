@@ -64,6 +64,11 @@ describe('get_optimization_report provider pricing', () => {
         summary,
         byServer: [group('token-optimizer')],
       }),
+      aggregateEntries: () => ({
+        hook: { summary, byHook: [group('Unknown')] },
+        action: { summary, byAction: [group('smart_grep')] },
+        server: { summary, byServer: [group('token-optimizer')] },
+      }),
       getEntries: async () => [verified],
       count: async () => 1,
     } as unknown as AnalyticsManager;

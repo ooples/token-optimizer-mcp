@@ -12,7 +12,7 @@
  */
 
 import { describe, expect, it } from '@jest/globals';
-import { looksLikeProse } from '../../../src/compress/prose.js';
+import { compressProse, looksLikeProse } from '../../../src/compress/prose.js';
 
 const PARAGRAPHS = [
   'The release waiter polls the registry until the published version resolves or the budget runs out.',
@@ -99,12 +99,135 @@ describe('numbered lists are line-oriented however they are numbered', () => {
 
   it('still claims prose whose lines open with a decimal measurement', () => {
     // THE BOUNDARY the trailing space buys. `3.5 ms` is a number, not an item
-    // marker, so these lines stay compressible.
+    // marker, so these lines stay compressible. They end as sentences do:
+    // an unterminated line one per row is a record (#494), declined for that
+    // reason, and this test is about the decimal, not about records.
     const readings = [
-      '3.5 ms was the median transform time across three passes of the comparator',
-      '28.7 ms was their tenth percentile, which is the bar the latency rows compare against',
-      '0.4 ms is what the move-whole arm costs when the store is already warm',
+      '3.5 ms was the median transform time across three passes of the comparator.',
+      '28.7 ms was their tenth percentile, which is the bar the latency rows compare against.',
+      '0.4 ms is what the move-whole arm costs when the store is already warm.',
     ].join('\n');
     expect(looksLikeProse(readings)).toBe(true);
+  });
+});
+
+/**
+ * #494: a listing, one record per line, none of them ending in a period. The
+ * engine claimed it as prose, ran sentences across line breaks, and dropped
+ * them -- deleting a header line and joining one record's text onto another's.
+ * Measured on a real 77-line issue listing: 14 output lines existed nowhere in
+ * the input.
+ */
+const record = (n: number, title: string): string =>
+  `#${n} [enhancement] upd=10-13 len=${n * 7} | ${title} || ` +
+  `This issue tracks ${title.toLowerCase()} across every backend and records what remains open`;
+
+const LISTING = [
+  '=== AiDotNet.Tensors',
+  record(368, 'BlasManaged perf sprint and supply-chain removal'),
+  record(377, 'GPU BLAS supply-chain removal for cuBLAS and rocBLAS'),
+  record(436, 'Close per-model gaps surfaced by the fair comparison'),
+  '=== AiDotNet',
+  record(293, 'Roadmap of the high-impact backlog and its tracking'),
+  record(310, 'Comprehensive model hub ecosystem with pretrained weights'),
+  record(425, 'Model metadata and license verification for the SDK'),
+].join('\n');
+
+const spill = (): string => '/spill/prose.txt';
+
+describe('prose elision never joins or truncates records (#494)', () => {
+  it('declines a one-record-per-line listing', () => {
+    expect(looksLikeProse(LISTING)).toBe(false);
+  });
+
+  it('still claims hard-wrapped prose, whose breaks continue lowercase', () => {
+    const wrapped = [
+      'The release waiter polls the registry until the published version',
+      'resolves or the budget runs out, and npm then processes the publish',
+      'asynchronously, which can take well over an hour on a busy day.',
+      'Raising the budget therefore cannot fix the failure, because no',
+      'runner-held budget outlasts the queue that npm keeps on its side.',
+    ].join('\n');
+    expect(looksLikeProse(wrapped)).toBe(true);
+  });
+
+  it('never emits a line made of two input lines, even when forced', () => {
+    // Called directly, past the gate, so the sentence splitter itself is what
+    // is under test: every output line must be a run of sentences from ONE
+    // input line, never the tail of one and the head of the next.
+    const mixed = `${PARAGRAPHS}\n${LISTING}\n${PARAGRAPHS}`;
+    const out = compressProse(mixed, { spill }).text;
+    expect(out).not.toBe(mixed);
+    const inputLines = mixed.split('\n');
+    for (const line of out.split('\n')) {
+      const body = line.replace(/\s*\[\.\.\..*$/, '');
+      if (!body.trim()) continue;
+      const pieces = body.split(/(?<=[.!?])\s+(?=[A-Z#=(`"'[])/);
+      const home = inputLines.find((input) =>
+        pieces.every((piece) => input.includes(piece.trim()))
+      );
+      expect({ line, home: home !== undefined }).toEqual({ line, home: true });
+    }
+  });
+});
+
+/** Output lines with any trailing elision marker removed. */
+const survivors = (out: string): string[] =>
+  out
+    .split(/\r?\n/)
+    .map((line) => line.replace(/\s*\[\.\.\..*$/, ''))
+    .filter((line) => line.trim());
+
+/** A record with sentence breaks INSIDE it, the shape that could lose half itself. */
+const RICH_RECORDS = [
+  '#101 [bug] upd=10-13 | Cache misses on resume || The key omits the version. Resume then reads stale state. Fix by hashing it',
+  '#102 [perf] upd=10-12 | Join is quadratic || Each row rescans the table. Index it first. Then join once',
+  '#103 [docs] upd=10-11 | Install guide drift || Step four names a removed flag. Users copy it. Nothing warns them',
+];
+
+describe('records stay whole inside prose (#494 review)', () => {
+  it('keeps every surviving record line byte-identical, even inside prose-majority text', () => {
+    const mixed = [PARAGRAPHS, ...RICH_RECORDS, PARAGRAPHS].join('\n');
+    const out = compressProse(mixed, { spill }).text;
+    const inputLines = new Set(mixed.split('\n'));
+    for (const line of survivors(out).filter((l) => l.startsWith('#'))) {
+      expect({ line, exact: inputLines.has(line) }).toEqual({
+        line,
+        exact: true,
+      });
+    }
+  });
+
+  it('does not let a sentence cross between lowercase-starting rows', () => {
+    const rows = [
+      'alpha service restarts nightly. it drops the cache on every restart',
+      'beta worker retries forever. it never backs off under load at all',
+      'gamma queue loses ordering. it reorders on every rebalance of shards',
+      'delta store compacts hourly. it blocks writers for the whole window',
+      'epsilon proxy logs bodies. it leaks tokens into the shared log files',
+      'zeta index rebuilds weekly. it doubles disk use while it is running',
+    ];
+    const text = rows.join('\n');
+    expect(looksLikeProse(text)).toBe(false);
+    const out = compressProse(`${PARAGRAPHS}\n${text}\n${PARAGRAPHS}`, {
+      spill,
+    }).text;
+    const inputLines = new Set(
+      `${PARAGRAPHS}\n${text}\n${PARAGRAPHS}`.split('\n')
+    );
+    for (const line of survivors(out).filter((l) => /^[a-z]/.test(l)))
+      expect({ line, exact: inputLines.has(line) }).toEqual({
+        line,
+        exact: true,
+      });
+  });
+
+  it('keeps the indentation of a record that survives after removed lines', () => {
+    const indented = [PARAGRAPHS, ...RICH_RECORDS.map((r) => `    ${r}`)].join(
+      '\n'
+    );
+    const out = compressProse(indented, { spill }).text;
+    for (const line of survivors(out).filter((l) => l.includes('#10')))
+      expect(line.startsWith('    #10')).toBe(true);
   });
 });

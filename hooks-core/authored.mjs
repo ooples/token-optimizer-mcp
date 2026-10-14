@@ -30,10 +30,12 @@ import {
   writeFileSync,
   renameSync,
   statSync,
+  existsSync,
 } from 'node:fs';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { canonicalPath, isFsSafePath } from './paths.mjs';
+import { ignoreSelf } from './ignore-self.mjs';
 
 /**
  * Largest authored file kept.
@@ -84,7 +86,9 @@ export function recordAuthoredContent(projectRoot, sessionId, filePath, content)
     if (!isFsSafePath(filePath)) return;
 
     const dir = storeDir(projectRoot);
+    const created = !existsSync(dir);
     mkdirSync(dir, { recursive: true });
+    ignoreSelf(dir, { created });
 
     const record = JSON.stringify({
       v: 1,

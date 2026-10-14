@@ -303,6 +303,24 @@ export function declaredInputDisplacement(entry: AnalyticsEntry): number {
   return entry.tokensSaved;
 }
 
+/**
+ * Returned tokens on the SAME population as the verified transport delta (#498).
+ *
+ * A verified reduction returned optimizedTokens against its originalTokens;
+ * an expansion debit returned optimizedTokens against nothing. Summed over
+ * exactly those entries, original - verifiedReturned === saved holds row by
+ * row, which is the arithmetic a reader does with the three figures. The
+ * broader returned-context total (every observed reply) answers a different
+ * question and must not be printed under the verified original.
+ */
+export function verifiedReturnedTokens(entry: AnalyticsEntry): number {
+  const classification = classifySavings(entry);
+  return classification === 'verified-transport-reduction' ||
+    classification === 'verified-transport-expansion-debit'
+    ? Math.max(0, Number(entry.optimizedTokens) || 0)
+    : 0;
+}
+
 export function hasObservedReturnedContext(entry: AnalyticsEntry): boolean {
   return classifySavings(entry) !== 'unverified-reported';
 }

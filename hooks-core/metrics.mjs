@@ -30,6 +30,7 @@ import {
 import { join } from 'node:path';
 import { createHash, randomBytes } from 'node:crypto';
 import { redact } from './redact.mjs';
+import { ignoreSelf } from './ignore-self.mjs';
 
 /**
  * Read per call, not once at module load.
@@ -212,12 +213,14 @@ export function record(dir, event) {
   try {
     // Same restriction as the graph directory: metrics name real file paths
     // from a private codebase.
+    const created = !existsSync(dir);
     mkdirSync(dir, { recursive: true, mode: 0o700 });
     try {
       chmodSync(dir, 0o700);
     } catch {
       // Not POSIX, or not ours to chmod; the write still proceeds.
     }
+    ignoreSelf(dir, { created });
     // The CALLER'S timestamp wins when it supplied one. Overwriting it made
     // `rereadWaste`'s ordering depend on write order rather than on `at`, so a
     // test that set explicit times was passing by luck.

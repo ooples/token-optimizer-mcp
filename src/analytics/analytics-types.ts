@@ -60,6 +60,12 @@ export interface AggregatedStats {
   totalOriginalTokens: number;
   /** Total optimized tokens */
   totalOptimizedTokens: number;
+  /**
+   * Returned tokens on the same population as the original and the saving,
+   * so original - verifiedReturned === saved (#498). Optional for readers of
+   * rows recorded before it existed.
+   */
+  totalVerifiedReturnedTokens?: number;
   /** Total tokens saved */
   totalTokensSaved: number;
   /** Average tokens saved per operation */

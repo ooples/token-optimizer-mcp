@@ -62,6 +62,20 @@ function forcedToolName(request: ProviderRequest): string | null {
 }
 
 /**
+ * Client tools that are the only way to reach a whole class of other tools.
+ *
+ * NEVER DEFERRED, because the search tool added below cannot stand in for them.
+ * Claude Code keeps its MCP tools out of the request altogether and lists them
+ * by name in the conversation, to be fetched through its own `ToolSearch`. The
+ * server-side search only sees definitions that are IN the request, so once
+ * `ToolSearch` is deferred behind it, every client-deferred tool is unreachable:
+ * observed 2026-10-13 (#496), where three sub-agents searched for
+ * `get_optimization_report` and got "No tools match your search" although the
+ * name was listed to them, while `ToolSearch` itself loaded it at once.
+ */
+const CLIENT_DISCOVERY_TOOLS: ReadonlySet<string> = new Set(['ToolSearch']);
+
+/**
  * Keep definitions whose character count is at or below the configured floor.
  * Size, rather than tool name or origin, determines whether deferral pays.
  */
@@ -181,6 +195,7 @@ export function deferTools(
     if (typeof raw !== 'object' || raw === null) return;
     const t = raw as ToolLike & { description?: string };
     if (typeof t.name !== 'string') return;
+    if (CLIENT_DISCOVERY_TOOLS.has(t.name)) return;
     if (isCheapToKeep(JSON.stringify(raw).length, smallFloor)) return;
     candidates.push({ index, text: `${t.name} ${t.description ?? ''}` });
   });
@@ -211,6 +226,7 @@ export function deferTools(
     if (typeof tool.defer_loading === 'boolean') return raw;
     if (typeof tool.name !== 'string' || tool.name.length === 0) return raw;
     if (forced !== null && tool.name === forced) return raw;
+    if (CLIENT_DISCOVERY_TOOLS.has(tool.name)) return raw;
     // The agent's own loop, and the non-core tools this task looks like it
     // needs, both stay in context so nothing has to be searched for.
     // Small enough that deferring it would save less than the discovery it

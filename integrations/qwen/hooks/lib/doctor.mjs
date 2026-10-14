@@ -894,7 +894,44 @@ export function probeProxy(
   ];
 }
 
-export function probeVersion({ install, crossClient } = {}) {
+/**
+ * Whether version `a` precedes `b` under SemVer 2.0 precedence (#497 review).
+ *
+ * `compareVersions` reads `7.5.0-rc.1` as 7.5.0.1 and ranks it ABOVE 7.5.0, so a
+ * prerelease pin below the installed release went unreported. Here the core is
+ * compared numerically, a prerelease sorts below its release, and prerelease
+ * identifiers compare numerically when both are numbers, lexically otherwise,
+ * with numbers below words and a shorter list below a longer equal prefix.
+ */
+export function semverBelow(a, b) {
+  const parse = (v) => {
+    const [core, pre] = String(v).replace(/^v/, '').split('+')[0].split(/-(.*)/s);
+    return { core: core.split('.').map((n) => Number(n) || 0), pre: pre ? pre.split('.') : [] };
+  };
+  const x = parse(a);
+  const y = parse(b);
+  for (let i = 0; i < Math.max(x.core.length, y.core.length); i += 1) {
+    const d = (x.core[i] ?? 0) - (y.core[i] ?? 0);
+    if (d !== 0) return d < 0;
+  }
+  if (x.pre.length === 0 || y.pre.length === 0) return x.pre.length > 0 && y.pre.length === 0;
+  for (let i = 0; i < Math.min(x.pre.length, y.pre.length); i += 1) {
+    const p = x.pre[i];
+    const q = y.pre[i];
+    const pn = /^\d+$/.test(p);
+    const qn = /^\d+$/.test(q);
+    if (pn && qn && Number(p) !== Number(q)) return Number(p) < Number(q);
+    if (pn !== qn) return pn;
+    if (!pn && p !== q) return p < q;
+  }
+  return x.pre.length < y.pre.length;
+}
+
+export function probeVersion({
+  install,
+  crossClient,
+  pin = process.env.TOKEN_OPTIMIZER_VERSION,
+} = {}) {
   const {
     method,
     installedVersion,
@@ -928,6 +965,32 @@ export function probeVersion({ install, crossClient } = {}) {
   // nothing about whether Codex's hooks work -- and #408 is a Codex user whose report FAILED on
   // exactly that, about a client they were not using. It is still worth saying, because two
   // clients on different builds is a real split-brain, so it is a warning that names whose it is.
+  // A PIN OLDER THAN THE PLUGIN SERVES THE OLD SERVER, SILENTLY (#499).
+  //
+  // TOKEN_OPTIMIZER_VERSION is an exact pin, and the launcher honours it
+  // before the plugin's own version floor -- correctly, a pin is a pin. But a
+  // pin left behind by an old session outlives every upgrade: a 7.5.0 plugin
+  // ran a 7.0.0 server for weeks, every tool answered with 7.0.0's behaviour
+  // (smart_read paginating a 7 KB file unasked and booking the unread half as
+  // saved), and the fixes the user had installed never reached them. Checked
+  // before the early returns below, because those are about other questions.
+  // When the plugin cache and the package are different trees, the version
+  // the pin starves is the package under examination, not the cache's.
+  const current =
+    sameTree === false && packageVersion
+      ? packageVersion
+      : installedVersion || packageVersion;
+  if (pin && current && semverBelow(pin, current)) {
+    checks.push(
+      bad(
+        'the served version is not pinned below the plugin',
+        `TOKEN_OPTIMIZER_VERSION=${pin} pins the MCP server, so this ${current} install runs ${pin}`,
+        'unset TOKEN_OPTIMIZER_VERSION (it may be a user-level environment variable) ' +
+          'and restart the client, or raise it to the version you mean to run'
+      )
+    );
+  }
+
   if (crossClient?.installedVersion && packageVersion) {
     checks.push(
       crossClient.installedVersion === packageVersion

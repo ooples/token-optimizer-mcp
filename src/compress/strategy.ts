@@ -19,7 +19,7 @@ import { compressBlock } from './router.js';
 import { substituteHistory } from './history.js';
 import { dedupBlocks, type DedupBlock } from './dedup.js';
 import { queryFrom } from './relevance.js';
-import type { Tuning } from './options.js';
+import { DEFAULT_TUNING, type Tuning } from './options.js';
 import type { EmbeddingCache } from './embedding.js';
 import { dedupImages, isImageBlock } from './images.js';
 import {
@@ -435,6 +435,43 @@ function cachedPrefixBytes(
   });
   return bytes;
 }
+/**
+ * Text that is the conversation's own record, compressed only losslessly (#495).
+ *
+ * The model's earlier replies are what it told the user; a sub-agent's
+ * completion report is the evidence the coordinating model acts on. Prose
+ * elision dropped sentences from both, so the model misquoted its own replies
+ * back to the user and acted on agent reports with their evidence removed --
+ * and its marker sent it to a spill that, re-read, was elided again. Both are
+ * small next to tool output, which is where the saving is.
+ */
+function isConversationRecord(message: Message, text: string): boolean {
+  return (
+    message?.role === 'assistant' ||
+    HARNESS_REPORT.test(text) ||
+    carriesHarnessReport(message)
+  );
+}
+
+/**
+ * Whether ANY text block of the message opens a harness report (#497 review).
+ *
+ * A client may put the `<task-notification>` tag in one text block and the
+ * report body in the next; judged block by block, the body block carries no
+ * tag and was compressed lossily. The message is the unit the report lives in.
+ */
+function carriesHarnessReport(message: Message): boolean {
+  const content = message?.content;
+  if (typeof content === 'string') return HARNESS_REPORT.test(content);
+  if (!Array.isArray(content)) return false;
+  return content.some((block) => {
+    const text = (block as { text?: unknown })?.text;
+    return typeof text === 'string' && HARNESS_REPORT.test(text);
+  });
+}
+
+/** A background agent's completion report, as Claude Code delivers it. */
+const HARNESS_REPORT = /<task-notification>/;
 function isToolResult(block: unknown): boolean {
   return (
     typeof block === 'object' &&
@@ -701,7 +738,14 @@ function pathAddressed(
       stamp: options.stamp,
       spill: options.spill,
       query: cached || repeated ? undefined : query,
-      tuning: options.tuning,
+      // LOSSLESS ONLY for the conversation's own record (#495): a lossy
+      // engine drops sentences the model and the user rely on, but a lossless
+      // one (minified JSON, a folded repeat) loses nothing and is the bulk of
+      // what such a block can give back -- exempting it outright cost 122
+      // steady tokens on the human-authored-json proof workload.
+      tuning: isConversationRecord(message, text)
+        ? { ...(options.tuning ?? DEFAULT_TUNING), allowLossy: false }
+        : options.tuning,
       embeddings: options.embeddings,
       // The path the payload came from, recovered from the call that
       // produced it. This is what lets the code engine pick a language;

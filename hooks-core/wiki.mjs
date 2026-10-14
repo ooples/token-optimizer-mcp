@@ -23,6 +23,7 @@ import { homedir } from 'node:os';
 import { createHash } from 'node:crypto';
 import { canonicalPath, isFsSafePath } from './paths.mjs';
 import { flagOn } from './flags.mjs';
+import { ignoreSelf } from './ignore-self.mjs';
 
 /**
  * Schema version stamped on every record.
@@ -344,42 +345,6 @@ function withLock(dir, write) {
         // Already released.
       }
     }
-  }
-}
-
-/**
- * Makes the store ignore itself, once.
- *
- * The design says this directory is gitignored by default, precisely because
- * findings are unreviewed agent output and committing them puts unreviewed
- * analysis into git history. Nothing enforced it: measured on two real
- * checkouts, `.token-optimizer/` showed up as untracked in `git status`, so a
- * single `git add -A` would have committed tens of megabytes of it.
- *
- * A `.gitignore` containing `*` INSIDE the store is used rather than editing
- * the project's own .gitignore. Writing to a file the user owns and reviews is
- * not this tool's business.
- *
- * STRICTLY INSIDE, and that is not a detail. Writing the marker to the PARENT
- * covers `.token-optimizer/` in the default layout, but TOKEN_OPTIMIZER_WIKI_DIR
- * can point anywhere -- and when it points at a directory the user owns, the
- * parent is their project root and `*` ignores their entire repository. That is
- * not hypothetical: it took the skeleton suite's git fixture down, where
- * `git add auth.ts` began refusing a file the test had just written. Ignoring
- * only what we create cannot reach outside the store.
- */
-function ignoreSelf(dir) {
-  const marker = join(dir, '.gitignore');
-  try {
-    if (existsSync(marker)) return;
-    appendFileSync(
-      marker,
-      '# Written by token-optimizer. Findings are unreviewed agent output;\n' +
-        '# keeping them out of git history is the default. Delete this file to\n' +
-        '# opt in to committing them.\n*\n'
-    );
-  } catch {
-    // Best effort. Failing to write the marker must not fail the graph write.
   }
 }
 
@@ -804,6 +769,7 @@ function appendAll(dir, records) {
     // this shipped group- and world-readable while a test claimed otherwise.
     // (That test asserted on POSIX bits and was skipped on Windows, so it never
     // ran where it would have failed.)
+    const created = !existsSync(dir);
     mkdirSync(dir, { recursive: true, mode: 0o700 });
     try {
       chmodSync(dir, 0o700);
@@ -811,7 +777,7 @@ function appendAll(dir, records) {
       // Not POSIX, or not ours to chmod. The mkdir mode above still applies
       // where it can, and failing here must not stop the write.
     }
-    ignoreSelf(dir);
+    ignoreSelf(dir, { created });
     // ONE appendFileSync for the whole group, inside ONE lock: a caller that
     // needs several records to be observed together cannot get that by looping,
     // because every iteration is a separate crash point.

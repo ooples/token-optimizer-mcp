@@ -56,6 +56,11 @@ const manager = () =>
     getHookAnalytics: async () => ({ summary, byHook: noRows }),
     getActionAnalytics: async () => ({ summary, byAction: noRows }),
     getServerAnalytics: async () => ({ summary, byServer: noRows }),
+    aggregateEntries: () => ({
+      hook: { summary, byHook: noRows },
+      action: { summary, byAction: noRows },
+      server: { summary, byServer: noRows },
+    }),
     getEntries: async () => noEntries,
     count: async () => 0,
   }) as unknown as AnalyticsManager;
