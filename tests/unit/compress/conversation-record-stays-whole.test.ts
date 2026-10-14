@@ -106,3 +106,47 @@ describe('a harness report split across text blocks (#497 review)', () => {
     expect(out.messages[1].content[1].text).toBe(REPORT);
   });
 });
+
+describe('harness record tools and spill re-reads (#495)', () => {
+  const RECEIPT = rotated(1);
+  const RECOVERED = rotated(2);
+  const CONTROL = rotated(4);
+  const SPILL_PATH =
+    // Mixed case: Windows resolves it to the same spill file.
+    'C:\\Temp\\Token-Optimizer-SPILL\\532db20f\\c0a8e9f1-prose.txt';
+  const call = (id: string, name: string, input: Record<string, unknown>) => ({
+    role: 'assistant',
+    content: [{ type: 'tool_use', id, name, input }],
+  });
+  const result = (id: string, content: string) => ({
+    role: 'user',
+    content: [{ type: 'tool_result', tool_use_id: id, content }],
+  });
+  const out = v1Frontier(
+    {
+      system: 'You are a coding agent.',
+      messages: [
+        { role: 'user', content: [{ type: 'text', text: 'start here' }] },
+        call('a1', 'Agent', { prompt: 'implement the issue' }),
+        result('a1', RECEIPT),
+        call('s1', 'PowerShell', { command: `Get-Content ${SPILL_PATH}` }),
+        result('s1', RECOVERED),
+        call('c1', 'PowerShell', { command: 'Get-Content notes.txt' }),
+        result('c1', CONTROL),
+      ],
+    } as unknown as ProviderRequest,
+    { spill }
+  ).request as unknown as { messages: Msg[] };
+
+  it("leaves an agent tool's result whole: it carries the harness's instructions", () => {
+    expect(out.messages[2].content[0].content).toBe(RECEIPT);
+  });
+
+  it('leaves a re-read of a spill whole, so an elision can be recovered', () => {
+    expect(out.messages[4].content[0].content).toBe(RECOVERED);
+  });
+
+  it('still compresses the same read of any other file, the positive control', () => {
+    expect(out.messages[6].content[0].content).toContain('lower-signal');
+  });
+});

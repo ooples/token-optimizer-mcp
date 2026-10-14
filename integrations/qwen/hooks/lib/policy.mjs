@@ -893,6 +893,24 @@ function withPreceding(text) {
  * newer versions also send `agent_id`. Either is enough; neither means the main
  * session, where SessionStart has already said everything.
  */
+/**
+ * The scope one agent's hook state is kept under.
+ *
+ * `transcript_path` alone is not per agent: a Claude Code subagent's hook
+ * payload can carry its parent's transcript with its own `agent_id`, so a
+ * subagent's edits were counted into the main session's state and the main
+ * session's Stop asked it to harvest files only the subagent had touched --
+ * blocking every idle turn of the coordinator while its agents worked. The
+ * agent id, when sent, separates them; without one this is the transcript,
+ * as before.
+ */
+export function stateScope(raw, transcriptPath) {
+  const transcript =
+    transcriptPath ?? raw?.transcript_path ?? raw?.transcriptPath ?? null;
+  const agent = raw?.agent_id ?? raw?.agentId;
+  if (typeof agent !== 'string' || agent.length === 0) return transcript;
+  return `${transcript ?? ''}#agent:${agent}`;
+}
 export function isSubagentPayload(raw) {
   if (raw?.agent_id || raw?.agentId) return true;
   const transcript = String(raw?.transcript_path ?? raw?.transcriptPath ?? '');

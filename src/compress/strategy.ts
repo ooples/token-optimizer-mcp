@@ -366,6 +366,49 @@ const SLICE_COMMAND = [
  * turn costs more than the bytes the fold saved, because it re-sends the whole
  * context. A deliberate range is therefore passed through whole.
  */
+/**
+ * Harness tools whose result is the conversation's record, not tool output
+ * (#495): an agent's launch receipt carries the harness's instructions for
+ * handling it, and a message between agents is evidence one acts on. Prose
+ * elision dropped exactly those sentences.
+ */
+const RECORD_TOOLS = new Set(['Agent', 'Task', 'SendMessage', 'TaskOutput']);
+
+/**
+ * Where elision spills go (src/proxy/server.ts); a read of one is a recovery.
+ * Matched without case: Windows paths are case-insensitive, so a read through
+ * TOKEN-OPTIMIZER-SPILL reaches the same file.
+ */
+const SPILL_DIRECTORY = 'token-optimizer-spill';
+
+/**
+ * The tool calls whose result is compressed only losslessly, keyed by call id:
+ * a harness record tool, or any call that names a spill file. Re-reading a
+ * spill is how the model recovers what an elision removed; eliding that read
+ * again pointed it at a second spill, and so on, so nothing was ever
+ * recovered (#495).
+ */
+function recordToolResults(request: ProviderRequest): Set<string> {
+  const records = new Set<string>();
+  for (const message of request.messages ?? []) {
+    const content = message?.content;
+    if (!Array.isArray(content)) continue;
+    for (const raw of content) {
+      const block = raw as ToolUseBlock;
+      if (block?.type !== 'tool_use' || typeof block.id !== 'string') continue;
+      const named =
+        typeof block.name === 'string' && RECORD_TOOLS.has(block.name);
+      const readsSpill = Object.values(block.input ?? {}).some(
+        (value) =>
+          typeof value === 'string' &&
+          value.toLowerCase().includes(SPILL_DIRECTORY)
+      );
+      if (named || readsSpill) records.add(block.id);
+    }
+  }
+  return records;
+}
+
 function targetedToolResults(request: ProviderRequest): Set<string> {
   const targeted = new Set<string>();
   for (const message of request.messages ?? []) {
@@ -445,8 +488,13 @@ function cachedPrefixBytes(
  * and its marker sent it to a spill that, re-read, was elided again. Both are
  * small next to tool output, which is where the saving is.
  */
-function isConversationRecord(message: Message, text: string): boolean {
+function isConversationRecord(
+  message: Message,
+  text: string,
+  recordResult = false
+): boolean {
   return (
+    recordResult ||
     message?.role === 'assistant' ||
     HARNESS_REPORT.test(text) ||
     carriesHarnessReport(message)
@@ -702,6 +750,7 @@ function pathAddressed(
   // byte-identical.
   const sourcePaths = toolResultPaths(request);
   const targeted = targetedToolResults(request);
+  const records = recordToolResults(request);
   mapBlocks(request, (text, at, message, toolUseId) => {
     // #3456: a signed message is untouchable. Rewriting it poisons the
     // conversation permanently, not just this turn. A range the model asked
@@ -743,7 +792,11 @@ function pathAddressed(
       // one (minified JSON, a folded repeat) loses nothing and is the bulk of
       // what such a block can give back -- exempting it outright cost 122
       // steady tokens on the human-authored-json proof workload.
-      tuning: isConversationRecord(message, text)
+      tuning: isConversationRecord(
+        message,
+        text,
+        toolUseId !== undefined && records.has(toolUseId)
+      )
         ? { ...(options.tuning ?? DEFAULT_TUNING), allowLossy: false }
         : options.tuning,
       embeddings: options.embeddings,

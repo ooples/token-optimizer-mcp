@@ -755,6 +755,66 @@ describe('through the Claude Code Stop hook', () => {
   });
 });
 
+describe('a subagent Stop through the Claude Code hook (#502)', () => {
+  /**
+   * A subagent's hook state is scoped on transcript + agent id, which is not a
+   * path. That scope reached derive() as its transcriptPath, so a subagent's
+   * transcript-only failures were never read: the failure below exists nowhere
+   * else, and the paired success alone derives nothing.
+   */
+  it('reads the transcript file, not the state scope, when the payload has an agent_id', () => {
+    const workspace = mkdtempSync(join(tmpdir(), 'der-sub-'));
+    mkdirSync(join(workspace, '.git'), { recursive: true });
+    writeFileSync(join(workspace, 'package.json'), '{"name":"fixture"}');
+    const wiki = join(workspace, '.wiki');
+    mkdirSync(wiki, { recursive: true });
+    const transcript = join(workspace, 'session.jsonl');
+    try {
+      writeFileSync(
+        join(wiki, 'metrics.jsonl'),
+        JSON.stringify({ kind: 'tool-outcome', surface: 'command', anchor: 'deploy --retry', success: true, at: 2000 }) + '\n'
+      );
+      writeFileSync(
+        transcript,
+        [
+          toolUse('toolu_1', 'deploy', '1970-01-01T00:00:01.000Z'),
+          toolResult('toolu_1', 'Exit code 1\nconnection refused by host', '1970-01-01T00:00:01.000Z'),
+        ]
+          .map((row) => JSON.stringify(row))
+          .join('\n') + '\n'
+      );
+      const result = spawnSync(process.execPath, [join(process.cwd(), 'plugin', 'hooks', 'stop.mjs')], {
+        cwd: workspace,
+        env: {
+          ...process.env,
+          TOKEN_OPTIMIZER_STATE_DIR: join(workspace, '.state'),
+          TOKEN_OPTIMIZER_WIKI_DIR: wiki,
+          TOKEN_OPTIMIZER_SHARED_DIR: join(workspace, '.shared'),
+        },
+        input: JSON.stringify({
+          session_id: 'cc-subagent',
+          cwd: workspace,
+          transcript_path: transcript,
+          agent_id: 'agent-7',
+          agent_type: 'general-purpose',
+        }),
+        encoding: 'utf8',
+        timeout: 60_000,
+      });
+      expect(result.status).toBe(0);
+      const claims = [...load(wiki).nodes.values()]
+        .filter((node) => node.kind === 'finding')
+        .map((node) => node.claim);
+      expect(claims.some((claim) => claim.includes('connection refused by host'))).toBe(true);
+    } finally {
+      try {
+        rmSync(workspace, { recursive: true, force: true });
+      } catch {
+        /* windows */
+      }
+    }
+  });
+});
 describe('what counts as the same attempt', () => {
   it('ignores flags, so a retry pairs with the command it retries', () => {
     expect(attemptKey('deploy --retry')).toBe(attemptKey('deploy'));
