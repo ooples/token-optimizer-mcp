@@ -16,6 +16,8 @@
 import { describe, expect, it } from '@jest/globals';
 import { compressBody } from '../../../src/proxy/server.js';
 import { resolveTuning } from '../../../src/compress/options.js';
+import { variedRows } from '../compress/varied-rows.js';
+import { rehydrate } from '../../../src/compress/rehydrate.js';
 
 /** Random-looking text the engine cannot shrink, so the threshold must fire. */
 function incompressible(seed: number, lines: number): string {
@@ -68,16 +70,88 @@ describe('what a spill call counts', () => {
   });
 
   it('does not fire at all without a threshold', () => {
-    // THE CONTROL. spillWholeBlockBelow defaults to 0 -- never move anything --
-    // so the same body with the same sink must leave everything in place. This
-    // is also the defect that made the arm unreachable: a sink without a
-    // threshold is inert.
+    // THE CONTROL. The library's spillWholeBlockBelow defaults to 0 -- never
+    // move anything -- so the same body with the same sink must leave
+    // everything in place. This is also the defect that made the arm
+    // unreachable: a sink without a threshold is inert. The library tuning is
+    // named explicitly because compressBody's own default is the proxy's.
     const calls: string[] = [];
-    compressBody(bodyOf(), (content) => {
+    compressBody(
+      bodyOf(),
+      (content) => {
+        calls.push(content);
+        return `.spill/${calls.length}`;
+      },
+      undefined,
+      undefined,
+      resolveTuning()
+    );
+    expect(calls).toHaveLength(0);
+  });
+
+  it("moves blocks out by the proxy's default and leaves no file unreferenced", () => {
+    // PROXY_DEFAULTS sets the threshold to 0.9 (#436), so compressBody with no
+    // tuning moves these blocks. The decision is taken on a dry run, so every
+    // file the sink was asked to write is one the output points at: the
+    // engine's own spills for a block that is then moved whole are never
+    // written at all.
+    const calls: string[] = [];
+    const result = compressBody(bodyOf(), (content) => {
       calls.push(content);
       return `.spill/${calls.length}`;
     });
-    expect(calls).toHaveLength(0);
+    expect(calls.length).toBeGreaterThan(0);
+    const sent = result.body.toString('utf8');
+    for (let i = 1; i <= calls.length; i += 1)
+      expect(sent).toContain(`.spill/${i}`);
+  });
+
+  it('writes none of the engine spills a moved block supersedes', () => {
+    // A block the engine DOES spill from -- forty varied rows, elided to a
+    // rows.json file -- but takes only ~86% off, so the proxy moves it whole.
+    // Run for real, the engine's rows.json would be written first and then
+    // pointed at by nothing. Only the moved block may reach the sink.
+    const text = JSON.stringify(variedRows(40));
+    const hints: string[] = [];
+    const result = compressBody(
+      Buffer.from(
+        JSON.stringify({
+          messages: [{ role: 'user', content: [{ type: 'text', text }] }],
+        }),
+        'utf8'
+      ),
+      (_content, hint) => {
+        hints.push(hint);
+        return `.spill/${hints.length}-${hint}`;
+      }
+    );
+    expect(hints).toEqual(['block']);
+    expect(result.body.toString('utf8')).toContain('.spill/1-block');
+  });
+
+  it('stores a moved block in its smallest exact form', () => {
+    // The moved file is read into context when it is fetched, so its size is
+    // the price of the fetch. Pretty-printed rows have an exact template
+    // encoding far smaller than their bytes; that is what is stored, and the
+    // shipped decoder gives back the block byte for byte.
+    const text = JSON.stringify(variedRows(40), null, 2);
+    const stored: string[] = [];
+    const result = compressBody(
+      Buffer.from(
+        JSON.stringify({
+          messages: [{ role: 'user', content: [{ type: 'text', text }] }],
+        }),
+        'utf8'
+      ),
+      (content, hint) => {
+        stored.push(content);
+        return `.spill/${stored.length}-${hint}`;
+      }
+    );
+    expect(stored).toHaveLength(1);
+    expect(stored[0].length).toBeLessThan(text.length / 2);
+    const decoded = (result.stamps ?? []).map((s) => rehydrate(stored[0], s));
+    expect(decoded).toContain(text);
   });
 
   it('reports elisions separately from spills', () => {

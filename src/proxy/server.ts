@@ -90,7 +90,7 @@ import type { Finding } from '../compress/knowledge.js';
 import { loadFindingsFrom } from './findings.js';
 import {
   presetFromEnv,
-  resolveTuning,
+  resolveProxyTuning,
   type CompressionOptions,
   type PresetName,
   type Tuning,
@@ -1056,12 +1056,19 @@ export function netSavingEnabled(
  * path pays nothing for this. Dropping `findings` is what makes the retry
  * smaller -- everything else about the two passes is identical.
  */
+/**
+ * The tuning a body is compressed under when the caller names none: the
+ * proxy's, not the library's, so every caller of this entry point -- the
+ * running proxy, the benchmarks, the tests -- measures the product as shipped.
+ */
+const PROXY_TUNING = resolveProxyTuning();
+
 export function compressBody(
   body: Buffer,
   spill: SpillSink,
   anchors?: AnchorStore,
   findings?: readonly Finding[],
-  tuning?: Tuning,
+  tuning: Tuning = PROXY_TUNING,
   sharedGraph?: boolean,
   wireFormat?: 'chat-completions'
 ): CompressedBody {
@@ -1823,7 +1830,7 @@ export async function startProxy(options: ProxyOptions = {}): Promise<{
   // the one being swept: an explicit `compression` option still wins over it,
   // so this layers in rather than overriding the caller.
   const knowledgeChars = knowledgeCharsFromEnv(process.env);
-  const tuning = resolveTuning(
+  const tuning = resolveProxyTuning(
     {
       ...(knowledgeChars === undefined
         ? {}

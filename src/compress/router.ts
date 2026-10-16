@@ -50,6 +50,7 @@ import { foldLongRepeats } from './runs.js';
 import { foldRepeatedSegments, looksRepetitive } from './segments.js';
 import type { CompressionResult, ContentKind, EngineContext } from './types.js';
 import { spillFor, unchanged } from './types.js';
+import { compressJsonArray } from './json-fragments.js';
 import { marker, withStamp } from './annotate.js';
 import { DEFAULT_TUNING } from './options.js';
 
@@ -259,12 +260,21 @@ function movable(text: string, ctx: EngineContext): boolean {
   );
 }
 
-/** The block moved out whole, or null when there is nowhere to put it. */
-function moveOut(text: string, ctx: EngineContext): CompressionResult | null {
+/**
+ * The block moved out whole, or null when there is nowhere to put it.
+ *
+ * `stored` is what the file holds: the block itself unless the caller found a
+ * smaller form that still determines every byte of it (see `storedForm`).
+ */
+function moveOut(
+  text: string,
+  ctx: EngineContext,
+  stored: string = text
+): CompressionResult | null {
   // A SINK THAT FAILED IS NOT A PATH. `spillFor` normalises the proxy's empty
   // string to null, and without somewhere to put the block the honest answer is
   // whatever the engine managed, however modest it was.
-  const at = spillFor(ctx, text, 'block');
+  const at = spillFor(ctx, stored, 'block');
   if (at === null) return null;
 
   const removed = `${text.length.toLocaleString('en-US')} bytes, moved whole`;
@@ -275,31 +285,6 @@ function moveOut(text: string, ctx: EngineContext): CompressionResult | null {
     elisions: [{ removed, recoverAt: at, lossless: false }],
     lossless: false,
   };
-}
-
-/**
- * Moves a block that barely compressed out of the request, leaving its path.
- *
- * GATED ON THE SAVING RATHER THAN THE SIZE. HeadRoom's content-cache references
- * do this to every block over a size floor, which is where their ~99.7% comes
- * from. Gating on what the engines actually achieved keeps every block they
- * compressed well IN the request -- the reader still has it, and the ratio on it
- * is a real one -- and matches the cache reference only where our engines had
- * nothing to offer. That is the better trade in both directions, which is the
- * only reason to ship this at all.
- *
- * OFF UNLESS ASKED. Default `spillWholeBlockBelow` is 0, so this returns its
- * input untouched and no shipped measurement moves. See the dial.
- */
-function substitute(
-  text: string,
-  result: CompressionResult,
-  ctx: EngineContext
-): CompressionResult {
-  if (!movable(text, ctx)) return result;
-  const saving = 1 - result.text.length / text.length;
-  if (saving >= (ctx.tuning?.spillWholeBlockBelow ?? 0)) return result;
-  return moveOut(text, ctx) ?? result;
 }
 
 /**
@@ -341,11 +326,66 @@ function routed(text: string, ctx: EngineContext = {}): CompressionResult {
   // skip: its saving is zero by definition. It used to return here, above the
   // substitution pass, which meant the dial did nothing for the one shape it
   // most obviously applies to.
-  return substitute(
-    text,
-    engine ? runEngine(engine, text, tuned) : unchanged(text),
-    tuned
-  );
+  // DECIDED ON A DRY RUN, SO A MOVED BLOCK LEAVES NO DEAD FILES. The engine
+  // writes its own spills while it compresses, and a block that is then moved
+  // whole supersedes every one of them: nothing points at them any more, yet
+  // they sat on disk and an agent fetching "everything" paid for them too --
+  // on codebase-exploration seven files for four blocks, three of them
+  // duplicates. The trial runs against a sink that writes nothing; only the
+  // branch that is kept touches the real one.
+  //
+  // GATED ON THE SAVING RATHER THAN THE SIZE. HeadRoom's content-cache
+  // references move every block over a size floor; gating on what the engines
+  // achieved keeps every block they compressed well IN the request, where the
+  // reader still has it, and moves only where they had nothing to offer.
+  if (movable(text, tuned)) {
+    const trial = engine
+      ? runEngine(engine, text, { ...tuned, spill: dryRunSink })
+      : unchanged(text);
+    const saving = 1 - trial.text.length / text.length;
+    if (saving < (tuned.tuning?.spillWholeBlockBelow ?? 0)) {
+      const moved = moveOut(text, tuned, storedForm(text, trial, tuned));
+      if (moved !== null) return moved;
+    }
+  }
+  return engine ? runEngine(engine, text, tuned) : unchanged(text);
+}
+
+/**
+ * A sink that accepts every spill and writes none, for a trial run.
+ *
+ * Its path has the shape and length of the proxy's (`spillTo` in
+ * src/proxy/server.ts: a fixed-width digest and the engine's hint), so the
+ * trial is priced on the marker the real run would emit.
+ */
+const dryRunSink = (_content: string, hint: string): string =>
+  `.token-optimizer/spill/${'0'.repeat(32)}-${hint}`;
+
+/**
+ * The smallest text that still determines every byte of a block being moved.
+ *
+ * THE MOVED FILE IS READ INTO CONTEXT WHEN IT IS FETCHED, so its size is the
+ * price of the fetch. Storing the block as it arrived charged agent-loop's
+ * pretty-printed search results 6,290 tokens a fetch where their exact
+ * encoding takes about a third of that. Two forms qualify: the engine's own
+ * output when it was lossless and referred to no spill, and the exact JSON
+ * array encoding. Both carry their decoding rule in-band, as the inline forms
+ * do; anything else is stored as the source wrote it.
+ */
+function storedForm(
+  text: string,
+  trial: CompressionResult,
+  ctx: EngineContext
+): string {
+  let best = text;
+  const offer = (candidate: string): void => {
+    if (candidate.length < best.length) best = candidate;
+  };
+  if (trial.lossless && trial.elisions.every((e) => e.recoverAt === null))
+    offer(trial.text);
+  const exact = compressJsonArray(text, ctx.stamp ?? null);
+  if (exact.lossless) offer(exact.text);
+  return best;
 }
 
 /**

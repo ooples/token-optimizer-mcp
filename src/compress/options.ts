@@ -279,6 +279,9 @@ export const PRESETS: Readonly<
     keepSentenceFraction: 0.75,
     minBodyLines: 6,
     minDedupBytes: 2000,
+    // Stated, because the proxy's own default moves blocks out (see
+    // PROXY_DEFAULTS): keeping more means keeping every block in the request.
+    spillWholeBlockBelow: 0,
   }),
 
   /**
@@ -300,15 +303,21 @@ export const PRESETS: Readonly<
  */
 export function resolveTuning(
   options: CompressionOptions = {},
-  preset: PresetName | string | undefined = 'balanced'
+  preset: PresetName | string | undefined = 'balanced',
+  surface: Readonly<CompressionOptions> = {}
 ): Tuning {
   const base =
     (PRESETS as Record<string, CompressionOptions | undefined>)[
       String(preset ?? 'balanced')
     ] ?? PRESETS.balanced;
 
+  // `surface` sits between the preset and the defaults: what one product
+  // surface does differently from the library when nobody has said otherwise.
   const pick = <K extends keyof Tuning>(key: K): Tuning[K] =>
-    (options[key] ?? base[key] ?? DEFAULT_TUNING[key]) as Tuning[K];
+    (options[key] ??
+      base[key] ??
+      surface[key] ??
+      DEFAULT_TUNING[key]) as Tuning[K];
 
   return {
     keepRows: pick('keepRows'),
@@ -326,6 +335,34 @@ export function resolveTuning(
     retrievalCostTokens: pick('retrievalCostTokens'),
     assumedFetchRate: pick('assumedFetchRate'),
   };
+}
+
+/**
+ * What the proxy does by default that the library does not.
+ *
+ * IT MOVES A BLOCK OUT WHOLE WHEN ITS ENGINE COULD NOT TAKE 90% OFF IT. The
+ * proxy is metered per request, and a block that stays nearly full size is paid
+ * for on every turn it is re-read -- 56 of them on the measured median -- while
+ * a moved block is paid for only if the agent comes back for it. On
+ * codebase-exploration the competitor hands over 161 tokens by moving every
+ * file read out; keeping the skeletons in the request cost this proxy 155,126
+ * effective tokens against their 1,231. Decided 2026-10-16 (#436).
+ *
+ * The MCP tools keep the library default of 0 -- a tool reply is read once, in
+ * the turn that asked for it -- and an explicit `spillWholeBlockBelow`, a
+ * preset that sets it (`conservative` pins 0), or the `lossless` preset (which
+ * forbids moving at all) still wins over this.
+ */
+export const PROXY_DEFAULTS: Readonly<CompressionOptions> = Object.freeze({
+  spillWholeBlockBelow: 0.9,
+});
+
+/** The proxy's tuning: caller over preset over PROXY_DEFAULTS over defaults. */
+export function resolveProxyTuning(
+  options: CompressionOptions = {},
+  preset: PresetName | string | undefined = 'balanced'
+): Tuning {
+  return resolveTuning(options, preset, PROXY_DEFAULTS);
 }
 
 /**
