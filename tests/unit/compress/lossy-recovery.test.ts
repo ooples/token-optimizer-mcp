@@ -1,4 +1,4 @@
-import { reassemble } from './spill-reassembly.js';
+import { decodeSpill, reassemble } from './spill-reassembly.js';
 import { variedRows, variedRowsSource } from './varied-rows.js';
 import { describe, it, expect } from '@jest/globals';
 import { compressCode } from '../../../src/compress/code.js';
@@ -317,8 +317,12 @@ describe('the spill is the only way back, so it must hold what went', () => {
     // was missing, so the two halves reassemble in order -- asserted here
     // rather than assumed, because the reassembly is the property that
     // "the spill holds everything" was ever standing in for.
-    expect(JSON.parse(content).length).toBeLessThan(JSON.parse(ROWS).length);
-    expect(reassemble(result.text, content)).toEqual(JSON.parse(ROWS));
+    expect(
+      JSON.parse(decodeSpill(content, result.stamp ?? null)).length
+    ).toBeLessThan(JSON.parse(ROWS).length);
+    expect(reassemble(result.text, content, result.stamp ?? null)).toEqual(
+      JSON.parse(ROWS)
+    );
   });
 
   it('the json tail spill keeps the lexemes the source wrote', () => {
@@ -345,7 +349,9 @@ describe('the spill is the only way back, so it must hold what went', () => {
     // Now that it does not, both halves are sliced from the source, and
     // reassembly is what proves it.
     expect(content).toContain('"ratio":1.0');
-    expect(reassemble(result.text, content)).toEqual(JSON.parse(LEXEMES));
+    expect(reassemble(result.text, content, result.stamp ?? null)).toEqual(
+      JSON.parse(LEXEMES)
+    );
   });
 
   it('json keeps the minification and the rows when the sink fails', () => {

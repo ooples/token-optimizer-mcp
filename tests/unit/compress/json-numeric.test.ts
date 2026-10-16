@@ -55,5 +55,7 @@ test('recovery preserves nulls in rows outside the retained sample', () => {
   // THROUGH THE REASSEMBLY, because the spill now holds only the rows that
   // left. A null in a kept row is in the request and a null in a dropped row
   // is in the spill; this test is about neither half losing one.
-  expect(reassemble(result.text, recovered)).toEqual(rows);
+  expect(reassemble(result.text, recovered, result.stamp ?? null)).toEqual(
+    rows
+  );
 });
