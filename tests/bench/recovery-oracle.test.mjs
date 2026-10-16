@@ -54,7 +54,18 @@ function compressed() {
       { role: 'user', content: [{ type: 'text', text: alpha }] },
     ],
   };
-  const result = compressBody(Buffer.from(JSON.stringify(request), 'utf8'), {});
+  // NO SPILL SINK, AND SAID SO WITH `undefined`. The second argument is the
+  // sink -- a function or nothing -- not an options bag. This used to pass `{}`,
+  // which went unnoticed while no engine spilled this fixture; once the proxy
+  // moved barely-compressible blocks out whole by default, the router called
+  // `{}` as a function, the whole request fell back to "compression threw",
+  // and every assertion below measured an untouched payload. Without a sink
+  // nothing can be moved out, so what is left to rebuild is the back-reference
+  // this oracle exists to check.
+  const result = compressBody(
+    Buffer.from(JSON.stringify(request), 'utf8'),
+    undefined
+  );
   return {
     alpha,
     keys: result.stamps ?? [],
