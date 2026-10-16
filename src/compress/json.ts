@@ -811,10 +811,17 @@ function compressJsonDocument(
     // row before it is admitted, and it carries its own decoding rule in its
     // header -- so the dropped rows stay byte-recoverable, from fewer tokens.
     // Anything it cannot vouch for is spilled as the source wrote it.
-    const encodedSpill = compressJsonArray(spillContent, ctx.stamp ?? null);
+    //
+    // ONLY WHEN THERE IS A SINK TO WRITE IT TO. `spillFor` returns null without
+    // one, so encoding first threw the work away on every sinkless call -- the
+    // product default -- and on relevance-probe that was a second full pass of
+    // the record encoder over 295 rows, about a seventh of the arm's time.
+    const encodedSpill = ctx.spill
+      ? compressJsonArray(spillContent, ctx.stamp ?? null)
+      : null;
     const recoverAt = spillFor(
       ctx,
-      encodedSpill.lossless && encodedSpill.text.length < spillContent.length
+      encodedSpill?.lossless && encodedSpill.text.length < spillContent.length
         ? encodedSpill.text
         : spillContent,
       'rows.json'

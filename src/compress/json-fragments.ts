@@ -76,6 +76,28 @@ function scalarLeaves(value: unknown): number {
 const SCALAR =
   '(?:"(?:\\\\.|[^"\\\\])*"|true|false|null|-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?)';
 
+/**
+ * `"key":` followed by one scalar, or by a whole list of them.
+ *
+ * THE LIST ALTERNATIVE IS ONLY FOR LISTS OF SCALARS. A list holding objects is
+ * left alone: the key/value alternative reaches its inner fields by itself and
+ * templates each of them, which is the better encoding whenever the inner
+ * records line up. It is the list of bare scalars -- labels, tags, a set of
+ * ids -- that has no keys to match and so ends up as literal text whose LENGTH
+ * becomes part of the shape.
+ *
+ * BUILT ONCE. It used to be compiled per record, inside the loop of
+ * `records`, which paid for a pattern this size on every row of every array.
+ * Sharing a `g` pattern is safe here only because it is used through
+ * `matchAll`, which iterates a copy and never moves this one's `lastIndex`.
+ */
+const FIELD = new RegExp(
+  `"(?:\\\\.|[^"\\\\])*"\\s*:\\s*(` +
+    `\\[(?:\\s*${SCALAR}\\s*,)*\\s*(?:${SCALAR}\\s*)?\\]` +
+    `|${SCALAR})`,
+  'g'
+);
+
 interface RecordParts {
   start: number;
   end: number;
@@ -184,24 +206,10 @@ function records(text: string, compact = false): RecordParts[] {
       continue;
     }
     if (!parsed || Array.isArray(parsed)) continue;
-    const field = new RegExp(
-      // `"key":` followed by one scalar, or by a whole list of them.
-      //
-      // THE LIST ALTERNATIVE IS ONLY FOR LISTS OF SCALARS. A list holding
-      // objects is left alone: the key/value alternative reaches its inner
-      // fields by itself and templates each of them, which is the better
-      // encoding whenever the inner records line up. It is the list of bare
-      // scalars -- labels, tags, a set of ids -- that has no keys to match and
-      // so ends up as literal text whose LENGTH becomes part of the shape.
-      `"(?:\\\\.|[^"\\\\])*"\\s*:\\s*(` +
-        `\\[(?:\\s*${SCALAR}\\s*,)*\\s*(?:${SCALAR}\\s*)?\\]` +
-        `|${SCALAR})`,
-      'g'
-    );
     const chunks: string[] = [],
       values: string[] = [];
     let cursor = 0;
-    for (const value of source.matchAll(field)) {
+    for (const value of source.matchAll(FIELD)) {
       const start = value.index! + value[0].length - value[1].length;
       chunks.push(encode(source.slice(cursor, start)));
       values.push(encode(value[1]));
