@@ -81,10 +81,9 @@ EXTRA = sys.argv[sys.argv.index("--extra") + 1] if "--extra" in sys.argv else No
 # so a reader sees the gap instead of taking a claim about it.
 #
 # SCOPE: this governs `text_of`, which defines `PAYLOADS` -- the bytes both
-# sides are handed. It deliberately does NOT touch the `indent=2` at the
-# `wrapped_before_text` site below: that is THEIR pipeline arm's own
-# denominator, it is generous to them, and it is identical under both arms, so
-# re-serialising it would move their column for a reason unrelated to this one.
+# sides are handed -- and, through `arm_pipeline` and `wrapped_before_text`,
+# the text their pipeline arm is scored on. Those two used to emit `indent=2`;
+# see `wrapped_before_text` below for why they now use these separators too.
 SEPARATORS_ARM = (
     sys.argv[sys.argv.index("--separators") + 1]
     if "--separators" in sys.argv
@@ -154,6 +153,23 @@ import logging  # noqa: E402
 # fastest and strongest backend, which is why we ask for it.
 _DETECT_BACKEND_PRESET = os.environ.get("HEADROOM_DETECT_BACKEND")
 os.environ.setdefault("HEADROOM_DETECT_BACKEND", "rust")
+
+# AND THEIR ML COMPRESSOR GETS THE TIME IT NEEDS. Kompress runs ONNX inference on
+# the CPU under a 20s per-request budget, and when the budget runs out it keeps
+# the remainder verbatim -- their column then measures a time limit, not their
+# engine, and the health check refuses the whole capture. On a laptop CPU one
+# 16,294-word payload exhausts it even on an idle machine (2-8% busy measured
+# before the sweep), so the default cannot produce a healthy capture here at
+# all. A larger budget only ever lets them compress MORE, which is the direction
+# that makes our side's comparison harder; the value used is recorded below.
+_KOMPRESS_BUDGET_PRESET = os.environ.get("HEADROOM_KOMPRESS_TIME_BUDGET_SECONDS")
+_KOMPRESS_ACQUIRE_PRESET = os.environ.get("HEADROOM_KOMPRESS_ACQUIRE_TIMEOUT_SECONDS")
+os.environ.setdefault("HEADROOM_KOMPRESS_TIME_BUDGET_SECONDS", "600")
+os.environ.setdefault("HEADROOM_KOMPRESS_ACQUIRE_TIMEOUT_SECONDS", "600")
+# The per-request deadline is a third, separate limit (HEADROOM_COMPRESSION_DEADLINE_MS,
+# 20000 by default) and the one the 16,294-word payload actually hit.
+_COMPRESSION_DEADLINE_PRESET = os.environ.get("HEADROOM_COMPRESSION_DEADLINE_MS")
+os.environ.setdefault("HEADROOM_COMPRESSION_DEADLINE_MS", "600000")
 
 ADVISORY_SIGNATURES = (
     # Their cache aligner reporting that OUR fixture puts a timestamp in the
@@ -698,7 +714,7 @@ def arm_pipeline(native, text, limit):
     out = getattr(result, "messages", result)
     if not isinstance(out, list):
         return None
-    return json.dumps(out, indent=2)
+    return json.dumps(out, separators=SEPARATORS)
 
 
 # THE ENGINE IS SUBSTITUTABLE -- TO TEST THIS HARNESS, NEVER TO PUBLISH.
@@ -862,8 +878,19 @@ def run(name, native, text):
     # envelope this harness added would be the same denominator error in the
     # other direction. The scorer converts it to a ratio; both texts are handed
     # over so it can do that with a real tokeniser rather than a proxy.
-    wrapped_before_text = json.dumps(as_messages(native, text), indent=2)
-    wrapped_before = len(wrapped_before_text)
+    #
+    # SERIALISED THE WAY THE PAYLOAD IS, NOT WITH `indent=2`. On a transcript
+    # `as_messages` returns the native messages unchanged, so this form is
+    # byte-identical to `text` -- the input-parity precondition
+    # (input-parity.mjs) then holds for a pipeline winner exactly as it does for
+    # a text-native one. The indented form re-serialised the same messages with
+    # 1,000+ characters of whitespace, so the first capture in which their
+    # pipeline won a row (agent-loop, once the Kompress deadline stopped
+    # passing it through) recorded their input as c719897c against our 57841f26
+    # and every such row read "not a comparison" despite identical content.
+    # Their output is serialised the same way in `arm_pipeline`, so whitespace
+    # neither side's wire carries is in neither numerator nor denominator.
+    wrapped_before_text = json.dumps(as_messages(native, text), separators=SEPARATORS)
     wrapped = {}
     for fraction in (0.1, 0.25, 0.5, 0.75, 1.0, 2.0):
         limit = max(1, int(before_tokens * fraction))
@@ -1407,6 +1434,12 @@ provenance = {
     # had already pinned one and we left it alone.
     "detectBackendSetByHarness": _DETECT_BACKEND_PRESET is None,
     "detectBackendPreset": _DETECT_BACKEND_PRESET,
+    # Their Kompress budgets, and whether this harness raised them (see the note
+    # beside the setdefault): a capture states the limits their engine ran under.
+    "kompressTimeBudgetSeconds": os.environ.get("HEADROOM_KOMPRESS_TIME_BUDGET_SECONDS"),
+    "kompressAcquireTimeoutSeconds": os.environ.get("HEADROOM_KOMPRESS_ACQUIRE_TIMEOUT_SECONDS"),
+    "compressionDeadlineMs": os.environ.get("HEADROOM_COMPRESSION_DEADLINE_MS"),
+    "kompressBudgetSetByHarness": _KOMPRESS_BUDGET_PRESET is None and _KOMPRESS_ACQUIRE_PRESET is None and _COMPRESSION_DEADLINE_PRESET is None,
     "kompressWarmup": KOMPRESS_WARMUP,
     # NOT NULL MEANS NOT A MEASUREMENT. A known-answer capture drives this same
     # path with arms whose output is arithmetic, so its numbers are correct and
