@@ -170,7 +170,13 @@ const ROWS = {
     costFloor: 'strict',
     retention: 'ceiling',
   },
-  'repeated-reads': { issue: 446, costFloor: 'strict', retention: 'ceiling' },
+  // 394, NOT 'ceiling'. The bar was named for their arm holding every unit, and
+  // once the scorer read their pipeline arm on the payload's own bytes their
+  // cheapest arm kept 388 of 394 -- so 'ceiling' described a column they no
+  // longer set, and retentionVerdict rightly left the row undecided. Pinning
+  // the full denominator keeps the strictest bar that exists on this payload
+  // rather than relaxing it to "more than theirs".
+  'repeated-reads': { issue: 446, costFloor: 'strict', retention: 394 },
   'browser-session': { issue: 447, costFloor: 'strict', retention: 'ceiling' },
 };
 
