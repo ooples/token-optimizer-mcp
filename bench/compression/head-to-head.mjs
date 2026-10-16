@@ -697,8 +697,19 @@ for (const [name, text] of Object.entries(payloads)) {
   // for, so the body ratios are very slightly pessimistic.
   const bodySpilled = [];
   let body = null;
+  // ONLY THE PARSE MAY FAIL QUIETLY. A payload that is not JSON has no body
+  // arm, and that is all the catch is for. It used to wrap the whole arm, so a
+  // throw from inside it -- the currency's "no recorded token count", which is
+  // what an unseeded run (no TOKEN_OPTIMIZER_BENCH_STAMP_SEED) raises on every
+  // stamped body -- was read as "not a message list": the proxy column vanished
+  // from 11 of 12 rows and the run still exited 0.
+  let parsed;
   try {
-    const parsed = JSON.parse(text);
+    parsed = JSON.parse(text);
+  } catch {
+    /* not JSON, so not a message list */
+  }
+  if (parsed !== undefined) {
     // A MESSAGE LIST, NOT MERELY AN ARRAY. `Array.isArray` alone let the four
     // raw-data payloads here -- log-entries, search-results, api-responses,
     // database-rows, which are arrays of log lines and API records with no
@@ -832,8 +843,6 @@ for (const [name, text] of Object.entries(payloads)) {
           : `${result.summary.reason ?? ''}; ${(behind * 100).toFixed(0)}% of the payload is behind the client's cache marker`,
       };
     }
-  } catch {
-    /* a payload that is not a message list has no body arm */
   }
 
   const before = text.length;
@@ -1013,11 +1022,19 @@ for (const [name, text] of Object.entries(payloads)) {
     preset.stamp ?? []
   );
   const presetSpill = presetSpilled.join('\n');
+  // Its row spills are template-encoded like the body arm's, so they are read
+  // back through the same decoder, one spill at a time (see `spillRecovered`).
+  const presetSpillRecovered = presetSpilled
+    .map((spill, i) =>
+      recoverable(spill, `${name} (preset spill ${i + 1})`, preset.stamp ?? [])
+    )
+    .join('\n');
   let presetGone = 0;
   let presetFree = 0;
   for (const id of want) {
     if (preset.text.includes(id) || presetRecovered.includes(id)) presetFree++;
-    else if (!presetSpill.includes(id)) presetGone++;
+    else if (!presetSpill.includes(id) && !presetSpillRecovered.includes(id))
+      presetGone++;
   }
 
   let bodyGone = 0;
@@ -1031,11 +1048,23 @@ for (const [name, text] of Object.entries(payloads)) {
       body.stamps ?? []
     );
     const bodySpill = bodySpilled.join('\n');
+    // A SPILL IS DECODED THE WAY THE OUTPUT IS. Row spills are written in the
+    // engine's exact template encoding (src/compress/json.ts), where `doc_100`
+    // is a template piece and a row value rather than a substring; the same
+    // shipped decoder, under the same per-block keys, reads them back. ONE
+    // SPILL AT A TIME: each is its own file under its own block's key, and
+    // joined they are one fragment the decoder reads under the first key only.
+    const spillRecovered = bodySpilled
+      .map((spill, i) =>
+        recoverable(spill, `${name} (body spill ${i + 1})`, body.stamps ?? [])
+      )
+      .join('\n');
     for (const id of want)
       if (
         !body.text.includes(id) &&
         !bodyRecovered.includes(id) &&
-        !bodySpill.includes(id)
+        !bodySpill.includes(id) &&
+        !spillRecovered.includes(id)
       )
         bodyGone++;
   }
@@ -1513,10 +1542,20 @@ const armsFor = (r, params) => {
   // Their per-block split is read off their own markers; the TOTAL is measured
   // from their resolver. A rounded `156.3KB` can move how the bytes spread
   // across turns, never how many of them there are.
+  //
+  // A MARKER WITH NO SIZE STILL REDEEMS ITS SHARE. Their row-offload markers
+  // (`<<ccr:358e6e618385 86_rows_offloaded>>`, see offload.mjs) carry a row
+  // count and no bytes, so `markerBytes` reads 0 for them. Splitting by bytes
+  // then priced every block at zero: on sre-debugging their 69,116 measured
+  // redeem tokens added nothing to their full-fetch cost but the two round
+  // trips, which reported their p=1 cost 335,212 too low. When any marker is
+  // unsized the measured total is spread evenly instead -- the total is what
+  // the resolver measured either way; only the spread is an assumption.
   const bytes = r.theirMarkerBytes;
   const byteSum = bytes.reduce((a, b) => a + b, 0);
+  const sized = bytes.every((b) => b > 0);
   const theirBlocks = bytes.map((b) =>
-    byteSum === 0 ? 0 : (r.theirTokRedeem * b) / byteSum
+    sized ? (r.theirTokRedeem * b) / byteSum : r.theirTokRedeem / bytes.length
   );
   const L = (handed, blocks, cachedPrefix = 0) =>
     costLine({ handed, blocks, cachedPrefix, params });
