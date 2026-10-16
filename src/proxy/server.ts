@@ -329,10 +329,14 @@ export function proxyEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
 function spillTo(root: string) {
   const salt = randomBytes(32);
   return (content: string, hint: string): string => {
+    // SIXTEEN HEX DIGITS, because the name is read on every turn the marker
+    // sits in the request: 64 bits under a per-process salt inside a random
+    // directory is ample for dedup and for unpredictability, and each digit
+    // past that is a token a marker pays and a competitor's does not.
     const name = createHmac('sha256', salt)
       .update(content)
       .digest('hex')
-      .slice(0, 32);
+      .slice(0, 16);
     const file = join(root, `${name}-${hint}`);
     try {
       // SYNC ON PURPOSE, against `n/no-sync`, and the rule is right in general.

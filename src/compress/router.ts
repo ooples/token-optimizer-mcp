@@ -237,7 +237,7 @@ const MIN_SUBSTITUTE_BYTES = 4_000;
  * May this block be moved out of the request whole?
  *
  * SUBSTITUTION, NOT REDUCTION. Nothing here makes a block smaller: it takes the
- * block out and writes `[... n bytes, moved whole -> path]` where it was. The
+ * block out and writes `[... moved ~stamp -> path]` where it was. The
  * ratio that produces is a measurement of a move, and `spillWholeBlockBelow` is
  * documented to say exactly that, because a 99% in a table says the opposite.
  *
@@ -277,7 +277,11 @@ function moveOut(
   const at = spillFor(ctx, stored, 'block');
   if (at === null) return null;
 
-  const removed = `${text.length.toLocaleString('en-US')} bytes, moved whole`;
+  // "moved" AND NOTHING ELSE. The marker is re-read on every later turn, so
+  // each word in it is paid for again and again: the byte count and "whole"
+  // took it from 18 tokens to 25 against a competitor's 18, which was most of
+  // the p=0 gap on codebase-exploration. The path says where it went.
+  const removed = 'moved';
   const line = marker({ removed, recoverAt: at }, ctx.stamp ?? null);
   return {
     text: line,
@@ -359,7 +363,7 @@ function routed(text: string, ctx: EngineContext = {}): CompressionResult {
  * trial is priced on the marker the real run would emit.
  */
 const dryRunSink = (_content: string, hint: string): string =>
-  `.token-optimizer/spill/${'0'.repeat(32)}-${hint}`;
+  `.token-optimizer/spill/${'0'.repeat(16)}-${hint}`;
 
 /**
  * The smallest text that still determines every byte of a block being moved.

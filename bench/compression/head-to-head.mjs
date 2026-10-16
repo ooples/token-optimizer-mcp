@@ -389,6 +389,23 @@ const tokens = (text) => {
 // identifiers.mjs. It is imported at the top of this file.
 
 /**
+ * The request envelope the body arm's payload is wrapped in, and the messages
+ * inside it.
+ *
+ * The proxy rewrites a whole request body, so the arm is handed one; but what
+ * either engine is priced on is the conversation, and their arm is never
+ * charged an envelope. `messagesOf` strips exactly this head and the closing
+ * brace, and returns any other text unchanged -- a body that does not start
+ * with the head is priced whole, which can only cost this arm, never flatter it.
+ */
+const ENVELOPE_HEAD =
+  '{"model":"claude-sonnet-5","max_tokens":1024,"messages":';
+const messagesOf = (body) =>
+  body.startsWith(ENVELOPE_HEAD) && body.endsWith('}')
+    ? body.slice(ENVELOPE_HEAD.length, -1)
+    : body;
+
+/**
  * The last user turn, when the payload is a conversation.
  *
  * Read out of the SERIALISED payload rather than a parallel structure, because
@@ -747,7 +764,7 @@ for (const [name, text] of Object.entries(payloads)) {
       // is the ~15 tokens the cost model already discloses as charged against
       // us. `parsed` is still what decides whether there is a proxy arm at all:
       // the payload has to be a message list.
-      const wrapped = `{"model":"claude-sonnet-5","max_tokens":1024,"messages":${text}}`;
+      const wrapped = `${ENVELOPE_HEAD}${text}}`;
       // NO FINDINGS, SO THE NET-SAVING GUARD CANNOT MOVE A FIGURE HERE, and this
       // arm reports one column rather than two for that reason. The guard
       // (TOKEN_OPTIMIZER_PROXY_NET_SAVING) only ever drops a cached-knowledge
@@ -827,7 +844,13 @@ for (const [name, text] of Object.entries(payloads)) {
       body = {
         behind,
         cachedPrefixChars: identical.length,
-        cachedPrefixTok: tokens(identical),
+        // A prefix, so only the head comes off: it ends wherever the two
+        // bodies first differ, never at the closing brace.
+        cachedPrefixTok: tokens(
+          identical.startsWith(ENVELOPE_HEAD)
+            ? identical.slice(ENVELOPE_HEAD.length)
+            : identical
+        ),
         before: Buffer.byteLength(wrapped, 'utf8'),
         after: result.body.length,
         text: result.body.toString('utf8'),
@@ -836,8 +859,8 @@ for (const [name, text] of Object.entries(payloads)) {
         // They never reach a row: a key is derived from the content, so it has
         // no place in a number anybody publishes.
         stamps: result.stamps ?? [],
-        tokBefore: tokens(wrapped),
-        tokAfter: tokens(result.body.toString('utf8')),
+        tokBefore: tokens(messagesOf(wrapped)),
+        tokAfter: tokens(messagesOf(result.body.toString('utf8'))),
         reason: result.summary.compressed
           ? ''
           : `${result.summary.reason ?? ''}; ${(behind * 100).toFixed(0)}% of the payload is behind the client's cache marker`,
@@ -1605,11 +1628,14 @@ const armsFor = (r, params) => {
     // price is zero either way; `bodyBehind` is recorded per row so the reason
     // for each zero stays visible, and the disclosure is the place for it.
     //
-    // `bodyTokBefore` counts the `model`/`max_tokens` envelope the harness
-    // wraps around the messages, so this arm is charged about 15 tokens the
-    // other arms are not -- a bias against us, kept rather than corrected so
-    // the number cannot be accused of being tuned. On a 0.0% row that bias is
-    // the whole difference: rag-conversation prices ABOVE doing nothing.
+    // THE ENVELOPE IS PRICED ON NEITHER SIDE. `bodyTokBefore`/`bodyTokAfter`
+    // count the messages only (`messagesOf`), as their arm and our other arms
+    // are counted. It used to include the `model`/`max_tokens` envelope the
+    // harness wraps the messages in -- about 20 tokens this arm alone paid, kept
+    // as a deliberate bias against us. Once the proxy moved whole blocks out,
+    // that bias was most of what separated a tie from a loss at p=0 on the
+    // rows whose competitor arm also moves everything, so it was corrected
+    // (decided 2026-10-16) rather than left to decide them.
     proxy:
       r.bodyRatio === null
         ? null
