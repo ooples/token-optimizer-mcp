@@ -69,6 +69,24 @@ export function compressBlock(text) {
   return { text: mirrored(text) };
 }
 
+/**
+ * The request envelope head-to-head wraps a message-list payload in before it
+ * hands it to the body arm (`wrapped` in head-to-head.mjs). The payload inside
+ * it is the text the capture measured, so that is what is mirrored, and the
+ * envelope goes back around their bytes unchanged.
+ *
+ * Unwrapped, every body-arm call threw "no counterpart", and the scorer's
+ * catch-all read the throw as "not a message list": the mirror profile ran with
+ * no body column at all, and nothing said so.
+ */
+const ENVELOPE_HEAD =
+  '{"model":"claude-sonnet-5","max_tokens":1024,"messages":';
+
 export function compressBody(buffer) {
-  return bodyResult(mirrored(buffer.toString('utf8')));
+  const body = buffer.toString('utf8');
+  if (body.startsWith(ENVELOPE_HEAD) && body.endsWith('}'))
+    return bodyResult(
+      ENVELOPE_HEAD + mirrored(body.slice(ENVELOPE_HEAD.length, -1)) + '}'
+    );
+  return bodyResult(mirrored(body));
 }
