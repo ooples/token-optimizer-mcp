@@ -87,7 +87,7 @@ at `spillWholeBlockBelow: 0.9`.
 | repeated-reads       | 158,285 | 37.4% / 30.4% | 71.7% / 68.5% | 99.5% / 99.6% | 100.0% / 100.0% |    394 / 388 / 0 |
 | sre-debugging        | 312,276 | 88.4% / 89.9% | 67.4% / 62.4% | 98.5% / 98.7% |   97.1% / 97.5% |  3116 / 506 / 82 |
 
-Recorded 2026-10-17 at `f6fe362a`, by the command in the
+Recorded 2026-10-17 at `b1231a8c`, by the command in the
 record's `regenerate` field, over HeadRoom 0.37.0's own fixtures and harness. That arm runs
 HeadRoom itself, so CI does not re-derive it -- it checks these figures and
 this provenance against the record instead.
