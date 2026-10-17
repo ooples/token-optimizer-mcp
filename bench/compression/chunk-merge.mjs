@@ -77,6 +77,44 @@ const MUST_AGREE = [
  * @returns {{ok: boolean, errors: string[], seam: object|null,
  *            theirs: object|null, resolved: object|null}}
  */
+/**
+ * THEIR PER-FETCH LATENCY ACROSS CHUNKS, which this merge used to drop.
+ *
+ * `resolve-theirs.py` times their retrieval once per chunk, in `perFetch`, and
+ * the merged provenance kept only each chunk's resolution stamp -- so every
+ * merged capture reported their fetches as never timed, and every latency
+ * criterion where they force a round trip read UNMEASURED on a capture that had
+ * measured it six times. Pass k of the merge is pass k of every chunk that timed
+ * anything, concatenated: the same probe, over the whole corpus's markers. A
+ * chunk whose output carried no markers has nothing to add and is skipped; if no
+ * chunk timed anything the merge says so rather than inventing a figure.
+ */
+export function mergePerFetch(perChunk) {
+  const timed = perChunk.filter(
+    (p) => p && !p.unmeasured && Array.isArray(p.passes) && p.passes.length > 0
+  );
+  if (timed.length === 0)
+    return {
+      unmeasured: true,
+      detail: 'no chunk timed a retrieval: ' +
+        perChunk.map((p) => p?.detail ?? 'no probe recorded').join('; '),
+    };
+  const passes = Math.min(...timed.map((p) => p.passes.length));
+  return {
+    passes: Array.from({ length: passes }, (_unused, k) =>
+      timed.flatMap((p) => p.passes[k])
+    ),
+    markersProbed: timed.reduce((n, p) => n + (p.markersProbed ?? 0), 0),
+    hits: timed.reduce((n, p) => n + (p.hits ?? 0), 0),
+    misses: perChunk.reduce((n, p) => n + (p?.misses ?? 0), 0),
+    resolver: timed[0].resolver ?? null,
+    granularity: timed[0].granularity ?? null,
+    warmedUntimed: timed.every((p) => p.warmedUntimed === true),
+    chunksTimed: timed.length,
+    chunks: perChunk.length,
+  };
+}
+
 export function mergeChunks(chunks) {
   const errors = [];
   const refuse = () => ({ ok: false, errors, seam: null, theirs: null, resolved: null });
@@ -454,6 +492,7 @@ export function mergeChunks(chunks) {
       // cannot be read as their loss, and `resolutionUsable` needs the bound above
       // to be present in order to refuse them one by one.
       pastTheirTtl: withRes.some((p) => p.resolved.__provenance__?.pastTheirTtl === true),
+      perFetch: mergePerFetch(withRes.map((p) => p.resolved.__provenance__?.perFetch)),
     };
   }
 

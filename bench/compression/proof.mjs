@@ -38,7 +38,7 @@ import { lastCacheBreakpoint, isAfter } from '../../dist/compress/frontier.js';
 import { anchorStore } from '../../dist/compress/anchor.js';
 import { describeImage, isImageBlock } from '../../dist/compress/images.js';
 import { pathToFileURL } from 'node:url';
-import { createHash } from 'node:crypto';
+import { benchSpillPath } from './spill-sink.mjs';
 import { tokens } from './currency.mjs';
 
 const CACHE_READ = 0.1;
@@ -66,23 +66,16 @@ const CACHE_WRITE = 1.25;
  *     fixtures for a reason that was entirely the harness's bookkeeping.
  *
  * So each arm gets its own sink -- real isolation, rather than isolation by
- * namespacing a shared one -- and a file is named by a fixed-width digest of
- * its content plus the engine's own hint, which is `spillTo` in
- * `src/proxy/server.ts` exactly. Unsalted, where the sink salts: the salt is
- * there so a path in a shared temp directory is unguessable, and these
- * fixtures are synthetic and this file must give the same answer twice.
+ * namespacing a shared one -- and a file gets the path the proxy's sink would
+ * give it, from `benchSpillPath`, which says why that path and not a shorter
+ * invented one. Its salt is fixed: these fixtures are synthetic and this file
+ * must give the same answer twice.
  */
 function spillSink() {
   const spilled = new Map();
   return (content, hint) => {
     const key = `${hint}:${content.length}:${content}`;
-    if (!spilled.has(key)) {
-      const name = createHash('sha256')
-        .update(content)
-        .digest('hex')
-        .slice(0, 32);
-      spilled.set(key, `.token-optimizer/spill/${name}-${hint}`);
-    }
+    if (!spilled.has(key)) spilled.set(key, benchSpillPath(content));
     return spilled.get(key);
   };
 }

@@ -51,6 +51,7 @@ import { fileURLToPath } from 'node:url';
 import { compressBody, anchorStore } from './ours-engine.mjs';
 import { tokens } from './currency.mjs';
 import { RATES } from './assembly.mjs';
+import { benchSpillPath } from './spill-sink.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const CORPUS = join(HERE, '..', '..', 'hr-corpus', 'natives-18.json');
@@ -125,9 +126,9 @@ for (const { name, turns } of conversations()) {
     try {
       out = compressBody(
         body,
-        (content, hint) => {
+        (content) => {
           spilled.push(content);
-          return `.token-optimizer/spill/r${spilled.length}-${hint}`;
+          return benchSpillPath(content);
         },
         anchors
       );

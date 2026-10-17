@@ -20,7 +20,7 @@
  */
 
 import { instrumentFingerprint } from './ratchet.mjs';
-import { mergeChunks, mergePayloads } from './chunk-merge.mjs';
+import { mergeChunks, mergePayloads, mergePerFetch } from './chunk-merge.mjs';
 
 let failures = 0;
 const check = (cond, what, detail) => {
@@ -509,6 +509,37 @@ console.log('the store state a merged capture may claim');
   for (const part of unstamped) delete part.theirs.__provenance__.ccrStoreBeforeRun;
   const bare = instrumentFingerprint(mergeChunks(unstamped).theirs.__provenance__);
   check(!bare.includes('store='), 'an unstamped capture gets no store term at all', bare);
+}
+
+// THEIR PER-FETCH TIMINGS SURVIVE THE MERGE. Every merged capture used to read
+// their fetches as never timed, because only each chunk's resolution stamp was
+// carried over.
+{
+  const none = { unmeasured: true, detail: 'their output carries no markers', misses: 0 };
+  const a = { passes: [[1, 2], [3, 4], [5, 6]], markersProbed: 2, hits: 2, misses: 0, warmedUntimed: true };
+  const b = { passes: [[7], [8], [9]], markersProbed: 1, hits: 1, misses: 1, warmedUntimed: true };
+  const merged = mergePerFetch([none, a, b]);
+  check(
+    JSON.stringify(merged.passes) === JSON.stringify([[1, 2, 7], [3, 4, 8], [5, 6, 9]]),
+    'pass k of the merge is pass k of every chunk that timed anything',
+    JSON.stringify(merged.passes)
+  );
+  check(
+    merged.hits === 3 && merged.misses === 1 && merged.chunksTimed === 2 && merged.chunks === 3,
+    'the merged probe counts every chunk it came from',
+    JSON.stringify(merged)
+  );
+  check(
+    merged.unmeasured === undefined && merged.warmedUntimed === true,
+    'a chunk with no markers neither blocks the merge nor adds a figure',
+    JSON.stringify(merged)
+  );
+  const nothing = mergePerFetch([none, undefined]);
+  check(
+    nothing.unmeasured === true && /no chunk timed/.test(nothing.detail),
+    'no timed chunk is reported as unmeasured, not as a fast fetch',
+    JSON.stringify(nothing)
+  );
 }
 
 console.log(failures === 0 ? '\nall checks passed' : `\n${failures} check(s) failed`);
