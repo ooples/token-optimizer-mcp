@@ -195,11 +195,17 @@ function records(text: string, compact = false): RecordParts[] {
         if (encode(source) !== raw) continue;
         parsed = JSON.parse(source.trim().replace(/,$/, ''));
       } else {
-        const structural = raw.replace(
-          /("(?:\\.|[^"\\])*")|\\r\\n|\\n/g,
-          (token, quoted: string | undefined) =>
-            quoted ?? (token === '\\n' ? '\n' : '\r\n')
-        );
+        // Only an escaped newline is rewritten, and a quoted string is handed
+        // back as it was, so text with no `\n` escape anywhere is its own
+        // answer -- which is almost every compact record, and the replace below
+        // was the largest single cost in this function.
+        const structural = !raw.includes('\\n')
+          ? raw
+          : raw.replace(
+              /("(?:\\.|[^"\\])*")|\\r\\n|\\n/g,
+              (token, quoted: string | undefined) =>
+                quoted ?? (token === '\\n' ? '\n' : '\r\n')
+            );
         parsed = JSON.parse(structural.trim().replace(/,$/, ''));
       }
     } catch {
@@ -873,20 +879,28 @@ function dictsOf(
 ): Map<number, string[]> {
   const dicts = new Map<number, string[]>();
   for (const { slot, cells } of cols) {
-    const distinct = [...new Set(cells)];
-    if (distinct.length === cells.length) continue;
-    const index = new Map(distinct.map((value, i) => [value, i]));
+    // Each distinct value is priced once and weighted by how often it occurs:
+    // the same integer sums as pricing every cell, without serialising and
+    // tokenising a repeated value once per repeat -- which, on a column worth a
+    // dictionary at all, is most of them. A Map keeps first-occurrence order,
+    // which is the order the dictionary is emitted in, so each value's index is
+    // the one it had.
+    const counts = new Map<string, number>();
+    for (const cell of cells) counts.set(cell, (counts.get(cell) ?? 0) + 1);
+    if (counts.size === cells.length) continue;
+    const distinct = [...counts.keys()];
     let before = 0,
       after = 0,
       beforeChars = 0,
-      afterChars = 0;
-    for (const cell of cells) {
+      afterChars = 0,
+      index = 0;
+    for (const [cell, occurrences] of counts) {
       const was = JSON.stringify(cell),
-        now = String(index.get(cell));
-      before += tokenCost(was);
-      after += tokenCost(now);
-      beforeChars += was.length;
-      afterChars += now.length;
+        now = String(index++);
+      before += occurrences * tokenCost(was);
+      after += occurrences * tokenCost(now);
+      beforeChars += occurrences * was.length;
+      afterChars += occurrences * now.length;
     }
     // `4=` and the leading space the clause pays for this slot, plus the list.
     const list = JSON.stringify(distinct),
