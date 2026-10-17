@@ -49,7 +49,9 @@ export const Source = Object.freeze({
  * that quotes the same rows. The rest of the file is not covered and this says
  * so rather than implying a sweep it does not do.
  */
-const SECTIONS = [{ from: '## Why it wins', to: '## The 30-second version' }];
+const SECTIONS = [
+  { from: '## How it compares to HeadRoom', to: '## The 30-second version' },
+];
 const SPAN = ['<!-- PROSE-CLAIMS:START', '<!-- PROSE-CLAIMS:END -->'];
 
 const GUARDS = [
@@ -66,34 +68,17 @@ const GUARDS = [
  */
 export const DECLARED = [
   {
-    figure: '71%',
-    anchor: 'Their number there is a',
-    kind: Source.OTHER_HARNESS,
-    from: 'bench/competitive -- their content-cache arm, not a row of either table',
-  },
-  {
-    figure: '6.0%',
-    anchor: 'used to be the one genuine engine loss',
-    kind: Source.RETRACTED,
-    from: 'the loss this row used to publish, before the repeat folding landed',
-  },
-  {
     figure: '44.3%',
     anchor: 'of the whole payload',
     kind: Source.DERIVED,
     from: 'the image share of one payload, which is not a reduction figure',
   },
+
   {
-    figure: '44%',
-    anchor: 'reduction, still ahead of their',
-    kind: Source.DERIVED,
-    from: 'the same row with the image excluded -- stated as ~44%, deliberately rounded',
-  },
-  {
-    figure: '90%',
-    anchor: 'On seven of the twelve rows it changes nothing at all',
-    kind: Source.DERIVED,
-    from: 'an upper bound being argued against, not a measurement',
+    figure: '53.7%',
+    anchor: 'under it the row reads',
+    kind: Source.RETRACTED,
+    from: 'what this row scored under the real currency, before the arm priced the spill path the proxy really writes',
   },
   {
     figure: '61.3%',
@@ -140,8 +125,13 @@ export const DECLARED = [
   {
     figure: '95.7%',
     anchor: 'and destroyed both the UUID record',
-    kind: Source.RETRACTED,
-    from: 'what the elide-after-N strategy scored while losing the needles',
+    // OTHER_HARNESS, not RETRACTED: this is what the elide-after-N strategy
+    // scored on proof.mjs's needle fixture, a different harness from either
+    // table. Filed as retracted, it read as "a figure the tree moved past", and
+    // the 18-row HeadRoom table now holds an unrelated 95.7% (log-entries,
+    // proxy tokens), which the resurrection rule then took for a contradiction.
+    kind: Source.OTHER_HARNESS,
+    from: 'what the elide-after-N strategy scored on the proof.mjs needle fixture while losing the needles',
   },
   {
     figure: '92.4%',

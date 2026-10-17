@@ -134,9 +134,14 @@ describe.each(['head-to-head.json', 'head-to-head.store-empty.json'])(
       // are still in the old currency. That is a real gap and it is pinned here
       // rather than hidden: when that sweep is re-run these numbers move, and a
       // reader can see which record is which.
+      // grep-output MOVED 85% -> 84% IN BOTH, and toward us, when the comparator
+      // began charging their marker for the retrieval tool their proxy injects to
+      // redeem it (headroom/ccr-tool.py): their cost at every fetch rate rose by
+      // the same amount, so the crossing came earlier. raw-build-log did not move
+      // a whole point.
       const expected = {
         'head-to-head.json': {
-          'grep-output': 'above 85%',
+          'grep-output': 'above 84%',
           'raw-build-log': 'above 95%',
         },
         // RE-RECORDED, SO THESE MOVED WITH THE WARM HALF. They were 81% and
@@ -146,7 +151,7 @@ describe.each(['head-to-head.json', 'head-to-head.store-empty.json'])(
         // which is what store-pair.check.mjs requires of a pair meant to be one
         // variable apart.
         'head-to-head.store-empty.json': {
-          'grep-output': 'above 85%',
+          'grep-output': 'above 84%',
           'raw-build-log': 'above 95%',
         },
       }[file];

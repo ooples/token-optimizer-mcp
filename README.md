@@ -55,7 +55,43 @@ leaves a marker naming the path -- the same kind of trade their content-cache
 reference makes. `ours, preset` is the block engine with that move switched on
 at `spillWholeBlockBelow: 0.9`.
 
-<!-- HEADROOM-TABLE:START -->
+<!-- HEADROOM-TABLE:START -- every figure below must appear in
+     `bench/compression/headroom/results/head-to-head.json`. Written by
+     `node bench/compression/readme-headroom.render.mjs` and guarded by
+     `node bench/compression/readme-headroom.check.mjs`; do not hand-edit.
+     Each figure cell is `characters / tokens` removed, tokens counted by
+     Anthropic's tokenizer over both arms' real output. `zero-turn ids` is
+     `ours / theirs / preset`: of the identifiers planted in that workload,
+     how many the agent can have without spending a turn -- in the text, or
+     rebuilt from the text alone.
+     -->
+
+| workload             | payload |        theirs |          ours |   ours, proxy |    ours, preset |    zero-turn ids |
+| -------------------- | ------: | ------------: | ------------: | ------------: | --------------: | ---------------: |
+| agentic-conversation | 244,908 | 37.3% / 33.4% | 42.9% / 30.8% | 52.4% / 49.0% | 100.0% / 100.0% |  2099 / 2099 / 0 |
+| agent-loop           | 170,938 | 42.2% / 54.3% | 69.3% / 59.1% | 92.0% / 94.1% |   93.6% / 94.3% |   185 / 185 / 52 |
+| agent-loop-logs      | 327,500 | 51.5% / 53.0% | 61.9% / 58.1% | 88.7% / 91.5% |   96.2% / 97.0% | 2034 / 2034 / 81 |
+| api-responses        |  49,127 | 88.2% / 89.3% | 66.6% / 59.1% | 96.4% / 96.8% |   96.6% / 96.8% |    699 / 98 / 23 |
+| browser-session      | 781,774 | 21.7% / 13.1% | 93.7% / 26.5% | 55.5% / 90.2% |  100.0% / 99.9% |    334 / 334 / 0 |
+| code-search          | 131,264 | 47.4% / 59.7% | 81.8% / 70.8% | 97.7% / 97.9% |   95.7% / 96.1% |   201 / 201 / 43 |
+| database-rows        |  45,929 | 88.6% / 89.2% | 65.6% / 56.5% | 92.4% / 93.1% |   92.6% / 93.4% |    590 / 78 / 49 |
+| codebase-exploration | 137,961 | 99.7% / 99.7% | 16.0% / 12.7% | 99.6% / 99.6% |  100.0% / 99.9% |      540 / 3 / 0 |
+| grep-output          |  75,219 | 99.6% / 99.6% | 56.1% / 51.9% | 99.5% / 99.6% |   99.9% / 99.9% |     1005 / 3 / 0 |
+| log-entries          |  91,385 | 80.8% / 83.2% | 63.5% / 52.0% | 95.4% / 95.7% |   95.5% / 96.0% |  1180 / 237 / 46 |
+| human-authored-json  |  37,425 | 30.6% / 30.0% | 66.6% / 66.0% | 81.6% / 83.7% |   96.7% / 96.9% |   154 / 154 / 11 |
+| issue-triage         | 109,354 | 53.1% / 55.2% | 88.1% / 85.7% | 97.2% / 97.6% |   95.1% / 95.7% |     59 / 59 / 21 |
+| rag-conversation     | 171,913 |   0.0% / 0.1% | 84.6% / 83.2% | 99.1% / 99.4% | 100.0% / 100.0% |      42 / 42 / 0 |
+| raw-build-log        | 158,057 | 99.8% / 99.8% | 70.6% / 48.2% | 99.7% / 99.8% | 100.0% / 100.0% |      430 / 3 / 0 |
+| relevance-probe      |  49,157 | 64.1% / 71.0% | 82.4% / 77.2% | 97.1% / 97.8% |   95.8% / 96.6% |   225 / 225 / 13 |
+| search-results       |  96,647 | 95.0% / 95.4% | 74.3% / 59.4% | 96.5% / 96.5% |   96.6% / 96.6% |    505 / 62 / 34 |
+| repeated-reads       | 158,285 | 37.4% / 30.4% | 71.7% / 68.5% | 99.5% / 99.6% | 100.0% / 100.0% |    394 / 388 / 0 |
+| sre-debugging        | 312,276 | 88.4% / 89.9% | 67.4% / 62.4% | 98.5% / 98.7% |   97.1% / 97.5% |  3116 / 506 / 82 |
+
+Recorded 2026-10-17 at `f6fe362a`, by the command in the
+record's `regenerate` field, over HeadRoom 0.37.0's own fixtures and harness. That arm runs
+HeadRoom itself, so CI does not re-derive it -- it checks these figures and
+this provenance against the record instead.
+
 <!-- HEADROOM-TABLE:END -->
 
 <!-- HEADROOM-CORPUS:START -- every figure between a CORPUS:START and its CORPUS:END
@@ -66,7 +102,8 @@ at `spillWholeBlockBelow: 0.9`.
 Over the corpus the proxy removes **82.5%** of the characters and **91.5%** of
 the tokens; their best configuration removes 51.5% and 61.4%. It is cheaper than
 their best arm on **18 of 18** rows when nothing is ever fetched back, which is
-the end of the range their markers are built for. The block engine alone removes
+the end of the range their markers are built for, and on 17 of 18 when every
+moved block is fetched back. The block engine alone removes
 72.0% and 55.9%: more of the characters than theirs, fewer of the tokens.
 
 <!-- HEADROOM-CORPUS:END -->
@@ -80,7 +117,11 @@ An engine with nowhere to put a block cannot match that, so on those rows the
 `ours` column loses on reduction, and on cost when nothing is fetched back. The
 proxy makes the same move: it is ahead of them on five of those eight rows, level
 on `grep-output` and `raw-build-log`, and a tenth of a point behind on
-`codebase-exploration`.
+`codebase-exploration`. The one row where the proxy costs more than they do is
+`agentic-conversation`, and only when every block it moved is fetched back:
+they move none of that conversation out, so they cost the same at either end,
+while the proxy moves part of it and pays a retrieval for each part it wants
+back.
 
 <!-- HEADROOM-CORPUS:START -->
 
@@ -143,7 +184,7 @@ comparator can be checked without their clone. `node bench/compression/proof.mjs
 | code-search          |   17765 |  92.1% | 97.8% | ours    |
 | sre-debugging        |   65694 |  92.2% | 98.6% | ours    |
 | issue-triage         |   54174 |  72.8% | 97.5% | ours    |
-| codebase-exploration |   78502 |  47.4% | 53.7% | ours    |
+| codebase-exploration |   78502 |  47.4% | 54.7% | ours    |
 
 <!-- PROOF-TABLE:END -->
 
@@ -151,7 +192,7 @@ Four workloads, because those are the four this arm has a published comparator
 for. The head-to-head harness scores eighteen; the other fourteen are not in
 this arm, and are scored against their real implementation in the table above.
 
-**`codebase-exploration` was theirs and is now ours, by 16.8 points.** An earlier
+**`codebase-exploration` was theirs and is now ours, by 7.3 points.** An earlier
 version of this table claimed 61.3% for us on that row, then parity, then a
 published loss at 46.0% against their 47.4%. The first two were figures from a
 branch rather than from here; the third was true on this tree when it was
@@ -163,7 +204,9 @@ sink really names it, instead of by its position in a counter, took another
 half point, to reach 64.2%. Then the currency stopped being an estimate: every
 figure in the table above is now the count Anthropic's own tokenizer returns
 for the text, recorded into a committed fixture so this stays offline, and
-under it the row reads **53.7%**. That is the largest move in this history and
+under it the row reads **53.7%**, and pricing the path the proxy's sink really
+writes -- content-addressed and decimal, where this arm had invented a 32-digit
+hex name -- moved it to **54.7%**. That is the largest move in this history and
 the only one that is not about the engine at all. Dividing characters by four
 had been charging the control's hex markers too much and our own stamp far too
 little -- the stamp was six characters of a vowelless base-31 alphabet then,
@@ -682,7 +725,7 @@ from truncation.
 
 Reduction over the content each strategy is permitted to rewrite, on fixtures
 matching the four workloads HeadRoom publishes, is the guarded table earlier in
-this section -- 97.5%, 97.8%, 98.6% and 53.7% against their 72.8%, 92.1%, 92.2%
+this section -- 97.5%, 97.8%, 98.6% and 54.7% against their 72.8%, 92.1%, 92.2%
 and 47.4%. It is stated once and checked there rather than restated here, which
 is how this copy came to claim 98.9%, 98.2%, 92.8% and 61.3% long after the
 tree had moved.
