@@ -357,8 +357,6 @@
     "codebase-exploration/speed",
     "raw-build-log/speed",
     "relevance-probe/cost-proxy",
-    "relevance-probe/latency",
-    "relevance-probe/speed",
     "sre-debugging/cost-proxy",
     "sre-debugging/speed"
   ]
