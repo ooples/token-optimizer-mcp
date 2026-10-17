@@ -1,0 +1,1 @@
+"""A fixed-window request limiter."""

@@ -1,0 +1,1 @@
+CREATE TABLE products (id INTEGER PRIMARY KEY, title TEXT NOT NULL);

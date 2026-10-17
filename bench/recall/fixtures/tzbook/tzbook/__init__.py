@@ -1,0 +1,1 @@
+"""Daily buckets for ledger entries."""

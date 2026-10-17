@@ -1,0 +1,1 @@
+{"id":"recall-tz-derive","title":"recall: timezone-dependent day buckets (derive)","kind":"code","workspace":{"fixture":"tzbook"},"max_turns":30,"timeout_s":900,"success_threshold":1.0}

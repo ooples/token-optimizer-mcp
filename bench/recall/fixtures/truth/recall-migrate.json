@@ -1,0 +1,63 @@
+{
+  "pair": "recall-migrate",
+  "fixture": "migrun",
+  "marker": "migrun/runner.py",
+  "derive": {
+    "groups": [
+      [
+        "lexicographic",
+        "alphabetical",
+        "as strings",
+        "as text",
+        "string order",
+        "string sort",
+        "lexical",
+        "not numerically"
+      ],
+      [
+        "10_"
+      ]
+    ]
+  },
+  "reuse": {
+    "accept": [
+      "\\b10_backfill_email(?:\\.sql)?\\b"
+    ],
+    "decoys": [
+      "\\b1_create_users(?:\\.sql)?\\b"
+    ]
+  },
+  "reference": {
+    "derive": "pending() sorts the file names as strings, so 10_backfill_email.sql sorts before 1_create_users.sql and runs first, before the users table exists.",
+    "reuse": "10_backfill_email.sql"
+  },
+  "decoyAnswers": [
+    "1_create_users.sql",
+    "2_add_email.sql",
+    "1_create_users.sql or 10_backfill_email.sql"
+  ],
+  "absent": [
+    "lexicographic",
+    "alphabetical",
+    "sorts before",
+    "as strings",
+    "10_backfill_email.sql is"
+  ],
+  "fixture_hashes": {
+    "migrations/10_backfill_email.sql": "067c4b59f8c0ac9cc0ff87912dd5957b477a72841b8851a628954a9329f05997",
+    "migrations/1_create_users.sql": "f202577af96fe5ff413f6456e176f80eb994ac7d349d89f8707fa32f79cef931",
+    "migrations/2_add_email.sql": "7a3a4c70d5af51f931ef9c9e1b12d7ae59d117a77416e39b47abf3041544bf39",
+    "migrations/3_create_orders.sql": "e39eca2d89e2212e9b6fca8d55344c2a3ed8394229c6763dc042f121b3acb927",
+    "migrations/4_index_orders_user.sql": "01b2714a415725a3e92af7cb65e0e79068ba1f6b9559854d53b8855043705ecc",
+    "migrations/5_create_products.sql": "762ecf5aff555e446eed504c7c3878f0e5f2084b79fa3cbacdf00932ba956c03",
+    "migrations/6_add_product_price.sql": "c5561bbeb757ed258a9c284ecf14a2085f9db2cf3a61232834fa993074bab1c9",
+    "migrations/7_create_order_lines.sql": "4703c49d3ccc9be96d01ca728491b106e3aacd1408c26e91dffe301590cb8f8c",
+    "migrations/8_seed_admin.sql": "06a434cdae0e1d462a2adec402c3ac4833608be8dc103df6f867d10115e721e5",
+    "migrations/9_index_lines_order.sql": "77f1869d9b43704092799765f8cc5ae08dbd1ca9ba27289dc78b901bf3fd51aa",
+    "migrun/__init__.py": "59560137168ce2e1b73443a6887a9383f0c55bf02b6159cf85323df44df8bf88",
+    "migrun/runner.py": "b10b746c5760acc3afe4ea0803785ea2868455b9cfc48af3f190358e5cf4c9c6",
+    "README.md": "31662aa5abf7529d393810a38366f542ff624b09c876003d89f40d1596914776",
+    "tests/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "tests/test_runner.py": "1dbc46f80a4bbb687c9ab6bfaea041d275cf29bb5aca5fe9d010e8d1c82589fd"
+  }
+}
