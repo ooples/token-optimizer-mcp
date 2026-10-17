@@ -3158,13 +3158,14 @@ if (process.argv[3] === '--record') {
               // ON HOW MANY ROWS THE PROXY ARM COSTS LESS THAN THEIR BEST ARM, at
               // each end, so a sentence that counts them quotes this rather than
               // a tally taken by hand.
-              proxyCheaper: !proxyEverywhere
-                ? null
-                : {
-                    p0: String(proxyCheaperAt(0)),
-                    p1: String(proxyCheaperAt(1)),
-                    of: String(rows.length),
-                  },
+              proxyCheaper:
+                !COST_PRICED || !proxyEverywhere
+                  ? null
+                  : {
+                      p0: String(proxyCheaperAt(0)),
+                      p1: String(proxyCheaperAt(1)),
+                      of: String(rows.length),
+                    },
               breakEven: breakEvenLabel(corpus.cross),
               // The `ours` arm above compresses in place and spills nothing, so
               // against a cache-read bill it is the wrong arm to quote alone.

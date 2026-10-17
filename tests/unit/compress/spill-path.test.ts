@@ -8,7 +8,7 @@
  */
 import { describe, it, expect } from '@jest/globals';
 import { createHash } from 'node:crypto';
-import { join } from 'node:path';
+import { isAbsolute, join, resolve } from 'node:path';
 import {
   canonicalSpillPath,
   deadSpillRoots,
@@ -58,25 +58,43 @@ describe('spillBase', () => {
 
   it('honours TOKEN_OPTIMIZER_SPILL_ROOT, and ignores a blank one', () => {
     expect(spillBase('/home/u', { TOKEN_OPTIMIZER_SPILL_ROOT: '/x/y' })).toBe(
-      '/x/y'
+      resolve('/x/y')
     );
     expect(spillBase('/home/u', { TOKEN_OPTIMIZER_SPILL_ROOT: '  ' })).toBe(
       join('/home/u', '.tok')
     );
   });
+
+  it('makes a relative override absolute, because Read needs an absolute path', () => {
+    const base = spillBase('/home/u', {
+      TOKEN_OPTIMIZER_SPILL_ROOT: 'rel/dir',
+    });
+    expect(isAbsolute(base)).toBe(true);
+    expect(base).toBe(resolve('rel/dir'));
+  });
 });
 
 describe('deadSpillRoots', () => {
   const alive = (pids: number[]) => (pid: number) => pids.includes(pid);
+  const ours = (): boolean => true;
 
   it('returns the directories of proxies the OS says are gone', () => {
     expect(
-      deadSpillRoots(['100', '200', '200-3', '300'], 1, alive([200]))
+      deadSpillRoots(['100', '200', '200-3', '300'], 1, alive([200]), ours)
     ).toEqual(['100', '300']);
   });
 
   it('never returns its own directories, even if asked about a dead self', () => {
-    expect(deadSpillRoots(['7', '7-1'], 7, alive([]))).toEqual([]);
+    expect(deadSpillRoots(['7', '7-1'], 7, alive([]), ours)).toEqual([]);
+  });
+
+  it('never returns a dead-looking directory a proxy did not mark as its own', () => {
+    // An override can point at a shared directory with numbered entries that
+    // are not ours; a PID-shaped name alone must not get one deleted.
+    const marked = new Set(['100']);
+    expect(
+      deadSpillRoots(['100', '300'], 1, alive([]), (name) => marked.has(name))
+    ).toEqual(['100']);
   });
 
   it('leaves alone anything that is not a proxy directory', () => {
@@ -84,7 +102,8 @@ describe('deadSpillRoots', () => {
       deadSpillRoots(
         ['notes', '0', '012', '12-', '12-0', '12-a', '1.5', ''],
         1,
-        alive([])
+        alive([]),
+        ours
       )
     ).toEqual([]);
   });

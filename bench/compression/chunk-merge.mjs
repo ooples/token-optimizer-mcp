@@ -35,7 +35,8 @@
  */
 
 const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
-const median = (xs) => (xs.length === 0 ? null : xs.slice().sort((a, b) => a - b)[xs.length >> 1]);
+const median = (xs) =>
+  xs.length === 0 ? null : xs.slice().sort((a, b) => a - b)[xs.length >> 1];
 /**
  * How many redeemable entries their store held at a stamp, or null if not counted.
  *
@@ -90,13 +91,28 @@ const MUST_AGREE = [
  * chunk timed anything the merge says so rather than inventing a figure.
  */
 export function mergePerFetch(perChunk) {
+  // A CHUNK THAT HAD MARKERS AND TIMED NONE MAKES THE MERGE UNMEASURED. Its
+  // workloads force fetches too, and skipping it would hand them the other
+  // chunks' timings -- a latency verdict from a store that is not theirs. Only a
+  // chunk with nothing to probe is skippable.
+  const failed = perChunk.filter(
+    (p) => p?.unmeasured && (p.markersProbed ?? 0) > 0
+  );
+  if (failed.length > 0)
+    return {
+      unmeasured: true,
+      detail: failed
+        .map((p) => p.detail ?? 'a marker probe timed no retrieval')
+        .join('; '),
+    };
   const timed = perChunk.filter(
     (p) => p && !p.unmeasured && Array.isArray(p.passes) && p.passes.length > 0
   );
   if (timed.length === 0)
     return {
       unmeasured: true,
-      detail: 'no chunk timed a retrieval: ' +
+      detail:
+        'no chunk timed a retrieval: ' +
         perChunk.map((p) => p?.detail ?? 'no probe recorded').join('; '),
     };
   const passes = Math.min(...timed.map((p) => p.passes.length));
@@ -117,7 +133,13 @@ export function mergePerFetch(perChunk) {
 
 export function mergeChunks(chunks) {
   const errors = [];
-  const refuse = () => ({ ok: false, errors, seam: null, theirs: null, resolved: null });
+  const refuse = () => ({
+    ok: false,
+    errors,
+    seam: null,
+    theirs: null,
+    resolved: null,
+  });
   if (!Array.isArray(chunks) || chunks.length === 0) {
     errors.push('no chunks to merge');
     return refuse();
@@ -128,22 +150,30 @@ export function mergeChunks(chunks) {
     const label = c?.dir ?? '(unnamed)';
     const p = c?.theirs?.__provenance__;
     if (p === undefined || p === null) {
-      errors.push(`${label}: no __provenance__, so nothing about how it was taken is known`);
+      errors.push(
+        `${label}: no __provenance__, so nothing about how it was taken is known`
+      );
       continue;
     }
     if (!('chunk' in p)) {
-      errors.push(`${label}: predates chunking -- it cannot say which slice of the roster it holds`);
+      errors.push(
+        `${label}: predates chunking -- it cannot say which slice of the roster it holds`
+      );
       continue;
     }
     // A WHOLE-SWEEP CAPTURE IS NOT A CHUNK. It holds every row, so merging it
     // beside real chunks double-counts the overlap instead of failing, and the
     // duplicate rows silently take whichever value came last.
     if (p.chunk === null) {
-      errors.push(`${label}: is a WHOLE-sweep capture, not a chunk -- merging it would double-count`);
+      errors.push(
+        `${label}: is a WHOLE-sweep capture, not a chunk -- merging it would double-count`
+      );
       continue;
     }
     if (!Array.isArray(p.roster) || p.roster.length === 0) {
-      errors.push(`${label}: records no roster, so completeness cannot be checked at all`);
+      errors.push(
+        `${label}: records no roster, so completeness cannot be checked at all`
+      );
       continue;
     }
     if (p.stubArms !== null && p.stubArms !== undefined) {
@@ -164,9 +194,18 @@ export function mergeChunks(chunks) {
       errors.push(
         `${label}: claims ${claimed.length} workload(s) and carries ${rows.length}` +
           (short.length > 0 ? ` -- missing ${short.join(', ')}` : '') +
-          (unclaimed.length > 0 ? ` -- carries unclaimed ${unclaimed.join(', ')}` : '')
+          (unclaimed.length > 0
+            ? ` -- carries unclaimed ${unclaimed.join(', ')}`
+            : '')
       );
-    parts.push({ label, prov: p, chunk: p.chunk, rows, theirs: c.theirs, resolved: c.resolved ?? null });
+    parts.push({
+      label,
+      prov: p,
+      chunk: p.chunk,
+      rows,
+      theirs: c.theirs,
+      resolved: c.resolved ?? null,
+    });
   }
   if (parts.length === 0) return refuse();
 
@@ -185,7 +224,8 @@ export function mergeChunks(chunks) {
 
   for (const field of MUST_AGREE) {
     const seen = new Map();
-    for (const p of parts) seen.set(JSON.stringify(p.prov[field] ?? null), p.label);
+    for (const p of parts)
+      seen.set(JSON.stringify(p.prov[field] ?? null), p.label);
     if (seen.size > 1)
       errors.push(
         `${field} differs across chunks, so these are not one engine: ` +
@@ -198,37 +238,52 @@ export function mergeChunks(chunks) {
   const owner = new Map();
   for (const p of parts)
     for (const name of p.chunk.names ?? []) {
-      if (owner.has(name)) errors.push(`${name} is claimed by both ${owner.get(name)} and ${p.label}`);
+      if (owner.has(name))
+        errors.push(
+          `${name} is claimed by both ${owner.get(name)} and ${p.label}`
+        );
       else owner.set(name, p.label);
     }
   const gaps = roster.filter((n) => !owner.has(n));
   if (gaps.length > 0)
-    errors.push(`${gaps.length} of ${roster.length} workload(s) are in no chunk: ${gaps.join(', ')}`);
+    errors.push(
+      `${gaps.length} of ${roster.length} workload(s) are in no chunk: ${gaps.join(', ')}`
+    );
   const strays = [...owner.keys()].filter((n) => !roster.includes(n));
-  if (strays.length > 0) errors.push(`claimed but not on the roster: ${strays.join(', ')}`);
+  if (strays.length > 0)
+    errors.push(`claimed but not on the roster: ${strays.join(', ')}`);
 
   // THE DECLARED COUNT IS ITS OWN CHECK. Coverage above is satisfied by any set of
   // chunks that tiles the roster, including three chunks of a four-way split whose
   // fourth was folded into another dir by hand -- which is no longer the split the
   // provenance describes.
-  const ofs = new Set(parts.map((p) => num(p.chunk.of)).filter((v) => v !== null));
-  if (ofs.size > 1) errors.push(`the chunks disagree on how many there are: ${[...ofs].join(', ')}`);
+  const ofs = new Set(
+    parts.map((p) => num(p.chunk.of)).filter((v) => v !== null)
+  );
+  if (ofs.size > 1)
+    errors.push(
+      `the chunks disagree on how many there are: ${[...ofs].join(', ')}`
+    );
   else if (ofs.size === 1) {
     const of = [...ofs][0];
     const idx = parts.map((p) => num(p.chunk.index)).filter((v) => v !== null);
     if (parts.length !== of)
       errors.push(`${parts.length} chunk(s) given for a ${of}-way split`);
     const dupes = idx.filter((v, i) => idx.indexOf(v) !== i);
-    if (dupes.length > 0) errors.push(`chunk index ${dupes.join(', ')} given more than once`);
+    if (dupes.length > 0)
+      errors.push(`chunk index ${dupes.join(', ')} given more than once`);
   }
 
   if (errors.length > 0) return refuse();
 
   // ---- the merge itself, once the chunks are known to describe one run ----
 
-  const ordered = parts.slice().sort((a, b) => (num(a.prov.sweptAt) ?? 0) - (num(b.prov.sweptAt) ?? 0));
+  const ordered = parts
+    .slice()
+    .sort((a, b) => (num(a.prov.sweptAt) ?? 0) - (num(b.prov.sweptAt) ?? 0));
   const rows = {};
-  for (const p of ordered) for (const name of p.rows) rows[name] = p.theirs[name];
+  for (const p of ordered)
+    for (const name of p.rows) rows[name] = p.theirs[name];
 
   // POOLED ACROSS CHUNKS, WITH THE CHUNK NAMED ON EVERY READING. `before-pass-0`
   // occurs once per chunk, so without the prefix the merged pool reads as one
@@ -239,8 +294,10 @@ export function mergeChunks(chunks) {
   for (const p of ordered) {
     const w = p.prov.loadWitness ?? {};
     const tag = p.chunk.selector ?? p.label;
-    for (const r of w.readings ?? []) witnessReadings.push({ ...r, at: `${tag} ${r.at}` });
-    for (const e of w.errors ?? []) witnessErrors.push({ ...e, at: `${tag} ${e.at}` });
+    for (const r of w.readings ?? [])
+      witnessReadings.push({ ...r, at: `${tag} ${r.at}` });
+    for (const e of w.errors ?? [])
+      witnessErrors.push({ ...e, at: `${tag} ${e.at}` });
   }
 
   // ADDITIVE, BECAUSE THE CHUNKS ARE DISJOINT. Both counts are per workload, and
@@ -263,24 +320,38 @@ export function mergeChunks(chunks) {
         if (had === undefined) byMessage.set(w.message, { ...w });
         else had.count = (num(had.count) ?? 0) + (num(w.count) ?? 0);
       }
-    warnings[bucket] = [...byMessage.values()].sort((a, b) => String(a.message).localeCompare(String(b.message)));
+    warnings[bucket] = [...byMessage.values()].sort((a, b) =>
+      String(a.message).localeCompare(String(b.message))
+    );
   }
 
   // N WARM-UPS HAPPENED, AND THE MERGED FILE SAYS N. `ready` stays a single
   // boolean because instrumentFingerprint reads it, and it is true only when EVERY
   // chunk was warm -- one cold chunk degrades the capture it is part of.
-  const warmups = ordered.map((p) => ({ chunk: p.chunk.selector, ...(p.prov.kompressWarmup ?? {}) }));
+  const warmups = ordered.map((p) => ({
+    chunk: p.chunk.selector,
+    ...(p.prov.kompressWarmup ?? {}),
+  }));
   const kompressWarmup = {
     ready: warmups.every((w) => w.ready === true),
     waitedSeconds: warmups.reduce((a, w) => a + (num(w.waitedSeconds) ?? 0), 0),
-    why: warmups.filter((w) => w.why).map((w) => `${w.chunk}: ${w.why}`).join('; ') || null,
+    why:
+      warmups
+        .filter((w) => w.why)
+        .map((w) => `${w.chunk}: ${w.why}`)
+        .join('; ') || null,
     perChunk: warmups,
   };
 
   const sweptPerWorkload = {};
-  for (const p of ordered) Object.assign(sweptPerWorkload, p.prov.sweptPerWorkload ?? {});
-  const starts = ordered.map((p) => num(p.prov.sweepStartedAt)).filter((v) => v !== null);
-  const ends = ordered.map((p) => num(p.prov.sweptAt)).filter((v) => v !== null);
+  for (const p of ordered)
+    Object.assign(sweptPerWorkload, p.prov.sweptPerWorkload ?? {});
+  const starts = ordered
+    .map((p) => num(p.prov.sweepStartedAt))
+    .filter((v) => v !== null);
+  const ends = ordered
+    .map((p) => num(p.prov.sweptAt))
+    .filter((v) => v !== null);
 
   const seam = {
     // WHAT A READER HAS TO KNOW BEFORE TRUSTING A ROW OF THIS FILE.
@@ -305,7 +376,12 @@ export function mergeChunks(chunks) {
       resolved: p.resolved !== null,
       resolvedAt: num(p.resolved?.__provenance__?.resolvedAt),
       entryAgeSecondsWorst: Math.max(
-        ...[0, ...Object.values(p.resolved?.__provenance__?.entryAgeSeconds ?? {}).map((v) => num(v) ?? 0)]
+        ...[
+          0,
+          ...Object.values(
+            p.resolved?.__provenance__?.entryAgeSeconds ?? {}
+          ).map((v) => num(v) ?? 0),
+        ]
       ),
     })),
     // Named, not inferred: a reader should not have to work these out from the
@@ -356,7 +432,9 @@ export function mergeChunks(chunks) {
     witnessSessionsPooled: ordered.length,
     speedPassSeparation:
       'passes within a chunk are separated by a chunk-sized sweep, not a roster-sized one',
-    chunksWithoutResolution: ordered.filter((p) => p.resolved === null).map((p) => p.label),
+    chunksWithoutResolution: ordered
+      .filter((p) => p.resolved === null)
+      .map((p) => p.label),
   };
 
   const provenance = {
@@ -377,7 +455,9 @@ export function mergeChunks(chunks) {
     sweptAtIso: ordered[ordered.length - 1].prov.sweptAtIso ?? null,
     sweptPerWorkload,
     loadWitness: {
-      ms: median(witnessReadings.map((r) => num(r.ms)).filter((v) => v !== null)),
+      ms: median(
+        witnessReadings.map((r) => num(r.ms)).filter((v) => v !== null)
+      ),
       readings: witnessReadings,
       errors: witnessErrors,
       script: parts[0].prov.loadWitness?.script ?? null,
@@ -414,7 +494,8 @@ export function mergeChunks(chunks) {
       // as having swept an empty store, which is the claim it cannot support.
       const states = ordered.map((p) => {
         const s = p.prov.ccrStoreBeforeRun;
-        if (s === null || s === undefined || typeof s !== 'object') return 'absent';
+        if (s === null || s === undefined || typeof s !== 'object')
+          return 'absent';
         const live = liveEntries(s);
         if (live === null) return 'unknown';
         return live === 0 ? 'empty' : 'warm';
@@ -422,7 +503,8 @@ export function mergeChunks(chunks) {
       // NO STAMP ANYWHERE IS NOT A MIX. A capture from before the stamp existed has
       // nothing to disagree about, and the fingerprint gives it no store term at all,
       // so its recorded passes still inherit. That promise is kept here.
-      if (states.every((s) => s === 'absent')) return ordered[0].prov.ccrStoreBeforeRun ?? null;
+      if (states.every((s) => s === 'absent'))
+        return ordered[0].prov.ccrStoreBeforeRun ?? null;
       if (new Set(states).size === 1 && states[0] !== 'unknown')
         return ordered[0].prov.ccrStoreBeforeRun ?? null;
       // `present` IS OVERWRITTEN ON PURPOSE. The fingerprint reads `present: false`
@@ -434,11 +516,16 @@ export function mergeChunks(chunks) {
         ...(ordered[0].prov.ccrStoreBeforeRun ?? {}),
         present: true,
         liveEntries: null,
-        mixedAcrossChunks: ordered.map((p, i) => ({ chunk: p.label, state: states[i] })),
+        mixedAcrossChunks: ordered.map((p, i) => ({
+          chunk: p.label,
+          state: states[i],
+        })),
       };
     })(),
     ccrStoreAfterRun: ordered[ordered.length - 1].prov.ccrStoreAfterRun ?? null,
-    carriedPayloads: [...new Set(ordered.flatMap((p) => p.prov.carriedPayloads ?? []))].sort(),
+    carriedPayloads: [
+      ...new Set(ordered.flatMap((p) => p.prov.carriedPayloads ?? [])),
+    ].sort(),
     inertArms,
     competitorWarnings: warnings,
     kompressWarmup,
@@ -455,7 +542,10 @@ export function mergeChunks(chunks) {
   if (withRes.length > 0) {
     const entryAgeSeconds = {};
     for (const p of withRes)
-      Object.assign(entryAgeSeconds, p.resolved.__provenance__?.entryAgeSeconds ?? {});
+      Object.assign(
+        entryAgeSeconds,
+        p.resolved.__provenance__?.entryAgeSeconds ?? {}
+      );
     const ttls = withRes
       .map((p) => num(p.resolved.__provenance__?.theirStatedTtlSeconds))
       .filter((v) => v !== null);
@@ -467,10 +557,15 @@ export function mergeChunks(chunks) {
       .filter((v) => v !== null);
     resolved = { __provenance__: {} };
     for (const p of withRes)
-      for (const [k, v] of Object.entries(p.resolved)) if (!k.startsWith('__')) resolved[k] = v;
+      for (const [k, v] of Object.entries(p.resolved))
+        if (!k.startsWith('__')) resolved[k] = v;
     resolved.__provenance__ = {
-      resolvedAt: Math.max(...withRes.map((p) => num(p.resolved.__provenance__?.resolvedAt) ?? 0)),
-      resolvedAtIso: withRes[withRes.length - 1].resolved.__provenance__?.resolvedAtIso ?? null,
+      resolvedAt: Math.max(
+        ...withRes.map((p) => num(p.resolved.__provenance__?.resolvedAt) ?? 0)
+      ),
+      resolvedAtIso:
+        withRes[withRes.length - 1].resolved.__provenance__?.resolvedAtIso ??
+        null,
       resolvedPerChunk: withRes.map((p) => ({
         chunk: p.chunk.selector,
         resolvedAt: num(p.resolved.__provenance__?.resolvedAt),
@@ -485,18 +580,30 @@ export function mergeChunks(chunks) {
       theirStatedTtlSeconds: ttls.length > 0 ? Math.max(...ttls) : null,
       elapsedSecondsOldestEntry: olds.length > 0 ? Math.max(...olds) : null,
       elapsedSeconds: elapsed.length > 0 ? Math.max(...elapsed) : null,
-      ageBasis: withRes.every((p) => p.resolved.__provenance__?.ageBasis === 'oldest-entry')
+      ageBasis: withRes.every(
+        (p) => p.resolved.__provenance__?.ageBasis === 'oldest-entry'
+      )
         ? 'oldest-entry'
         : 'mixed',
       // TRUE IF ANY CHUNK WAS LATE, because the merged file then contains rows that
       // cannot be read as their loss, and `resolutionUsable` needs the bound above
       // to be present in order to refuse them one by one.
-      pastTheirTtl: withRes.some((p) => p.resolved.__provenance__?.pastTheirTtl === true),
-      perFetch: mergePerFetch(withRes.map((p) => p.resolved.__provenance__?.perFetch)),
+      pastTheirTtl: withRes.some(
+        (p) => p.resolved.__provenance__?.pastTheirTtl === true
+      ),
+      perFetch: mergePerFetch(
+        withRes.map((p) => p.resolved.__provenance__?.perFetch)
+      ),
     };
   }
 
-  return { ok: true, errors, seam, theirs: { __provenance__: provenance, ...rows }, resolved };
+  return {
+    ok: true,
+    errors,
+    seam,
+    theirs: { __provenance__: provenance, ...rows },
+    resolved,
+  };
 }
 
 /**
@@ -512,7 +619,9 @@ export function mergePayloads(sets) {
     for (const [name, value] of Object.entries(data ?? {})) {
       const had = out[name];
       if (had !== undefined && JSON.stringify(had) !== JSON.stringify(value))
-        errors.push(`${name}: two chunks carry different bytes for it (${dir} disagrees)`);
+        errors.push(
+          `${name}: two chunks carry different bytes for it (${dir} disagrees)`
+        );
       out[name] = value;
     }
   return { out, errors };
@@ -536,7 +645,9 @@ if (invokedDirectly) {
   const out = args.find((a) => a.startsWith('--out='))?.slice(6);
   const dirs = args.filter((a) => !a.startsWith('--'));
   if (out === undefined || dirs.length === 0) {
-    console.error('usage: node bench/compression/chunk-merge.mjs --out=<dir> <chunk-dir> ...');
+    console.error(
+      'usage: node bench/compression/chunk-merge.mjs --out=<dir> <chunk-dir> ...'
+    );
     process.exit(2);
   }
   const read = (dir, file) => {
@@ -559,8 +670,12 @@ if (invokedDirectly) {
     for (const e of merged.errors) console.error(`  ${e}`);
     process.exit(2);
   }
-  const payloads = mergePayloads(dirs.map((dir) => ({ dir, data: read(dir, 'payloads.json') })));
-  const natives = mergePayloads(dirs.map((dir) => ({ dir, data: read(dir, 'natives.json') })));
+  const payloads = mergePayloads(
+    dirs.map((dir) => ({ dir, data: read(dir, 'payloads.json') }))
+  );
+  const natives = mergePayloads(
+    dirs.map((dir) => ({ dir, data: read(dir, 'natives.json') }))
+  );
   const payloadErrors = [...payloads.errors, ...natives.errors];
   if (payloadErrors.length > 0) {
     console.error('REFUSING TO MERGE:');
@@ -568,11 +683,20 @@ if (invokedDirectly) {
     process.exit(2);
   }
   fs.mkdirSync(out, { recursive: true });
-  fs.writeFileSync(path.join(out, 'payloads.json'), JSON.stringify(payloads.out));
+  fs.writeFileSync(
+    path.join(out, 'payloads.json'),
+    JSON.stringify(payloads.out)
+  );
   fs.writeFileSync(path.join(out, 'natives.json'), JSON.stringify(natives.out));
-  fs.writeFileSync(path.join(out, 'theirs.json'), JSON.stringify(merged.theirs, null, 2));
+  fs.writeFileSync(
+    path.join(out, 'theirs.json'),
+    JSON.stringify(merged.theirs, null, 2)
+  );
   if (merged.resolved !== null)
-    fs.writeFileSync(path.join(out, 'theirs-resolved.json'), JSON.stringify(merged.resolved));
+    fs.writeFileSync(
+      path.join(out, 'theirs-resolved.json'),
+      JSON.stringify(merged.resolved)
+    );
   const seam = merged.seam;
   console.log(
     `merged ${seam.chunks.length} chunk(s) into ${out}: ` +
@@ -585,5 +709,7 @@ if (invokedDirectly) {
         `${c.resolved ? `resolved, worst entry age ${c.entryAgeSecondsWorst}s` : 'NOT RESOLVED'}`
     );
   if (seam.chunksWithoutResolution.length > 0)
-    console.log(`  unresolved chunk(s): ${seam.chunksWithoutResolution.join(', ')}`);
+    console.log(
+      `  unresolved chunk(s): ${seam.chunksWithoutResolution.join(', ')}`
+    );
 }

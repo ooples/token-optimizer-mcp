@@ -24,7 +24,8 @@ import { mergeChunks, mergePayloads, mergePerFetch } from './chunk-merge.mjs';
 
 let failures = 0;
 const check = (cond, what, detail) => {
-  if (cond) console.log(`ok   ${what}${detail === undefined ? '' : ` -- ${detail}`}`);
+  if (cond)
+    console.log(`ok   ${what}${detail === undefined ? '' : ` -- ${detail}`}`);
   else {
     failures += 1;
     console.log(`FAIL ${what}${detail === undefined ? '' : ` -- ${detail}`}`);
@@ -49,8 +50,15 @@ const chunk = (index, names, over = {}) => ({
       sweepStartedAt: 1000 + index * 100,
       sweptAt: 1050 + index * 100,
       sweptAtIso: `2026-09-27T0${index}:00:00`,
-      sweptPerWorkload: Object.fromEntries(names.map((n, i) => [n, 1000 + index * 100 + i])),
-      loadWitness: { ms: 40 + index, readings: names.map(() => ({ at: 'before-pass-0', ms: 40 + index })), errors: [], script: 'compression/load-witness.mjs' },
+      sweptPerWorkload: Object.fromEntries(
+        names.map((n, i) => [n, 1000 + index * 100 + i])
+      ),
+      loadWitness: {
+        ms: 40 + index,
+        readings: names.map(() => ({ at: 'before-pass-0', ms: 40 + index })),
+        errors: [],
+        script: 'compression/load-witness.mjs',
+      },
       // CONTINUOUS BY CONSTRUCTION: chunk N starts from what chunk N-1 left, which is
       // what the merge expects and what the break case below deliberately violates.
       ccrStoreBeforeRun: {
@@ -59,14 +67,24 @@ const chunk = (index, names, over = {}) => ({
         liveEntries: 10 * (index - 1),
         sha256: `sha${index - 1}`,
       },
-      ccrStoreAfterRun: { bytes: 100 * index, entries: 10 * index, liveEntries: 10 * index, sha256: `sha${index}` },
+      ccrStoreAfterRun: {
+        bytes: 100 * index,
+        entries: 10 * index,
+        liveEntries: 10 * index,
+        sha256: `sha${index}`,
+      },
       carriedPayloads: names.slice(0, 1),
       inertArms: { router: { ranOn: names.length, returnedInputUnchanged: 1 } },
-      competitorWarnings: { degraded: [], advisory: [{ message: 'advice', count: index }] },
+      competitorWarnings: {
+        degraded: [],
+        advisory: [{ message: 'advice', count: index }],
+      },
       kompressWarmup: { ready: true, waitedSeconds: 10 * index, why: null },
       ...over,
     },
-    ...Object.fromEntries(names.map((n) => [n, { before: 100, after: 50, arm: 'router' }])),
+    ...Object.fromEntries(
+      names.map((n) => [n, { before: 100, after: 50, arm: 'router' }])
+    ),
   },
   resolved: {
     __provenance__: {
@@ -79,11 +97,16 @@ const chunk = (index, names, over = {}) => ({
       ageBasis: 'oldest-entry',
       pastTheirTtl: false,
     },
-    ...Object.fromEntries(names.map((n) => [n, { text: n, markers: 2, unresolved: 0 }])),
+    ...Object.fromEntries(
+      names.map((n) => [n, { text: n, markers: 2, unresolved: 0 }])
+    ),
   },
 });
 
-const two = () => [chunk(1, ['alpha', 'bravo']), chunk(2, ['charlie', 'delta'])];
+const two = () => [
+  chunk(1, ['alpha', 'bravo']),
+  chunk(2, ['charlie', 'delta']),
+];
 const why = (r) => r.errors.join(' | ');
 
 console.log('two disjoint chunks that tile the roster merge');
@@ -94,9 +117,18 @@ console.log('two disjoint chunks that tile the roster merge');
     Object.keys(r.theirs).filter((k) => !k.startsWith('__')).length === 4,
     'all four workloads are present'
   );
-  check(r.theirs.__provenance__.chunk === null, 'the merged file is not itself a chunk');
-  check(r.theirs.__provenance__.mergedFromChunks === 2, 'and says how many it came from');
-  check(r.theirs.__provenance__.sweepStartedAt === 1100, 'the sweep starts at the earliest chunk');
+  check(
+    r.theirs.__provenance__.chunk === null,
+    'the merged file is not itself a chunk'
+  );
+  check(
+    r.theirs.__provenance__.mergedFromChunks === 2,
+    'and says how many it came from'
+  );
+  check(
+    r.theirs.__provenance__.sweepStartedAt === 1100,
+    'the sweep starts at the earliest chunk'
+  );
   check(r.theirs.__provenance__.sweptAt === 1250, 'and ends at the latest');
 }
 
@@ -109,9 +141,16 @@ console.log('\na gap is refused');
 
 console.log('\nan overlap is refused');
 {
-  const r = mergeChunks([chunk(1, ['alpha', 'bravo']), chunk(2, ['bravo', 'charlie', 'delta'])]);
+  const r = mergeChunks([
+    chunk(1, ['alpha', 'bravo']),
+    chunk(2, ['bravo', 'charlie', 'delta']),
+  ]);
   check(r.ok === false, 'a workload in two chunks is not merged', why(r));
-  check(why(r).includes('bravo is claimed by both'), 'and the duplicate is named', why(r));
+  check(
+    why(r).includes('bravo is claimed by both'),
+    'and the duplicate is named',
+    why(r)
+  );
 }
 
 console.log('\na different instrument is refused');
@@ -120,11 +159,19 @@ console.log('\na different instrument is refused');
   parts[1].theirs.__provenance__.detectBackend = 'python';
   const r = mergeChunks(parts);
   check(r.ok === false, 'two detector backends are two engines', why(r));
-  check(why(r).includes('detectBackend differs'), 'and the field is named', why(r));
+  check(
+    why(r).includes('detectBackend differs'),
+    'and the field is named',
+    why(r)
+  );
 
   const ver = two();
   ver[1].theirs.__provenance__.headroomVersion = '0.38.0';
-  check(mergeChunks(ver).ok === false, 'so are two engine versions', why(mergeChunks(ver)));
+  check(
+    mergeChunks(ver).ok === false,
+    'so are two engine versions',
+    why(mergeChunks(ver))
+  );
 
   // AND SO ARE TWO SERIALISATIONS. `--separators` changes the bytes handed to
   // both engines, not the engine, which is exactly why a merge across it would
@@ -134,7 +181,11 @@ console.log('\na different instrument is refused');
   sep[1].theirs.__provenance__.payloadSeparators = 'compact';
   const sr = mergeChunks(sep);
   check(sr.ok === false, 'so are two payload serialisations', why(sr));
-  check(why(sr).includes('payloadSeparators differs'), 'and that field is named too', why(sr));
+  check(
+    why(sr).includes('payloadSeparators differs'),
+    'and that field is named too',
+    why(sr)
+  );
 
   // THE CONTROL FOR THE CASE ABOVE. A pair that agrees on the new field must
   // still merge, or the check would pass for the wrong reason -- any refusal
@@ -142,7 +193,11 @@ console.log('\na different instrument is refused');
   const same = two();
   same[0].theirs.__provenance__.payloadSeparators = 'compact';
   same[1].theirs.__provenance__.payloadSeparators = 'compact';
-  check(mergeChunks(same).ok === true, 'two chunks that agree on it still merge', why(mergeChunks(same)));
+  check(
+    mergeChunks(same).ok === true,
+    'two chunks that agree on it still merge',
+    why(mergeChunks(same))
+  );
 }
 
 console.log('\na chunk that does not hold what it claims is refused');
@@ -151,7 +206,11 @@ console.log('\na chunk that does not hold what it claims is refused');
   delete parts[1].theirs.delta;
   const r = mergeChunks(parts);
   check(r.ok === false, 'a declared workload with no row refuses', why(r));
-  check(why(r).includes('missing delta'), 'and says which row is absent', why(r));
+  check(
+    why(r).includes('missing delta'),
+    'and says which row is absent',
+    why(r)
+  );
 }
 
 console.log('\na whole-sweep capture is not a chunk');
@@ -164,7 +223,10 @@ console.log('\na whole-sweep capture is not a chunk');
 
   const old = two();
   delete old[1].theirs.__provenance__.chunk;
-  check(mergeChunks(old).ok === false, 'a capture predating chunking is refused too');
+  check(
+    mergeChunks(old).ok === false,
+    'a capture predating chunking is refused too'
+  );
   const noRoster = two();
   delete noRoster[1].theirs.__provenance__.roster;
   check(mergeChunks(noRoster).ok === false, 'so is one that records no roster');
@@ -192,7 +254,10 @@ console.log('\nthe declared split size is its own check');
 
   const disagree = two();
   disagree[1].theirs.__provenance__.chunk.of = 3;
-  check(mergeChunks(disagree).ok === false, 'chunks disagreeing on the count refuse');
+  check(
+    mergeChunks(disagree).ok === false,
+    'chunks disagreeing on the count refuse'
+  );
 }
 
 console.log('\nthe entry ages survive the merge per workload');
@@ -202,8 +267,16 @@ console.log('\nthe entry ages survive the merge per workload');
   // every row back on the oldest entry -- the exact defect chunking exists to fix.
   const r = mergeChunks(two());
   const ages = r.resolved.__provenance__.entryAgeSeconds;
-  check(Object.keys(ages).length === 4, 'every workload keeps its own age', JSON.stringify(ages));
-  check(ages.alpha === 20 && ages.delta === 21, 'and the values are its own', JSON.stringify(ages));
+  check(
+    Object.keys(ages).length === 4,
+    'every workload keeps its own age',
+    JSON.stringify(ages)
+  );
+  check(
+    ages.alpha === 20 && ages.delta === 21,
+    'and the values are its own',
+    JSON.stringify(ages)
+  );
 }
 
 console.log('\na bound one chunk was told applies to all of them');
@@ -216,8 +289,14 @@ console.log('\na bound one chunk was told applies to all of them');
   parts[0].resolved.__provenance__.theirStatedTtlSeconds = 1800;
   parts[0].resolved.__provenance__.pastTheirTtl = true;
   const r = mergeChunks(parts);
-  check(r.resolved.__provenance__.theirStatedTtlSeconds === 1800, 'the quoted bound survives');
-  check(r.resolved.__provenance__.pastTheirTtl === true, 'and one late chunk makes the run late');
+  check(
+    r.resolved.__provenance__.theirStatedTtlSeconds === 1800,
+    'the quoted bound survives'
+  );
+  check(
+    r.resolved.__provenance__.pastTheirTtl === true,
+    'and one late chunk makes the run late'
+  );
   check(
     r.resolved.__provenance__.elapsedSecondsOldestEntry === 25,
     'the fallback age is the worst across chunks, not the newest'
@@ -228,19 +307,36 @@ console.log('\nthe seam is recorded, not smoothed over');
 {
   const r = mergeChunks(two());
   const seam = r.theirs.__provenance__.chunkSeam;
-  check(seam.warmupsPaid === 2, 'each chunk paid its own warm-up and the file says so');
-  check(seam.storeGrewBetweenChunks === true, 'their store grew between chunks', '10 -> 20 live entries');
-  check(seam.chunks.length === 2, 'and every chunk is listed with its own store state');
   check(
-    seam.chunks[0].ccrStoreAfterRun.sha256 === 'sha1' && seam.chunks[1].ccrStoreAfterRun.sha256 === 'sha2',
+    seam.warmupsPaid === 2,
+    'each chunk paid its own warm-up and the file says so'
+  );
+  check(
+    seam.storeGrewBetweenChunks === true,
+    'their store grew between chunks',
+    '10 -> 20 live entries'
+  );
+  check(
+    seam.chunks.length === 2,
+    'and every chunk is listed with its own store state'
+  );
+  check(
+    seam.chunks[0].ccrStoreAfterRun.sha256 === 'sha1' &&
+      seam.chunks[1].ccrStoreAfterRun.sha256 === 'sha2',
     'so a pipeline row can be told which store it ran against'
   );
   // A store that did NOT grow is the comparable case, and must not be reported as
   // if it had -- the flag is a fact about this capture, not a property of chunking.
   const same = two();
-  same[1].theirs.__provenance__.ccrStoreAfterRun = { bytes: 100, entries: 10, liveEntries: 10, sha256: 'sha1' };
+  same[1].theirs.__provenance__.ccrStoreAfterRun = {
+    bytes: 100,
+    entries: 10,
+    liveEntries: 10,
+    sha256: 'sha1',
+  };
   check(
-    mergeChunks(same).theirs.__provenance__.chunkSeam.storeGrewBetweenChunks === false,
+    mergeChunks(same).theirs.__provenance__.chunkSeam.storeGrewBetweenChunks ===
+      false,
     'an unchanged store is reported unchanged'
   );
   // THE WAL CASE, and the reason neither store field is keyed on the digest. SQLite
@@ -257,7 +353,8 @@ console.log('\nthe seam is recorded, not smoothed over');
     sha256: 'checkpointed-since',
   };
   check(
-    mergeChunks(checkpointed).theirs.__provenance__.chunkSeam.storeGrewBetweenChunks === false,
+    mergeChunks(checkpointed).theirs.__provenance__.chunkSeam
+      .storeGrewBetweenChunks === false,
     'a checkpoint is not growth',
     'same rows, different digest'
   );
@@ -267,13 +364,21 @@ console.log('\nthe pooled witness names which chunk each reading came from');
 {
   const r = mergeChunks(two());
   const w = r.theirs.__provenance__.loadWitness;
-  check(w.readings.length === 4, 'every reading is kept', String(w.readings.length));
+  check(
+    w.readings.length === 4,
+    'every reading is kept',
+    String(w.readings.length)
+  );
   check(
     w.readings.every((x) => x.at.startsWith('--chunk ')),
     'and carries its chunk, so the label still identifies a moment',
     w.readings[0].at
   );
-  check(w.ms === 42, 'the median is taken over the pooled readings', String(w.ms));
+  check(
+    w.ms === 42,
+    'the median is taken over the pooled readings',
+    String(w.ms)
+  );
 }
 
 console.log('\nthe additive provenance is added, not re-derived');
@@ -283,21 +388,51 @@ console.log('\nthe additive provenance is added, not re-derived');
   // Both counts are per workload and the chunks are disjoint, so the sum is what a
   // single sweep would have computed. Re-deriving the rule in a second language is
   // how the two would drift.
-  check(p.inertArms.router.ranOn === 4, 'inert-arm denominators sum', JSON.stringify(p.inertArms));
-  check(p.inertArms.router.returnedInputUnchanged === 2, 'and so do the numerators');
+  check(
+    p.inertArms.router.ranOn === 4,
+    'inert-arm denominators sum',
+    JSON.stringify(p.inertArms)
+  );
+  check(
+    p.inertArms.router.returnedInputUnchanged === 2,
+    'and so do the numerators'
+  );
   check(p.kompressWarmup.ready === true, 'two warm chunks are a warm capture');
-  check(p.kompressWarmup.waitedSeconds === 30, 'and the waits sum', String(p.kompressWarmup.waitedSeconds));
-  check(p.competitorWarnings.advisory[0].count === 3, 'warning counts sum per message');
-  check(p.carriedPayloads.join(',') === 'alpha,charlie', 'carried payloads union', p.carriedPayloads.join(','));
+  check(
+    p.kompressWarmup.waitedSeconds === 30,
+    'and the waits sum',
+    String(p.kompressWarmup.waitedSeconds)
+  );
+  check(
+    p.competitorWarnings.advisory[0].count === 3,
+    'warning counts sum per message'
+  );
+  check(
+    p.carriedPayloads.join(',') === 'alpha,charlie',
+    'carried payloads union',
+    p.carriedPayloads.join(',')
+  );
 
   // ONE COLD CHUNK DEGRADES THE CAPTURE IT IS PART OF. instrumentFingerprint reads
   // this single boolean, so a merged file that reported `ready` because most chunks
   // were warm would let a ratchet entry be inherited across a changed instrument.
   const cold = two();
-  cold[1].theirs.__provenance__.kompressWarmup = { ready: false, waitedSeconds: 240, why: 'download' };
+  cold[1].theirs.__provenance__.kompressWarmup = {
+    ready: false,
+    waitedSeconds: 240,
+    why: 'download',
+  };
   const c = mergeChunks(cold).theirs.__provenance__.kompressWarmup;
-  check(c.ready === false, 'one cold chunk makes the capture not-ready', JSON.stringify(c.why));
-  check(String(c.why).includes('download'), 'and the reason names its chunk', String(c.why));
+  check(
+    c.ready === false,
+    'one cold chunk makes the capture not-ready',
+    JSON.stringify(c.why)
+  );
+  check(
+    String(c.why).includes('download'),
+    'and the reason names its chunk',
+    String(c.why)
+  );
 }
 
 console.log('\na chunk with no resolution is named, not quietly dropped');
@@ -305,9 +440,13 @@ console.log('\na chunk with no resolution is named, not quietly dropped');
   const parts = two();
   parts[1].resolved = null;
   const r = mergeChunks(parts);
-  check(r.ok === true, 'the merge still succeeds -- an unresolved chunk is a known state');
   check(
-    r.theirs.__provenance__.chunkSeam.chunksWithoutResolution.join(',') === 'hrc2',
+    r.ok === true,
+    'the merge still succeeds -- an unresolved chunk is a known state'
+  );
+  check(
+    r.theirs.__provenance__.chunkSeam.chunksWithoutResolution.join(',') ===
+      'hrc2',
     'and the chunk is listed'
   );
   check(
@@ -322,28 +461,53 @@ console.log('\npayload sets union, and a collision refuses');
     { dir: 'a', data: { alpha: 'x' } },
     { dir: 'b', data: { bravo: 'y' } },
   ]);
-  check(ok.errors.length === 0 && Object.keys(ok.out).length === 2, 'disjoint sets union');
+  check(
+    ok.errors.length === 0 && Object.keys(ok.out).length === 2,
+    'disjoint sets union'
+  );
   const clash = mergePayloads([
     { dir: 'a', data: { alpha: 'x' } },
     { dir: 'b', data: { alpha: 'DIFFERENT' } },
   ]);
-  check(clash.errors.length === 1, 'two different bytes for one name refuse', clash.errors[0]);
+  check(
+    clash.errors.length === 1,
+    'two different bytes for one name refuse',
+    clash.errors[0]
+  );
 }
 
-
-console.log('\ntheir store is stamped at both ends of the capture, and between chunks');
+console.log(
+  '\ntheir store is stamped at both ends of the capture, and between chunks'
+);
 {
   // THE INPUT THIS CAPTURE DELIBERATELY VARIES. Their `pipeline@*` arms read a
   // durable store, so which state a row was measured against is part of the
   // measurement -- and an after-stamp alone cannot say it, because every sweep
   // ends with its own entries in there.
   const p = mergeChunks(two()).theirs.__provenance__;
-  check(p.ccrStoreBeforeRun?.sha256 === 'sha0', 'the whole run begins where its first chunk began', p.ccrStoreBeforeRun?.sha256);
-  check(p.ccrStoreAfterRun?.sha256 === 'sha2', 'and ends where its last chunk left off', p.ccrStoreAfterRun?.sha256);
-  const pairs = p.chunkSeam.chunks.map((c) => `${c.ccrStoreBeforeRun?.sha256}->${c.ccrStoreAfterRun?.sha256}`).join(' ');
-  check(pairs === 'sha0->sha1 sha1->sha2', 'each chunk keeps its own pair', pairs);
+  check(
+    p.ccrStoreBeforeRun?.sha256 === 'sha0',
+    'the whole run begins where its first chunk began',
+    p.ccrStoreBeforeRun?.sha256
+  );
+  check(
+    p.ccrStoreAfterRun?.sha256 === 'sha2',
+    'and ends where its last chunk left off',
+    p.ccrStoreAfterRun?.sha256
+  );
+  const pairs = p.chunkSeam.chunks
+    .map((c) => `${c.ccrStoreBeforeRun?.sha256}->${c.ccrStoreAfterRun?.sha256}`)
+    .join(' ');
+  check(
+    pairs === 'sha0->sha1 sha1->sha2',
+    'each chunk keeps its own pair',
+    pairs
+  );
   check(p.chunkSeam.storeGrewBetweenChunks === true, 'the growth is named');
-  check(p.chunkSeam.storeContinuousBetweenChunks === true, "and the growth is this run's own");
+  check(
+    p.chunkSeam.storeContinuousBetweenChunks === true,
+    "and the growth is this run's own"
+  );
 }
 {
   // A THIRD PARTY WROTE TO THEIR STORE MID-CAPTURE. Chunk 2 did not start from
@@ -358,9 +522,17 @@ console.log('\ntheir store is stamped at both ends of the capture, and between c
     sha256: 'someone-else',
   };
   const r = mergeChunks(parts);
-  check(r.errors.length === 0, 'the merge still produces a file -- this is a fact, not a refusal', why(r));
+  check(
+    r.errors.length === 0,
+    'the merge still produces a file -- this is a fact, not a refusal',
+    why(r)
+  );
   const broke = r.theirs.__provenance__.chunkSeam.storeContinuousBetweenChunks;
-  check(Array.isArray(broke) && broke.length === 1, 'the break is reported', JSON.stringify(broke));
+  check(
+    Array.isArray(broke) && broke.length === 1,
+    'the break is reported',
+    JSON.stringify(broke)
+  );
   check(
     String(broke).includes('99') && String(broke).includes('left 10'),
     'naming both the state it found and the one it should have',
@@ -382,15 +554,21 @@ console.log('\ntheir store is stamped at both ends of the capture, and between c
     sha256: 'sha1',
   };
   check(
-    mergeChunks(expired).theirs.__provenance__.chunkSeam.storeContinuousBetweenChunks === true,
+    mergeChunks(expired).theirs.__provenance__.chunkSeam
+      .storeContinuousBetweenChunks === true,
     'entries expiring between chunks is not a third party',
     '10 left, 3 still live'
   );
   // Their whole store purged away, by their own hygiene or by a `rm`: still a fall.
   const gone = two();
-  gone[1].theirs.__provenance__.ccrStoreBeforeRun = { present: false, bytes: 0, sha256: null };
+  gone[1].theirs.__provenance__.ccrStoreBeforeRun = {
+    present: false,
+    bytes: 0,
+    sha256: null,
+  };
   check(
-    mergeChunks(gone).theirs.__provenance__.chunkSeam.storeContinuousBetweenChunks === true,
+    mergeChunks(gone).theirs.__provenance__.chunkSeam
+      .storeContinuousBetweenChunks === true,
     'and neither is an absent store file, which needs no count to read as zero'
   );
 }
@@ -399,7 +577,11 @@ console.log('\ntheir store is stamped at both ends of the capture, and between c
   // the byte-only stamp wrote, and it is the one case where guessing has a direction:
   // reading it as continuous would inherit a claim about a store nobody counted.
   const uncounted = two();
-  uncounted[1].theirs.__provenance__.ccrStoreBeforeRun = { present: true, bytes: 3866624, sha256: 'ca9' };
+  uncounted[1].theirs.__provenance__.ccrStoreBeforeRun = {
+    present: true,
+    bytes: 3866624,
+    sha256: 'ca9',
+  };
   const seam = mergeChunks(uncounted).theirs.__provenance__.chunkSeam;
   check(
     seam.storeContinuousBetweenChunks === null,
@@ -417,7 +599,9 @@ console.log('\ntheir store is stamped at both ends of the capture, and between c
   check(
     r.theirs.__provenance__.chunkSeam.storeContinuousBetweenChunks === null,
     'an unstamped chunk yields no verdict',
-    JSON.stringify(r.theirs.__provenance__.chunkSeam.storeContinuousBetweenChunks)
+    JSON.stringify(
+      r.theirs.__provenance__.chunkSeam.storeContinuousBetweenChunks
+    )
   );
 }
 
@@ -432,8 +616,22 @@ console.log('the store state a merged capture may claim');
     parts.forEach((part, i) => {
       part.theirs.__provenance__.ccrStoreBeforeRun =
         lives[i] === null
-          ? { path: 'p', present: false, bytes: 0, entries: 0, liveEntries: 0, sha256: null }
-          : { path: 'p', present: true, bytes: 4096, entries: lives[i], liveEntries: lives[i], sha256: 'x' };
+          ? {
+              path: 'p',
+              present: false,
+              bytes: 0,
+              entries: 0,
+              liveEntries: 0,
+              sha256: null,
+            }
+          : {
+              path: 'p',
+              present: true,
+              bytes: 4096,
+              entries: lives[i],
+              liveEntries: lives[i],
+              sha256: 'x',
+            };
     });
     return parts;
   };
@@ -443,7 +641,11 @@ console.log('the store state a merged capture may claim');
     return instrumentFingerprint(r.theirs.__provenance__);
   };
 
-  check(term([0, 0]).endsWith(' store=empty'), 'both chunks empty makes an empty capture', term([0, 0]));
+  check(
+    term([0, 0]).endsWith(' store=empty'),
+    'both chunks empty makes an empty capture',
+    term([0, 0])
+  );
   check(
     term([7, 4]).endsWith(' store=warm'),
     'both warm makes a warm one -- the counts need not match',
@@ -454,8 +656,16 @@ console.log('the store state a merged capture may claim');
   // disagree has no single state to attribute a difference to, and the honest term
   // says so rather than picking the gentler of the two states.
   const mixed = term([0, 10]);
-  check(mixed.endsWith(' store=unrecorded'), 'a mixed capture claims neither state', mixed);
-  check(!mixed.includes('store=empty'), 'and does not inherit chunk 1 and call the run empty', mixed);
+  check(
+    mixed.endsWith(' store=unrecorded'),
+    'a mixed capture claims neither state',
+    mixed
+  );
+  check(
+    !mixed.includes('store=empty'),
+    'and does not inherit chunk 1 and call the run empty',
+    mixed
+  );
   check(
     term([10, 0]).endsWith(' store=unrecorded'),
     'mixed the other way round too, so the rule is not about chunk order',
@@ -473,9 +683,11 @@ console.log('the store state a merged capture may claim');
 
   // AND THE MIX IS NAMED, because `unrecorded` alone tells a reader the stamp was
   // unusable, not that the sweep design was what made it so.
-  const named = mergeChunks(setStores(two(), [0, 10])).theirs.__provenance__.ccrStoreBeforeRun;
+  const named = mergeChunks(setStores(two(), [0, 10])).theirs.__provenance__
+    .ccrStoreBeforeRun;
   check(
-    Array.isArray(named.mixedAcrossChunks) && named.mixedAcrossChunks.length === 2,
+    Array.isArray(named.mixedAcrossChunks) &&
+      named.mixedAcrossChunks.length === 2,
     'the merged stamp lists each chunk state',
     JSON.stringify(named.mixedAcrossChunks)
   );
@@ -492,40 +704,88 @@ console.log('the store state a merged capture may claim');
   // capture as an empty-store sweep, which is exactly the claim it cannot support.
   const noCount = setStores(two(), [0, 10]);
   delete noCount[1].theirs.__provenance__.ccrStoreBeforeRun.liveEntries;
-  const kept = instrumentFingerprint(mergeChunks(noCount).theirs.__provenance__);
-  check(kept.endsWith(' store=unrecorded'), 'an uncounted chunk is not an empty one', kept);
+  const kept = instrumentFingerprint(
+    mergeChunks(noCount).theirs.__provenance__
+  );
+  check(
+    kept.endsWith(' store=unrecorded'),
+    'an uncounted chunk is not an empty one',
+    kept
+  );
 
   // AND UNANIMITY DOES NOT RESCUE IT EITHER. Every chunk holding a store file with
   // no count is unanimous about nothing; the count is the thing under discussion.
   const noneCounted = setStores(two(), [5, 10]);
-  for (const part of noneCounted) delete part.theirs.__provenance__.ccrStoreBeforeRun.liveEntries;
-  const allUnknown = instrumentFingerprint(mergeChunks(noneCounted).theirs.__provenance__);
-  check(allUnknown.endsWith(' store=unrecorded'), 'uncounted throughout is still unrecorded', allUnknown);
+  for (const part of noneCounted)
+    delete part.theirs.__provenance__.ccrStoreBeforeRun.liveEntries;
+  const allUnknown = instrumentFingerprint(
+    mergeChunks(noneCounted).theirs.__provenance__
+  );
+  check(
+    allUnknown.endsWith(' store=unrecorded'),
+    'uncounted throughout is still unrecorded',
+    allUnknown
+  );
 
   // THE INHERITANCE PROMISE, which this whole rule must not break. A capture from
   // before the stamp existed has no store field on any chunk, so there is nothing to
   // disagree about: it gets NO store term, and every pass recorded against it stands.
   const unstamped = two();
-  for (const part of unstamped) delete part.theirs.__provenance__.ccrStoreBeforeRun;
-  const bare = instrumentFingerprint(mergeChunks(unstamped).theirs.__provenance__);
-  check(!bare.includes('store='), 'an unstamped capture gets no store term at all', bare);
+  for (const part of unstamped)
+    delete part.theirs.__provenance__.ccrStoreBeforeRun;
+  const bare = instrumentFingerprint(
+    mergeChunks(unstamped).theirs.__provenance__
+  );
+  check(
+    !bare.includes('store='),
+    'an unstamped capture gets no store term at all',
+    bare
+  );
 }
 
 // THEIR PER-FETCH TIMINGS SURVIVE THE MERGE. Every merged capture used to read
 // their fetches as never timed, because only each chunk's resolution stamp was
 // carried over.
 {
-  const none = { unmeasured: true, detail: 'their output carries no markers', misses: 0 };
-  const a = { passes: [[1, 2], [3, 4], [5, 6]], markersProbed: 2, hits: 2, misses: 0, warmedUntimed: true };
-  const b = { passes: [[7], [8], [9]], markersProbed: 1, hits: 1, misses: 1, warmedUntimed: true };
+  const none = {
+    unmeasured: true,
+    detail: 'their output carries no markers',
+    misses: 0,
+  };
+  const a = {
+    passes: [
+      [1, 2],
+      [3, 4],
+      [5, 6],
+    ],
+    markersProbed: 2,
+    hits: 2,
+    misses: 0,
+    warmedUntimed: true,
+  };
+  const b = {
+    passes: [[7], [8], [9]],
+    markersProbed: 1,
+    hits: 1,
+    misses: 1,
+    warmedUntimed: true,
+  };
   const merged = mergePerFetch([none, a, b]);
   check(
-    JSON.stringify(merged.passes) === JSON.stringify([[1, 2, 7], [3, 4, 8], [5, 6, 9]]),
+    JSON.stringify(merged.passes) ===
+      JSON.stringify([
+        [1, 2, 7],
+        [3, 4, 8],
+        [5, 6, 9],
+      ]),
     'pass k of the merge is pass k of every chunk that timed anything',
     JSON.stringify(merged.passes)
   );
   check(
-    merged.hits === 3 && merged.misses === 1 && merged.chunksTimed === 2 && merged.chunks === 3,
+    merged.hits === 3 &&
+      merged.misses === 1 &&
+      merged.chunksTimed === 2 &&
+      merged.chunks === 3,
     'the merged probe counts every chunk it came from',
     JSON.stringify(merged)
   );
@@ -533,6 +793,18 @@ console.log('the store state a merged capture may claim');
     merged.unmeasured === undefined && merged.warmedUntimed === true,
     'a chunk with no markers neither blocks the merge nor adds a figure',
     JSON.stringify(merged)
+  );
+  const refused = {
+    unmeasured: true,
+    detail: 'their store served none of 2 probed marker(s)',
+    markersProbed: 2,
+    misses: 2,
+  };
+  const borrowed = mergePerFetch([a, refused, b]);
+  check(
+    borrowed.unmeasured === true && /served none of 2/.test(borrowed.detail),
+    "a chunk that probed markers and timed none makes the merge unmeasured, not another chunk's figure",
+    JSON.stringify(borrowed)
   );
   const nothing = mergePerFetch([none, undefined]);
   check(
@@ -542,5 +814,7 @@ console.log('the store state a merged capture may claim');
   );
 }
 
-console.log(failures === 0 ? '\nall checks passed' : `\n${failures} check(s) failed`);
+console.log(
+  failures === 0 ? '\nall checks passed' : `\n${failures} check(s) failed`
+);
 process.exit(failures === 0 ? 0 : 1);

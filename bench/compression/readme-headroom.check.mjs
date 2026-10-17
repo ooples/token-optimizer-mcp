@@ -138,11 +138,14 @@ const cellsOf = (row) =>
     .map((c) => c.trim());
 const headers = cellsOf(rows[0]);
 const misplaced = [];
-for (const h of headers)
-  if (!COLUMNS.some((c) => c.header === h))
-    misplaced.push(
-      `column "${h}" is not one readme-headroom.columns.mjs defines`
-    );
+// THE WHOLE HEADER, IN ORDER. Rejecting unknown columns is not enough: a table
+// with a column removed from every row has no cell left to disagree, so a
+// README that dropped their figures entirely would pass.
+const expectedHeaders = COLUMNS.map((c) => c.header);
+if (headers.join('|') !== expectedHeaders.join('|'))
+  misplaced.push(
+    `the header is [${headers.join(', ')}], not [${expectedHeaders.join(', ')}]`
+  );
 const listed = new Set();
 for (const row of dataRows) {
   const cells = cellsOf(row);

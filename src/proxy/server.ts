@@ -33,7 +33,13 @@ import {
   type ServerResponse,
 } from 'node:http';
 import { request as httpsRequest } from 'node:https';
-import { mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { createHash, randomBytes } from 'node:crypto';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -77,6 +83,7 @@ import type { SpillSink, Stamp } from '../compress/types.js';
 import {
   deadSpillRoots,
   processAlive,
+  SPILL_OWNER_MARKER,
   spillBase,
   spillName,
   spillRootFor,
@@ -360,6 +367,12 @@ function spillTo(root: string) {
       // tick.
       // eslint-disable-next-line n/no-sync
       mkdirSync(dirname(file), { recursive: true, mode: 0o700 });
+      // MARKED AS OURS before anything is written into it, so a later proxy
+      // prunes this directory after a crash and never a directory it did not
+      // make (see deadSpillRoots).
+      const owner = join(dirname(file), SPILL_OWNER_MARKER);
+      // eslint-disable-next-line n/no-sync
+      if (!existsSync(owner)) writeFileSync(owner, '', { mode: 0o600 });
       // eslint-disable-next-line n/no-sync
       writeFileSync(file, content, { encoding: 'utf8', mode: 0o600 });
     } catch {
@@ -1777,7 +1790,15 @@ export async function startProxy(options: ProxyOptions = {}): Promise<{
     try {
       // eslint-disable-next-line n/no-sync
       const names = readdirSync(spillHome);
-      for (const dead of deadSpillRoots(names, process.pid, processAlive)) {
+      const owned = (name: string): boolean =>
+        // eslint-disable-next-line n/no-sync
+        existsSync(join(spillHome, name, SPILL_OWNER_MARKER));
+      for (const dead of deadSpillRoots(
+        names,
+        process.pid,
+        processAlive,
+        owned
+      )) {
         // eslint-disable-next-line n/no-sync
         rmSync(join(spillHome, dead), { recursive: true, force: true });
       }

@@ -32,7 +32,7 @@
  */
 
 import { createHmac } from 'node:crypto';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 
 /** The directory every proxy's spill directory lives under. */
 export function spillBase(
@@ -40,7 +40,10 @@ export function spillBase(
   env: NodeJS.ProcessEnv = process.env
 ): string {
   const override = env.TOKEN_OPTIMIZER_SPILL_ROOT?.trim();
-  return override ? override : join(home, '.tok');
+  // ABSOLUTE, ALWAYS. The path is handed to the agent's own `Read`, which needs
+  // an absolute one, and a relative override would also move with whatever
+  // directory the proxy happened to start in.
+  return override ? resolve(override) : join(home, '.tok');
 }
 
 /**
@@ -71,19 +74,28 @@ export function spillName(salt: Buffer, content: string): string {
  * `alive` is asked rather than a retention age guessed, because only the OS
  * knows whether a proxy still holds references into its directory. A name
  * that is not a pid was not written by a proxy and is left alone.
+ *
+ * A PID-SHAPED NAME IS NOT PROOF OF OWNERSHIP. TOKEN_OPTIMIZER_SPILL_ROOT can
+ * point anywhere, including a shared directory holding numbered directories
+ * that are not ours, so a directory is only ever a candidate if `owned` says
+ * a proxy marked it (SPILL_OWNER_MARKER, written when the proxy first spills).
  */
 export function deadSpillRoots(
   names: readonly string[],
   self: number,
-  alive: (pid: number) => boolean
+  alive: (pid: number) => boolean,
+  owned: (name: string) => boolean
 ): string[] {
   return names.filter((name) => {
     const owner = /^([1-9]\d*)(?:-[1-9]\d*)?$/.exec(name);
     if (owner === null) return false;
     const pid = Number(owner[1]);
-    return pid !== self && !alive(pid);
+    return pid !== self && !alive(pid) && owned(name);
   });
 }
+
+/** The file a proxy writes into its spill directory to mark it as its own. */
+export const SPILL_OWNER_MARKER = '.token-optimizer-spill';
 
 /**
  * A spill path of the real shape on a typical machine, for everything that
