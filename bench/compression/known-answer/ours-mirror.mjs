@@ -82,11 +82,42 @@ export function compressBlock(text) {
 const ENVELOPE_HEAD =
   '{"model":"claude-sonnet-5","max_tokens":1024,"messages":';
 
+/**
+ * A payload that is not a conversation is handed to the body arm as the text
+ * of one user turn (head-to-head.mjs builds it, because that is how such
+ * content reaches a proxy). The text inside that turn is the payload the
+ * capture measured, so it is what is mirrored, and the turn goes back around
+ * their bytes unchanged -- the same treatment the envelope gets.
+ */
+function mirroredMessages(messages) {
+  if (MIRROR.has(messages)) return mirrored(messages);
+  let parsed;
+  try {
+    parsed = JSON.parse(messages);
+  } catch {
+    return mirrored(messages);
+  }
+  const turn = Array.isArray(parsed) && parsed.length === 1 ? parsed[0] : null;
+  const block =
+    turn?.role === 'user' &&
+    Array.isArray(turn.content) &&
+    turn.content.length === 1
+      ? turn.content[0]
+      : null;
+  if (block?.type !== 'text' || typeof block.text !== 'string')
+    return mirrored(messages);
+  return JSON.stringify([
+    { role: 'user', content: [{ type: 'text', text: mirrored(block.text) }] },
+  ]);
+}
+
 export function compressBody(buffer) {
   const body = buffer.toString('utf8');
   if (body.startsWith(ENVELOPE_HEAD) && body.endsWith('}'))
     return bodyResult(
-      ENVELOPE_HEAD + mirrored(body.slice(ENVELOPE_HEAD.length, -1)) + '}'
+      ENVELOPE_HEAD +
+        mirroredMessages(body.slice(ENVELOPE_HEAD.length, -1)) +
+        '}'
     );
   return bodyResult(mirrored(body));
 }

@@ -36,18 +36,27 @@ describe('the README as committed', () => {
     // test said nothing about the region at all. A region disappearing is
     // caught on its own terms: proseDrift raises a `scope` fault for a marker
     // pair it cannot find, which the control below holds it to.
-    expect(report.checked).toBeGreaterThanOrEqual(37);
-    expect(report.coveredLines).toBeGreaterThanOrEqual(205);
+    //
+    // LOWERED ONCE, ON PURPOSE, 2026-10-17 (#505): the HeadRoom section was
+    // rewritten from an 18-row record, and the prose it replaced -- the
+    // dial-on and preset paragraphs, the 12-row tallies, the second corpus
+    // paragraph -- carried ten figures and 38 covered lines that are now in the
+    // rendered table or gone with the claims they made. The floors are the
+    // rewritten README's own counts, so a remnant of it still fails.
+    expect(report.checked).toBeGreaterThanOrEqual(27);
+    expect(report.coveredLines).toBeGreaterThanOrEqual(167);
   });
 
   it('declares every figure with a reason of a known kind', () => {
     const known = new Set(Object.values(Source));
-    expect(DECLARED.length).toBeGreaterThanOrEqual(18);
+    // 15 since the 2026-10-17 rewrite: four declarations went with the
+    // sentences they covered, and one was added (53.7%, retracted).
+    expect(DECLARED.length).toBeGreaterThanOrEqual(15);
     expect(DECLARED.filter((d) => !known.has(d.kind))).toEqual([]);
     expect(DECLARED.filter((d) => !d.from || !d.anchor)).toEqual([]);
     expect(
       DECLARED.filter((d) => d.kind === Source.RETRACTED).length
-    ).toBeGreaterThanOrEqual(11);
+    ).toBeGreaterThanOrEqual(10);
   });
 });
 
@@ -71,11 +80,15 @@ describe('control: the check catches the drift it was written for', () => {
   it('catches a new percentage dropped into covered prose', () => {
     const added = README.replace(
       'tree had moved.',
-      'tree had moved. A later pass took it to 99.4%.'
+      'tree had moved. A later pass took it to 97.3%.'
     );
+    // A figure no table holds. This was 99.4%, which the 18-row HeadRoom table
+    // now holds (rag-conversation, proxy tokens), so the forgery matched a
+    // guarded cell and the control stopped forging anything undeclared.
+    expect(README).not.toContain('97.3%');
     const report = proseDrift(added);
     expect(kinds(report)).toEqual(['undeclared']);
-    expect(report.faults[0].figure).toBe('99.4%');
+    expect(report.faults[0].figure).toBe('97.3%');
   });
 
   it('catches a registry entry whose sentence was rewritten out from under it', () => {

@@ -27,7 +27,13 @@
  */
 
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -319,17 +325,19 @@ try {
     // an arm missing from the record is an arm missing from `arms`. This is the
     // other direction too: a scorer that starts filling the slot in with a zero
     // fails right here.
-    const sorted = (xs) => [...xs].sort().join(',');
+    //
+    // EVERY FIXTURE HAS ONE NOW. A payload that is not a conversation reaches
+    // the proxy as the text of one user turn, which is how such content really
+    // arrives (head-to-head.mjs, where the body arm is built), so the arm is
+    // present on all of them -- and a scorer that drops it on any fixture, or
+    // reverts to leaving the non-conversations out, fails right here.
     const absent = rec.workloads
       .filter((w) => w.chars.body === null)
       .map((w) => w.name);
-    const notConversations = KA.filter((f) => f.kind !== 'messages').map(
-      (f) => f.name
-    );
     check(
-      sorted(absent) === sorted(notConversations),
-      'the body arm is absent on exactly the fixtures that are not conversations',
-      `absent [${sorted(absent)}], not conversations [${sorted(notConversations)}]`
+      absent.length === 0 && rec.workloads.length === KA.length,
+      'the body arm is present on every fixture, conversation or not',
+      `absent [${absent.join(',')}] of ${rec.workloads.length} recorded, ${KA.length} fixtures`
     );
     check(
       pct(rec.totals.chars.ours) === 0,
@@ -561,6 +569,15 @@ try {
       'the scorer completes',
       `exit ${run.status}`
     );
+    // A RUN THAT WROTE NO RECORD SAYS WHY, rather than surfacing as an ENOENT
+    // on the read below with the scorer's own error thrown away.
+    check(
+      existsSync(at),
+      'the scorer wrote its record',
+      (run.stderr ?? '').trim().split('\n').slice(-6).join(' | ')
+    );
+    if (!existsSync(at))
+      throw new Error(`no record at ${at}; see the failure above`);
     const rec = JSON.parse(readFileSync(at, 'utf8'));
     for (const w of rec.workloads) {
       const name = w.name;
