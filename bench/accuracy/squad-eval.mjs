@@ -52,6 +52,7 @@ import { dirname, join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { compressBlock } from '../../dist/compress/router.js';
+import { benchSpillPath } from '../compression/spill-sink.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -189,9 +190,9 @@ function payloadFor(item, index, pool) {
 
 function compress(text, question) {
   const spilled = [];
-  const spill = (content, hint) => {
+  const spill = (content) => {
     spilled.push(content);
-    return `.token-optimizer/spill/${spilled.length}-${hint}`;
+    return benchSpillPath(content);
   };
   const out = compressBlock(text, { spill, query: question });
   return { text: out.text, spilledCount: spilled.length };

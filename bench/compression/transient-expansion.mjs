@@ -67,6 +67,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { compressBlock } from './ours-engine.mjs';
 import { resolveTuning } from '../../dist/compress/options.js';
+import { benchSpillPath } from './spill-sink.mjs';
 
 /**
  * THE SPILLING CONFIGURATION, WHICH IS NOT THE DEFAULT.
@@ -131,8 +132,8 @@ if (rows.length === 0) {
     // `spill`, NOT `sink`. The option is named `spill` in the engine, and a
     // wrong key is silently ignored: the previous version passed `sink`, was
     // never called, and reported every fixture as having nothing to expand.
-    const spill = (content, hint) => {
-      const path = `.token-optimizer/spill/t${spilled.size + 1}-${hint}`;
+    const spill = (content) => {
+      const path = benchSpillPath(content);
       spilled.set(path, content);
       return path;
     };

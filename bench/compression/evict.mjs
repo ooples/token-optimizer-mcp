@@ -48,6 +48,7 @@ import { fileURLToPath } from 'node:url';
 import { compressBody, anchorStore } from './ours-engine.mjs';
 import { tokens } from './currency.mjs';
 import { RATES } from './assembly.mjs';
+import { benchSpillPath } from './spill-sink.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const CORPUS = join(HERE, '..', '..', 'hr-corpus', 'natives-18.json');
@@ -198,11 +199,7 @@ function replay(turns, { evictAt = null, dead = [] } = {}) {
     );
     let out;
     try {
-      out = compressBody(
-        body,
-        (c, h) => `.token-optimizer/spill/e-${h}`,
-        anchors
-      );
+      out = compressBody(body, (c) => benchSpillPath(c), anchors);
     } catch {
       out = { body };
     }

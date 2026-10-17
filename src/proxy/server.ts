@@ -33,9 +33,9 @@ import {
   type ServerResponse,
 } from 'node:http';
 import { request as httpsRequest } from 'node:https';
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
-import { createHash, createHmac, randomBytes } from 'node:crypto';
-import { tmpdir } from 'node:os';
+import { mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { createHash, randomBytes } from 'node:crypto';
+import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import {
   v1Frontier,
@@ -74,6 +74,13 @@ import { digestOf, reinstatedIn } from './reinstated.js';
 import { record, libraryVersion } from '../telemetry/recorder.js';
 import { noteRequest, flushRollup } from '../telemetry/rollup.js';
 import type { SpillSink, Stamp } from '../compress/types.js';
+import {
+  deadSpillRoots,
+  processAlive,
+  spillBase,
+  spillName,
+  spillRootFor,
+} from '../compress/spill-path.js';
 import { captureDir, captureRequest } from './capture.js';
 import { compressResponses } from './responses.js';
 import { compressChatCompletions } from './chat-completions.js';
@@ -306,13 +313,16 @@ export function proxyEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
   return !/^(0|false|no|off)$/i.test(env.TOKEN_OPTIMIZER_PROXY?.trim() || '');
 }
 
+/** How many proxies this process has started; see spillRootFor. */
+let proxiesStarted = 0;
+
 /**
  * Where spilled content goes.
  *
- * Under the OS temp directory with an unguessable name and mode 0600, for the
- * same reason the host-CLI harvest does it: this is a fragment of the user's
- * session sitting in a shared directory. Written, never read back by us -- the
- * agent reads it with the tool it already has.
+ * Under the user's home directory, in a 0700 directory with mode 0600 files,
+ * because this is a fragment of the user's session; spill-path.ts says why it
+ * is there and not under the shared temp directory. Written, never read back
+ * by us -- the agent reads it with the tool it already has.
  *
  * CONTENT-ADDRESSED, AND THAT IS LOAD-BEARING, not tidiness. A random name
  * per call means the same bytes spilled twice get two paths, so the two
@@ -328,16 +338,11 @@ export function proxyEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
  */
 function spillTo(root: string) {
   const salt = randomBytes(32);
-  return (content: string, hint: string): string => {
-    // SIXTEEN HEX DIGITS, because the name is read on every turn the marker
-    // sits in the request: 64 bits under a per-process salt inside a random
-    // directory is ample for dedup and for unpredictability, and each digit
-    // past that is a token a marker pays and a competitor's does not.
-    const name = createHmac('sha256', salt)
-      .update(content)
-      .digest('hex')
-      .slice(0, 16);
-    const file = join(root, `${name}-${hint}`);
+  return (content: string): string => {
+    // The name's shape, and why it is decimal, is in spill-path.ts. The
+    // engine's hint is not in it: it cost two tokens of marker on every turn
+    // and told the reader nothing the file does not.
+    const file = join(root, spillName(salt, content));
     try {
       // SYNC ON PURPOSE, against `n/no-sync`, and the rule is right in general.
       //
@@ -354,7 +359,7 @@ function spillTo(root: string) {
       // Correctness of the recovery path is worth more here than the event-loop
       // tick.
       // eslint-disable-next-line n/no-sync
-      mkdirSync(dirname(file), { recursive: true });
+      mkdirSync(dirname(file), { recursive: true, mode: 0o700 });
       // eslint-disable-next-line n/no-sync
       writeFileSync(file, content, { encoding: 'utf8', mode: 0o600 });
     } catch {
@@ -1760,14 +1765,26 @@ export async function startProxy(options: ProxyOptions = {}): Promise<{
   };
   // ONE DIRECTORY PER PROXY, because shutdown deletes it. A shared root would mean the
   // first proxy to stop wiping the spills of every other one still running -- and a
-  // spill path is a live reference the agent may still follow with `Read`. The random
+  // spill path is a live reference the agent may still follow with `Read`. The pid
   // segment is what keeps two proxies from sharing a fate; within a proxy the file
   // names stay content-addressed, which is what dedup needs.
-  const spillRoot = join(
-    tmpdir(),
-    'token-optimizer-spill',
-    randomBytes(12).toString('hex')
-  );
+  const spillHome = spillBase(homedir());
+  const spillRoot = spillRootFor(spillHome, process.pid, proxiesStarted++);
+  // A PROXY THAT WAS KILLED NEVER RAN ITS SHUTDOWN, so its directory is
+  // removed here instead, once the OS says its pid is gone. Only when spilling,
+  // because a proxy that never writes there has no business deleting there.
+  if (options.spill === true) {
+    try {
+      // eslint-disable-next-line n/no-sync
+      const names = readdirSync(spillHome);
+      for (const dead of deadSpillRoots(names, process.pid, processAlive)) {
+        // eslint-disable-next-line n/no-sync
+        rmSync(join(spillHome, dead), { recursive: true, force: true });
+      }
+    } catch {
+      // No directory yet, or one we cannot list: nothing to prune.
+    }
+  }
   // NO SINK UNLESS ASKED. `undefined` reaches every engine as "keep it in the
   // request", which is the zero-round-trip arm -- see SpillSink in
   // compress/types.ts for why that is the default rather than the fallback.
@@ -1804,14 +1821,14 @@ export async function startProxy(options: ProxyOptions = {}): Promise<{
   const spill: SpillSink =
     sink === undefined
       ? undefined
-      : (content, hint) => {
+      : (content) => {
           spilledBlocks += 1;
           if (spilledDigests.size >= MAX_TRACKED_SPILLS) {
             const oldest = spilledDigests.values().next().value;
             if (oldest !== undefined) spilledDigests.delete(oldest);
           }
           spilledDigests.add(digestOf(content));
-          return sink(content, hint);
+          return sink(content);
         };
 
   /**
