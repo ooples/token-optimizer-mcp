@@ -700,6 +700,10 @@ jobs:
   # them, quoting the same rows. Editing the table was checked; editing the
   # paragraph two markers below it was not.
   #
+  # `readme-headroom` checks the HeadRoom table and its corpus sentences against
+  # the recorded head-to-head run. It ran only from scripts/verify-blockers.mjs,
+  # so the table drifted through three re-records while CI stayed green (#505).
+  #
   # They need the install and the build, which is why they are not in the
   # dependency-free job above: the proof harness imports the compiled engine.
   #
@@ -740,6 +744,7 @@ jobs:
           node bench/compression/proof-metrics.check.mjs 2>&1 | tee -a $GITHUB_STEP_SUMMARY || status=$?
           node bench/compression/readme-table.check.mjs 2>&1 | tee -a $GITHUB_STEP_SUMMARY || status=$?
           node bench/compression/readme-prose.check.mjs 2>&1 | tee -a $GITHUB_STEP_SUMMARY || status=$?
+          node bench/compression/readme-headroom.check.mjs 2>&1 | tee -a $GITHUB_STEP_SUMMARY || status=$?
           echo '```' >> $GITHUB_STEP_SUMMARY
           exit $status
 
