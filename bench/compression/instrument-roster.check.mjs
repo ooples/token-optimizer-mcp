@@ -43,6 +43,7 @@ const RUNS_ELSEWHERE = {
   'bench/compression/proof-metrics.check.mjs': 'bench-proof',
   'bench/compression/readme-table.check.mjs': 'bench-proof',
   'bench/compression/readme-prose.check.mjs': 'bench-proof',
+  'bench/compression/readme-headroom.check.mjs': 'bench-proof',
   // Moved out of the roster because they need a dependency the install-free job
   // does not have: `pretoken-proxy` tokenises with tiktoken AND imports dist/,
   // `bench/tools/reduction` tokenises with tiktoken. Both were green on a laptop
@@ -74,11 +75,6 @@ const NOT_IN_CI = {
     'session fills them this check must fail rather than let the 8.1x-to-15.3x ' +
     'projection read as a result. Putting it in CI would make the gate green by ' +
     'deleting the gate',
-  'bench/compression/readme-headroom.check.mjs':
-    'red today by design, on three counts -- 27 of the table figures and all 25 ' +
-    'of the corpus figures are absent from the record, and the table does not name ' +
-    'the record it was read from. All three need the README rewritten, and that ' +
-    'edit is being held until the claims settle',
 };
 
 const walk = (dir, out = []) => {
@@ -158,9 +154,7 @@ const jobBlock = (job) => {
   // that `$` will not match. Without stripping it every job header missed and all nine
   // exception-mapped checks called a job the workflow plainly defines undefined -- on Windows
   // only, which is why CI, being Linux, never saw it.
-  const lines = workflow
-    .split('\n')
-    .map((line) => line.replace(/\r$/, ''));
+  const lines = workflow.split('\n').map((line) => line.replace(/\r$/, ''));
   const start = lines.findIndex((line) => line === `  ${job}:`);
   if (start === -1) return null;
   const rest = lines.slice(start + 1);
