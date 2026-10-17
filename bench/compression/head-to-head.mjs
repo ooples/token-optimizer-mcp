@@ -1781,6 +1781,17 @@ const crossComparableByName = !COST_PRICED
   ? {}
   : Object.fromEntries(sessionCosts.map((c) => [c.name, c.crossComparable]));
 
+/** The proxy arm summed over the corpus at fetch rate `p`, or null without one everywhere. */
+const proxyCorpusAt = (p) =>
+  !COST_PRICED || !proxyEverywhere
+    ? null
+    : String(Math.round(sum((r) => costAt(byName[r.name].proxy, p))));
+/** Rows on which the proxy arm costs strictly less than their best arm at `p`. */
+const proxyCheaperAt = (p) =>
+  rows.filter(
+    (r) => costAt(byName[r.name].proxy, p) < costAt(byName[r.name].theirs, p)
+  ).length;
+
 const k = (t) => `${(t / 1000).toFixed(1)}k`;
 // EVERY `times` HERE IS A CORPUS RATIO, SO THE COMMON TERM IS PER SESSION
 // TIMES THE NUMBER OF SESSIONS. A workload is one session, and the assistant
@@ -3135,13 +3146,25 @@ if (process.argv[3] === '--record') {
                 ours: String(Math.round(costAt(corpus.ours, 0))),
                 preset: String(Math.round(costAt(corpus.preset, 0))),
                 theirs: String(Math.round(costAt(corpus.theirs, 0))),
+                proxy: proxyCorpusAt(0),
               },
               p1: {
                 none: String(Math.round(costAt(corpus.none, 1))),
                 ours: String(Math.round(costAt(corpus.ours, 1))),
                 preset: String(Math.round(costAt(corpus.preset, 1))),
                 theirs: String(Math.round(costAt(corpus.theirs, 1))),
+                proxy: proxyCorpusAt(1),
               },
+              // ON HOW MANY ROWS THE PROXY ARM COSTS LESS THAN THEIR BEST ARM, at
+              // each end, so a sentence that counts them quotes this rather than
+              // a tally taken by hand.
+              proxyCheaper: !proxyEverywhere
+                ? null
+                : {
+                    p0: String(proxyCheaperAt(0)),
+                    p1: String(proxyCheaperAt(1)),
+                    of: String(rows.length),
+                  },
               breakEven: breakEvenLabel(corpus.cross),
               // The `ours` arm above compresses in place and spills nothing, so
               // against a cache-read bill it is the wrong arm to quote alone.
