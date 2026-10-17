@@ -72,6 +72,9 @@ const RECORDED = {
   theirsP1: num(session.p1.theirs),
   oursCapP0: session.capMultiple.oursP0,
   theirsCapP0: session.capMultiple.theirsP0,
+  // The two multiples the withdrawn p=1 claim was actually about.
+  theirsCapP50: session.capMultiple.theirsP50,
+  presetCapP1: session.capMultiple.presetP1,
   workloads: record.workloads.length,
 };
 
@@ -680,13 +683,36 @@ check(
   capMultiple(atP0, nAll) > theirsCap,
   `all five take the p=0 column: ${capMultiple(atP0, nAll).toFixed(2)}x against their ${theirsCap.toFixed(2)}x`
 );
-// THE WITHDRAWN CLAIM, PINNED SO IT CANNOT COME BACK. Withholding alone loses
-// at p=1 -- 1.43x against their 1.59x at p=50 and worse beyond -- and nothing
-// here has shown the other four levers cover that. Any future p=1 figure has
-// to come from the components.
+// THE WITHDRAWN CLAIM, PINNED SO IT CANNOT COME BACK.
+//
+// The claim was about a MULTIPLE: withholding alone at p=1 read 1.43x against
+// their 1.59x at p=50, and worse beyond. The first version of this guard
+// compared raw session totals instead, which is a different quantity -- and the
+// re-record moved it, so the guard went red while saying nothing about the
+// claim. Totals are not what was withdrawn.
+//
+// What was withdrawn is the PERMISSION TO BANK a p=1 win from the preset alone.
+// That is a fact about this file, not about the record: the record's multiple
+// may improve -- on this capture `presetP1` is 1.77x against their 1.59x at
+// p=50 -- and it still may not be banked here, because the comment above the
+// stack requires a p=1 figure to come from the components, and
+// cost-decomposition.check.mjs stays red over exactly the unmeasured p that
+// this lever's sign depends on. So the guard asserts the two things that are
+// actually assertable: the instrument reproduces the record's own multiple, and
+// this file does not bank the p=1 end. Flipping `P1_BANKED` is an edit a
+// reviewer sees, which is the point.
+const P1_BANKED = false;
+const presetP1Cap = capMultiple(PRESET.p1, RECORDED.turnsAfter);
 check(
-  PRESET.p1 > RECORDED.theirsP1,
-  `and withholding alone still LOSES at p=1 on the record: ${PRESET.p1} against their ${RECORDED.theirsP1} -- so the stack's p=1 end is an open question, not a win`
+  `${presetP1Cap.toFixed(2)}x` === RECORDED.presetCapP1,
+  `control: the preset's p=1 multiple recomputes to ${presetP1Cap.toFixed(2)}x == recorded ${RECORDED.presetCapP1}`
+);
+console.log(
+  `  p=1  preset ${RECORDED.presetCapP1} against their ${RECORDED.theirsCapP50} at p=50 -- reported, not banked`
+);
+check(
+  !P1_BANKED,
+  `and the p=1 end is still an open question rather than a win: banking it needs the figure derived from the components, not the preset total`
 );
 
 if (failures.length > 0) {

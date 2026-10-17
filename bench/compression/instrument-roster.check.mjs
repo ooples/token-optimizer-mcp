@@ -154,7 +154,13 @@ else ok(`${WORKFLOW} runs the roster through the script`);
  * a comment, or run by a different job entirely, reads as covered.
  */
 const jobBlock = (job) => {
-  const lines = workflow.split('\n');
+  // `* text=auto` checks this workflow out with CRLF on Windows, so a line end carries a \r
+  // that `$` will not match. Without stripping it every job header missed and all nine
+  // exception-mapped checks called a job the workflow plainly defines undefined -- on Windows
+  // only, which is why CI, being Linux, never saw it.
+  const lines = workflow
+    .split('\n')
+    .map((line) => line.replace(/\r$/, ''));
   const start = lines.findIndex((line) => line === `  ${job}:`);
   if (start === -1) return null;
   const rest = lines.slice(start + 1);

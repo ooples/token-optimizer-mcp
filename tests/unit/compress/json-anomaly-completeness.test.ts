@@ -51,7 +51,7 @@ test('capped shape representatives do not claim the whole population survives', 
   // capped representatives do not silently stand in for the rows they capped,
   // so what has to survive is every row -- not every row in the spill, which is
   // only where the ones that left now live.
-  expect(reassemble(result.text, recovery)).toEqual(rows);
+  expect(reassemble(result.text, recovery, result.stamp ?? null)).toEqual(rows);
 });
 
 test('complete exceptional shapes still report the actual retained population', () => {

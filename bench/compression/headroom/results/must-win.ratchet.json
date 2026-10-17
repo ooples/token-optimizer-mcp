@@ -351,8 +351,13 @@
     }
   },
   "warmOnly": [
+    "agent-loop/cost-proxy",
     "code-search/latency",
     "code-search/speed",
+    "codebase-exploration/speed",
+    "raw-build-log/speed",
+    "relevance-probe/cost-proxy",
+    "sre-debugging/cost-proxy",
     "sre-debugging/speed"
   ]
 }

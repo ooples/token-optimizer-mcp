@@ -1,4 +1,4 @@
-import { reassemble } from './spill-reassembly.js';
+import { decodeSpill, reassemble } from './spill-reassembly.js';
 import { expect, test } from '@jest/globals';
 import { cachedOutput } from '../../../src/proxy/output-cache.js';
 import { compressBlock } from '../../../src/compress/router.js';
@@ -31,8 +31,13 @@ test('repeated output matches uncached compression and restores recovery content
   // rows in the spill.
   const restored = files.get('/first.json');
   expect(restored).toBeDefined();
-  expect(JSON.parse(restored ?? '[]').length).toBeLessThan(240);
-  expect(reassemble(expected.text, restored ?? '[]')).toEqual(JSON.parse(text));
+  const stamp = expected.stamp ?? null;
+  expect(JSON.parse(decodeSpill(restored ?? '[]', stamp)).length).toBeLessThan(
+    240
+  );
+  expect(reassemble(expected.text, restored ?? '[]', stamp)).toEqual(
+    JSON.parse(text)
+  );
 });
 
 test('proxy scopes and changed recovery paths never reuse another path', () => {

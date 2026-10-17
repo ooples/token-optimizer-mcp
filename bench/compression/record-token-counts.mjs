@@ -125,7 +125,11 @@ const TARGETS = [
 ];
 
 /** The targets this run will walk, which is all of them unless --only. */
-const RUN = only === null ? TARGETS : TARGETS.filter((t) => t === only);
+// A target with arguments is named by its whole command line ("path arg"), so `--only` can pick one of several
+// invocations of the same file. Comparing the array itself to the string matched nothing, and head-to-head --
+// the target that most needs a narrow run -- could not be recorded on its own at all.
+const targetName = (t) => (Array.isArray(t) ? t.join(' ') : t);
+const RUN = only === null ? TARGETS : TARGETS.filter((t) => targetName(t) === only);
 if (RUN.length === 0) {
   console.error(`--only ${only} matches no target; add it to TARGETS first`);
   process.exit(2);

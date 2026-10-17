@@ -801,7 +801,31 @@ function compressJsonDocument(
         elisions,
         lossless: !nestedLossy && lexemeSafe,
       });
-    const recoverAt = spillFor(ctx, spillContent, 'rows.json');
+    // THE SPILL IS READ AS CONTEXT TOO, so it is written in the smallest exact
+    // form. An agent that follows the marker reads the whole file into its
+    // conversation, where every repeated key costs what it costs inline: on
+    // the agent-loop workload six spills of 54 search results each re-read the
+    // same eight key names on every row, 3,885 tokens apiece against 1,650 in
+    // the template encoding below. That encoding is the one this engine already
+    // hands inline whenever it is smaller (`exact` above), it verifies every
+    // row before it is admitted, and it carries its own decoding rule in its
+    // header -- so the dropped rows stay byte-recoverable, from fewer tokens.
+    // Anything it cannot vouch for is spilled as the source wrote it.
+    //
+    // ONLY WHEN THERE IS A SINK TO WRITE IT TO. `spillFor` returns null without
+    // one, so encoding first threw the work away on every sinkless call -- the
+    // product default -- and on relevance-probe that was a second full pass of
+    // the record encoder over 295 rows, about a seventh of the arm's time.
+    const encodedSpill = ctx.spill
+      ? compressJsonArray(spillContent, ctx.stamp ?? null)
+      : null;
+    const recoverAt = spillFor(
+      ctx,
+      encodedSpill?.lossless && encodedSpill.text.length < spillContent.length
+        ? encodedSpill.text
+        : spillContent,
+      'rows.json'
+    );
     // NO HOME MEANS NO ELISION -- the marker would name a count and a shape and
     // offer no way back, which is the dangling reference this design exists to
     // avoid. The minified document is still a real saving, so keep it and keep

@@ -267,7 +267,11 @@ describe('the ledger itself', () => {
   it('writes one joinable line per request', () => {
     const path = ledger();
     appendRecord(path, {
-      ts: '2026-09-11T00:00:00.000Z',
+      // NOW, NOT A FIXED DATE. The first append also prunes, and a row older than
+      // `retentionDays()` (34 today) is folded out of the raw lines -- so the
+      // fixed 2026-09-11 this used to carry aged out on 2026-10-16 and the file
+      // read back empty.
+      ts: new Date().toISOString(),
       path: '/v1/messages',
       status: 200,
       compressed: true,

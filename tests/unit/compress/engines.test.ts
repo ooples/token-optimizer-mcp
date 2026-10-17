@@ -1,4 +1,4 @@
-import { reassemble } from './spill-reassembly.js';
+import { decodeSpill, reassemble } from './spill-reassembly.js';
 import { variedRows } from './varied-rows.js';
 import { describe, it, expect } from '@jest/globals';
 import { compressJson, looksLikeJson } from '../../../src/compress/json.js';
@@ -201,8 +201,12 @@ describe('json', () => {
     // FEWER THAN 60, because the rows still in the request are not written
     // again -- and all 60 all the same, once the marker's positions put the
     // two halves back together.
-    expect(JSON.parse(rec.written[0]).length).toBeLessThan(60);
-    expect(reassemble(out.text, rec.written[0])).toEqual(all);
+    expect(
+      JSON.parse(decodeSpill(rec.written[0], out.stamp ?? null)).length
+    ).toBeLessThan(60);
+    expect(reassemble(out.text, rec.written[0], out.stamp ?? null)).toEqual(
+      all
+    );
   });
 });
 

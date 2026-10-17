@@ -15,6 +15,7 @@ import {
 } from '../../../src/proxy/server.js';
 import { netSavingEnabled } from '../../../src/proxy/server.js';
 import { anchorStore } from '../../../src/compress/anchor.js';
+import { resolveTuning } from '../../../src/compress/options.js';
 import { rehydrate } from '../../../src/compress/rehydrate.js';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -292,21 +293,71 @@ describe('compressBody', () => {
     expect(out.body.length).toBeLessThanOrEqual(body.length);
   });
 
-  it('does not touch content at or before the cache breakpoint', () => {
-    const cached = rows(80);
-    const body = bodyOf([
+  // THE CLIENT'S CACHED PREFIX IS KEPT UNLESS REWRITING IT PAYS ON THIS TURN.
+  // With no anchor store nothing says what later turns will do, so the cache
+  // is broken only when the rewrite removes at least `breakEvenRewriteShare(0)`
+  // of the prefix -- 92%, where a 1.25x write of what is left costs less than
+  // the 0.1x read of the original. Both sides of that line are pinned, under
+  // the library tuning: the proxy's default also moves whole blocks out, which
+  // removes far more than 92% of any block it moves and would hide the line.
+  const LIBRARY = resolveTuning();
+  const withCachedFirst = (cached: string, fresh: string) =>
+    bodyOf([
       {
         role: 'user',
         content: [
           { type: 'text', text: cached, cache_control: { type: 'ephemeral' } },
         ],
       },
-      { role: 'user', content: [{ type: 'text', text: rows(80) }] },
+      { role: 'user', content: [{ type: 'text', text: fresh }] },
     ]);
-    const out = compressBody(body, spill);
+
+  it('keeps the cached prefix when rewriting it would not pay on this turn', () => {
+    // The engine takes about 86% off these rows, which is short of the line.
+    const cached = JSON.stringify(variedRows(40));
+    // NOT VACUOUS: uncached, the same block does shrink, so keeping it below
+    // is a decision rather than an engine that had nothing to do.
+    const alone = JSON.parse(
+      compressBody(
+        bodyOf([{ role: 'user', content: [{ type: 'text', text: cached }] }]),
+        spill,
+        undefined,
+        undefined,
+        LIBRARY
+      ).body.toString('utf8')
+    );
+    expect(alone.messages[0].content[0].text.length).toBeLessThan(
+      cached.length
+    );
+
+    const out = compressBody(
+      withCachedFirst(cached, rows(80)),
+      spill,
+      undefined,
+      undefined,
+      LIBRARY
+    );
     const sent = JSON.parse(out.body.toString('utf8'));
     expect(sent.messages[0].content[0].text).toBe(cached);
-    expect(sent.messages[1].content[0].text.length).toBeLessThan(cached.length);
+    expect(sent.messages[1].content[0].text.length).toBeLessThan(
+      rows(80).length
+    );
+  });
+
+  it('rewrites the cached prefix when that is cheaper even at a cache write', () => {
+    // Uniform rows template down by about 94%, past the line.
+    const cached = rows(80);
+    const out = compressBody(
+      withCachedFirst(cached, rows(80)),
+      spill,
+      undefined,
+      undefined,
+      LIBRARY
+    );
+    const sent = JSON.parse(out.body.toString('utf8'));
+    const now: string = sent.messages[0].content[0].text;
+    expect(now).not.toBe(cached);
+    expect(now.length * 1.25).toBeLessThan(cached.length * 0.1);
   });
 });
 

@@ -1027,11 +1027,42 @@ export const SESSION_HORIZON_CENSUS = Object.freeze({
   }),
 });
 
+/**
+ * V1 with no anchor store: no memory of what the provider holds.
+ *
+ * THE CLIENT'S MARKER IS RESPECTED UNLESS BREAKING IT PAYS ON THIS TURN ALONE.
+ * Without a store nothing says what the next turn will do, so the only rewrite
+ * that is safe is one that repays its 1.25x write before any later turn is
+ * counted: `breakEvenRewriteShare(0)`, which asks for 92% of the cached prefix
+ * removed. Past that, rewriting is cheaper on every turn even if each one pays
+ * the write again, because 1.25x of what is left is below 0.1x of the
+ * original. Short of it, the hit is worth more than the bytes.
+ *
+ * It used to respect the marker unconditionally, which was right while the
+ * prefix compressed less than that. Once row spills were written in the exact
+ * encoding (src/compress/json.ts), agent-loop-logs' cached prefix crossed the
+ * line and the cache-blind `ccrStyle` undercut this arm on effective tokens,
+ * 9,566 to 10,103, which is the one ordering bench/compression/proof.mjs says
+ * must never happen.
+ */
+function withoutMemory(
+  request: ProviderRequest,
+  options: StrategyOptions
+): StrategyResult {
+  const kept = pathAddressed(request, options, true);
+  const frontier = lastCacheBreakpoint(request);
+  const before = cachedPrefixBytes(request, frontier);
+  if (before === 0) return kept;
+  const rewritten = pathAddressed(request, options, false);
+  const removed = before - cachedPrefixBytes(rewritten.request, frontier);
+  return removed >= before * breakEvenRewriteShare(0) ? rewritten : kept;
+}
+
 export function v1Frontier(
   request: ProviderRequest,
   options: StrategyOptions = {}
 ): StrategyResult {
-  if (!options.anchors) return pathAddressed(request, options, true);
+  if (!options.anchors) return withoutMemory(request, options);
 
   // DECIDED HERE, COMMITTED BY THE CALLER, and the order matters. The proxy
   // still discards a rewrite that did not come out smaller and forwards the
