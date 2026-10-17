@@ -199,7 +199,15 @@ const num = (v) => (v === null || v === undefined ? null : Number(v));
  * never promoted and never enforced.
  */
 const outOfScope = (criterion, cfg) =>
-  criterion === 'retention' && cfg.retention === null;
+  (criterion === 'retention' && cfg.retention === null) ||
+  // ON THE FOUR TIE-AT-P0 ROWS THE COST WIN IS THE PROXY'S, decided 2026-10-17.
+  // Their `p = 0` hand-off there is a content-cache reference, and #435 decided
+  // to match the mechanism rather than out-encode it. The block engine runs with
+  // no sink, as the MCP tools and the hooks do, so by design it keeps every
+  // block in the request and cannot make that move; the proxy can, and its
+  // criterion, `cost-proxy`, is the one enforced. The block engine's cost on
+  // these rows is still measured and reported, under NOT CLAIMED.
+  (criterion === 'cost' && cfg.costFloor === 'tie-at-p0');
 
 /**
  * The four must-wins for one row, each as `{ pass, detail }`, with `pass: null`
@@ -737,6 +745,16 @@ for (const row of results.workloads) {
       // could not measure it", which the verdict text alone does not separate.
       claimed: !outOfScope(criterion, cfg),
     };
+    // NO ISSUE CLAIMS IT, SO IT IS REPORTED AND NOTHING ELSE: not open work when
+    // it fails, and not promoted into the ratchet when it passes -- a pass here
+    // would otherwise become enforced, and a criterion nobody claims would then
+    // fail a build. Only one that was never enforced; a pair already in the
+    // ratchet keeps the treatment below, so leaving scope cannot hide a regression.
+    if (outOfScope(criterion, cfg) && !was) {
+      unclaimed.push(`#${cfg.issue} ${key} - ${v.detail}`);
+      unclaimedKeys.push(key);
+      continue;
+    }
     // A pair stays enforced once enforced, so a regression is reported on every
     // later run rather than only on the one that caused it.
     if (v.pass === true)
@@ -764,10 +782,7 @@ for (const row of results.workloads) {
       unverified.push(`${key} - ${v.detail} (was enforced)`);
     if (v.pass === false && !was)
       open.push(`#${cfg.issue} ${key} - ${v.detail}`);
-    if (v.pass === null && !was && outOfScope(criterion, cfg)) {
-      unclaimed.push(`#${cfg.issue} ${key} - ${v.detail}`);
-      unclaimedKeys.push(key);
-    } else if (v.pass === null && !was)
+    if (v.pass === null && !was)
       open.push(`#${cfg.issue} ${key} - UNMEASURED: ${v.detail}`);
   }
 }
@@ -910,9 +925,11 @@ const enforcedCount = Object.keys(ratchet.enforced ?? {}).length;
 // check is one pass over a handful of strings, so there is no reason not to run
 // it on every invocation rather than in a test that a future edit can forget.
 const declaredUnclaimed = new Set(
-  Object.entries(ROWS)
-    .filter(([, cfg]) => cfg.retention === null)
-    .map(([name]) => `${name}/retention`)
+  Object.entries(ROWS).flatMap(([name, cfg]) =>
+    ['cost', 'retention']
+      .filter((criterion) => outOfScope(criterion, cfg))
+      .map((criterion) => `${name}/${criterion}`)
+  )
 );
 const undeclared = unclaimedKeys.filter((k) => !declaredUnclaimed.has(k));
 if (undeclared.length)

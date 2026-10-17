@@ -128,6 +128,7 @@ import {
   worstAgainst,
 } from './cost-model.mjs';
 import { degradationRefusal } from './competitor-health.mjs';
+import { benchSpillPath } from './spill-sink.mjs';
 
 const dir = process.argv[2];
 if (!dir) {
@@ -139,6 +140,41 @@ if (!dir) {
 
 const payloads = JSON.parse(readFileSync(join(dir, 'payloads.json'), 'utf8'));
 const theirs = JSON.parse(readFileSync(join(dir, 'theirs.json'), 'utf8'));
+
+// THE TOOL THEIR MARKER NEEDS, CHARGED WHEREVER THEIR OUTPUT CARRIES ONE. A
+// `<<ccr:...>>` marker is only redeemable because their proxy also sends
+// `headroom_retrieve` in the request's tools, by default and on every request
+// once a session has done CCR -- see headroom/ccr-tool.py, which records the
+// definition from their package. This priced the marker and never the tool.
+// Ours needs none: our marker names a path the agent opens with its own Read.
+// Charged as handed tokens, which is how the cost line already prices content
+// that is written once and re-read every turn; the one-off rewrite of the
+// cached prefix behind the tool is not charged, which errs in their favour.
+const CCR_TOOL = JSON.parse(
+  readFileSync(new URL('./headroom/ccr-tool.json', import.meta.url), 'utf8')
+);
+{
+  const swept = theirs.__provenance__?.headroomVersion ?? null;
+  if (swept !== null && swept !== CCR_TOOL.headroomVersion) {
+    console.error(
+      `head-to-head: the capture was swept with headroom-ai ${swept} but ` +
+        `headroom/ccr-tool.json records the tool from ${CCR_TOOL.headroomVersion}; ` +
+        're-run python bench/compression/headroom/ccr-tool.py with the version the ' +
+        'capture used'
+    );
+    process.exit(2);
+  }
+}
+const CCR_TOOL_TEXT = JSON.stringify(CCR_TOOL.definition);
+/** Tokens their proxy adds to a request carrying this text, for the tool. */
+const injectedFor = (text) =>
+  typeof text === 'string' && /<<ccr:/.test(text) ? tokens(CCR_TOOL_TEXT) : 0;
+/** What their best arm hands the model: its output, and the tool if it needs one. */
+const theirHandedTok = (r) =>
+  tokens(theirs[r.name].bestText ?? '') + injectedFor(theirs[r.name].bestText);
+/** The same for the comparable arm, or null where there is none. */
+const compHandedTok = (r) =>
+  r.compTokAfter === null ? null : r.compTokAfter + r.compInjectedTok;
 
 // THEIR ENGINE'S OWN HEALTH, READ BEFORE ANY OF ITS NUMBERS ARE USED.
 //
@@ -538,9 +574,9 @@ function timeEveryWorkload(byName) {
         const held = [];
         const t0 = performance.now();
         compressBlock(text, {
-          spill: (content, hint) => {
+          spill: (content) => {
             held.push(content);
-            return `.token-optimizer/spill/t${held.length}-${hint}`;
+            return benchSpillPath(content);
           },
           query: queryOf(text),
           stamp: BENCH_STAMP,
@@ -641,9 +677,9 @@ for (const [name, text] of Object.entries(payloads)) {
   // out of `retention` in the record.)
   const subSpilled = [];
   const sub = compressBlock(text, {
-    spill: (content, hint) => {
+    spill: (content) => {
       subSpilled.push(content);
-      return `.token-optimizer/spill/s${subSpilled.length}-${hint}`;
+      return benchSpillPath(content);
     },
     query: queryOf(text),
     stamp: BENCH_STAMP,
@@ -657,7 +693,7 @@ for (const [name, text] of Object.entries(payloads)) {
   // `fetch-latency.mjs` for why a figure that cannot change the answer is not
   // demanded rather than defaulted to one.
   //
-  // The sink the arm ran with returns a fake `.token-optimizer/spill/...` path,
+  // The sink the arm ran with returns the proxy's path but writes no file,
   // because what the cost model needs from it is the block's SIZE, not a file.
   // Latency needs the file: so the same bytes are written here, the way
   // `spillTo` in src/proxy/server.ts writes them, and read back the way the
@@ -692,9 +728,9 @@ for (const [name, text] of Object.entries(payloads)) {
   // is only checkable if the arm is published separately from the one at 1.
   const presetSpilled = [];
   const preset = compressBlock(text, {
-    spill: (content, hint) => {
+    spill: (content) => {
       presetSpilled.push(content);
-      return `.token-optimizer/spill/p${presetSpilled.length}-${hint}`;
+      return benchSpillPath(content);
     },
     query: queryOf(text),
     stamp: BENCH_STAMP,
@@ -725,6 +761,30 @@ for (const [name, text] of Object.entries(payloads)) {
     parsed = JSON.parse(text);
   } catch {
     /* not JSON, so not a message list */
+  }
+  // A PAYLOAD THAT IS NOT A MESSAGE LIST REACHES THE PROXY AS THE TEXT OF ONE
+  // BLOCK, because that is the only way it can: a log, an API response or a
+  // set of rows arrives in a request as the text of a tool result or a user
+  // turn, never as the `messages` array itself. Wrapping it as `messages` was
+  // the shape that cannot occur (see below); leaving the arm out left four rows
+  // with no proxy figure at all. One user turn holding the payload as its text
+  // is a request a client really sends. The text is JSON-escaped inside it, so
+  // an identifier containing a quote or a backslash is not found verbatim in
+  // the output and is counted lost -- which can only charge this arm more.
+  const listShaped = (v) =>
+    Array.isArray(v) &&
+    v.length > 0 &&
+    v.every(
+      (m) =>
+        m !== null &&
+        typeof m === 'object' &&
+        typeof m.role === 'string' &&
+        m.content !== undefined
+    );
+  let bodyText = text;
+  if (!listShaped(parsed)) {
+    parsed = [{ role: 'user', content: [{ type: 'text', text }] }];
+    bodyText = JSON.stringify(parsed);
   }
   if (parsed !== undefined) {
     // A MESSAGE LIST, NOT MERELY AN ARRAY. `Array.isArray` alone let the four
@@ -764,7 +824,7 @@ for (const [name, text] of Object.entries(payloads)) {
       // is the ~15 tokens the cost model already discloses as charged against
       // us. `parsed` is still what decides whether there is a proxy arm at all:
       // the payload has to be a message list.
-      const wrapped = `${ENVELOPE_HEAD}${text}}`;
+      const wrapped = `${ENVELOPE_HEAD}${bodyText}}`;
       // NO FINDINGS, SO THE NET-SAVING GUARD CANNOT MOVE A FIGURE HERE, and this
       // arm reports one column rather than two for that reason. The guard
       // (TOKEN_OPTIMIZER_PROXY_NET_SAVING) only ever drops a cached-knowledge
@@ -791,9 +851,9 @@ for (const [name, text] of Object.entries(payloads)) {
       // to report: whatever the store is worth, it is worth on turn one.
       const result = compressBody(
         Buffer.from(wrapped, 'utf8'),
-        (c, hint) => {
+        (c) => {
           bodySpilled.push(c);
-          return `.token-optimizer/spill/b${bodySpilled.length}-${hint}`;
+          return benchSpillPath(c);
         },
         anchorStore()
       );
@@ -1321,6 +1381,7 @@ for (const [name, text] of Object.entries(payloads)) {
       picked.comparable === null ? null : picked.comparable.retained,
     compTokBefore: compBeforeText === null ? null : tokens(compBeforeText),
     compTokAfter: compText === null ? null : tokens(compText),
+    compInjectedTok: injectedFor(compText),
     compIn: compText === null ? null : compIn,
     compTurns: compText === null ? null : compMarkers.length,
     compMarkerBytes: compMarkers.map(markerBytes),
@@ -1517,7 +1578,7 @@ console.log(
 );
 for (const r of rows) {
   const oursWhole = r.oursTokAfter + r.oursTokSpill;
-  const theirHanded = tokens(theirs[r.name].bestText ?? '');
+  const theirHanded = theirHandedTok(r);
   const theirWhole = theirHanded + r.theirTokRedeem;
   console.log(
     `${r.name.padEnd(34)} ${n(r.oursTurns, 5)} ${n(r.theirTurns, 6)} ${n(r.oursTokAfter, 9)} ${n(theirHanded, 9)} ${n(oursWhole, 10)} ${n(theirWhole, 9)} | ` +
@@ -1549,6 +1610,23 @@ const subAll = sum((r) => r.subAfter);
 // reported next to its own zero-turn count rather than on its own.
 const presetAll = sum((r) => r.presetAfter);
 const presetTokAll = sum((r) => r.presetTokAfter);
+// THE PROXY ARM'S TOTALS, its per-row ratio applied to the common denominator
+// the way theirs is, because its own denominator is the request envelope. Only
+// where every row has a proxy figure: a total over a subset would compare a
+// different corpus with the columns beside it.
+const proxyEverywhere = rows.every(
+  (r) => r.bodyRatio !== null && r.bodyTokBefore > 0
+);
+const proxyChars = proxyEverywhere
+  ? 1 - sum((r) => Math.round(r.before * (1 - r.bodyRatio))) / beforeAll
+  : null;
+const proxyTokens = proxyEverywhere
+  ? 1 -
+    sum((r) =>
+      Math.round((r.oursTokBefore * r.bodyTokAfter) / r.bodyTokBefore)
+    ) /
+      beforeTokAll
+  : null;
 const subTokAll = sum((r) => r.subTokAfter);
 
 // WHAT THE WHOLE SESSION COSTS, which is what a subscription is metered on.
@@ -1561,7 +1639,7 @@ const subTokAll = sum((r) => r.subTokAfter);
 // is the one a byte column cannot see, and it is the one that decides this
 // comparison. `cost-model.mjs` holds the model and names its two assumptions.
 const armsFor = (r, params) => {
-  const theirHanded = tokens(theirs[r.name].bestText ?? '');
+  const theirHanded = theirHandedTok(r);
   // Their per-block split is read off their own markers; the TOTAL is measured
   // from their resolver. A rounded `156.3KB` can move how the bytes spread
   // across turns, never how many of them there are.
@@ -1593,7 +1671,7 @@ const armsFor = (r, params) => {
     ours: L(r.oursTokAfter, r.oursBlockTok),
     theirs: L(theirHanded, theirBlocks),
     theirsComparable:
-      r.compTokAfter === null ? null : L(r.compTokAfter, compBlocks),
+      r.compTokAfter === null ? null : L(compHandedTok(r), compBlocks),
     preset: L(r.presetTokAfter, r.presetBlockTok),
     // THE PROXY ARM, PRICED BUT NOT YET THE PUBLISHED COLUMN. `ours` above is
     // `compressBlock`, which is what the MCP tools apply to one block of text.
@@ -1702,6 +1780,17 @@ const crossByName = !COST_PRICED
 const crossComparableByName = !COST_PRICED
   ? {}
   : Object.fromEntries(sessionCosts.map((c) => [c.name, c.crossComparable]));
+
+/** The proxy arm summed over the corpus at fetch rate `p`, or null without one everywhere. */
+const proxyCorpusAt = (p) =>
+  !COST_PRICED || !proxyEverywhere
+    ? null
+    : String(Math.round(sum((r) => costAt(byName[r.name].proxy, p))));
+/** Rows on which the proxy arm costs strictly less than their best arm at `p`. */
+const proxyCheaperAt = (p) =>
+  rows.filter(
+    (r) => costAt(byName[r.name].proxy, p) < costAt(byName[r.name].theirs, p)
+  ).length;
 
 const k = (t) => `${(t / 1000).toFixed(1)}k`;
 // EVERY `times` HERE IS A CORPUS RATIO, SO THE COMMON TERM IS PER SESSION
@@ -2764,21 +2853,26 @@ if (process.argv[3] === '--record') {
             },
             handedTokens: {
               ours: String(r.oursTokAfter),
-              theirs: String(tokens(theirs[r.name].bestText ?? '')),
+              theirs: String(theirHandedTok(r)),
               theirsComparable:
-                r.compTokAfter === null ? null : String(r.compTokAfter),
+                r.compTokAfter === null ? null : String(compHandedTok(r)),
+            },
+            // THE PART OF THEIR HANDED TOKENS THAT IS THEIR RETRIEVAL TOOL, shown
+            // apart so a reader can take it back out. See CCR_TOOL above.
+            injectedTokens: {
+              theirs: String(injectedFor(theirs[r.name].bestText)),
+              theirsComparable:
+                r.compTokAfter === null ? null : String(r.compInjectedTok),
             },
             wholeTokens: {
               ours: String(r.oursTokAfter + r.oursTokSpill),
-              theirs: String(
-                tokens(theirs[r.name].bestText ?? '') + r.theirTokRedeem
-              ),
+              theirs: String(theirHandedTok(r) + r.theirTokRedeem),
               // A LOWER BOUND, NOT A MEASUREMENT. We never resolved the comparable
               // arm, so its redeem tokens are unknown and priced at zero here.
               // Their whole cost is therefore AT LEAST this, which only makes our
               // bar harder -- but it must not be read as their measured total.
               theirsComparableAtLeast:
-                r.compTokAfter === null ? null : String(r.compTokAfter),
+                r.compTokAfter === null ? null : String(compHandedTok(r)),
             },
             // THE SESSION MODEL, which is what a subscription is metered on.
             // `p0` assumes nothing is ever fetched back and `p1` that everything
@@ -2945,7 +3039,10 @@ if (process.argv[3] === '--record') {
         // measurement is in `theirsFetch` below, taken by `resolve-theirs.py`
         // inside their TTL with their own resolver.
         oursSubFetch: r.subFetch,
-        theirsFetch: theirs.__provenance__?.perFetch ?? null,
+        // FROM THE RESOLVED FILE, which is the one `resolve-theirs.py` writes it
+        // to. This read `theirs.json`, where it never is, so their side was
+        // reported untimed on every capture, merged or not.
+        theirsFetch: resolved?.__provenance__?.perFetch ?? null,
         // WHICH OF THEIR ARMS EACH COLUMN IS, NAMED IN THE ROW. Their arms
         // differ by more than a percentage: a 13.7ms `crusher` reading and a
         // 37.4ms `pipeline@0.10` reading are different mechanisms, and a reader
@@ -3004,7 +3101,11 @@ if (process.argv[3] === '--record') {
       },
     })),
     totals: {
-      chars: { ours: pct(oursChars), theirs: pct(theirsChars) },
+      chars: {
+        ours: pct(oursChars),
+        theirs: pct(theirsChars),
+        proxy: proxyChars === null ? null : pct(proxyChars),
+      },
       costRefusal: COST_PRICED ? null : BASE.reason,
       cost: !COST_PRICED
         ? null
@@ -3017,16 +3118,14 @@ if (process.argv[3] === '--record') {
             },
             handedTokens: {
               ours: String(sum((r) => r.oursTokAfter)),
-              theirs: String(sum((r) => tokens(theirs[r.name].bestText ?? ''))),
+              theirs: String(sum((r) => theirHandedTok(r))),
+            },
+            injectedTokens: {
+              theirs: String(sum((r) => injectedFor(theirs[r.name].bestText))),
             },
             wholeTokens: {
               ours: String(sum((r) => r.oursTokAfter + r.oursTokSpill)),
-              theirs: String(
-                sum(
-                  (r) =>
-                    tokens(theirs[r.name].bestText ?? '') + r.theirTokRedeem
-                )
-              ),
+              theirs: String(sum((r) => theirHandedTok(r) + r.theirTokRedeem)),
             },
             // THE SAME MODEL OVER THE WHOLE CORPUS, plus the two session-shape
             // assumptions it was evaluated under, so a reader can tell which of
@@ -3047,13 +3146,25 @@ if (process.argv[3] === '--record') {
                 ours: String(Math.round(costAt(corpus.ours, 0))),
                 preset: String(Math.round(costAt(corpus.preset, 0))),
                 theirs: String(Math.round(costAt(corpus.theirs, 0))),
+                proxy: proxyCorpusAt(0),
               },
               p1: {
                 none: String(Math.round(costAt(corpus.none, 1))),
                 ours: String(Math.round(costAt(corpus.ours, 1))),
                 preset: String(Math.round(costAt(corpus.preset, 1))),
                 theirs: String(Math.round(costAt(corpus.theirs, 1))),
+                proxy: proxyCorpusAt(1),
               },
+              // ON HOW MANY ROWS THE PROXY ARM COSTS LESS THAN THEIR BEST ARM, at
+              // each end, so a sentence that counts them quotes this rather than
+              // a tally taken by hand.
+              proxyCheaper: !proxyEverywhere
+                ? null
+                : {
+                    p0: String(proxyCheaperAt(0)),
+                    p1: String(proxyCheaperAt(1)),
+                    of: String(rows.length),
+                  },
               breakEven: breakEvenLabel(corpus.cross),
               // The `ours` arm above compresses in place and spills nothing, so
               // against a cache-read bill it is the wrong arm to quote alone.
@@ -3104,7 +3215,11 @@ if (process.argv[3] === '--record') {
               },
             },
           },
-      tokens: { ours: pct(oursTokens), theirs: pct(theirsTokens) },
+      tokens: {
+        ours: pct(oursTokens),
+        theirs: pct(theirsTokens),
+        proxy: proxyTokens === null ? null : pct(proxyTokens),
+      },
       // THE COMPARISON THIS HARNESS CALLS APPLES-TO-APPLES, now in the record.
       //
       // `tokens` above is our encoding arm against their best arm of ANY kind,

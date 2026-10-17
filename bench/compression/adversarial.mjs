@@ -40,6 +40,7 @@ import { pathToFileURL } from 'node:url';
 import { compressBlock } from '../../dist/compress/router.js';
 import { rehydrate } from '../../dist/compress/rehydrate.js';
 import { scanIdentifiers } from './identifiers.mjs';
+import { benchSpillPath } from './spill-sink.mjs';
 
 /** Where in its carrier a payload is spliced. */
 export const POSITION = Object.freeze({
@@ -383,11 +384,7 @@ function reduction(before, after) {
  * says yes; the content itself is dropped on the floor here.
  */
 function sink() {
-  let n = 0;
-  return (content, hint) => {
-    n++;
-    return '.token-optimizer/spill/' + n + '-' + hint;
-  };
+  return (content) => benchSpillPath(content);
 }
 
 /** The decoy arm that kept most, which is the one an attack has to beat. */

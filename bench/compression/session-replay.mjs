@@ -82,14 +82,12 @@ import { createHash } from 'node:crypto';
 import { STRATEGIES } from '../../dist/compress/strategy.js';
 import { anchorStore } from '../../dist/compress/anchor.js';
 import { substituteHistory } from '../../dist/compress/history.js';
+import { benchSpillPath } from './spill-sink.mjs';
 
 function replaySpill() {
-  // Simulated content-addressed sink: offline replay never retrieves files.
-  return (content, hint) =>
-    '.token-optimizer/spill/' +
-    createHash('sha256').update(content).digest('hex') +
-    '-' +
-    hint;
+  // Content-addressed, at the proxy's own path: offline replay never retrieves
+  // files, but every turn still carries the marker, so its length is priced.
+  return (content) => benchSpillPath(content);
 }
 const directSpill = replaySpill();
 const anchoredSpill = replaySpill();
