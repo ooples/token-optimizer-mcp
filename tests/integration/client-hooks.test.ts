@@ -420,6 +420,126 @@ describe('native CLI hook integrations', () => {
     expect(compactionOutput.context.join('\n')).toContain('smart_read');
   });
 
+  // OpenCode 2.x dropped the V1 hook-name map: a plugin must default-export an
+  // object with an id and a setup(ctx) that registers through session.hook /
+  // tool.hook, or it fails to load with "Plugin must export a default
+  // definition". This exercises that registration path with a fake V2 context
+  // so the shipped file is known to serve both plugin APIs.
+  it('preserves enforcement and guidance through the OpenCode V2 default export', async () => {
+    const pluginModule = (await import(
+      `${pathToFileURL(openCodePlugin).href}?v2=${Date.now()}`
+    )) as {
+      default: {
+        id: string;
+        server: unknown;
+        setup: (ctx: unknown) => Promise<void>;
+      };
+    };
+    expect(pluginModule.default.id).toBe('token-optimizer');
+
+    const registered: Record<string, (event: unknown) => Promise<void>> = {};
+    const context = {
+      location: { directory: fixtureDir },
+      session: {
+        hook: async (name: string, callback: (event: unknown) => void) => {
+          registered[`session:${name}`] = callback;
+        },
+      },
+      tool: {
+        hook: async (name: string, callback: (event: unknown) => void) => {
+          registered[`tool:${name}`] = callback;
+        },
+      },
+    };
+    await pluginModule.default.setup(context);
+
+    expect(Object.keys(registered).sort()).toEqual([
+      'session:compaction',
+      'session:context',
+      'tool:execute.after',
+      'tool:execute.before',
+    ]);
+
+    const previousMode = process.env.TOKEN_OPTIMIZER_MODE;
+    const previousCapabilities = process.env.TOKEN_OPTIMIZER_MCP_CAPABILITIES;
+    delete process.env.TOKEN_OPTIMIZER_MODE;
+    delete process.env.TOKEN_OPTIMIZER_MCP_CAPABILITIES;
+
+    try {
+      // Mirrors the V1 contract test above: unset means assist (no refusal),
+      // so the deny case must ask for `enforce` explicitly -- otherwise this
+      // proves only that nothing happened.
+      process.env.TOKEN_OPTIMIZER_MODE = 'enforce';
+      await expect(
+        registered['tool:execute.before']({
+          tool: 'read',
+          sessionID: 'v2-enforce',
+          id: 'call-1',
+          input: { filePath: largeFile },
+        })
+      ).rejects.toThrow('smart_read');
+
+      // The new default is pinned here too: unset must mean assist, so the
+      // large read goes through untouched.
+      delete process.env.TOKEN_OPTIMIZER_MODE;
+      await expect(
+        registered['tool:execute.before']({
+          tool: 'read',
+          sessionID: 'v2-default',
+          id: 'call-2',
+          input: { filePath: largeFile },
+        })
+      ).resolves.toBeUndefined();
+
+      process.env.TOKEN_OPTIMIZER_MODE = 'advise';
+      await expect(
+        registered['tool:execute.before']({
+          tool: 'read',
+          sessionID: 'v2-advise',
+          id: 'call-3',
+          input: { filePath: largeFile },
+        })
+      ).resolves.toBeUndefined();
+
+      // Fail-open on an empty inventory, checked under enforce for the same
+      // reason as above.
+      process.env.TOKEN_OPTIMIZER_MODE = 'enforce';
+      process.env.TOKEN_OPTIMIZER_MCP_CAPABILITIES = '';
+      await expect(
+        registered['tool:execute.before']({
+          tool: 'read',
+          sessionID: 'v2-empty',
+          id: 'call-4',
+          input: { filePath: largeFile },
+        })
+      ).resolves.toBeUndefined();
+
+      delete process.env.TOKEN_OPTIMIZER_MODE;
+      const compaction = { system: [] as { type: string; text: string }[] };
+      await registered['session:compaction'](compaction);
+      expect(compaction.system.map((part) => part.text).join('\n')).toContain(
+        'smart_read'
+      );
+
+      const contextRequest = { system: [] as { type: string; text: string }[] };
+      await registered['session:context'](contextRequest);
+      expect(contextRequest.system.every((part) => part.type === 'text')).toBe(
+        true
+      );
+    } finally {
+      if (previousMode === undefined) {
+        delete process.env.TOKEN_OPTIMIZER_MODE;
+      } else {
+        process.env.TOKEN_OPTIMIZER_MODE = previousMode;
+      }
+      if (previousCapabilities === undefined) {
+        delete process.env.TOKEN_OPTIMIZER_MCP_CAPABILITIES;
+      } else {
+        process.env.TOKEN_OPTIMIZER_MCP_CAPABILITIES = previousCapabilities;
+      }
+    }
+  });
+
   it.each([
     ['OpenCode', openCodePlugin],
     ['Kilo', kiloPlugin],
