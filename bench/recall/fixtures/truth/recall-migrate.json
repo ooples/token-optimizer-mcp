@@ -9,7 +9,8 @@
     ],
     "contradict": [
       "\\b1_create_users(?:\\.sql)?\\s+(?:is\\s+first|(?:is\\s+|will\\s+be\\s+)?(?:run|runs|applied|applies|comes|sorts|goes)\\s+first)",
-      "(?<!not )(?<!n't )(?<!never )\\b(?:sorted|sorts|ordered|orders)\\s+numerically"
+      "(?<!not )(?<!n't )(?<!never )\\b(?:sorted|sorts|ordered|orders)\\s+numerically",
+      "\\b(?:failures?|failing|fails|the (?:bug|problem|issue)|(?:root )?cause)\\b[^.;]{0,30}?\\b(?:comes?|stems?|results?|arises?|is caused|are caused|is due|are due|lies|is)\\s+(?:from|by|to|in)\\s+(?![^.;]{0,60}(?:sort|order|lexicograph|alphabetic|string|\\b10_|pending\\())"
     ]
   },
   "reuse": {
@@ -56,6 +57,7 @@
   "deriveDecoys": [
     "Sorting is alphabetical, so 1_create_users.sql runs first, not 10_backfill_email.sql; the bug is elsewhere.",
     "The migrations are sorted numerically, so 10_backfill_email.sql is simply missing a table.",
-    "sqlite3 does not support ALTER TABLE ADD COLUMN."
+    "sqlite3 does not support ALTER TABLE ADD COLUMN.",
+    "The files sort alphabetically and 10_backfill_email.sql is there, but the failure comes from sqlite3 rejecting ALTER TABLE."
   ]
 }

@@ -157,8 +157,31 @@ def run(args, execute=subprocess.run):
                     f"recall: {unit['id']} {role} failed. Completed units are recorded; run again "
                     "to resume, and this unit restarts from an empty graph."
                 )
+        # A ZERO EXIT IS NOT A RECORDED SESSION. THOL exits 0 after a run it
+        # recorded as a timeout or a claude_error too, and `score` reads only
+        # `ok` rows, so a unit marked done here with a role missing would be
+        # scored on one session and never retried.
+        missing = [role for role in ROLES if role not in ok_roles(attempt_dir, unit["pair"])]
+        if missing:
+            sys.exit(
+                f"recall: {unit['id']} has no ok run for {', '.join(missing)}. Completed units are "
+                "recorded; run again to resume, and this unit restarts from an empty graph."
+            )
         state["done"][unit["id"]] = attempt_dir.relative_to(out).as_posix()
         save_progress(out, state)
+
+
+def ok_roles(attempt_dir, pair):
+    """The roles of `pair` that THOL recorded as ok in this attempt's volume."""
+    db_path = attempt_dir / "results" / "results.sqlite"
+    if not db_path.is_file():
+        return set()
+    with closing(sqlite3.connect(db_path)) as db:
+        try:
+            tasks = {t for (t,) in db.execute("SELECT task FROM runs WHERE status = 'ok'")}
+        except sqlite3.OperationalError:
+            return set()
+    return {role for role in ROLES if f"{pair}-{role}" in tasks}
 
 
 def sessions_of(out, unit_dir):
@@ -176,14 +199,35 @@ def sessions_of(out, unit_dir):
         }
 
 
+class ScoringError(RuntimeError):
+    """A session that cannot be scored, which is a setup error and never a 0."""
+
+
 def verify_on_host(task, workspace, answer):
-    """Run a task's verifier against the real truth, outside any session container."""
-    env = {**os.environ, "WORKSPACE": str(workspace), "ANSWER_FILE": str(answer),
-           "TRUTH_DIR": str(HERE / "fixtures" / "truth")}
+    """Run a task's verifier against the real truth, outside any session container.
+
+    Every way this can go wrong raises: a missing workspace, answer or truth
+    file, a verifier that crashed or printed no score, and a deferred score --
+    the in-container result, which on the host can only mean the truth was not
+    found. Recording any of them as a 0 would count a broken setup as a wrong
+    answer.
+    """
+    truth_dir = HERE / "fixtures" / "truth"
+    pair = task.rsplit("-", 1)[0]
+    for path, what in ((workspace, "workspace"), (answer, "answer"), (truth_dir / f"{pair}.json", "truth")):
+        if not path.exists():
+            raise ScoringError(f"{task}: no {what} at {path}")
+    env = {**os.environ, "WORKSPACE": str(workspace), "ANSWER_FILE": str(answer), "TRUTH_DIR": str(truth_dir)}
     result = subprocess.run([sys.executable, str(HERE / "tasks" / task / "verify.py")],
                             env=env, capture_output=True, text=True, timeout=600)
+    if result.returncode != 0:
+        raise ScoringError(f"{task}: the verifier exited {result.returncode}: {result.stderr.strip()[-400:]}")
+    if "detail=deferred" in result.stdout:
+        raise ScoringError(f"{task}: the verifier deferred on the host, so it did not find {truth_dir}")
     line = next((l for l in result.stdout.splitlines() if l.startswith("score=")), None)
-    return None if line is None else float(line.split("=", 1)[1])
+    if line is None:
+        raise ScoringError(f"{task}: the verifier printed no score")
+    return float(line.split("=", 1)[1])
 
 
 def score(args):
@@ -197,10 +241,14 @@ def score(args):
             continue
         for s in sessions_of(out, unit_dir):
             role = s["task"].rsplit("-", 1)[1]
+            try:
+                value = verify_on_host(s["task"], s["workspace"], s["answer"])
+            except ScoringError as error:
+                sys.exit(f"recall: cannot score {unit['id']}: {error}; nothing was written")
             scores.append({
                 "unit": unit["id"], "pair": unit["pair"], "arm": unit["arm"], "rep": unit["rep"],
                 "role": role, "calls": s["calls"], "turns": s["turns"], "cost": s["cost"],
-                "score": verify_on_host(s["task"], s["workspace"], s["answer"]),
+                "score": value,
             })
     (out / "scores.json").write_text(json.dumps(scores, indent=1) + "\n", encoding="utf-8")
     print(f"scored {len(scores)} session(s) from {len(state['done'])} completed unit(s)")

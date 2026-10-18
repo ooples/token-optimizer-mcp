@@ -9,7 +9,8 @@
     ],
     "contradict": [
       "(?<!not )(?<!n't )(?<!never )\\b(?:read|interpreted|treated|used|parsed|handled)\\s+(?:correctly\\s+)?(?:in|as)\\s+seconds\\b",
-      "\\b(?:isn't|is not|never|not)\\s+(?:read|interpreted|treated|used)\\s+(?:in|as)\\s+milli\\s*-?seconds"
+      "\\b(?:isn't|is not|never|not)\\s+(?:read|interpreted|treated|used)\\s+(?:in|as)\\s+milli\\s*-?seconds",
+      "\\b(?:failures?|failing|fails|the (?:bug|problem|issue)|(?:root )?cause)\\b[^.;]{0,30}?\\b(?:comes?|stems?|results?|arises?|is caused|are caused|is due|are due|lies|is)\\s+(?:from|by|to|in)\\s+(?![^.;]{0,60}(?:milli\\s*-?second|\\bms\\b|window_ms|\\bseconds?\\b|\\bunits?\\b|QUOTA_WINDOW|config\\.window))"
     ]
   },
   "reuse": {
@@ -49,6 +50,7 @@
   "deriveDecoys": [
     "QUOTA_WINDOW is read correctly in seconds, not milliseconds; the limit counter is never reset.",
     "The window is not interpreted as milliseconds; the problem is that QUOTA_LIMIT is ignored.",
-    "A race between concurrent requests lets extra requests through."
+    "A race between concurrent requests lets extra requests through.",
+    "QUOTA_WINDOW is documented in seconds and window_ms is milliseconds, but the problem is in the counter, which never resets."
   ]
 }

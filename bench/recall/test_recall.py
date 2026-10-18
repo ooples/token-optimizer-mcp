@@ -245,6 +245,20 @@ class Fail:
     returncode = 1
 
 
+def thol_records(step, status="ok"):
+    """Write the row THOL would for the session `step` ran, into its own volume."""
+    import sqlite3
+    from contextlib import closing
+
+    results = Path(next(m for m in mounts_of(step) if ":/results:" in m).split(":/results:")[0])
+    task = step[step.index("-t") + 1]
+    with closing(sqlite3.connect(results / "results.sqlite")) as db, db:
+        db.execute("CREATE TABLE IF NOT EXISTS runs (run_id TEXT, task TEXT, tool_calls INTEGER, "
+                   "num_turns INTEGER, total_cost_usd REAL, status TEXT)")
+        db.execute("INSERT INTO runs VALUES (?,?,?,?,?,?)", (task, task, 1, 1, 0.0, status))
+    return Ok()
+
+
 class TheRunnerKeepsThePairsApart(unittest.TestCase):
     """Nothing may reach a reuse session except what its own derive session left."""
 
@@ -312,7 +326,7 @@ class TheRunnerKeepsThePairsApart(unittest.TestCase):
                 graph = next(m for m in mounts_of(step) if ":/proxy-graph:" in m).split(":/proxy-graph:")[0]
                 # Each session leaves something in the graph, as a real one would.
                 (Path(graph) / f"left-{len(calls)}").write_text("x")
-                return Fail() if len(calls) == 4 else Ok()
+                return Fail() if len(calls) == 4 else thol_records(step)
 
             args = argparse.Namespace(out=str(out), approve_spend=True)
             with self.assertRaises(SystemExit):
@@ -324,7 +338,7 @@ class TheRunnerKeepsThePairsApart(unittest.TestCase):
             self.assertNotIn(failed, r.progress(out)["done"])
 
             calls.clear()
-            quiet(r.run, args, execute=lambda step: (calls.append(step), Ok())[1])
+            quiet(r.run, args, execute=lambda step: (calls.append(step), thol_records(step))[1])
             touched = {m for s in calls for m in mounts_of(s) if ":/results:" in m}
             self.assertFalse(any(f"units{os.sep}{first}{os.sep}" in m or f"units/{first}/" in m for m in touched))
             self.assertEqual(len(calls), 2 * (len(plan["units"]) - 1))
@@ -334,7 +348,62 @@ class TheRunnerKeepsThePairsApart(unittest.TestCase):
             self.assertFalse(any(p.name.startswith("left-") and int(p.name[5:]) <= 4 for p in retry.iterdir()))
 
 
+    def test_a_zero_exit_without_an_ok_row_does_not_complete_a_unit(self):
+        # THOL exits 0 after recording a timeout too; score reads only ok rows.
+        import argparse
+
+        r = runner()
+        with tempfile.TemporaryDirectory() as out:
+            out = Path(out) / "p"
+            plan = make_plan(out, reps=1)
+            args = argparse.Namespace(out=str(out), approve_spend=True)
+            with self.assertRaises(SystemExit) as stopped:
+                quiet(r.run, args, execute=lambda step: thol_records(
+                    step, "timeout" if step[step.index("-t") + 1].endswith("-reuse") else "ok"))
+            self.assertIn("no ok run for reuse", str(stopped.exception))
+            self.assertEqual(r.progress(out)["done"], {})
+            self.assertEqual(r.progress(out)["attempts"], {plan["units"][0]["id"]: 1})
+
+
 class ScoringHappensOnTheHost(unittest.TestCase):
+    def test_host_scoring_refuses_what_it_cannot_score(self):
+        r = runner()
+        with Workspace("recall-tz") as ws, tempfile.TemporaryDirectory() as scratch:
+            answer = Path(scratch) / "answer.txt"
+            with self.assertRaisesRegex(r.ScoringError, "no answer"):
+                r.verify_on_host("recall-tz-reuse", ws, answer)
+            answer.write_text("TZ=UTC")
+            with self.assertRaisesRegex(r.ScoringError, "no workspace"):
+                r.verify_on_host("recall-tz-reuse", Path(scratch) / "missing", answer)
+            with self.assertRaisesRegex(r.ScoringError, "no truth"):
+                r.verify_on_host("recall-absent-reuse", ws, answer)
+            self.assertEqual(r.verify_on_host("recall-tz-reuse", ws, answer), 1.0)
+
+    def test_a_deferred_crashed_or_silent_verifier_is_an_error_not_a_zero(self):
+        # The check after the truth pre-check: a verifier that still defers on
+        # the host means the setup is wrong, and must not be recorded as a 0.
+        r = runner()
+        real = r.HERE
+        with tempfile.TemporaryDirectory() as fake, Workspace("recall-tz") as ws:
+            fake = Path(fake)
+            (fake / "tasks" / "recall-tz-reuse").mkdir(parents=True)
+            (fake / "fixtures" / "truth").mkdir(parents=True)
+            (fake / "fixtures" / "truth" / "recall-tz.json").write_text("{}")
+            answer = fake / "answer.txt"
+            answer.write_text("TZ=UTC")
+            stubs = {
+                "deferred": 'print("score=0.0000")\nprint("detail=deferred: no truth here")\n',
+                "exited 3": 'import sys\nsys.exit(3)\n',
+                "no score": 'print("detail=nothing to say")\n',
+            }
+            r.HERE = fake
+            try:
+                for expected, source in stubs.items():
+                    (fake / "tasks" / "recall-tz-reuse" / "verify.py").write_text(source)
+                    with self.assertRaisesRegex(r.ScoringError, expected):
+                        r.verify_on_host("recall-tz-reuse", ws, answer)
+            finally:
+                r.HERE = real
     def test_inside_the_container_the_verifier_defers(self):
         with Workspace("recall-tz") as ws, tempfile.TemporaryDirectory() as empty_truth:
             with tempfile.TemporaryDirectory() as scratch:

@@ -8,7 +8,8 @@
     ],
     "contradict": [
       "\\b(?:does not|doesn't|never|isn't|is not)\\s+(?:use|depend on|call|read|consult)\\s+(?:the\\s+)?(?:machine'?s\\s+)?(?:local\\s*time|localtime|time\\s*zone|timezone)",
-      "\\b(?:has nothing to do with|unrelated to|not caused by)\\s+(?:the\\s+)?(?:local\\s*time|localtime|time\\s*zone|timezone)"
+      "\\b(?:has nothing to do with|unrelated to|not caused by)\\s+(?:the\\s+)?(?:local\\s*time|localtime|time\\s*zone|timezone)",
+      "\\b(?:failures?|failing|fails|the (?:bug|problem|issue)|(?:root )?cause)\\b[^.;]{0,30}?\\b(?:comes?|stems?|results?|arises?|is caused|are caused|is due|are due|lies|is)\\s+(?:from|by|to|in)\\s+(?![^.;]{0,60}(?:local\\s*time|localtime|time\\s*zone|timezone|UTC|day_of|strftime))"
     ]
   },
   "reuse": {
@@ -52,6 +53,7 @@
   "deriveDecoys": [
     "The code does not use local time; the failures come from float rounding in sum().",
     "It has nothing to do with the time zone: OrderedDict ordering differs between machines.",
-    "The tests are flaky because of a race condition in the test runner."
+    "The tests are flaky because of a race condition in the test runner.",
+    "The code uses time.localtime, but the failures come from float rounding in sum()."
   ]
 }

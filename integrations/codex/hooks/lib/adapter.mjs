@@ -1884,9 +1884,16 @@ async function runHook(clientName, event, invocation) {
   // and buys nothing until there is something to record. The first edit is the
   // clearest sign there will be; GUIDANCE_AFTER_CALLS tool calls is the fallback
   // for an investigation that edits nothing but still works things out.
+  //
+  // Only where it can arrive and is wanted: an experiment arm with harvest off
+  // gets no recording instructions (the nudge above has the same gate), and a
+  // client whose context style is silent (Windsurf) cannot deliver any context,
+  // so it must not spend the once-only flag on a message nobody receives.
   const guided =
     event === 'post-tool' &&
     !state.recordingGuided &&
+    features.harvest &&
+    contextOutput(client, eventName, '') !== null &&
     toolEvidence.names.has('wiki_write') &&
     ((Number(state.edits) || 0) >= 1 ||
       (Number(state.toolCalls) || 0) >= GUIDANCE_AFTER_CALLS);
