@@ -54,10 +54,9 @@ const createInvoke = (directory) => {
 };
 
 /**
- * OpenCode V1 entrypoint. OpenCode 1.x loads this plugin through the named
- * export and the V1 hook-name map; OpenCode 2.x rejects that shape outright
- * ("Plugin must export a default definition with an id and an effect or setup
- * function"), so the V2 implementation lives in the default export below.
+ * OpenCode V1 entrypoint: the V1 hook-name map. OpenCode 2.x rejects this shape
+ * outright ("Plugin must export a default definition with an id and an effect
+ * or setup function"), so 2.x is served by a separate `setup` instead.
  */
 export const TokenOptimizerPlugin = async ({ directory }) => {
   const invoke = createInvoke(directory);
@@ -109,12 +108,20 @@ export const TokenOptimizerPlugin = async ({ directory }) => {
   };
 };
 
+// LEGACY CUT. scripts/generate-opencode-legacy-plugin.mjs copies everything
+// above this line to
+// integrations/opencode/legacy/.opencode/plugins/token-optimizer.js.
+// OpenCode 1.3.3 and earlier call EVERY export as a plugin function, so the
+// default object below makes them fail to load the whole file, while OpenCode
+// 2.x accepts nothing but that object. No one module satisfies both loaders.
+
 /**
  * OpenCode V2 entrypoint. V2 loads plugins from a default export with an `id`
  * and a `setup(ctx)` that registers hooks through the V2 hook domains
  * (`session.hook` / `tool.hook`) instead of returning a hook-name
- * map. `server` is kept for V1 object entrypoints (OpenCode >= 1.18.29), so
- * this one file serves both plugin APIs from the same hook logic.
+ * map. `server` serves OpenCode 1.3.4 and later 1.x releases, which read a
+ * default `{ id, server }` object, so this file serves both plugin APIs from
+ * the same hook logic.
  *
  * V1 hook -> V2 hook mapping:
  *   experimental.chat.system.transform -> session.hook('context')

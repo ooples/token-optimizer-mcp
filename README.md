@@ -1919,6 +1919,8 @@ New-Item -ItemType Directory -Force .opencode/plugins | Out-Null
 Copy-Item integrations/opencode/.opencode/plugins/token-optimizer.js .opencode/plugins/
 ```
 
+On OpenCode 1.3.3 or earlier (check `opencode --version`), copy `integrations/opencode/legacy/.opencode/plugins/token-optimizer.js` to the same place instead. Those releases call every export of a plugin file as a plugin function, so they cannot load the current file, whose default export is the object OpenCode 2.x requires. Both files have the same name, so copying one replaces the other.
+
 The plugin preserves Token Optimizer usage state in OpenCode's compaction prompt. Under `TOKEN_OPTIMIZER_MODE=enforce` its `tool.execute.before` hook rejects full-file reads over 25 KB and steers the agent to `smart_read`; the default `assist` lets them through. Small and partial reads always pass normally, and `TOKEN_OPTIMIZER_MODE=advise` gives non-blocking guidance. Restart OpenCode after adding the plugin. See the official [OpenCode MCP guide](https://opencode.ai/docs/mcp-servers/) and [plugin hook guide](https://opencode.ai/docs/plugins/).
 
 ### Generic MCP configuration

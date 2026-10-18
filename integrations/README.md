@@ -135,6 +135,12 @@ cp -R opencode/hooks/* /path/to/project/.opencode/hooks/token-optimizer/
 The local plugin invokes the generated shared-engine entries, preserves guidance
 during compaction, and appends applicable graph findings to tool results.
 
+On OpenCode 1.3.3 or earlier, copy
+`opencode/legacy/.opencode/plugins/token-optimizer.js` to the same destination
+instead. Those releases call every export of a plugin file as a plugin function
+and cannot load the current file, whose default export is the object OpenCode
+2.x requires. The two files share a name, so copying one replaces the other.
+
 ## Hook behavior and controls
 
 All adapters are fail-open for malformed payloads, missing files, small files,

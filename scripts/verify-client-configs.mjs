@@ -625,6 +625,18 @@ for (const [client, relative, required] of [
       raw.includes('export const TokenOptimizerPlugin')
     );
   }
+  // OpenCode <= 1.3.3 calls every export as a plugin, so its file must export
+  // the V1 function and nothing else.
+  const legacy = join(
+    ROOT,
+    'integrations/opencode/legacy/.opencode/plugins/token-optimizer.js'
+  );
+  const legacyRaw = existsSync(legacy) ? readFileSync(legacy, 'utf8') : '';
+  check(
+    'opencode legacy: exports only the V1 plugin function',
+    legacyRaw.includes('export const TokenOptimizerPlugin') &&
+      (legacyRaw.match(/^export\b/gm) || []).length === 1
+  );
 }
 
 const failed = results.filter((r) => !r.pass);
