@@ -10,7 +10,7 @@
     "contradict": [
       "\\b1_create_users(?:\\.sql)?\\s+(?:is\\s+first|(?:is\\s+|will\\s+be\\s+)?(?:run|runs|applied|applies|comes|sorts|goes)\\s+first)",
       "(?<!not )(?<!n't )(?<!never )\\b(?:sorted|sorts|ordered|orders)\\s+numerically",
-      "\\b(?:failures?|failing|fails|the (?:bug|problem|issue)|(?:root )?cause)\\b[^.;]{0,30}?\\b(?:comes?|stems?|results?|arises?|is caused|are caused|is due|are due|lies|is)\\s+(?:from|by|to|in)\\s+(?![^.;]{0,60}(?:sort|order|lexicograph|alphabetic|string|\\b10_|pending\\())"
+      "\\b(?:failures?|failing|fails|the (?:bug|problem|issue)|(?:root )?cause)\\b[^.;]{0,30}?\\b(?:comes?|stems?|results?|arises?|is caused|are caused|is due|are due|lies|is)\\s+(?:from|by|to|in)\\s+(?:(?!sort|order|lexicograph|alphabetic|\\b10_|pending\\()(?:[^.;]|\\.(?!\\s|$))){0,60}?(?:sqlite|ALTER TABLE|syntax|foreign key|transaction|\\block|permission|encoding|race\\b|concurren)"
     ]
   },
   "reuse": {
@@ -59,5 +59,8 @@
     "The migrations are sorted numerically, so 10_backfill_email.sql is simply missing a table.",
     "sqlite3 does not support ALTER TABLE ADD COLUMN.",
     "The files sort alphabetically and 10_backfill_email.sql is there, but the failure comes from sqlite3 rejecting ALTER TABLE."
+  ],
+  "deriveAccepts": [
+    "The failure comes from migration 10 referencing a missing table. The files sort alphabetically, so 10_backfill_email.sql runs first."
   ]
 }

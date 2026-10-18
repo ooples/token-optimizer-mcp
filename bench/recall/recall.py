@@ -234,6 +234,9 @@ def score(args):
     out = Path(args.out).resolve()
     record = load(out)
     state = progress(out)
+    # A rescore replaces the scores whole: if it fails partway, report must
+    # find nothing rather than the scores of an earlier, smaller run.
+    (out / "scores.json").unlink(missing_ok=True)
     scores = []
     for unit in record["units"]:
         unit_dir = state["done"].get(unit["id"])
@@ -244,7 +247,7 @@ def score(args):
             try:
                 value = verify_on_host(s["task"], s["workspace"], s["answer"])
             except ScoringError as error:
-                sys.exit(f"recall: cannot score {unit['id']}: {error}; nothing was written")
+                sys.exit(f"recall: cannot score {unit['id']}: {error}; no scores.json is left behind")
             scores.append({
                 "unit": unit["id"], "pair": unit["pair"], "arm": unit["arm"], "rep": unit["rep"],
                 "role": role, "calls": s["calls"], "turns": s["turns"], "cost": s["cost"],
@@ -256,6 +259,8 @@ def score(args):
 
 def report(args):
     out = Path(args.out).resolve()
+    if not (out / "scores.json").is_file():
+        sys.exit(f"recall: no scores.json in {out}; run score first")
     rows = [r for r in json.loads((out / "scores.json").read_text(encoding="utf-8")) if r["role"] == "reuse"]
     by = {}
     for r in rows:

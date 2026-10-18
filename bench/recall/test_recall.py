@@ -164,6 +164,15 @@ class TheVerifiersScoreWhatTheySay(unittest.TestCase):
                 (ws / ".token-optimizer" / "wiki" / "nodes.jsonl").write_text("{}\n")
                 self.assertEqual(score(pair, "reuse", t["reference"]["reuse"], ws), 1.0, pair)
 
+    def test_a_right_cause_told_in_other_words_scores_full_credit(self):
+        # The contradiction check must reject named wrong causes only: "comes
+        # from migration 10 referencing a missing table." is the symptom, and
+        # the next sentence gives the ordering cause.
+        for pair in PAIRS:
+            with Workspace(pair) as ws:
+                for right in record(pair)["deriveAccepts"]:
+                    self.assertEqual(score(pair, "derive", right, ws), 1.0, f"{pair}: {right!r}")
+
     def test_a_derive_reply_that_misses_the_cause_scores_nothing(self):
         vague = "The tests fail because of a bug in the code; it needs fixing."
         for pair in PAIRS:
@@ -463,6 +472,16 @@ class ScoringHappensOnTheHost(unittest.TestCase):
 
             buffer = io.StringIO()
             with contextlib.redirect_stdout(buffer):
+                r.report(argparse.Namespace(out=str(out)))
+
+            # A rescore that fails (here: an answer went missing) must not
+            # leave the earlier scores for report to present as current.
+            first = next(Path(out, d) for d in state["done"].values())
+            next((first / "results" / "artifacts").glob("*/answer.txt")).unlink()
+            with self.assertRaisesRegex(SystemExit, "cannot score"):
+                quiet(r.score, argparse.Namespace(out=str(out)))
+            self.assertFalse((out / "scores.json").exists())
+            with self.assertRaisesRegex(SystemExit, "run score first"):
                 r.report(argparse.Namespace(out=str(out)))
         line = next(l for l in buffer.getvalue().splitlines() if "knowledge" in l)
         self.assertIn("10.0 over 1", line)
