@@ -166,6 +166,7 @@ describe('every generator', () => {
   const GENERATORS = [
     'scripts/sync-hook-core.mjs',
     'scripts/generate-client-entries.mjs',
+    'scripts/generate-opencode-legacy-plugin.mjs',
     'scripts/generate-client-configs.mjs',
   ];
 

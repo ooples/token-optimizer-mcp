@@ -45,6 +45,10 @@ const openCodePlugin = join(
   repoRoot,
   'integrations/opencode/.opencode/plugins/token-optimizer.js'
 );
+const openCodeLegacyPlugin = join(
+  repoRoot,
+  'integrations/opencode/legacy/.opencode/plugins/token-optimizer.js'
+);
 const kiloPlugin = join(
   repoRoot,
   'integrations/kilo/.kilo/plugin/token-optimizer.js'
@@ -420,8 +424,197 @@ describe('native CLI hook integrations', () => {
     expect(compactionOutput.context.join('\n')).toContain('smart_read');
   });
 
+  // Each shipped file against a replica of the loader it is for, taken from
+  // OpenCode's packages/opencode/src/plugin/index.ts (v1.3.3, v1.3.4) and
+  // packages/core/src/plugin/module.ts (2.x). No single file can pass all three:
+  // up to 1.3.3 every export is called as a plugin, while 2.x accepts only an
+  // object default. That is why the legacy file exists, and why it is generated
+  // from the current one rather than maintained beside it.
+  it('ships an OpenCode plugin file that each loader generation accepts', async () => {
+    type Hooks = Record<string, unknown>;
+    const load = async (file: string) =>
+      (await import(
+        `${pathToFileURL(file).href}?loader=${Date.now()}`
+      )) as Record<string, unknown>;
+    const input = { directory: fixtureDir };
+
+    // <= 1.3.3: Object.entries(mod), deduplicated by reference, each one called.
+    const upTo133 = async (mod: Record<string, unknown>) => {
+      const seen = new Set<unknown>();
+      const hooks: Hooks[] = [];
+      for (const fn of Object.values(mod)) {
+        if (seen.has(fn)) continue;
+        seen.add(fn);
+        hooks.push(await (fn as (i: unknown) => Promise<Hooks>)(input));
+      }
+      return hooks;
+    };
+    // 1.3.4 to 1.x: a default object with a server() wins over the named exports.
+    const from134 = async (mod: Record<string, unknown>) => {
+      const value = mod.default as
+        | { id?: unknown; server?: unknown }
+        | undefined;
+      expect(value !== null && typeof value === 'object').toBe(true);
+      expect(typeof value?.id).toBe('string');
+      expect(typeof value?.server).toBe('function');
+      return (value?.server as (i: unknown) => Promise<Hooks>)(input);
+    };
+    // 2.x: the default must be an object with a string id and setup().
+    const v2Accepts = (mod: Record<string, unknown>) => {
+      const value = mod.default as
+        | { id?: unknown; setup?: unknown }
+        | undefined;
+      return (
+        value !== null &&
+        typeof value === 'object' &&
+        typeof value.id === 'string' &&
+        typeof value.setup === 'function'
+      );
+    };
+
+    const legacy = await load(openCodeLegacyPlugin);
+    expect(Object.keys(legacy)).toEqual(['TokenOptimizerPlugin']);
+    const legacyHooks = await upTo133(legacy);
+    expect(legacyHooks).toHaveLength(1);
+    expect(Object.keys(legacyHooks[0]).sort()).toEqual([
+      'experimental.chat.system.transform',
+      'experimental.session.compacting',
+      'tool.execute.after',
+      'tool.execute.before',
+    ]);
+
+    const current = await load(openCodePlugin);
+    await expect(upTo133(current)).rejects.toThrow(TypeError);
+    expect(Object.keys(await from134(current)).sort()).toEqual(
+      Object.keys(legacyHooks[0]).sort()
+    );
+    expect(v2Accepts(current)).toBe(true);
+    expect(v2Accepts(legacy)).toBe(false);
+  });
+
+  // OpenCode 2.x dropped the V1 hook-name map: a plugin must default-export an
+  // object with an id and a setup(ctx) that registers through session.hook /
+  // tool.hook, or it fails to load with "Plugin must export a default
+  // definition". This exercises that registration path with a fake V2 context
+  // so the shipped file is known to serve both plugin APIs.
+  it('preserves enforcement and guidance through the OpenCode V2 default export', async () => {
+    const pluginModule = (await import(
+      `${pathToFileURL(openCodePlugin).href}?v2=${Date.now()}`
+    )) as {
+      default: {
+        id: string;
+        server: unknown;
+        setup: (ctx: unknown) => Promise<void>;
+      };
+    };
+    expect(pluginModule.default.id).toBe('token-optimizer');
+
+    const registered: Record<string, (event: unknown) => Promise<void>> = {};
+    const context = {
+      location: { directory: fixtureDir },
+      session: {
+        hook: async (name: string, callback: (event: unknown) => void) => {
+          registered[`session:${name}`] = callback;
+        },
+      },
+      tool: {
+        hook: async (name: string, callback: (event: unknown) => void) => {
+          registered[`tool:${name}`] = callback;
+        },
+      },
+    };
+    await pluginModule.default.setup(context);
+
+    expect(Object.keys(registered).sort()).toEqual([
+      'session:compaction',
+      'session:context',
+      'tool:execute.after',
+      'tool:execute.before',
+    ]);
+
+    const previousMode = process.env.TOKEN_OPTIMIZER_MODE;
+    const previousCapabilities = process.env.TOKEN_OPTIMIZER_MCP_CAPABILITIES;
+    delete process.env.TOKEN_OPTIMIZER_MODE;
+    delete process.env.TOKEN_OPTIMIZER_MCP_CAPABILITIES;
+
+    try {
+      // Mirrors the V1 contract test above: unset means assist (no refusal),
+      // so the deny case must ask for `enforce` explicitly -- otherwise this
+      // proves only that nothing happened.
+      process.env.TOKEN_OPTIMIZER_MODE = 'enforce';
+      await expect(
+        registered['tool:execute.before']({
+          tool: 'read',
+          sessionID: 'v2-enforce',
+          id: 'call-1',
+          input: { filePath: largeFile },
+        })
+      ).rejects.toThrow('smart_read');
+
+      // The new default is pinned here too: unset must mean assist, so the
+      // large read goes through untouched.
+      delete process.env.TOKEN_OPTIMIZER_MODE;
+      await expect(
+        registered['tool:execute.before']({
+          tool: 'read',
+          sessionID: 'v2-default',
+          id: 'call-2',
+          input: { filePath: largeFile },
+        })
+      ).resolves.toBeUndefined();
+
+      process.env.TOKEN_OPTIMIZER_MODE = 'advise';
+      await expect(
+        registered['tool:execute.before']({
+          tool: 'read',
+          sessionID: 'v2-advise',
+          id: 'call-3',
+          input: { filePath: largeFile },
+        })
+      ).resolves.toBeUndefined();
+
+      // Fail-open on an empty inventory, checked under enforce for the same
+      // reason as above.
+      process.env.TOKEN_OPTIMIZER_MODE = 'enforce';
+      process.env.TOKEN_OPTIMIZER_MCP_CAPABILITIES = '';
+      await expect(
+        registered['tool:execute.before']({
+          tool: 'read',
+          sessionID: 'v2-empty',
+          id: 'call-4',
+          input: { filePath: largeFile },
+        })
+      ).resolves.toBeUndefined();
+
+      delete process.env.TOKEN_OPTIMIZER_MODE;
+      const compaction = { system: [] as { type: string; text: string }[] };
+      await registered['session:compaction'](compaction);
+      expect(compaction.system.map((part) => part.text).join('\n')).toContain(
+        'smart_read'
+      );
+
+      const contextRequest = { system: [] as { type: string; text: string }[] };
+      await registered['session:context'](contextRequest);
+      expect(contextRequest.system.every((part) => part.type === 'text')).toBe(
+        true
+      );
+    } finally {
+      if (previousMode === undefined) {
+        delete process.env.TOKEN_OPTIMIZER_MODE;
+      } else {
+        process.env.TOKEN_OPTIMIZER_MODE = previousMode;
+      }
+      if (previousCapabilities === undefined) {
+        delete process.env.TOKEN_OPTIMIZER_MCP_CAPABILITIES;
+      } else {
+        process.env.TOKEN_OPTIMIZER_MCP_CAPABILITIES = previousCapabilities;
+      }
+    }
+  });
+
   it.each([
     ['OpenCode', openCodePlugin],
+    ['OpenCode legacy', openCodeLegacyPlugin],
     ['Kilo', kiloPlugin],
   ])(
     '%s executes its staged shared hook, refuses when enforcing, and allows by default',

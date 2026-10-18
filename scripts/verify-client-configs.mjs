@@ -595,6 +595,50 @@ for (const [client, relative, required] of [
   );
 }
 
+// OpenCode 2.x rejects V1 plugin implementations outright ("Plugin must export
+// a default definition with an id and an effect or setup function"), so the
+// OpenCode file must additionally default-export the V2 shape. Kilo stays on
+// the V1 contract and is intentionally not part of this check.
+{
+  const path = join(
+    ROOT,
+    'integrations/opencode/.opencode/plugins/token-optimizer.js'
+  );
+  if (!existsSync(path)) {
+    check('opencode: V2 default export exists', false);
+  } else {
+    const raw = readFileSync(path, 'utf8');
+    check('opencode: default-exports the V2 plugin object', raw.includes('export default'));
+    check(
+      'opencode: V2 plugin declares its id',
+      raw.includes("id: 'token-optimizer'")
+    );
+    check(
+      'opencode: V2 setup registers the hook domains',
+      raw.includes("ctx.session.hook('context'") &&
+        raw.includes("ctx.tool.hook('execute.before'") &&
+        raw.includes("ctx.tool.hook('execute.after'") &&
+        raw.includes("ctx.session.hook('compaction'")
+    );
+    check(
+      'opencode: V1 named export stays loadable',
+      raw.includes('export const TokenOptimizerPlugin')
+    );
+  }
+  // OpenCode <= 1.3.3 calls every export as a plugin, so its file must export
+  // the V1 function and nothing else.
+  const legacy = join(
+    ROOT,
+    'integrations/opencode/legacy/.opencode/plugins/token-optimizer.js'
+  );
+  const legacyRaw = existsSync(legacy) ? readFileSync(legacy, 'utf8') : '';
+  check(
+    'opencode legacy: exports only the V1 plugin function',
+    legacyRaw.includes('export const TokenOptimizerPlugin') &&
+      (legacyRaw.match(/^export\b/gm) || []).length === 1
+  );
+}
+
 const failed = results.filter((r) => !r.pass);
 console.log(
   `\n${results.length - failed.length}/${results.length} checks passed`
