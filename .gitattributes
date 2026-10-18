@@ -15,3 +15,7 @@ bench/tools/fixtures/** text eol=lf
 # compared against, exact bytes.
 bench/compression/corpus.snapshot.json text eol=lf
 bench/compression/token-counts.json text eol=lf
+
+# The recall verifiers hash the fixture files to prove a session changed nothing,
+# so a file's bytes must be the same on every checkout.
+bench/recall/fixtures/** text eol=lf

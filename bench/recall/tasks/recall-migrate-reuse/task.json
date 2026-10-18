@@ -1,0 +1,1 @@
+{"id":"recall-migrate-reuse","title":"recall: migration order (reuse)","kind":"code","workspace":{"fixture":"migrun"},"max_turns":30,"timeout_s":900,"success_threshold":1.0}

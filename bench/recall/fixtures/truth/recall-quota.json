@@ -1,0 +1,60 @@
+{
+  "pair": "recall-quota",
+  "fixture": "quotasvc",
+  "marker": "quotasvc/config.py",
+  "derive": {
+    "require": [
+      "milli\\s*-?seconds?|\\bms\\b|window_ms",
+      "\\bseconds?\\b"
+    ],
+    "contradict": [
+      "(?<!not )(?<!n't )(?<!never )\\b(?:read|interpreted|treated|used|parsed|handled)\\s+(?:correctly\\s+)?(?:in|as)\\s+seconds\\b",
+      "\\b(?:isn't|is not|never|not)\\s+(?:read|interpreted|treated|used)\\s+(?:in|as)\\s+milli\\s*-?seconds",
+      "\\b(?:failures?|failing|fails|the (?:bug|problem|issue)|(?:root )?cause)\\b[^.;]{0,30}?\\b(?:comes?|stems?|results?|arises?|is caused|are caused|is due|are due|lies|is)\\s+(?:from|by|to|in)\\s+(?:(?!QUOTA_WINDOW|window_ms|config\\.window|\\bwindow\\b|milli\\s*-?second|\\bms\\b)(?:[^.;]|\\.(?!\\s|$))){0,60}?(?:QUOTA_LIMIT|counter|never reset|not reset|race\\b|concurren|clock|cache|off[- ]by[- ]one|rounding|time\\s*zone)"
+    ]
+  },
+  "reuse": {
+    "accept": [
+      "(?<![\\d.,_])90[,_]?000(?![\\d.,_])"
+    ],
+    "decoys": [
+      "(?<![\\d.,_])90(?![\\d.,_])",
+      "(?<![\\d.,_])1\\.5(?![\\d])",
+      "(?<![\\d.,_])90s\\b"
+    ]
+  },
+  "reference": {
+    "derive": "config.window() hands the QUOTA_WINDOW value to the limiter unconverted, and the limiter reads it as window_ms, so a value the README documents in seconds is used as milliseconds: 60 becomes a 60 ms window.",
+    "reuse": "90000"
+  },
+  "decoyAnswers": [
+    "90",
+    "1.5",
+    "90s",
+    "90000 or 90"
+  ],
+  "absent": [
+    "90000",
+    "90_000",
+    "90,000",
+    "millisecond"
+  ],
+  "fixture_hashes": {
+    "quotasvc/__init__.py": "3c98cb40b0993425157593dd9d5f7450ec79bc97c719c2ddbf14b71a4289b12a",
+    "quotasvc/config.py": "61208092ddd6766cf7be63ba3ca25ff49aa33282fe72b2fe1c46da9839b90b09",
+    "quotasvc/limiter.py": "da1c754a02ea04e0695b55a7b179e85ac8797c638c529ce7ecfb4bf101b2b3fc",
+    "README.md": "6803a5c9e41c6ab2ecd0165161747bd7610d3c6a447b2656ac1726f753a681d5",
+    "tests/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "tests/test_limiter.py": "a581cb0066f3c1ce7fab365010d974f682ffa2aebd7bf945701002ff8f00b9ba"
+  },
+  "deriveDecoys": [
+    "QUOTA_WINDOW is read correctly in seconds, not milliseconds; the limit counter is never reset.",
+    "The window is not interpreted as milliseconds; the problem is that QUOTA_LIMIT is ignored.",
+    "A race between concurrent requests lets extra requests through.",
+    "QUOTA_WINDOW is documented in seconds and window_ms is milliseconds, but the problem is in the counter, which never resets.",
+    "The bug stems from QUOTA_LIMIT being measured in seconds; QUOTA_WINDOW is in seconds and window_ms is in milliseconds."
+  ],
+  "deriveAccepts": [
+    "The bug comes from QUOTA_WINDOW being given in seconds while window_ms expects milliseconds."
+  ]
+}

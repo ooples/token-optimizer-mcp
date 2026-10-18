@@ -30,8 +30,10 @@ import { mode, MODE_ASSIST, MODE_ENFORCE, MODE_OFF } from '../../hooks-core/poli
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROUTER = join(HERE, '..', '..', 'plugin', 'hooks', 'pretooluse-router.mjs');
 const SESSION_START = join(HERE, '..', '..', 'plugin', 'hooks', 'session-start.mjs');
+const POST_TOOL = join(HERE, '..', '..', 'plugin', 'hooks', 'post-tool.mjs');
 
 const ISOLATED_GRAPH = mkdtempSync(join(tmpdir(), 'assist-graph-'));
+const ISOLATED_STATE = mkdtempSync(join(tmpdir(), 'assist-state-'));
 
 let workspace;
 let big;
@@ -62,6 +64,10 @@ function runHook(script, payload, modeValue) {
         'smart_read,smart_write,smart_edit,smart_glob,smart_grep,wiki_write',
       TOKEN_OPTIMIZER_WIKI_DIR: ISOLATED_GRAPH,
       TOKEN_OPTIMIZER_SHARED_DIR: ISOLATED_GRAPH,
+      // Session state is per run, not per machine: the session ids restart at
+      // 1 every run, so a shared state root handed one run the "already said"
+      // flags an earlier run had saved.
+      TOKEN_OPTIMIZER_STATE_DIR: ISOLATED_STATE,
     },
   });
 }
@@ -146,17 +152,72 @@ describe('assist does not advertise routing it will not perform', () => {
     // The hook actually ran and emitted its payload. Three absences alone are
     // also satisfied by a crashed hook returning '' -- which would suppress the
     // routing advisory for entirely the wrong reason, and look identical here.
-    expect(out).toContain('Record what you work out');
+    expect(out).toContain('Token optimization is active');
     expect(out).not.toContain('Prefer only the registered');
     expect(out).not.toContain('These are recommendations');
     expect(out).not.toContain('denied only when');
   });
 
-  test('but the graph guidance survives, which is the point of assist', () => {
-    // Guards against over-correction: suppressing the whole payload would make
-    // assist indistinguishable from off.
-    expect(startUnder('assist')).toContain('Record what you work out');
+  test('the graph guidance survives, deferred to the first sign of real work (#357, M5)', () => {
+    // Guards against over-correction: suppressing the guidance would make
+    // assist indistinguishable from off. It is no longer in SessionStart,
+    // where every session paid for it, but the first post-tool event after an
+    // edit delivers it -- once.
+    const session = `assist-deferred-${++sessionSeq}`;
+    const start = runHook(
+      SESSION_START,
+      { hook_event_name: 'SessionStart', cwd: workspace, session_id: session },
+      'assist'
+    ).stdout;
+    expect(start).toContain('Token optimization is active');
+    expect(start).not.toContain('Record what you work out');
+    const edit = {
+      hook_event_name: 'PostToolUse',
+      cwd: workspace,
+      session_id: session,
+      tool_name: 'Edit',
+      tool_input: { file_path: big, old_string: 'x', new_string: 'y' },
+      tool_response: { success: true },
+    };
+    expect(runHook(POST_TOOL, edit, 'assist').stdout).toContain(
+      'Record what you work out'
+    );
+    expect(runHook(POST_TOOL, edit, 'assist').stdout).not.toContain(
+      'Record what you work out'
+    );
   });
+
+  test('an investigation that edits nothing gets it after GUIDANCE_AFTER_CALLS tool calls', () => {
+    const session = `assist-calls-${++sessionSeq}`;
+    const bash = {
+      hook_event_name: 'PostToolUse',
+      cwd: workspace,
+      session_id: session,
+      tool_name: 'Bash',
+      tool_input: { command: 'git status' },
+      tool_response: { stdout: 'clean', exitCode: 0 },
+    };
+    const read = (n) =>
+      runHook(
+        ROUTER,
+        {
+          hook_event_name: 'PreToolUse',
+          cwd: workspace,
+          session_id: session,
+          tool_name: 'Read',
+          tool_input: { file_path: join(workspace, `f${n}.ts`) },
+        },
+        'assist'
+      );
+    for (let n = 0; n < 9; n++) read(n);
+    expect(runHook(POST_TOOL, bash, 'assist').stdout).not.toContain(
+      'Record what you work out'
+    );
+    read(9);
+    expect(runHook(POST_TOOL, bash, 'assist').stdout).toContain(
+      'Record what you work out'
+    );
+  }, 60_000);
 
   test('enforce still advertises routing, so this is scoped to assist', () => {
     const out = startUnder('enforce');

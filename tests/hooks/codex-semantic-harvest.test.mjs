@@ -68,10 +68,17 @@ describe('Codex semantic harvest lifecycle', () => {
     writeFileSync(first, 'export const first = 1;\n');
     writeFileSync(second, 'export const second = 2;\n');
 
-    expect(run(POST, editPayload('semantic-1', first))).toBeNull();
+    // The first edit is the first sign of real work, so it carries the deferred
+    // recording guidance (#357, M5) -- once. The nudge naming the files waits
+    // for the second edit, as before.
+    const opening = run(POST, editPayload('semantic-1', first));
+    expect(opening.hookSpecificOutput.additionalContext).toContain(
+      'Record what you work out'
+    );
     const output = run(POST, editPayload('semantic-1', second));
 
     const context = output.hookSpecificOutput.additionalContext;
+    expect(context).not.toContain('Record what you work out');
     expect(context).toContain('wiki_write');
     expect(context).toContain('first.ts');
     expect(context).toContain('second.ts');

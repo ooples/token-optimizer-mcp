@@ -711,6 +711,27 @@ jobs:
   # `tiktoken` and `dist/`; `bench/tools/reduction` needs `tiktoken`. They are
   # instrument checks and not README checks, so they are run as their own step --
   # a failure names which half of the job went red without reading the log.
+  # THE RECALL BENCHMARK'S VERIFIERS, EXERCISED WITHOUT RUNNING A SESSION. A
+  # verifier that is wrong is wrong silently -- it scores real, billed sessions
+  # and nobody re-reads the replies -- so every one is run here against answers
+  # whose score is known first. Standard library only, so no install.
+  recall-selftest:
+    name: Recall Benchmark Self-Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Run the recall verifiers against known answers
+        run: python3 -m unittest discover -s bench/recall -p "test_*.py" -v
+
   bench-proof:
     name: Proof Harness, Instruments That Need a Build, README Figures
     runs-on: ubuntu-latest
