@@ -260,9 +260,17 @@ describe('session policy honesty', () => {
   });
 
   test('mentions only schemas proven present', () => {
-    const text = policyText(true, new Set(['smart_grep', 'wiki_write']), true);
+    // optimize_session, not wiki_write: since #357 (M5) the wiki_write guidance
+    // is delivered after real work rather than at SessionStart, so this block
+    // no longer names it either way.
+    const text = policyText(
+      true,
+      new Set(['smart_grep', 'optimize_session']),
+      true
+    );
     expect(text).toContain('smart_grep');
-    expect(text).toContain('wiki_write');
+    expect(text).toContain('optimize_session');
     expect(text).not.toContain('smart_read');
+    expect(text).not.toContain('get_optimization_report');
   });
 });

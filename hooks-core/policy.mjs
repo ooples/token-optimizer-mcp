@@ -392,6 +392,9 @@ function emptyState() {
     editedFiles: [],
     harvestedEdits: 0,
     recordingNudged: false,
+    // The recording guidance has been delivered (#357, M5); see
+    // recordingGuidance in adapter.mjs.
+    recordingGuided: false,
     // Facts the search advisory has already delivered this session. Without
     // this in the default, loadState returned an object with no `advised`, the
     // router rebuilt an empty Set on every hook process, and the same advisory
@@ -485,6 +488,7 @@ export function loadState(sessionId, agent) {
         ? parsed.harvestedEdits
         : 0,
       recordingNudged: parsed.recordingNudged === true,
+      recordingGuided: parsed.recordingGuided === true,
       // Every hook call is a new process, so a field left out of this list is
       // forgotten between calls: that is how "said once" kept being said on
       // every search, and how a repeated WebFetch was never recognised
@@ -648,6 +652,10 @@ export function saveState(sessionId, state, agent) {
       // ONCE SET, STAYS SET. A nudge that can un-fire is a nudge that repeats.
       recordingNudged: Boolean(
         current.recordingNudged || state.recordingNudged
+      ),
+      // Same rule: guidance said once stays said.
+      recordingGuided: Boolean(
+        current.recordingGuided || state.recordingGuided
       ),
       // UNION, AND CAPPED. Two hook processes can each deliver an advisory
       // before either writes, so last-writer-wins would forget one and repeat

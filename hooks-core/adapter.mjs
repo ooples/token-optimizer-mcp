@@ -890,6 +890,21 @@ function gradeObservedTools(state, event, payload, raw) {
 }
 
 /** The session-start notice, shared verbatim so no client drifts its own copy. */
+/** Tool calls after which a session that has edited nothing still gets the recording guidance. */
+export const GUIDANCE_AFTER_CALLS = 10;
+
+/**
+ * The wiki_write guidance. It was part of the SessionStart block until #357
+ * (M5): it is the largest part of that block, and it only matters once there is
+ * something to record, so it is now delivered once, on the first post-tool
+ * event after the session shows real work, and a session that never gets that
+ * far never pays for it. The wording is unchanged, because it was measured --
+ * see the last paragraph.
+ */
+export function recordingGuidance() {
+  return `## Record what you work out\n\nCall wiki_write when you establish something durable about this project, while\nyou still hold the context. Every claim needs at least one anchor -- a real file\npath, or path#symbol -- because an unanchored claim can never be checked against\nthe code again and would be served as current forever; unanchored writes are\nrefused.\n\nWorth recording: a decision and why the alternative was rejected, a failure and\nwhat actually caused it, a command that turned out to be the one that works.\nNot worth recording: what the code plainly says. Every wiki_write must include\nthe concrete evidence, when it applies, a calibrated confidence label, its\nscope, and what would invalidate it. Prefer the thing someone had to work out,\nbecause that exists nowhere in the source tree.\n\nRECORD BEFORE YOU ANSWER, NEVER AFTER. Your final message must be the answer to\nthe task -- never a confirmation that you saved a note. Measured: a run whose\nlast message was "Recorded. The finding captured: ..." scored 0.3 where the\nidentical task answered directly scored 0.9. The work had been done correctly\nand the artifact was written; only the last message was wrong, and the last\nmessage is what a verifier, a reviewer and the person who asked all read.${extractionNotice()}`;
+}
+
 export function policyText(
   canDeny,
   availableTools = undefined,
@@ -970,16 +985,10 @@ export function policyText(
   ]
     .filter(Boolean)
     .join(' ');
-  const recording = tools.has('wiki_write')
-    ? `\n\n## Record what you work out\n\nCall wiki_write when you establish something durable about this project, while\nyou still hold the context. Every claim needs at least one anchor -- a real file\npath, or path#symbol -- because an unanchored claim can never be checked against\nthe code again and would be served as current forever; unanchored writes are\nrefused.\n\nWorth recording: a decision and why the alternative was rejected, a failure and\nwhat actually caused it, a command that turned out to be the one that works.\nNot worth recording: what the code plainly says. Every wiki_write must include\nthe concrete evidence, when it applies, a calibrated confidence label, its\nscope, and what would invalidate it. Prefer the thing someone had to work out,\nbecause that exists nowhere in the source tree.\n\nRECORD BEFORE YOU ANSWER, NEVER AFTER. Your final message must be the answer to\nthe task -- never a confirmation that you saved a note. Measured: a run whose\nlast message was "Recorded. The finding captured: ..." scored 0.3 where the\nidentical task answered directly scored 0.9. The work had been done correctly\nand the artifact was written; only the last message was wrong, and the last\nmessage is what a verifier, a reviewer and the person who asked all read.${extractionNotice()}`
-    // WAS 158 CHARACTERS OF SELF-DESCRIPTION. "Structural graph capture remains
-    // active through lifecycle hooks. Durable semantic MCP writes are not
-    // requested because the writer schema is not proven available." -- true,
-    // and it changed no decision the model ever made with it. Fixed context is
-    // charged on every session; it has to earn its place by altering behaviour.
-    : '';
+  // THE RECORDING GUIDANCE IS DELIVERED LATER, NOT HERE (#357, M5): see
+  // recordingGuidance. A session that never does real work never pays for it.
 
-  return `# Token optimization is active\n\n${outputDiscipline()}\n\n${connection}${routing}${enforcement}${utilities ? `\n\n${utilities}` : ''}${recording}${projectBriefing()}`;
+  return `# Token optimization is active\n\n${outputDiscipline()}\n\n${connection}${routing}${enforcement}${utilities ? `\n\n${utilities}` : ''}${projectBriefing()}`;
 }
 
 /**
@@ -1868,9 +1877,26 @@ async function runHook(clientName, event, invocation) {
   // has already run) either way. Say it once per session per kind -- see
   // adviseOnce -- rather than on every matching call.
   const advisory = verdict && adviseOnce(state, verdict) ? verdict.reason : null;
+  // THE RECORDING GUIDANCE, ONCE, AFTER REAL WORK (#357, M5). It used to ride in
+  // every SessionStart, where it is the largest fixed cost a small session pays
+  // and buys nothing until there is something to record. The first edit is the
+  // clearest sign there will be; GUIDANCE_AFTER_CALLS tool calls is the fallback
+  // for an investigation that edits nothing but still works things out.
+  const guided =
+    event === 'post-tool' &&
+    !state.recordingGuided &&
+    toolEvidence.names.has('wiki_write') &&
+    ((Number(state.edits) || 0) >= 1 ||
+      (Number(state.toolCalls) || 0) >= GUIDANCE_AFTER_CALLS);
+  if (guided) state.recordingGuided = true;
   saveState(payload.session_id, state, agentScope);
 
-  const context = [advisory, graphContext, recordingContext]
+  const context = [
+    advisory,
+    graphContext,
+    guided ? recordingGuidance() : null,
+    recordingContext,
+  ]
     .filter(Boolean)
     .join('\n\n');
   if (context) {

@@ -29,10 +29,15 @@ const ADAPTER = pathToFileURL(
 ).href;
 
 let policyText;
+let recordingGuidance;
 let volatileLines;
 
+// THE GUIDANCE MOVED OUT OF policyText (#357, M5): SessionStart no longer
+// carries it, and the first post-tool event after real work delivers
+// recordingGuidance() once instead. What it must say is unchanged, so these
+// assertions read it from where it now lives.
 beforeAll(async () => {
-  ({ policyText } = await import(ADAPTER));
+  ({ policyText, recordingGuidance } = await import(ADAPTER));
   ({ volatileLines } = await import(
     pathToFileURL(join(process.cwd(), 'hooks-core', 'cache.mjs')).href
   ));
@@ -40,12 +45,12 @@ beforeAll(async () => {
 
 describe('the standing policy asks for findings', () => {
   it('names the tool that records them', () => {
-    expect(policyText(true)).toMatch(/wiki_write/);
+    expect(recordingGuidance()).toMatch(/wiki_write/);
   });
 
   it('states the anchor requirement, which the tool enforces', () => {
     // Without this the agent learns the rule by having writes refused.
-    expect(policyText(true)).toMatch(/anchor/i);
+    expect(recordingGuidance()).toMatch(/anchor/i);
   });
 
   it('says what is worth recording, not merely that recording exists', () => {
@@ -53,14 +58,16 @@ describe('the standing policy asks for findings', () => {
     // specific -- what was TRIED AND REJECTED, and why, because that exists
     // nowhere in the source tree -- and the briefing has to carry that same
     // specificity or it produces restatements of what the code already says.
-    expect(policyText(true)).toMatch(/rejected|failure|decision/i);
+    expect(recordingGuidance()).toMatch(/rejected|failure|decision/i);
   });
 
-  it('keeps the briefing in both enforcement modes', () => {
-    // policyText(false) is the advise-only wording used by clients that cannot
-    // deny a tool call. Recording findings is not an enforcement feature, so it
-    // must not disappear along with the denial language.
-    expect(policyText(false)).toMatch(/wiki_write/);
+  it('is the same briefing in both enforcement modes, and in neither SessionStart', () => {
+    // Recording findings is not an enforcement feature, so it must not depend on
+    // the denial wording either mode uses: it is one text, delivered after the
+    // session has done real work, and neither policy block repeats it.
+    expect(recordingGuidance()).toMatch(/wiki_write/);
+    expect(policyText(true)).not.toMatch(/Record what you work out/);
+    expect(policyText(false)).not.toMatch(/Record what you work out/);
   });
 });
 
@@ -108,7 +115,7 @@ describe('the standing policy states what will extract findings after the sessio
     // that was buried deepest: no credential, no billing, no digest sent.
     process.env.TOKEN_OPTIMIZER_HARVEST_ENDPOINT =
       'http://127.0.0.1:11434/v1/chat/completions';
-    const text = policyText(true);
+    const text = recordingGuidance();
 
     expect(text).toMatch(/local model endpoint is configured/i);
     expect(text).toMatch(/free and private/i);
@@ -117,7 +124,7 @@ describe('the standing policy states what will extract findings after the sessio
 
   it('names what a credentialed harvest sends, and what it never sends', () => {
     process.env.TOKEN_OPTIMIZER_API_KEY = 'sk-test';
-    const text = policyText(true);
+    const text = recordingGuidance();
 
     expect(text).toMatch(/bounded digest/i);
     expect(text).toMatch(/never file contents/i);
@@ -126,7 +133,7 @@ describe('the standing policy states what will extract findings after the sessio
   it('on a machine with no credential, states the consequence and names the free option', () => {
     // THE DEFAULT STATE, and the whole reason this line exists. `off:no-key` is
     // CI, corporate laptops and every subscription-only login.
-    const text = policyText(true);
+    const text = recordingGuidance();
 
     expect(text).toMatch(/no separate extractor will run/i);
     expect(text).toMatch(/derived locally/i);
@@ -138,7 +145,7 @@ describe('the standing policy states what will extract findings after the sessio
     // and this one is charged to every session's prefix.
     process.env.TOKEN_OPTIMIZER_HARVEST = '0';
     process.env.TOKEN_OPTIMIZER_API_KEY = 'sk-test';
-    const text = policyText(true);
+    const text = recordingGuidance();
 
     expect(text).toMatch(/off by configuration/i);
     expect(text).toMatch(/derived locally/i);
@@ -163,6 +170,7 @@ describe('the standing policy states what will extract findings after the sessio
       for (const key of KEYS) delete process.env[key];
       Object.assign(process.env, env);
       expect(volatileLines(policyText(true))).toHaveLength(0);
+      expect(volatileLines(recordingGuidance())).toHaveLength(0);
     }
   });
 });
