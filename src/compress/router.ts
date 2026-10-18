@@ -53,6 +53,7 @@ import { spillFor, unchanged } from './types.js';
 import { compressJsonArray } from './json-fragments.js';
 import { marker, withStamp } from './annotate.js';
 import { DEFAULT_TUNING } from './options.js';
+import { canonicalSpillPath } from './spill-path.js';
 
 /**
  * A diff is claimed and then deliberately left alone.
@@ -358,12 +359,13 @@ function routed(text: string, ctx: EngineContext = {}): CompressionResult {
 /**
  * A sink that accepts every spill and writes none, for a trial run.
  *
- * Its path has the shape and length of the proxy's (`spillTo` in
- * src/proxy/server.ts: a fixed-width digest and the engine's hint), so the
- * trial is priced on the marker the real run would emit.
+ * Its path has the shape and length of the proxy's (see spill-path.ts), so the
+ * trial is priced on the marker the real run would emit. It used to be
+ * `.token-optimizer/spill/<16 zeros>-<hint>`, which described no sink that
+ * exists: the proxy's real path was about 100 characters longer.
  */
-const dryRunSink = (_content: string, hint: string): string =>
-  `.token-optimizer/spill/${'0'.repeat(16)}-${hint}`;
+const dryRunSink = (_content: string, _hint: string): string =>
+  canonicalSpillPath('0'.repeat(15));
 
 /**
  * The smallest text that still determines every byte of a block being moved.
