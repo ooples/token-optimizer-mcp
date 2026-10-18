@@ -3,20 +3,13 @@
   "fixture": "migrun",
   "marker": "migrun/runner.py",
   "derive": {
-    "groups": [
-      [
-        "lexicographic",
-        "alphabetical",
-        "as strings",
-        "as text",
-        "string order",
-        "string sort",
-        "lexical",
-        "not numerically"
-      ],
-      [
-        "10_"
-      ]
+    "require": [
+      "lexicograph|alphabetic|as strings|as text|string (?:order|sort)|lexical|not numerically|character by character",
+      "\\b10_"
+    ],
+    "contradict": [
+      "\\b1_create_users(?:\\.sql)?\\s+(?:is\\s+first|(?:is\\s+|will\\s+be\\s+)?(?:run|runs|applied|applies|comes|sorts|goes)\\s+first)",
+      "(?<!not )(?<!n't )(?<!never )\\b(?:sorted|sorts|ordered|orders)\\s+numerically"
     ]
   },
   "reuse": {
@@ -59,5 +52,10 @@
     "README.md": "31662aa5abf7529d393810a38366f542ff624b09c876003d89f40d1596914776",
     "tests/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "tests/test_runner.py": "1dbc46f80a4bbb687c9ab6bfaea041d275cf29bb5aca5fe9d010e8d1c82589fd"
-  }
+  },
+  "deriveDecoys": [
+    "Sorting is alphabetical, so 1_create_users.sql runs first, not 10_backfill_email.sql; the bug is elsewhere.",
+    "The migrations are sorted numerically, so 10_backfill_email.sql is simply missing a table.",
+    "sqlite3 does not support ALTER TABLE ADD COLUMN."
+  ]
 }

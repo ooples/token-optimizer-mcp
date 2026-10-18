@@ -11,7 +11,9 @@ and reads `score=<0..1>` from its output. Inside the rig the verifiers import
 THOL's own `_vlib.py`, which sits beside every task there; this file is never
 mounted into the rig. It exists so `test_recall.py` can run every verifier
 offline against the same contract, and it implements only the part of that
-contract these verifiers use.
+contract these verifiers use. THOL's own hashes_intact is deliberately not
+mirrored: it checks only the files it is given, so a file ADDED to the
+workspace passes it; _recall.py checks the whole inventory instead.
 """
 
 import hashlib
@@ -46,11 +48,3 @@ def emit(score: float, detail: str = ""):
 
 def sha(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
-
-
-def hashes_intact(root: Path, expected: dict) -> bool:
-    for rel, h in expected.items():
-        p = root / rel
-        if not p.exists() or sha(p) != h:
-            return False
-    return True

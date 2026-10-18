@@ -3,24 +3,23 @@
   "fixture": "tzbook",
   "marker": "tzbook/buckets.py",
   "derive": {
-    "groups": [
-      [
-        "localtime",
-        "local time",
-        "time zone",
-        "timezone"
-      ]
+    "require": [
+      "local\\s*time|localtime|time\\s*zone|timezone"
+    ],
+    "contradict": [
+      "\\b(?:does not|doesn't|never|isn't|is not)\\s+(?:use|depend on|call|read|consult)\\s+(?:the\\s+)?(?:machine'?s\\s+)?(?:local\\s*time|localtime|time\\s*zone|timezone)",
+      "\\b(?:has nothing to do with|unrelated to|not caused by)\\s+(?:the\\s+)?(?:local\\s*time|localtime|time\\s*zone|timezone)"
     ]
   },
   "reuse": {
     "accept": [
-      "\\bTZ\\s*=\\s*['\"]?(?:UTC0?|Etc/UTC|Etc/UCT|UCT|GMT0?|Etc/GMT|Universal|Zulu)\\b"
+      "\\bTZ\\s*=\\s*['\\\"]?(?:UTC0?|Etc/UTC|Etc/UCT|UCT|GMT0?|Etc/GMT|Universal|Zulu)['\\\"]?(?![\\w+\\-:/.])"
     ],
     "decoys": [
       "\\bLANG\\s*=",
       "\\bLC_ALL\\s*=",
       "PYTHONHASHSEED",
-      "\\bTZ\\s*=\\s*['\"]?(?!(?:UTC0?|Etc/UTC|Etc/UCT|UCT|GMT0?|Etc/GMT|Universal|Zulu)\\b)[A-Za-z]"
+      "\\bTZ\\s*=\\s*['\\\"]?(?!(?:UTC0?|Etc/UTC|Etc/UCT|UCT|GMT0?|Etc/GMT|Universal|Zulu)['\\\"]?(?![\\w+\\-:/.]))[A-Za-z]"
     ]
   },
   "reference": {
@@ -31,7 +30,11 @@
     "LANG=C",
     "PYTHONHASHSEED=0",
     "TZ=America/New_York",
-    "TZ=UTC or LANG=C"
+    "TZ=UTC or LANG=C",
+    "TZ=UTC+10",
+    "TZ=GMT-5",
+    "TZ='UTC+3'",
+    "TZ=UTC0:30"
   ],
   "absent": [
     "TZ=",
@@ -45,5 +48,10 @@
     "tests/test_buckets.py": "0dc884aeb5e9a113c2a07e7ac4147b1c1d24488e69453baf831ab86fbe8e29ff",
     "tzbook/__init__.py": "d23d7221c352ee8cc5c63c902fd71bc3528e1d1ed1e54cb68cd45ef31f58d946",
     "tzbook/buckets.py": "67eb8faeb69e313ce11262948a68d3088dcb319247744602438f909064c6ff3c"
-  }
+  },
+  "deriveDecoys": [
+    "The code does not use local time; the failures come from float rounding in sum().",
+    "It has nothing to do with the time zone: OrderedDict ordering differs between machines.",
+    "The tests are flaky because of a race condition in the test runner."
+  ]
 }

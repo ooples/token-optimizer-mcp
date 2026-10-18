@@ -135,6 +135,35 @@ class TheVerifiersScoreWhatTheySay(unittest.TestCase):
                 for role in ("derive", "reuse"):
                     self.assertEqual(score(pair, role, t["reference"][role], ws), 0.0, f"{pair}-{role}")
 
+    def test_a_derive_reply_that_denies_the_cause_in_the_right_words_scores_nothing(self):
+        # "Sorting is alphabetical, so 1_create_users.sql runs first" names both
+        # the sort and 10_ and says the opposite of what the fixture does.
+        for pair in PAIRS:
+            with Workspace(pair) as ws:
+                for wrong in record(pair)["deriveDecoys"]:
+                    self.assertEqual(score(pair, "derive", wrong, ws), 0.0, f"{pair}: {wrong!r}")
+
+    def test_an_added_fixture_file_scores_nothing(self):
+        # migrations/0_x.sql changes which migration runs first without
+        # touching any listed file, so the listed hashes alone cannot see it.
+        for pair in PAIRS:
+            t = record(pair)
+            with Workspace(pair) as ws:
+                extra = ws / Path(t["marker"]).parent / "0_added.sql"
+                extra.write_text("SELECT 1;\n")
+                for role in ("derive", "reuse"):
+                    self.assertEqual(score(pair, role, t["reference"][role], ws), 0.0, f"{pair}-{role}")
+
+    def test_bytecode_and_a_clients_own_state_are_not_the_fixture(self):
+        for pair in PAIRS:
+            t = record(pair)
+            with Workspace(pair) as ws:
+                (ws / "__pycache__").mkdir()
+                (ws / "__pycache__" / "x.cpython-313.pyc").write_bytes(b"\0")
+                (ws / ".token-optimizer" / "wiki").mkdir(parents=True)
+                (ws / ".token-optimizer" / "wiki" / "nodes.jsonl").write_text("{}\n")
+                self.assertEqual(score(pair, "reuse", t["reference"]["reuse"], ws), 1.0, pair)
+
     def test_a_derive_reply_that_misses_the_cause_scores_nothing(self):
         vague = "The tests fail because of a bug in the code; it needs fixing."
         for pair in PAIRS:
@@ -188,80 +217,184 @@ def runner():
     return module
 
 
+def quiet(fn, *args, **kwargs):
+    import contextlib
+    import io
+
+    with contextlib.redirect_stdout(io.StringIO()):
+        return fn(*args, **kwargs)
+
+
+def make_plan(out, reps=2):
+    import argparse
+
+    quiet(runner().plan, argparse.Namespace(
+        out=str(out), arms="control,knowledge", reps=reps, image="img", campaign="2.1.251 (Claude Code)"))
+    return json.loads((Path(out) / "plan.json").read_text(encoding="utf-8"))
+
+
+def mounts_of(step):
+    return [v for i, v in enumerate(step) if i and step[i - 1] == "-v"]
+
+
+class Ok:
+    returncode = 0
+
+
+class Fail:
+    returncode = 1
+
+
 class TheRunnerKeepsThePairsApart(unittest.TestCase):
     """Nothing may reach a reuse session except what its own derive session left."""
 
-    def plan(self, out, reps=2):
-        import argparse
-        import contextlib
-        import io
-
-        with contextlib.redirect_stdout(io.StringIO()):
-            runner().plan(argparse.Namespace(out=str(out), arms="control,token-optimizer-proxy-knowledge", reps=reps, image="img"))
-        return json.loads((Path(out) / "plan.json").read_text(encoding="utf-8"))
-
-    def test_each_pair_arm_and_repetition_has_its_own_graph_shared_by_its_two_sessions(self):
+    def test_a_plan_is_one_unit_per_pair_arm_and_repetition(self):
         with tempfile.TemporaryDirectory() as out:
-            steps = self.plan(out)
-        self.assertEqual(len(steps), 3 * 2 * 2 * 2)
-        graphs = {}
-        for step in steps:
-            graph = next(v.split(":/proxy-graph:")[0] for v in step if ":/proxy-graph:" in v)
-            task = step[step.index("-t") + 1]
-            graphs.setdefault(graph, []).append(task)
-        self.assertEqual(len(graphs), 3 * 2 * 2)
-        for tasks in graphs.values():
-            self.assertEqual(len(tasks), 2)
-            self.assertTrue(tasks[0].endswith("-derive") and tasks[1].endswith("-reuse"))
-            self.assertEqual(tasks[0][: -len("-derive")], tasks[1][: -len("-reuse")])
+            plan = make_plan(Path(out) / "p")
+        self.assertEqual(len(plan["units"]), 3 * 2 * 2)
+        self.assertEqual(len({u["id"] for u in plan["units"]}), len(plan["units"]))
 
-    def test_a_session_sees_only_its_own_task_fixture_and_truth(self):
+    def test_planning_into_a_used_directory_is_refused(self):
         with tempfile.TemporaryDirectory() as out:
-            steps = self.plan(out, reps=1)
-        for step in steps:
-            task = step[step.index("-t") + 1]
-            pair = task.rsplit("-", 1)[0]
-            mounts = [v for i, v in enumerate(step) if i and step[i - 1] == "-v"]
-            tasks = [m for m in mounts if "/tasks/recall-" in m]
-            truths = [m for m in mounts if "/fixtures/truth/" in m]
-            self.assertEqual(len(tasks), 1, task)
-            self.assertIn(f"/tasks/{task}:", tasks[0])
-            self.assertEqual(len(truths), 1, task)
-            self.assertIn(f"/fixtures/truth/{pair}.json:", truths[0])
+            make_plan(Path(out) / "p")
+            with self.assertRaises(SystemExit) as refused:
+                make_plan(Path(out) / "p")
+        self.assertIn("not empty", str(refused.exception))
+
+    def test_a_session_sees_its_own_task_and_fixture_and_never_the_truth(self):
+        r = runner()
+        with tempfile.TemporaryDirectory() as out:
+            out = Path(out) / "p"
+            plan = make_plan(out, reps=1)
+            for unit in plan["units"]:
+                for role in r.ROLES:
+                    step = r.session(unit, role, out / "units" / unit["id"] / "try1", out, plan)
+                    mounts = mounts_of(step)
+                    self.assertEqual([m for m in mounts if "truth" in m], [], unit["id"])
+                    tasks = [m for m in mounts if "/tasks/recall-" in m]
+                    self.assertEqual(len(tasks), 1)
+                    self.assertIn(f"/tasks/{unit['pair']}-{role}:", tasks[0])
+                    self.assertIn("--keep-workspaces", step)
+                    self.assertIn("THOL_CAMPAIGN=2.1.251 (Claude Code)", step)
+
+    def test_the_two_sessions_of_an_attempt_share_one_graph_and_results_volume(self):
+        r = runner()
+        with tempfile.TemporaryDirectory() as out:
+            out = Path(out) / "p"
+            plan = make_plan(out, reps=1)
+            unit = plan["units"][0]
+            attempt = out / "units" / unit["id"] / "try1"
+            steps = [r.session(unit, role, attempt, out, plan) for role in r.ROLES]
+        for wanted in (":/proxy-graph:", ":/results:"):
+            found = {next(m for m in mounts_of(s) if wanted in m) for s in steps}
+            self.assertEqual(len(found), 1, wanted)
 
     def test_running_without_approval_is_refused(self):
         import argparse
 
         with tempfile.TemporaryDirectory() as out:
-            self.plan(out, reps=1)
+            make_plan(Path(out) / "p", reps=1)
             with self.assertRaises(SystemExit) as refused:
-                runner().run(argparse.Namespace(out=out, approve_spend=False))
+                runner().run(argparse.Namespace(out=str(Path(out) / "p"), approve_spend=False))
         self.assertIn("approve-spend", str(refused.exception))
 
-    def test_calls_avoided_counts_only_repetitions_both_arms_got_right(self):
+    def test_a_rerun_repeats_no_finished_unit_and_restarts_a_failed_one_clean(self):
         import argparse
-        import contextlib
-        import io
-        import sqlite3
 
+        r = runner()
         with tempfile.TemporaryDirectory() as out:
-            db = Path(out) / "results.sqlite"
-            with contextlib.closing(sqlite3.connect(db)) as c, c:
-                c.execute(
-                    "CREATE TABLE runs (competitor TEXT, task TEXT, rep INTEGER, score REAL, "
-                    "tool_calls INTEGER, num_turns INTEGER, total_cost_usd REAL, status TEXT)"
+            out = Path(out) / "p"
+            plan = make_plan(out, reps=1)
+            calls = []
+
+            def flaky(step):
+                calls.append(step)
+                graph = next(m for m in mounts_of(step) if ":/proxy-graph:" in m).split(":/proxy-graph:")[0]
+                # Each session leaves something in the graph, as a real one would.
+                (Path(graph) / f"left-{len(calls)}").write_text("x")
+                return Fail() if len(calls) == 4 else Ok()
+
+            args = argparse.Namespace(out=str(out), approve_spend=True)
+            with self.assertRaises(SystemExit):
+                quiet(r.run, args, execute=flaky)
+            self.assertEqual(len(calls), 4)
+            first = plan["units"][0]["id"]
+            failed = plan["units"][1]["id"]
+            self.assertIn(first, r.progress(out)["done"])
+            self.assertNotIn(failed, r.progress(out)["done"])
+
+            calls.clear()
+            quiet(r.run, args, execute=lambda step: (calls.append(step), Ok())[1])
+            touched = {m for s in calls for m in mounts_of(s) if ":/results:" in m}
+            self.assertFalse(any(f"units{os.sep}{first}{os.sep}" in m or f"units/{first}/" in m for m in touched))
+            self.assertEqual(len(calls), 2 * (len(plan["units"]) - 1))
+            retry = out / "units" / failed / "try2" / "graph"
+            self.assertEqual(r.progress(out)["done"][failed], f"units/{failed}/try2")
+            self.assertTrue(retry.is_dir())
+            self.assertFalse(any(p.name.startswith("left-") and int(p.name[5:]) <= 4 for p in retry.iterdir()))
+
+
+class ScoringHappensOnTheHost(unittest.TestCase):
+    def test_inside_the_container_the_verifier_defers(self):
+        with Workspace("recall-tz") as ws, tempfile.TemporaryDirectory() as empty_truth:
+            with tempfile.TemporaryDirectory() as scratch:
+                answer = Path(scratch) / "answer.txt"
+                answer.write_text(record("recall-tz")["reference"]["reuse"])
+                run = subprocess.run(
+                    [sys.executable, str(TASKS / "recall-tz-reuse" / "verify.py")],
+                    env={**os.environ, "WORKSPACE": str(ws), "ANSWER_FILE": str(answer), "TRUTH_DIR": empty_truth},
+                    capture_output=True, text=True, timeout=60,
                 )
-                rows = [
-                    ("control", "recall-tz-reuse", 1, 1.0, 12, 8, 0.2, "ok"),
-                    ("control", "recall-tz-reuse", 2, 1.0, 10, 7, 0.2, "ok"),
-                    ("knowledge", "recall-tz-reuse", 1, 1.0, 2, 2, 0.05, "ok"),
-                    # Cheap and wrong: must not count as calls avoided.
-                    ("knowledge", "recall-tz-reuse", 2, 0.0, 1, 1, 0.01, "ok"),
-                ]
-                c.executemany("INSERT INTO runs VALUES (?,?,?,?,?,?,?,?)", rows)
+        self.assertIn("score=0.0000", run.stdout)
+        self.assertIn("deferred", run.stdout)
+
+    def test_score_reads_the_kept_workspace_and_answer_and_report_counts_both_right(self):
+        import argparse
+        import sqlite3
+        from contextlib import closing
+
+        r = runner()
+        with tempfile.TemporaryDirectory() as out:
+            out = Path(out) / "p"
+            plan = make_plan(out, reps=2)
+            replies = {  # (arm, rep) -> (reuse reply, reuse tool calls)
+                ("control", 1): ("TZ=UTC", 12),
+                ("control", 2): ("TZ=UTC", 10),
+                ("knowledge", 1): ("TZ=UTC", 2),
+                ("knowledge", 2): ("LANG=C", 1),  # cheap and wrong: not a saving
+            }
+            state = {"done": {}, "attempts": {}}
+            for unit in plan["units"]:
+                if unit["pair"] != "recall-tz":
+                    continue
+                unit_dir = out / "units" / unit["id"] / "try1"
+                results = unit_dir / "results"
+                results.mkdir(parents=True)
+                with closing(sqlite3.connect(results / "results.sqlite")) as db, db:
+                    db.execute("CREATE TABLE runs (run_id TEXT, task TEXT, tool_calls INTEGER, "
+                               "num_turns INTEGER, total_cost_usd REAL, status TEXT)")
+                    for role in ("derive", "reuse"):
+                        run_id = f"{unit['id']}-{role}"
+                        reply, calls = (record("recall-tz")["reference"]["derive"], 5) if role == "derive" \
+                            else replies[(unit["arm"], unit["rep"])]
+                        shutil.copytree(FIXTURES / "tzbook", results / "runs" / run_id / "workspace",
+                                        ignore=shutil.ignore_patterns("__pycache__"))
+                        (results / "artifacts" / run_id).mkdir(parents=True)
+                        (results / "artifacts" / run_id / "answer.txt").write_text(reply)
+                        db.execute("INSERT INTO runs VALUES (?,?,?,?,?,?)",
+                                   (run_id, f"recall-tz-{role}", calls, calls, 0.1, "ok"))
+                state["done"][unit["id"]] = unit_dir.relative_to(out).as_posix()
+            r.save_progress(out, state)
+            quiet(r.score, argparse.Namespace(out=str(out)))
+            scores = json.loads((out / "scores.json").read_text(encoding="utf-8"))
+            self.assertEqual(len(scores), 8)
+            self.assertTrue(all(s["score"] == 1.0 for s in scores if s["role"] == "derive"))
+            import contextlib
+            import io
+
             buffer = io.StringIO()
             with contextlib.redirect_stdout(buffer):
-                runner().report(argparse.Namespace(results=str(db)))
+                r.report(argparse.Namespace(out=str(out)))
         line = next(l for l in buffer.getvalue().splitlines() if "knowledge" in l)
         self.assertIn("10.0 over 1", line)
         self.assertIn("1/2", line)
