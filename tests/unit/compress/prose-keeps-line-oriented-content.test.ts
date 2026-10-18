@@ -231,3 +231,47 @@ describe('records stay whole inside prose (#494 review)', () => {
       expect(line.startsWith('    #10')).toBe(true);
   });
 });
+
+describe('prose elision declines a listing whatever its gutter is spelt with', () => {
+  // Comment lines long enough to clear the wordiness bar on their own, which is
+  // the case that leaked: the listing is code, its gutter is not a bare number.
+  const COMMENTS = [
+    '// THE CAPTURED BYTES, NOT A RE-SERIALISATION OF THEM. This built the request body',
+    '// with JSON.stringify over the parsed messages, which discards the payload own formatting.',
+    '// and rebuilds it compact, which on the four raw-data rows alone is worth a fifth of it.',
+    '// before any compression runs, because those captures are indented and stringify is not.',
+    'const wrapped = `${ENVELOPE_HEAD}${bodyText}}`;',
+  ];
+  const listing = (gutter: (n: number) => string): string =>
+    COMMENTS.map((line, i) => `${gutter(750 + i)}${line}`).join('\n');
+
+  it('declines a listing with a letter before the number, like L755|', () => {
+    expect(looksLikeProse(listing((n) => `L${n}|       `))).toBe(false);
+  });
+
+  it('declines a listing with a zero-padded number and a hash, like 0300#', () => {
+    expect(looksLikeProse(listing((n) => `0${n}# `))).toBe(false);
+  });
+
+  it('declines git grep -n output, whose lines start with the path', () => {
+    expect(
+      looksLikeProse(
+        listing((n) => `bench/compression/head-to-head.mjs:${n}:  `)
+      )
+    ).toBe(false);
+    expect(
+      looksLikeProse(
+        listing((n) => `bench/compression/head-to-head.mjs-${n}-  `)
+      )
+    ).toBe(false);
+  });
+
+  it('still claims prose whose lines merely start with a hyphenated word', () => {
+    const prose = [
+      'Well-known results suggest the approach holds up across a wide range of settings and inputs.',
+      'Long-running sessions in particular benefit, because the history they carry grows every turn.',
+      'Self-evident as that sounds, the measurement had never been taken on a real transcript before.',
+    ].join('\n');
+    expect(looksLikeProse(prose)).toBe(true);
+  });
+});

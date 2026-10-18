@@ -329,8 +329,15 @@ export function score(
 // `1.` and `1)` are included: a numbered list written with a period is exactly
 // as line-oriented as one written with a pipe, and the trailing space keeps a
 // decimal like `3.5 ms` at the start of a line from matching.
+//
+// A GUTTER IS A GUTTER WHATEVER IT IS SPELT WITH. Only a bare leading number
+// was recognised, so `L755| // comment`, `0300# // comment` and every
+// `git grep -n` hit -- `src/a.ts:12:  // comment`, whose line starts with the
+// path -- read as prose, and a source listing came back with comment lines
+// missing from its middle: the #469 failure through a different door. A path
+// is told apart from a hyphenated word by the `/` or `.` it carries.
 const LINE_ORIENTED =
-  /^\s*(?:\d+\s*[|:\t]|\d+[.)]\s|\/\/|\/\*|\*\s|#\s|--\s|[-+]\s)/;
+  /^\s*(?:[A-Za-z]{0,2}\d+\s*[|:\t#]|\d+[.)]\s|[^\s:|]*[/.][^\s:|]*[:-]\d+[:-]|\/\/|\/\*|\*\s|#\s|--\s|[-+]\s)/;
 
 /**
  * Recognises prose rather than structured content.

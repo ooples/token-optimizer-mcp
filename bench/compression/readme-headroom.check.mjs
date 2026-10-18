@@ -26,6 +26,7 @@
  */
 
 import { readFileSync } from 'node:fs';
+import { COLUMNS } from './readme-headroom.columns.mjs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -109,17 +110,13 @@ const flatten = (node, into) => {
   return into;
 };
 
-// MEMBERSHIP, NOT PLACEMENT -- AND THAT IS A KNOWN HOLE. A figure passes if it
-// appears ANYWHERE in its row of the record, so a cell in the wrong column is
-// accepted. It is not hypothetical: agent-loop publishes 93.8% / 94.7% under
-// the `ours` column, where the record reads 55.9% / 50.7%, and it passes because
-// those two are the PRESET arm figures and the preset arm sits in the same row.
-//
-// Closing it needs a column-header-to-field map, which means deciding what the
-// `zero-turn ids` triple is meant to name -- a question about what the table
-// should publish, not about this check. It is written down here rather than
-// fixed quietly, because the table is being held until the claims settle and a
-// map guessed against a stale table would be checked against nothing.
+// MEMBERSHIP, AND NOW PLACEMENT TOO. Membership alone accepted a figure found
+// anywhere in its row of the record, so a cell under the wrong column passed:
+// agent-loop published its preset figures under `ours` for weeks. Closing it
+// needed a column-header-to-field map, and readme-headroom.columns.mjs is that
+// map: the renderer writes each cell from it and the placement check below
+// requires each cell to equal it. Membership is kept as the coarser first
+// answer, because it names the figure a reader would look for.
 const missing = figures.filter(({ workload, figure }) => {
   const known = flatten(byName.get(workload), new Set());
   // The payload column is recorded unformatted, so a README that writes it with
@@ -132,6 +129,40 @@ console.log(
     `rows, against a record from ${record.recordedAt} (${record.commit.slice(0, 8)}).`
 );
 
+// PLACEMENT: every cell is exactly what its column publishes for that row, and
+// every recorded workload has a row. See readme-headroom.columns.mjs.
+const cellsOf = (row) =>
+  row
+    .split('|')
+    .slice(1, -1)
+    .map((c) => c.trim());
+const headers = cellsOf(rows[0]);
+const misplaced = [];
+// THE WHOLE HEADER, IN ORDER. Rejecting unknown columns is not enough: a table
+// with a column removed from every row has no cell left to disagree, so a
+// README that dropped their figures entirely would pass.
+const expectedHeaders = COLUMNS.map((c) => c.header);
+if (headers.join('|') !== expectedHeaders.join('|'))
+  misplaced.push(
+    `the header is [${headers.join(', ')}], not [${expectedHeaders.join(', ')}]`
+  );
+const listed = new Set();
+for (const row of dataRows) {
+  const cells = cellsOf(row);
+  const w = byName.get(cells.find((c) => byName.has(c)));
+  listed.add(w.name);
+  headers.forEach((h, i) => {
+    const column = COLUMNS.find((c) => c.header === h);
+    if (column && cells[i] !== column.cell(w))
+      misplaced.push(
+        `${w.name} / ${h}: README has "${cells[i]}", the record "${column.cell(w)}"`
+      );
+  });
+}
+for (const w of record.workloads)
+  if (!listed.has(w.name))
+    misplaced.push(`${w.name}: recorded, but has no row`);
+
 // BOTH ANSWERS, NOT THE FIRST ONE. This used to exit on the provenance gap
 // before it printed the figure comparison, and the gap has been open for as long
 // as the README has been held back -- so for that whole time a drifted figure
@@ -139,6 +170,17 @@ console.log(
 // reason it names. Mutating one cell of the table changed NOTHING about the
 // output. A check that finds two problems reports two problems.
 let failed = false;
+
+if (misplaced.length) {
+  console.error(
+    '\nreadme-headroom.check FAILED. Cells that are not what their column publishes:'
+  );
+  for (const why of misplaced) console.error(`  ${why}`);
+  console.error(
+    '\nRegenerate the table with: node bench/compression/readme-headroom.render.mjs'
+  );
+  failed = true;
+}
 
 if (missing.length) {
   console.error('\nreadme-headroom.check FAILED. Not found in the record:');
@@ -175,7 +217,6 @@ if (provenance.length) {
   failed = true;
 }
 
-
 // ---- THE CORPUS CLAIMS, WHICH UNTIL NOW NOTHING READ AT ALL. ----------------
 //
 // Two regions of this README were instrumented -- the twelve-row table above and
@@ -204,12 +245,17 @@ const C_START = 'HEADROOM-CORPUS:START';
 const C_END = '<!-- HEADROOM-CORPUS:END -->';
 
 const corpusBlocks = [];
-for (let at = readme.indexOf(C_START); at !== -1; at = readme.indexOf(C_START, at + 1)) {
+for (
+  let at = readme.indexOf(C_START);
+  at !== -1;
+  at = readme.indexOf(C_START, at + 1)
+) {
   const open = readme.indexOf('-->', at);
   const close = readme.indexOf(C_END, open);
   if (open === -1 || close === -1) {
     console.error(
-      'readme-headroom.check: a HEADROOM-CORPUS:START at offset ' + at +
+      'readme-headroom.check: a HEADROOM-CORPUS:START at offset ' +
+        at +
         ' has no matching CORPUS:END. Markers are what makes this checkable.'
     );
     process.exit(1);
@@ -255,7 +301,8 @@ if (!corpusFigures.length) {
 
 const corpusKnown = flatten(record.totals, new Set());
 const corpusMissing = corpusFigures.filter(
-  (figure) => !corpusKnown.has(figure) && !corpusKnown.has(figure.replace(/,/g, ''))
+  (figure) =>
+    !corpusKnown.has(figure) && !corpusKnown.has(figure.replace(/,/g, ''))
 );
 
 // MARKERS ARE ONLY WORTH ANYTHING IF THEY ARE NOT OPTIONAL. Nothing stops the
@@ -287,7 +334,9 @@ console.log(
 );
 
 if (corpusMissing.length) {
-  console.error('\nreadme-headroom.check FAILED. Not found in the record totals:');
+  console.error(
+    '\nreadme-headroom.check FAILED. Not found in the record totals:'
+  );
   for (const figure of corpusMissing) console.error(`  corpus: ${figure}`);
   failed = true;
 }
