@@ -812,35 +812,48 @@ for (const row of results.workloads) {
  * is enforceable is a fact about the pair, so it belongs with the other facts
  * about the pair.
  */
-const warmOnly = [...(ratchet.warmOnly ?? [])].filter((key) =>
-  unpromoted.some((line) => line.split(' - ')[0] === key)
+//
+// THE STORE-EMPTY RECORD, WHEN IT IS HERE, DECIDES; the persisted list is the
+// fallback for a run that cannot see it. The persisted list used to be final:
+// a key withheld once stayed withheld after a re-record showed it passing from
+// an empty store, so eight criteria that hold from either store (store-pair
+// reports 0 turning on the store) sat unenforced on #436-#438 and #441-#443,
+// and nothing could ever promote them.
+const emptySide = (() => {
+  const emptyPath = RESULTS.replace(/\.json$/, '.store-empty.json');
+  const emptyReplicate = RESULTS.replace(
+    /\.json$/,
+    '.store-empty.replicate.json'
+  );
+  if (!existsSync(emptyPath)) return null;
+  return sideFromRecord(
+    'empty',
+    emptyPath,
+    existsSync(emptyReplicate) ? emptyReplicate : undefined
+  );
+})();
+const passesEmpty = (key) => {
+  const cut = key.lastIndexOf('/');
+  return (
+    emptySide?.verdicts?.[key.slice(0, cut)]?.[key.slice(cut + 1)]?.pass ?? null
+  );
+};
+const warmOnly = [...(ratchet.warmOnly ?? [])].filter(
+  (key) =>
+    unpromoted.some((line) => line.split(' - ')[0] === key) &&
+    (emptySide === null || passesEmpty(key) !== true)
 );
 for (const key of warmOnly)
   unpromoted.splice(
     unpromoted.findIndex((line) => line.split(' - ')[0] === key),
     1
   );
-{
-  const emptyPath = RESULTS.replace(/\.json$/, '.store-empty.json');
-  const emptyReplicate = RESULTS.replace(
-    /\.json$/,
-    '.store-empty.replicate.json'
-  );
-  if (existsSync(emptyPath) && unpromoted.length > 0) {
-    const side = sideFromRecord(
-      'empty',
-      emptyPath,
-      existsSync(emptyReplicate) ? emptyReplicate : undefined
-    );
-    for (const line of [...unpromoted]) {
-      const key = line.split(' - ')[0];
-      const cut = key.lastIndexOf('/');
-      const onEmpty =
-        side.verdicts?.[key.slice(0, cut)]?.[key.slice(cut + 1)]?.pass ?? null;
-      if (onEmpty !== true && !warmOnly.includes(key)) {
-        warmOnly.push(key);
-        unpromoted.splice(unpromoted.indexOf(line), 1);
-      }
+if (emptySide !== null) {
+  for (const line of [...unpromoted]) {
+    const key = line.split(' - ')[0];
+    if (passesEmpty(key) !== true && !warmOnly.includes(key)) {
+      warmOnly.push(key);
+      unpromoted.splice(unpromoted.indexOf(line), 1);
     }
   }
 }
