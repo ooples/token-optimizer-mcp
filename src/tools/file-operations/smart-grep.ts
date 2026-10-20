@@ -106,36 +106,49 @@ export async function gitGrepCandidates(
     ...opts.ignore.map((glob) => `:(exclude,glob)${glob}`),
   ];
   return new Promise((done) => {
+    // Options LAST, with no callback after them: the windows-hide guard reads
+    // the final argument of every spawn call, and output is collected from the
+    // child's own events instead, capped at the same 64 MB maxBuffer would.
+    const limit = 64 * 1024 * 1024;
+    let settled = false;
+    const finish = (value: string[] | null) => {
+      if (settled) return;
+      settled = true;
+      done(value);
+    };
     try {
-      execFile(
-        'git',
-        args,
-        {
-          encoding: 'utf8',
-          timeout: Math.max(1, timeoutMs),
-          maxBuffer: 64 * 1024 * 1024,
-          windowsHide: true,
-        },
-        (error, stdout) => {
-          // 0: matches; 1: none -- both are answers. Anything else (128: not a
-          // repository, a timeout, git missing) is git declining, and the walk
-          // answers instead.
-          const code = (error as { code?: unknown } | null)?.code;
-          if (error && code !== 1) {
-            done(null);
-            return;
-          }
-          done(
-            String(stdout || '')
-              .split('\n')
-              .map((line) => line.trim())
-              .filter(Boolean)
-              .map((file) => resolve(opts.cwd, file))
-          );
+      const child = execFile('git', args, {
+        encoding: 'utf8',
+        timeout: Math.max(1, timeoutMs),
+        windowsHide: true,
+      });
+      let stdout = '';
+      child.stdout?.on('data', (chunk: string) => {
+        stdout += chunk;
+        if (stdout.length > limit) {
+          child.kill();
+          finish(null);
         }
-      );
+      });
+      child.on('error', () => finish(null));
+      child.on('close', (code) => {
+        // 0: matches; 1: none -- both are answers. Anything else (128: not a
+        // repository, a timeout's kill, git missing) is git declining, and the
+        // walk answers instead.
+        if (code !== 0 && code !== 1) {
+          finish(null);
+          return;
+        }
+        finish(
+          stdout
+            .split('\n')
+            .map((line) => line.trim())
+            .filter(Boolean)
+            .map((file) => resolve(opts.cwd, file))
+        );
+      });
     } catch {
-      done(null);
+      finish(null);
     }
   });
 }
