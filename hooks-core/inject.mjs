@@ -1085,7 +1085,7 @@ export function relevantFindingIdsForContext(graph, context, { limit = 8 } = {})
  * graph that demonstrably gets queried grows its allowance while a noisy one
  * shrinks toward the floor. See metrics.indexBudget.
  */
-export function sessionIndex(dir, graph, { episode = {}, relevantFindingIds = [] } = {}) {
+export function sessionIndex(dir, graph, { episode = {}, relevantFindingIds = [], surface = 'session-start' } = {}) {
   // DRAINED HERE TOO, and this is the worst place to be wrong. The session index
   // is the FIRST thing a session sees and it arrives with no other context to
   // correct it, so advertising a finding the graph already knows is stale is a
@@ -1150,7 +1150,7 @@ export function sessionIndex(dir, graph, { episode = {}, relevantFindingIds = []
   record(dir, {
     ...episode,
     kind: 'index',
-    surface: 'session-start',
+    surface,
     count: served.length,
     tokens: spent,
     findingIds,
@@ -1159,7 +1159,7 @@ export function sessionIndex(dir, graph, { episode = {}, relevantFindingIds = []
   record(dir, {
     ...episode,
     kind: 'inject',
-    surface: 'session-start',
+    surface,
     anchor: 'session-index',
     holdout: false,
     tokens: spent,
@@ -1225,7 +1225,7 @@ ${lines.join('\n')}`;
  * is the one that already happened here: an always-on block that grows until it
  * is wallpaper, and the model stops reading the thing it always sees.
  */
-export function standingRules(dir, graph, { budget = standingBudget(), episode = {} } = {}) {
+export function standingRules(dir, graph, { budget = standingBudget(), episode = {}, surface = null } = {}) {
   // Same reason as sessionIndex: always-on text, delivered before the first
   // tool call, with nothing following it that could qualify what it said.
   graph = withPendingApplied(dir, graph);
@@ -1303,6 +1303,8 @@ export function standingRules(dir, graph, { budget = standingBudget(), episode =
   record(dir, {
     ...episode,
     kind: 'standing',
+    // Absent for the main session, as before, so its records are unchanged.
+    ...(surface ? { surface } : {}),
     count: lines.length,
     dropped,
     tokens: lines.length ? spent : 0,

@@ -47,7 +47,9 @@ import {
   harvest,
   projectRootFor,
   contentHash,
+  sharedDir,
 } from './lib/wiki.mjs';
+import { subagentKnowledge, subagentTask } from './lib/briefing.mjs';
 import {
   refusalPayload,
   substitutionFor,
@@ -193,12 +195,32 @@ try {
   state.toolCalls = (Number(state.toolCalls) || 0) + 1;
   // A subagent never sees SessionStart, so its first tool call carries the
   // guidance instead, on whichever exit this call takes.
-  const briefing = subagentBriefing(raw, state);
+  const briefing = subagentBriefing(raw, state, {
+    canRecord: toolEvidence.names.has('wiki_write'),
+  });
   // Counted on every Bash call, so it has to be saved on every exit that keeps
   // state -- which every exit below does via saveState.
   const batching = batchingNudge(payload, state);
   if (briefing || batching) {
-    precedeWith([briefing, batching].filter(Boolean).join('\n\n'));
+    // AND WHAT THE GRAPH ALREADY KNOWS about this agent's task -- the delivery
+    // SessionStart gives the main session and no subagent ever got. See
+    // hooks-core/briefing.mjs.
+    let knowledge = null;
+    if (briefing && features.retrieval) {
+      try {
+        const cwd = payload.cwd || process.cwd();
+        const dir = wikiDir(projectRootFor(join(cwd, '__session__'), cwd));
+        const graphs = [{ dir, graph: load(dir) }];
+        const shared = sharedDir();
+        if (shared !== dir) graphs.push({ dir: shared, graph: load(shared) });
+        knowledge = subagentKnowledge(graphs, subagentTask(raw), {
+          episode,
+        });
+      } catch {
+        /* the tool briefing still arrives without it */
+      }
+    }
+    precedeWith([briefing, knowledge, batching].filter(Boolean).join('\n\n'));
     saveState(payload.session_id, state, agentScope);
   }
   const ucrGuardVerdict = evaluateUcrGuards(
