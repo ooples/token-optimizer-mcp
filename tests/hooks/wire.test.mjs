@@ -309,6 +309,10 @@ describe('what an earlier install left behind is still ours', () => {
     ['a package of theirs with our filename', 'node "/x/node_modules/@me/other-tool/plugin/hooks/stop.mjs"'],
     ['a file of theirs inside our npm package dir', `node "${NPM}/my-own-logger.mjs"`],
     ['a dispatcher of theirs elsewhere', 'powershell.exe -File "C:\\tools\\hooks\\dispatcher.ps1"'],
+    // Review on #511: a path passed along as an ARGUMENT is not the script run.
+    ['our dispatcher passed as an argument to their node script', 'node "/home/u/scripts/audit.mjs" "/home/u/.claude-global/hooks/dispatcher.sh"'],
+    ['our dispatcher passed as an argument to their shell script', 'bash /home/u/scripts/check.sh /home/u/.claude-global/hooks/dispatcher.sh'],
+    ['our dispatcher named after -File in a non-PowerShell command', 'node /home/u/x.mjs -File /home/u/.claude-global/hooks/dispatcher.ps1'],
   ])('%s is not claimed', (_label, command) => {
     expect(wiredEntries({ hooks: { Stop: [entry(command)] } })).toHaveLength(0);
   });

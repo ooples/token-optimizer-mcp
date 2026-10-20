@@ -108,11 +108,22 @@ const LEGACY_DISPATCHER = /(^|\/)\.claude-global\/hooks\/dispatcher\.(ps1|sh)$/i
 
 /** The script a PowerShell `-File` invocation or a shell invocation runs. */
 export function dispatcherOf(command) {
+  // ONLY THE SCRIPT ACTUALLY INVOKED, never one passed along as an argument --
+  // the same rule entrypointOf applies to node. Accepting any token ending in
+  // dispatcher.ps1|sh claimed `node ~/audit.mjs ~/.claude-global/hooks/dispatcher.sh`
+  // as ours, and unwire/retireStrays would then have deleted a user's hook.
   const tokens = tokenize(command);
-  const fileAt = tokens.findIndex((token) => /^-file$/i.test(token));
-  if (fileAt !== -1 && tokens[fileAt + 1]) return tokens[fileAt + 1];
-  // `bash ~/.claude-global/hooks/dispatcher.sh PreToolUse`, or the script run directly.
-  return tokens.find((token) => /dispatcher\.(ps1|sh)$/i.test(token)) || '';
+  const head = (tokens[0] || '').split('\\').join('/').replace(/^.*\//, '');
+  if (/^(?:powershell|pwsh)(\.exe)?$/i.test(head)) {
+    const fileAt = tokens.findIndex((token) => /^-file$/i.test(token));
+    return fileAt !== -1 && tokens[fileAt + 1] ? tokens[fileAt + 1] : '';
+  }
+  if (/^(?:bash|sh)(\.exe)?$/i.test(head)) {
+    const script = tokens.slice(1).find((token) => !token.startsWith('-'));
+    return script || '';
+  }
+  // The script run directly.
+  return /dispatcher\.(ps1|sh)$/i.test(tokens[0] || '') ? tokens[0] : '';
 }
 
 /**
