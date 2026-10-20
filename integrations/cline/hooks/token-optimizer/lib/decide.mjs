@@ -856,6 +856,9 @@ export function normalizePayload(raw) {
     transcript_path: raw.transcript_path ?? raw.transcriptPath ?? null,
     cwd,
     tool_name: normalizeTool(raw.tool_name ?? raw.toolName ?? raw.tool),
+    // The client's own spelling, for the few rules that differ by client: Claude
+    // Code's `Edit` returns one line where another client's edit tool may not.
+    raw_tool_name: raw.tool_name ?? raw.toolName ?? raw.tool ?? null,
     // WHETHER THIS CALL IS ALREADY THE REPLACEMENT, carried alongside the
     // canonical name rather than inferred from it -- because it cannot be
     // inferred from it. `smart_edit` and `Edit` both normalise to `Edit`, and
@@ -1038,6 +1041,14 @@ export function decide(payload, state, availableTools = undefined) {
   }
 
   if (tool === 'Edit' || tool === 'MultiEdit') {
+    // NOT FOR CLAUDE CODE'S OWN EDIT. Its result is one line ("The file ... has
+    // been updated successfully."), never the file, so "returns a compact diff
+    // rather than echoing the file" is false there and smart_edit's diff is the
+    // LARGER answer. Observed live: the advice followed every edit of a file over
+    // 25 KB in a session -- seven times in an hour -- and under enforce each
+    // would have been a refused turn. Claude Code alone spells these with a
+    // capital; other clients' edit tools keep the rule.
+    if (payload.raw_tool_name === 'Edit' || payload.raw_tool_name === 'MultiEdit') return null;
     if (!replacementAvailable(availableTools, 'smart_edit')) return null;
     const path = input.file_path;
     if (!path) return null;

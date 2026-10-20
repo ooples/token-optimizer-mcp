@@ -119,8 +119,9 @@ describe('the loop hazard', () => {
     // The built-in spelling of the same call IS redirected -- that is the whole
     // point of enforcement -- so this pair is what proves the guard discriminates
     // rather than just disabling the Edit branch.
+    // Another client's edit tool: Claude Code's own `Edit` is exempt (below).
     const builtin = decide(
-      payloadFor('Edit', { file_path: big, old_string: 'x', new_string: 'y' }),
+      payloadFor('edit_file', { file_path: big, old_string: 'x', new_string: 'y' }),
       { seen: {} },
       AVAILABLE
     );
@@ -133,6 +134,17 @@ describe('the loop hazard', () => {
       AVAILABLE
     );
     expect(replacement).toBeNull();
+  });
+
+  it("does not redirect Claude Code's own Edit, whose result is one line", () => {
+    // smart_edit's "compact diff rather than echoing the file" is the LARGER
+    // answer there. Observed live: the advice followed every edit of a file over
+    // 25 KB, seven times in an hour of one session.
+    for (const name of ['Edit', 'MultiEdit']) {
+      expect(
+        decide(payloadFor(name, { file_path: big, old_string: 'x', new_string: 'y' }), { seen: {} }, AVAILABLE)
+      ).toBeNull();
+    }
   });
 
   it('does not redirect any of the other replacements to themselves', () => {
