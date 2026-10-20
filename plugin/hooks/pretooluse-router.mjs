@@ -26,6 +26,7 @@ import {
   MODE_ASSIST,
   precedeWith,
   subagentBriefing,
+  batchingNudge,
 } from './lib/policy.mjs';
 import {
   decide,
@@ -46,7 +47,9 @@ import {
   harvest,
   projectRootFor,
   contentHash,
+  sharedDir,
 } from './lib/wiki.mjs';
+import { subagentKnowledge, subagentTask } from './lib/briefing.mjs';
 import {
   refusalPayload,
   substitutionFor,
@@ -70,8 +73,8 @@ import { isFsSafePath } from './lib/paths.mjs';
 // large read for an outline of the same file.
 import { outlineRead, outlineShell, readNotice } from './lib/outline-rewrite.mjs';
 import { readFileSync, statSync, mkdirSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { homedir, tmpdir } from 'node:os';
+import { dirname, join, parse, resolve } from 'node:path';
 import {
   adviseSearch,
   searchPatternFromCommand,
@@ -192,9 +195,32 @@ try {
   state.toolCalls = (Number(state.toolCalls) || 0) + 1;
   // A subagent never sees SessionStart, so its first tool call carries the
   // guidance instead, on whichever exit this call takes.
-  const briefing = subagentBriefing(raw, state);
-  if (briefing) {
-    precedeWith(briefing);
+  const briefing = subagentBriefing(raw, state, {
+    canRecord: toolEvidence.names.has('wiki_write'),
+  });
+  // Counted on every Bash call, so it has to be saved on every exit that keeps
+  // state -- which every exit below does via saveState.
+  const batching = batchingNudge(payload, state);
+  if (briefing || batching) {
+    // AND WHAT THE GRAPH ALREADY KNOWS about this agent's task -- the delivery
+    // SessionStart gives the main session and no subagent ever got. See
+    // hooks-core/briefing.mjs.
+    let knowledge = null;
+    if (briefing && features.retrieval) {
+      try {
+        const cwd = payload.cwd || process.cwd();
+        const dir = wikiDir(projectRootFor(join(cwd, '__session__'), cwd));
+        const graphs = [{ dir, graph: load(dir) }];
+        const shared = sharedDir();
+        if (shared !== dir) graphs.push({ dir: shared, graph: load(shared) });
+        knowledge = subagentKnowledge(graphs, subagentTask(raw), {
+          episode,
+        });
+      } catch {
+        /* the tool briefing still arrives without it */
+      }
+    }
+    precedeWith([briefing, knowledge, batching].filter(Boolean).join('\n\n'));
     saveState(payload.session_id, state, agentScope);
   }
   const ucrGuardVerdict = evaluateUcrGuards(
@@ -1073,6 +1099,48 @@ function compactorFor(sessionId, command) {
  * results exactly as it would have, having paid a few tokens for a hint it can
  * ignore -- which is the only failure mode available to this.
  */
+/**
+ * The directory a search runs against, when the call says: Grep's `path`, or a
+ * shell search's leading `cd <dir> &&`. Null when it does not, so the caller
+ * falls back to the session's directory as before.
+ */
+function searchTargetDir(payload) {
+  const isDir = (p) => {
+    try {
+      return Boolean(p) && statSync(p).isDirectory();
+    } catch {
+      return false;
+    }
+  };
+  // RELATIVE TO THE SESSION, not to this process: the router's own directory is
+  // not where `Grep {path: "src"}` points (review on #512).
+  const base = payload.cwd || process.cwd();
+  const at = (p) => resolve(base, p);
+  const path = payload.tool_input?.path;
+  if (typeof path === 'string' && path) {
+    const full = at(path);
+    if (isDir(full)) return full;
+    const parent = dirname(full);
+    if (isDir(parent)) return parent;
+  }
+  const command = payload.tool_input?.command;
+  if (typeof command === 'string') {
+    const cd = /^\s*cd\s+("[^"]+"|'[^']+'|[^\s;&|]+)\s*(?:&&|;)/.exec(command);
+    if (cd) {
+      const dir = at(cd[1].replace(/^["']|["']$/g, ''));
+      if (isDir(dir)) return dir;
+    }
+  }
+  return null;
+}
+
+/** The home directory or a filesystem root is never a project to answer from. */
+function isNotAProject(dir) {
+  const fold = (s) => resolve(String(s)).replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+  const at = fold(dir);
+  return at === fold(homedir()) || at === fold(parse(resolve(String(dir))).root);
+}
+
 function searchAdvisory(payload, state, dirFor) {
   // EITHER SURFACE, RESOLVED HERE rather than at the two call sites, so the
   // Grep tool and a shell `grep` cannot drift into answering differently.
@@ -1087,7 +1155,13 @@ function searchAdvisory(payload, state, dirFor) {
       : searchPatternFromCommand(payload.tool_input?.command);
   if (typeof pattern !== 'string' || !pattern) return null;
 
-  const root = payload.cwd || process.cwd();
+  // WHERE THE SEARCH POINTS, NOT WHERE THE SESSION STARTED. A session launched in
+  // the home directory that greps E:/repo got index hits from the home store --
+  // observed live: `grep -n "test-start" ci.log` was answered with an openevolve
+  // file under AppData/Roaming/Python, on every such call, for the word `start`.
+  const target = searchTargetDir(payload);
+  const root = target || payload.cwd || process.cwd();
+  if (isNotAProject(root)) return null;
 
   // THE SCOPE IS THE PROJECT, NOT THE WORKING DIRECTORY. A session started in
   // `repo/src` must still be told about a symbol in `repo/lib`, so scoping to
@@ -1110,7 +1184,11 @@ function searchAdvisory(payload, state, dirFor) {
     const b = fold(inner);
     return b === a || b.startsWith(`${a}/`);
   };
-  const scope = contains(projectRoot, root) ? projectRoot : root;
+  const display = contains(projectRoot, root) ? projectRoot : root;
+  // AN EXPLICIT TARGET IS THE SCOPE. Widening `Grep {path: "src"}` to the whole
+  // project reported hits from sibling directories the search does not cover
+  // (review on #512). Paths still display relative to the project.
+  const scope = target ? root : display;
   const told = new Set(state.advised || []);
   if (told.size >= SESSION_CAP) return null;
   const graph = load(dirFor(join(root, '__search__')));
@@ -1119,7 +1197,7 @@ function searchAdvisory(payload, state, dirFor) {
     // Displayed relative to the project, so the path reads the way the model
     // would write it, and scoped to the project, so nothing outside it is
     // reported as though it were this codebase.
-    root: scope,
+    root: display,
     scope,
     firstOfSession: !told.size,
   });

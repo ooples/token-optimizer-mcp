@@ -539,11 +539,26 @@ describe('CompressionEngine', () => {
       // Warm the path so the first-call cost is not attributed to size.
       compression.decompress(small.compressed);
 
-      const smallNs = Math.max(
-        1,
-        time(() => compression.decompress(small.compressed))
-      );
-      const largeNs = time(() => compression.decompress(large.compressed));
+      // THE FASTEST OF SEVERAL INTERLEAVED PAIRS, not one sample of each. One
+      // timed call per size let a single GC pause or JIT tier-up during the
+      // large call decide the ratio: Node 26 in CI measured 2,242x on code
+      // whose real ratio is ~4-5x (median 3.9, min 4.6 over 15 local pairs).
+      // A pause can only make a sample slower, so the minimum is the estimate
+      // a pause cannot inflate; interleaving keeps machine load the same for
+      // both sizes.
+      let smallNs = Infinity;
+      let largeNs = Infinity;
+      for (let i = 0; i < 7; i++) {
+        smallNs = Math.min(
+          smallNs,
+          time(() => compression.decompress(small.compressed))
+        );
+        largeNs = Math.min(
+          largeNs,
+          time(() => compression.decompress(large.compressed))
+        );
+      }
+      smallNs = Math.max(1, smallNs);
 
       // Ten times the data should not cost anywhere near a hundred times the
       // work. Fifty times is generous head-room over the ~10x that is real.

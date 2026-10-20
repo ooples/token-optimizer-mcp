@@ -21,6 +21,7 @@
  */
 
 import { entrypointOf, isOurs } from './wire.mjs';
+import { describeStrays, strayEntries } from './install-health.mjs';
 import { execFile, spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import {
@@ -1195,6 +1196,30 @@ export function checklist({ root, settingsPath, install }) {
   // about a Cursor, Codex or Copilot install. Asking anyway reproduces #408 one level down: a
   // Claude Code machine reports its own wiring as the caller's, and a machine without one fails
   // a check the caller could not have passed by any means.
+  // A PLUGIN INSTALL STILL HAS TO LOOK AT settings.json -- for OTHER installs.
+  // Skipping it wholesale is how a 7.4.3 plugin reported healthy while a 5.5.0
+  // npm-global router and a legacy dispatcher.ps1 ran beside it on every call,
+  // the old router refusing what the plugin allowed. See install-health.mjs.
+  if (!resolved.foreign && resolved.method === 'plugin' && settingsPath && existsSync(settingsPath)) {
+    try {
+      const strays = describeStrays(
+        strayEntries(JSON.parse(readFileSync(settingsPath, 'utf8')))
+      );
+      checks.push(
+        strays.length === 0
+          ? ok('no other install hooked beside the plugin', settingsPath)
+          : bad(
+              'no other install hooked beside the plugin',
+              `${strays.length} hook entr${strays.length === 1 ? 'y' : 'ies'} from an earlier install still run on every call: ${strays.join('; ')}`,
+              'start a new session (the plugin\'s SessionStart retires them, keeping a backup), or remove those entries from the "hooks" block of ' +
+                settingsPath
+            )
+      );
+    } catch {
+      /* an unparseable settings file is not the plugin's to diagnose */
+    }
+  }
+
   if (!resolved.foreign && resolved.method !== 'plugin') {
     if (settingsPath && existsSync(settingsPath)) {
       try {

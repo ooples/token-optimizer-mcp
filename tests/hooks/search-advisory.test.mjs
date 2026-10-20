@@ -34,7 +34,7 @@ import {
   statSync,
 } from 'node:fs';
 import { join, dirname } from 'node:path';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 
 import {
@@ -900,6 +900,104 @@ describe('the advisory reaches the model on both paths', () => {
     });
     const out = JSON.parse(result.stdout || '{}').hookSpecificOutput || {};
     expect(out.updatedInput).toBeUndefined();
+  });
+
+  test('the scope follows where the search points, not where the session started', () => {
+    // Observed live: a session started in the home directory grepped a CI log
+    // under E:/ and was handed an index hit from AppData/Roaming/Python for the
+    // word `start`. The search's own `path` is what says which project it is.
+    const result = run(
+      {
+        ...grep(fresh('target')),
+        cwd: homedir(),
+        tool_input: { pattern: 'parse_line', path: workspace },
+      },
+      { TOKEN_OPTIMIZER_MODE: 'assist', TOKEN_OPTIMIZER_MCP_CAPABILITIES: '' }
+    );
+    const out = JSON.parse(result.stdout || '{}').hookSpecificOutput || {};
+    expect(out.additionalContext || '').toContain('parse.py');
+  });
+
+  test("a relative search path resolves against the session's directory, not the router's", () => {
+    // Review on #512: `Grep {path: "pipeline"}` was stat-ed relative to the hook
+    // process, whose directory is this repository, and scoped to the wrong tree.
+    const result = run(
+      {
+        ...grep(fresh('relative')),
+        tool_input: { pattern: 'parse_line', path: 'pipeline' },
+      },
+      { TOKEN_OPTIMIZER_MODE: 'assist', TOKEN_OPTIMIZER_MCP_CAPABILITIES: '' }
+    );
+    const out = JSON.parse(result.stdout || '{}').hookSpecificOutput || {};
+    expect(out.additionalContext || '').toContain('parse.py');
+  });
+
+  test('an explicit directory target is the scope: a sibling directory is not reported', () => {
+    // Review on #512: Grep {path: "<sibling>"} was widened to the whole project,
+    // so a hit in pipeline/ was reported for a search that never covers it.
+    mkdirSync(join(workspace, 'sibling'), { recursive: true });
+    // A repository marker makes the workspace a project root, which is what the
+    // widening needed: without one the scope never reached past the target.
+    const marker = join(workspace, '.git');
+    const made = !existsSync(marker);
+    if (made) mkdirSync(marker);
+    try {
+      const env = {
+        TOKEN_OPTIMIZER_MODE: 'assist',
+        TOKEN_OPTIMIZER_MCP_CAPABILITIES: '',
+      };
+      const inside = run(
+        {
+          ...grep(fresh('scope-in')),
+          tool_input: {
+            pattern: 'parse_line',
+            path: join(workspace, 'pipeline'),
+          },
+        },
+        env
+      );
+      expect(
+        JSON.parse(inside.stdout || '{}').hookSpecificOutput?.additionalContext
+      ).toContain('parse.py');
+      const sibling = run(
+        {
+          ...grep(fresh('scope-out')),
+          tool_input: {
+            pattern: 'parse_line',
+            path: join(workspace, 'sibling'),
+          },
+        },
+        env
+      );
+      expect(sibling.status).toBe(0);
+      expect(
+        JSON.parse(sibling.stdout || '{}').hookSpecificOutput
+          ?.additionalContext || ''
+      ).not.toContain('parse.py');
+    } finally {
+      if (made) rmSync(marker, { recursive: true, force: true });
+    }
+  });
+
+  test('a search scoped to the home directory itself is answered from nothing', () => {
+    // The home directory is not a project: every unrooted file the machine ever
+    // touched lives under it, so its "index" answers any common word.
+    const env = {
+      TOKEN_OPTIMIZER_MODE: 'assist',
+      TOKEN_OPTIMIZER_MCP_CAPABILITIES: '',
+    };
+    // The control: the same search from the project IS answered, so silence
+    // below means the scope rule, not a router that never ran (review on #512).
+    const control = run(grep(fresh('home-control')), env);
+    expect(
+      JSON.parse(control.stdout || '{}').hookSpecificOutput?.additionalContext
+    ).toContain('parse.py');
+
+    const result = run({ ...grep(fresh('home')), cwd: homedir() }, env);
+    expect(result.error).toBeUndefined();
+    expect(result.status).toBe(0);
+    const out = JSON.parse(result.stdout || '{}').hookSpecificOutput || {};
+    expect(out.additionalContext || '').not.toContain('parse.py');
   });
 
   test('the ROUTER stops advising once the session cap is reached', () => {

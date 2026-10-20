@@ -106,7 +106,7 @@ function Install-HooksFiles {
     }
 
     if ($DryRun) {
-        Write-Status "[DRY RUN] Would install the plugin hooks into $HOOKS_DIR	oken-optimizer" "INFO"
+        Write-Status "[DRY RUN] Would install the plugin hooks into $HOOKS_DIR\token-optimizer" "INFO"
         return
     }
 

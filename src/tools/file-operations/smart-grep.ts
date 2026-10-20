@@ -18,7 +18,9 @@ import {
   type StreamState,
   type TruncationReason,
 } from '../shared/bounded-traversal.js';
-import { relative, join } from 'path';
+import { relative, join, resolve } from 'path';
+import { spawn } from 'child_process';
+import { lstat } from 'fs/promises';
 import { homedir } from 'os';
 import { CacheEngine, resolveCacheLocation } from '../../core/cache-engine.js';
 import { TokenCounter } from '../../core/token-counter.js';
@@ -116,6 +118,201 @@ export function matchWindow(
  * narrowing the ignore list for bin/obj is not asking to search our store.
  */
 const OWN_STORE_IGNORE = '**/.token-optimizer/**';
+
+/** The environment git runs in: ours, minus every GIT_* variable. */
+export function gitEnvironment(
+  env: NodeJS.ProcessEnv = process.env
+): NodeJS.ProcessEnv {
+  return Object.fromEntries(
+    Object.entries(env).filter(([key]) => !/^GIT_/i.test(key))
+  );
+}
+
+/** Untracked entries above this many are left to the walk rather than stat-ed. */
+const MAX_UNTRACKED_TO_INSPECT = 50_000;
+
+/** Runs git with options LAST (the windows-hide guard reads the final argument). */
+function runGit(
+  args: string[],
+  timeoutMs: number,
+  limitBytes: number
+): Promise<{ code: number | null; stdout: Buffer } | null> {
+  return new Promise((done) => {
+    let settled = false;
+    const finish = (value: { code: number | null; stdout: Buffer } | null) => {
+      if (settled) return;
+      settled = true;
+      done(value);
+    };
+    try {
+      // spawn, not execFile: execFile buffers stdout itself under a 1 MiB
+      // default maxBuffer and killed git on large candidate lists (review on
+      // #517). Bytes are counted here instead, against an explicit cap.
+      // stdin and stderr IGNORED: an unread stderr pipe blocks git once it
+      // fills (one warning per unreadable file), and the timeout then spends
+      // the whole budget (review on #517). GIT_* variables inherited from the
+      // caller (GIT_DIR, GIT_INDEX_FILE, ...) would point git at a different
+      // repository than `-C`, so they are stripped.
+      const child = spawn('git', args, {
+        env: gitEnvironment(),
+        stdio: ['ignore', 'pipe', 'ignore'],
+        timeout: Math.max(1, timeoutMs),
+        windowsHide: true,
+      });
+      const chunks: Buffer[] = [];
+      let bytes = 0;
+      child.stdout?.on('data', (chunk: Buffer) => {
+        bytes += chunk.length;
+        if (bytes > limitBytes) {
+          child.kill();
+          finish(null);
+          return;
+        }
+        chunks.push(chunk);
+      });
+      child.on('error', () => finish(null));
+      child.on('close', (code) =>
+        finish({ code, stdout: Buffer.concat(chunks) })
+      );
+    } catch {
+      finish(null);
+    }
+  });
+}
+
+/** Splits `git ... -z` output into entries; never trims, so spaces in names survive. */
+const nulEntries = (stdout: Buffer): string[] =>
+  stdout
+    .toString('utf8')
+    .split('\0')
+    .filter((entry) => entry.length > 0);
+
+/**
+ * The files under `opts.cwd` that contain a LITERAL pattern, per `git grep -l`,
+ * or null when git cannot answer the same question the walk would.
+ *
+ * Same file set as the walk: tracked, untracked AND ignored files
+ * (`--untracked --no-exclude-standard`), dotfiles included, with the walk's own
+ * ignore globs passed as `:(exclude,glob)` pathspecs. Null -- the walk answers --
+ * whenever git's answer could be SMALLER than the walk's (review on #517):
+ *
+ * - regex patterns and explicit `files` globs (dialects differ);
+ * - `wholeWord` with a non-word first or last character (JS `\b` and `git -w`
+ *   disagree there);
+ * - case-insensitive non-ASCII patterns (git's `-i` folding depends on its
+ *   regex backend and locale; JS folds regardless);
+ * - any encoding but UTF-8 (git compares raw bytes);
+ * - a submodule or a nested repository anywhere under `opts.cwd`, which
+ *   `git grep --untracked` does not enter but the walk reads;
+ * - a tracked or untracked symlink, which git grep skips and the walk follows;
+ * - more than MAX_UNTRACKED_TO_INSPECT untracked entries to inspect.
+ *
+ * Runs with `core.fsmonitor=` so the searched repository's own config cannot
+ * run a hook. TOKEN_OPTIMIZER_GREP_BACKEND=walk turns it off.
+ */
+export async function gitGrepCandidates(
+  pattern: string,
+  opts: {
+    cwd: string;
+    files: string[];
+    regex: boolean;
+    caseSensitive: boolean;
+    wholeWord: boolean;
+    skipBinary: boolean;
+    ignore: string[];
+    encoding?: string;
+  },
+  timeoutMs: number
+): Promise<string[] | null> {
+  if (opts.regex || !pattern) return null;
+  if (opts.files.length !== 1 || opts.files[0] !== '**/*') return null;
+  if (process.env.TOKEN_OPTIMIZER_GREP_BACKEND === 'walk') return null;
+  if (opts.wholeWord && !/^\w[\s\S]*\w$|^\w$/.test(pattern)) return null;
+  if (!opts.caseSensitive && /[^\x00-\x7F]/.test(pattern)) return null;
+  const encoding = String(opts.encoding ?? 'utf-8').toLowerCase();
+  if (encoding !== 'utf-8' && encoding !== 'utf8') return null;
+
+  const deadline = Date.now() + timeoutMs;
+  const left = () => Math.max(1, deadline - Date.now());
+  const base = [
+    '-C',
+    opts.cwd,
+    '-c',
+    'core.quotePath=false',
+    '-c',
+    'core.fsmonitor=',
+  ];
+  const limit = 64 * 1024 * 1024;
+
+  const excludes = opts.ignore.map((glob) => `:(exclude,glob)${glob}`);
+
+  // Submodules (mode 160000) and tracked symlinks (mode 120000): git grep skips
+  // both, and the walk reads them (review on #517).
+  const staged = await runGit([...base, 'ls-files', '-s', '-z'], left(), limit);
+  if (!staged || staged.code !== 0) return null;
+  if (
+    nulEntries(staged.stdout).some(
+      (entry) => entry.startsWith('160000 ') || entry.startsWith('120000 ')
+    )
+  )
+    return null;
+
+  // Untracked entries WITHOUT --directory, under the walk's own excludes. A
+  // nested repository then appears as its own `dir/` entry at any depth --
+  // with --directory only the outermost untracked directory was listed, so
+  // third_party/libfoo/.git went unseen (review on #517) -- and every
+  // untracked file is listed, so untracked symlinks can be found by lstat.
+  const others = await runGit(
+    [...base, 'ls-files', '-o', '-z', '--', '.', ...excludes],
+    left(),
+    limit
+  );
+  if (!others || others.code !== 0) return null;
+  const untracked = nulEntries(others.stdout);
+  if (untracked.some((entry) => entry.endsWith('/'))) return null;
+  if (untracked.length > MAX_UNTRACKED_TO_INSPECT) return null;
+  for (let i = 0; i < untracked.length; i += 256) {
+    const slice = untracked.slice(i, i + 256);
+    const links = await Promise.all(
+      slice.map((entry) =>
+        lstat(resolve(opts.cwd, entry)).then(
+          (stats) => stats.isSymbolicLink(),
+          () => false
+        )
+      )
+    );
+    if (links.some(Boolean)) return null;
+  }
+
+  const grep = await runGit(
+    [
+      ...base,
+      'grep',
+      '-l',
+      '-z',
+      '--untracked',
+      '--no-exclude-standard',
+      '-F',
+      // ALWAYS -a: -I trusts .gitattributes (`*.svg binary`, `-diff`) and so
+      // skipped text files the walk searches (review on #517). Every candidate
+      // still goes through the walk's own binary check in passesFilters.
+      '-a',
+      ...(opts.caseSensitive ? [] : ['-i']),
+      ...(opts.wholeWord ? ['-w'] : []),
+      '-e',
+      pattern,
+      '--',
+      '.',
+      ...excludes,
+    ],
+    left(),
+    limit
+  );
+  // 0: matches; 1: none -- both are answers. Anything else (128: not a
+  // repository, a timeout's kill, git missing) is git declining.
+  if (!grep || (grep.code !== 0 && grep.code !== 1)) return null;
+  return nulEntries(grep.stdout).map((file) => resolve(opts.cwd, file));
+}
 
 export interface GrepMatch {
   file: string; // File path
@@ -451,27 +648,43 @@ export class SmartGrepTool {
       const regexProbe = this.buildRegexProbe(pattern, opts);
       let regexWouldMatch = false;
 
-      for (const filePattern of opts.files) {
+      // IN A GIT CHECKOUT, GIT FINDS THE CANDIDATE FILES. The JS walk stats and
+      // reads every file in the tree; on a 5,000-file .NET repository it hit the
+      // 10 s deadline and returned a possibly-incomplete answer, where `git grep`
+      // lists the files containing the pattern in under a second. Candidates
+      // only: every candidate still goes through the same filters and the same
+      // per-line matching below, so the answer is the walk's answer, faster. Null
+      // (regex, explicit globs, not a repository, git missing or failing) keeps
+      // the walk exactly as it was.
+      const candidates = await gitGrepCandidates(pattern, opts, remainingMs());
+      const fileSource = (filePattern: string): AsyncIterable<string> =>
+        candidates
+          ? (async function* () {
+              yield* candidates;
+            })()
+          : boundedGlobStream(
+              filePattern,
+              {
+                cwd: opts.cwd,
+                absolute: true,
+                ignore: opts.ignore,
+                nodir: true,
+                deadlineMs: remainingMs(),
+                // `.github/`, `.claude/`, `.husky/` and every dotfile are ordinary
+                // project content, but glob skips anything dot-prefixed unless told
+                // otherwise -- so every CI workflow in the repository was invisible.
+                // Measured: searching a tree returned 0 matches over 654 files while
+                // reporting success, and naming `.github` explicitly in `path`
+                // returned 7 matches in 4 files. What is excluded stays the ignore
+                // list's job.
+                dot: true,
+              },
+              streamState
+            );
+
+      for (const filePattern of candidates ? ['**/*'] : opts.files) {
         if (searchTruncatedBy) break;
-        for await (const file of boundedGlobStream(
-          filePattern,
-          {
-            cwd: opts.cwd,
-            absolute: true,
-            ignore: opts.ignore,
-            nodir: true,
-            deadlineMs: remainingMs(),
-            // `.github/`, `.claude/`, `.husky/` and every dotfile are ordinary
-            // project content, but glob skips anything dot-prefixed unless told
-            // otherwise -- so every CI workflow in the repository was invisible.
-            // Measured: searching a tree returned 0 matches over 654 files while
-            // reporting success, and naming `.github` explicitly in `path`
-            // returned 7 matches in 4 files. What is excluded stays the ignore
-            // list's job.
-            dot: true,
-          },
-          streamState
-        )) {
+        for await (const file of fileSource(filePattern)) {
           if (Date.now() >= expiresAt) {
             searchTruncatedBy = 'deadline';
             break;

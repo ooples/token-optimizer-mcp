@@ -74,8 +74,59 @@ export const WIRING = [
   { event: 'Stop', file: 'stop.mjs', matcher: null },
 ];
 
-/** The hook filenames we have ever installed. */
-const OUR_FILES = new Set(WIRING.map((w) => w.file));
+/**
+ * The hook filenames we have ever installed.
+ *
+ * WIRING ALONE IS ONLY TODAY'S LIST. `stop-harvest.mjs` served Stop and
+ * `large-read-advisor.mjs` served PreToolUse in earlier plugin manifests, and
+ * entries naming them are still in users' settings files: one machine carried a
+ * 5.5.0 `stop-harvest.mjs` entry beside a 7.4.3 plugin, unremovable because
+ * nothing recognised the name.
+ */
+const RETIRED_FILES = ['stop-harvest.mjs', 'large-read-advisor.mjs'];
+const OUR_FILES = new Set([...WIRING.map((w) => w.file), ...RETIRED_FILES]);
+
+/**
+ * The npm package's own hook directories, which a global install wired directly.
+ *
+ * `npm install -g @ooples/token-optimizer-mcp` put entries into settings.json that
+ * run the hooks IN PLACE, from `<npm root>/@ooples/token-optimizer-mcp/plugin/hooks`
+ * (or `/hooks` in older layouts). Those paths carry no `hooks/token-optimizer`
+ * segment, so the path rule below never claimed them: a later plugin install then
+ * ran beside them, and a 5.5.0 router -- which predates `assist` and refuses under
+ * it -- kept denying calls the plugin allowed.
+ */
+const NPM_PACKAGE_HOOKS = /(^|\/)node_modules\/@ooples\/token-optimizer-mcp\/(plugin\/)?hooks$/;
+
+/**
+ * The PowerShell and shell dispatchers the first installers wired.
+ *
+ * install-hooks.* used to download `dispatcher.ps1` / `dispatcher.sh` into
+ * `~/.claude-global/hooks` and wire every phase at it, matcher `*`. The current
+ * installers no longer do, but nothing removed the old entries, so an upgraded
+ * machine kept spawning PowerShell on every tool call beside the new router.
+ */
+const LEGACY_DISPATCHER = /(^|\/)\.claude-global\/hooks\/dispatcher\.(ps1|sh)$/i;
+
+/** The script a PowerShell `-File` invocation or a shell invocation runs. */
+export function dispatcherOf(command) {
+  // ONLY THE SCRIPT ACTUALLY INVOKED, never one passed along as an argument --
+  // the same rule entrypointOf applies to node. Accepting any token ending in
+  // dispatcher.ps1|sh claimed `node ~/audit.mjs ~/.claude-global/hooks/dispatcher.sh`
+  // as ours, and unwire/retireStrays would then have deleted a user's hook.
+  const tokens = tokenize(command);
+  const head = (tokens[0] || '').split('\\').join('/').replace(/^.*\//, '');
+  if (/^(?:powershell|pwsh)(\.exe)?$/i.test(head)) {
+    const fileAt = tokens.findIndex((token) => /^-file$/i.test(token));
+    return fileAt !== -1 && tokens[fileAt + 1] ? tokens[fileAt + 1] : '';
+  }
+  if (/^(?:bash|sh)(\.exe)?$/i.test(head)) {
+    const script = tokens.slice(1).find((token) => !token.startsWith('-'));
+    return script || '';
+  }
+  // The script run directly.
+  return /dispatcher\.(ps1|sh)$/i.test(tokens[0] || '') ? tokens[0] : '';
+}
 
 /**
  * Is this entry one WE installed?
@@ -161,6 +212,9 @@ export const isOurs = (entry) => {
     // it.
     if (hasOwnershipFlag(command)) return true;
 
+    const dispatcher = dispatcherOf(command).split('\\').join('/');
+    if (dispatcher && LEGACY_DISPATCHER.test(dispatcher)) return true;
+
     const script = entrypointOf(command).split('\\').join('/');
     if (!script) return false;
 
@@ -182,7 +236,9 @@ export const isOurs = (entry) => {
     // `$env:USERPROFILE\.claude-global\hooks`. Requiring the `hooks` segment as
     // well is what excludes `/workspace/token-optimizer/stop.mjs`, which
     // reproduces everything else about our layout.
-    const inOurDirectory = new RegExp(`(^|/)hooks/${MARKER}$`).test(directory);
+    const inOurDirectory =
+      new RegExp(`(^|/)hooks/${MARKER}$`).test(directory) ||
+      NPM_PACKAGE_HOOKS.test(directory);
 
     return inOurDirectory && OUR_FILES.has(file);
   });

@@ -191,6 +191,9 @@ const RECURSES_BY_DEFAULT = /^(?:rg|ag|ack)$/i;
 /** Words that may precede the real command without changing what it is. */
 const COMMAND_PREFIX = /^(?:sudo|time|env|command|nice|ionice|nohup|xargs)$/;
 
+/** A built-in Grep capped at this many lines or fewer is already bounded. */
+const GREP_BOUNDED_LINES = 100;
+
 /**
  * Removes heredoc BODIES, which are data the command carries rather than
  * commands the shell will run.
@@ -327,6 +330,119 @@ export function isRecursiveSearch(command) {
   }
 
   return false;
+}
+
+/**
+ * A command split into stages, each with the operator that FOLLOWS it.
+ *
+ * shellSegments drops the operators, so "piped into" could only be recovered by
+ * searching the command text for the segment again -- which finds the wrong
+ * occurrence when a segment repeats. Same quote rules as shellSegments.
+ */
+function pipelineStages(command) {
+  const out = [];
+  let current = '';
+  let quote = null;
+  for (let i = 0; i < command.length; i++) {
+    const c = command[i];
+    if (quote) {
+      if (c === quote && command[i - 1] !== '\\') quote = null;
+      current += c;
+    } else if (c === '"' || c === "'") {
+      quote = c;
+      current += c;
+    } else if (c === '&' && (command[i - 1] === '>' || command[i + 1] === '>')) {
+      // A REDIRECTION, not an operator: `2>&1`, `>&2`, `&>file`. Splitting here
+      // made `grep -rn x . 2>&1 | head` a stage ending in `&`, so the pipe into
+      // head was never seen (review on #512).
+      current += c;
+    } else if (c === ';' || c === '\n' || c === '|' || c === '&') {
+      let op = c;
+      if ((c === '|' || c === '&') && command[i + 1] === c) {
+        op = c + c;
+        i++;
+      } else if (c === '|' && command[i + 1] === '&') {
+        // `|&` pipes stdout and stderr: still a pipe.
+        i++;
+      }
+      out.push({ text: current, op });
+      current = '';
+    } else {
+      current += c;
+    }
+  }
+  out.push({ text: current, op: null });
+  return out;
+}
+
+/** Stages that cap what reaches the terminal, whatever is piped into them. */
+function boundsItsInput(stage) {
+  const tokens = stage.match(/(?:"[^"]*"|'[^']*'|[^\s]+)/g) || [];
+  let i = 0;
+  while (i < tokens.length && (/^\w+=/.test(tokens[i]) || COMMAND_PREFIX.test(tokens[i]))) {
+    // `xargs head` runs head once per batch of input -- the first lines of EVERY
+    // file named -- so it caps nothing (review on #512). xargs stays a prefix for
+    // isRecursiveSearch, where it only locates the search tool.
+    if (/^xargs$/.test(tokens[i])) return false;
+    i++;
+  }
+  if (i >= tokens.length) return false;
+  const head = tokens[i].replace(/^.*[/\\]/, '');
+  // NOT EVERY head/tail BOUNDS. `tail -n +N` / `tail +N` prints from line N to
+  // the end and GNU `head -n -N` prints all but the last N, so both pass the
+  // whole search through (review on #512).
+  if (/^(?:head|tail)$/i.test(head)) {
+    const args = tokens.slice(i + 1);
+    for (let a = 0; a < args.length; a++) {
+      const t = args[a];
+      const count = /^(?:-n|--lines)$/.test(t) ? args[a + 1] : (/^(?:-n|--lines=)(.+)$/.exec(t) || [])[1];
+      if (count !== undefined && /^[+-]/.test(String(count))) {
+        if (/^tail$/i.test(head) && String(count).startsWith('+')) return false;
+        if (/^head$/i.test(head) && String(count).startsWith('-')) return false;
+      }
+      if (/^tail$/i.test(head) && /^\+\d/.test(t)) return false;
+    }
+    return true;
+  }
+  if (/^(?:wc|Measure-Object|measure)$/i.test(head)) return true;
+  if (/^(?:Select-Object|select)$/i.test(head))
+    return tokens.slice(i + 1).some((t) => /^-(?:First|Last|Index)$/i.test(t));
+  // `grep -c` / `grep -l` downstream print a count or names, not the matches.
+  if (/^(?:grep|egrep|fgrep|rg)$/i.test(head))
+    return tokens.slice(i + 1).some((t) => /^-[A-Za-z]*[cl][A-Za-z]*$/.test(t) || t === '--count' || t === '--files-with-matches');
+  return false;
+}
+
+/**
+ * Is every recursive search in this command piped into something that bounds it?
+ *
+ * `grep -rn x . | head -20` prints at most twenty lines, and was routed as an
+ * "unbounded" search on every call -- observed live four times in one session,
+ * each an advisory under assist and a refused turn under enforce. Only a direct
+ * chain of single pipes counts: `grep -r x . ; head f` bounds nothing.
+ */
+export function searchOutputBounded(command) {
+  if (typeof command !== 'string') return false;
+  const stages = pipelineStages(stripHeredocs(command));
+  let searches = 0;
+  for (let s = 0; s < stages.length; s++) {
+    // Select-String recurses only when an EARLIER stage lists recursively, so a
+    // stage tested alone cannot say; see isRecursiveSearch.
+    const searchesHere =
+      isRecursiveSearch(stages[s].text) ||
+      (/^\s*(?:Select-String|sls)\b/i.test(stages[s].text) && listsRecursively(command));
+    if (!searchesHere) continue;
+    searches++;
+    let bounded = false;
+    for (let j = s; j + 1 < stages.length && stages[j].op === '|'; j++) {
+      if (boundsItsInput(stages[j + 1].text)) {
+        bounded = true;
+        break;
+      }
+    }
+    if (!bounded) return false;
+  }
+  return searches > 0;
 }
 
 /**
@@ -856,6 +972,9 @@ export function normalizePayload(raw) {
     transcript_path: raw.transcript_path ?? raw.transcriptPath ?? null,
     cwd,
     tool_name: normalizeTool(raw.tool_name ?? raw.toolName ?? raw.tool),
+    // The client's own spelling, for the few rules that differ by client: Claude
+    // Code's `Edit` returns one line where another client's edit tool may not.
+    raw_tool_name: raw.tool_name ?? raw.toolName ?? raw.tool ?? null,
     // WHETHER THIS CALL IS ALREADY THE REPLACEMENT, carried alongside the
     // canonical name rather than inferred from it -- because it cannot be
     // inferred from it. `smart_edit` and `Edit` both normalise to `Edit`, and
@@ -1014,6 +1133,11 @@ export function decide(payload, state, availableTools = undefined) {
     // Content searches are the expensive mode; a paths-only search is already
     // cheap and rewriting it would gain nothing.
     if (input.output_mode && input.output_mode !== 'content') return null;
+    // An explicit small head_limit is already the bound smart_grep would apply;
+    // redirecting it cost a turn (enforce) or an advisory (assist) for nothing.
+    // Observed live: `Grep {head_limit: 20, glob: '*.{ps1,yml}'}` was redirected.
+    const limit = Number(input.head_limit);
+    if (Number.isFinite(limit) && limit > 0 && limit <= GREP_BOUNDED_LINES) return null;
     if (!replacementAvailable(availableTools, 'smart_grep')) return null;
     const pattern = input.pattern || '';
     return {
@@ -1038,6 +1162,14 @@ export function decide(payload, state, availableTools = undefined) {
   }
 
   if (tool === 'Edit' || tool === 'MultiEdit') {
+    // NOT FOR CLAUDE CODE'S OWN EDIT. Its result is one line ("The file ... has
+    // been updated successfully."), never the file, so "returns a compact diff
+    // rather than echoing the file" is false there and smart_edit's diff is the
+    // LARGER answer. Observed live: the advice followed every edit of a file over
+    // 25 KB in a session -- seven times in an hour -- and under enforce each
+    // would have been a refused turn. Claude Code alone spells these with a
+    // capital; other clients' edit tools keep the rule.
+    if (payload.raw_tool_name === 'Edit' || payload.raw_tool_name === 'MultiEdit') return null;
     if (!replacementAvailable(availableTools, 'smart_edit')) return null;
     const path = input.file_path;
     if (!path) return null;
@@ -1138,6 +1270,7 @@ export function decide(payload, state, availableTools = undefined) {
     // operand does, so it is left alone.
     if (
       isRecursiveSearch(command) &&
+      !searchOutputBounded(command) &&
       replacementAvailable(availableTools, 'smart_grep')
     ) {
       if (!largeOperand(command, payload.cwd)) {
