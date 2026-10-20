@@ -97,7 +97,9 @@ describe('the briefing asks for a record only when one can be made', () => {
   });
 
   test('wiki_write absent', () => {
-    expect(subagentBriefing({ agent_id: 'x' }, {})).not.toContain('wiki_write');
+    const text = subagentBriefing({ agent_id: 'x' }, {});
+    expect(text).toContain('Token Optimizer (shown once to this agent)');
+    expect(text).not.toContain('wiki_write');
   });
 });
 
