@@ -26,6 +26,7 @@ import {
   MODE_ASSIST,
   precedeWith,
   subagentBriefing,
+  batchingNudge,
 } from './lib/policy.mjs';
 import {
   decide,
@@ -193,8 +194,11 @@ try {
   // A subagent never sees SessionStart, so its first tool call carries the
   // guidance instead, on whichever exit this call takes.
   const briefing = subagentBriefing(raw, state);
-  if (briefing) {
-    precedeWith(briefing);
+  // Counted on every Bash call, so it has to be saved on every exit that keeps
+  // state -- which every exit below does via saveState.
+  const batching = batchingNudge(payload, state);
+  if (briefing || batching) {
+    precedeWith([briefing, batching].filter(Boolean).join('\n\n'));
     saveState(payload.session_id, state, agentScope);
   }
   const ucrGuardVerdict = evaluateUcrGuards(
