@@ -20,7 +20,7 @@ import {
 } from '../shared/bounded-traversal.js';
 import { relative, join, resolve } from 'path';
 import { spawn } from 'child_process';
-import { access } from 'fs/promises';
+import { lstat } from 'fs/promises';
 import { homedir } from 'os';
 import { CacheEngine, resolveCacheLocation } from '../../core/cache-engine.js';
 import { TokenCounter } from '../../core/token-counter.js';
@@ -60,6 +60,18 @@ const MAX_RESPONSE_TOKENS = 8_000;
  */
 const MAX_MATCH_LINE_CHARS = 2_000;
 
+/** The environment git runs in: ours, minus every GIT_* variable. */
+export function gitEnvironment(
+  env: NodeJS.ProcessEnv = process.env
+): NodeJS.ProcessEnv {
+  return Object.fromEntries(
+    Object.entries(env).filter(([key]) => !/^GIT_/i.test(key))
+  );
+}
+
+/** Untracked entries above this many are left to the walk rather than stat-ed. */
+const MAX_UNTRACKED_TO_INSPECT = 50_000;
+
 /** Runs git with options LAST (the windows-hide guard reads the final argument). */
 function runGit(
   args: string[],
@@ -77,7 +89,14 @@ function runGit(
       // spawn, not execFile: execFile buffers stdout itself under a 1 MiB
       // default maxBuffer and killed git on large candidate lists (review on
       // #517). Bytes are counted here instead, against an explicit cap.
+      // stdin and stderr IGNORED: an unread stderr pipe blocks git once it
+      // fills (one warning per unreadable file), and the timeout then spends
+      // the whole budget (review on #517). GIT_* variables inherited from the
+      // caller (GIT_DIR, GIT_INDEX_FILE, ...) would point git at a different
+      // repository than `-C`, so they are stripped.
       const child = spawn('git', args, {
+        env: gitEnvironment(),
+        stdio: ['ignore', 'pipe', 'ignore'],
         timeout: Math.max(1, timeoutMs),
         windowsHide: true,
       });
@@ -125,7 +144,9 @@ const nulEntries = (stdout: Buffer): string[] =>
  *   regex backend and locale; JS folds regardless);
  * - any encoding but UTF-8 (git compares raw bytes);
  * - a submodule or a nested repository anywhere under `opts.cwd`, which
- *   `git grep --untracked` does not enter but the walk reads.
+ *   `git grep --untracked` does not enter but the walk reads;
+ * - a tracked or untracked symlink, which git grep skips and the walk follows;
+ * - more than MAX_UNTRACKED_TO_INSPECT untracked entries to inspect.
  *
  * Runs with `core.fsmonitor=` so the searched repository's own config cannot
  * run a hook. TOKEN_OPTIMIZER_GREP_BACKEND=walk turns it off.
@@ -164,26 +185,44 @@ export async function gitGrepCandidates(
   ];
   const limit = 64 * 1024 * 1024;
 
-  // Submodules are index entries of mode 160000.
+  const excludes = opts.ignore.map((glob) => `:(exclude,glob)${glob}`);
+
+  // Submodules (mode 160000) and tracked symlinks (mode 120000): git grep skips
+  // both, and the walk reads them (review on #517).
   const staged = await runGit([...base, 'ls-files', '-s', '-z'], left(), limit);
   if (!staged || staged.code !== 0) return null;
-  if (nulEntries(staged.stdout).some((entry) => entry.startsWith('160000 ')))
+  if (
+    nulEntries(staged.stdout).some(
+      (entry) => entry.startsWith('160000 ') || entry.startsWith('120000 ')
+    )
+  )
     return null;
-  // A nested repository is an untracked directory holding its own .git.
+
+  // Untracked entries WITHOUT --directory, under the walk's own excludes. A
+  // nested repository then appears as its own `dir/` entry at any depth --
+  // with --directory only the outermost untracked directory was listed, so
+  // third_party/libfoo/.git went unseen (review on #517) -- and every
+  // untracked file is listed, so untracked symlinks can be found by lstat.
   const others = await runGit(
-    [...base, 'ls-files', '-o', '--directory', '-z'],
+    [...base, 'ls-files', '-o', '-z', '--', '.', ...excludes],
     left(),
     limit
   );
   if (!others || others.code !== 0) return null;
-  for (const entry of nulEntries(others.stdout)) {
-    if (!entry.endsWith('/')) continue;
-    try {
-      await access(join(resolve(opts.cwd, entry), '.git'));
-      return null;
-    } catch {
-      /* not a repository: the walk and git agree on it */
-    }
+  const untracked = nulEntries(others.stdout);
+  if (untracked.some((entry) => entry.endsWith('/'))) return null;
+  if (untracked.length > MAX_UNTRACKED_TO_INSPECT) return null;
+  for (let i = 0; i < untracked.length; i += 256) {
+    const slice = untracked.slice(i, i + 256);
+    const links = await Promise.all(
+      slice.map((entry) =>
+        lstat(resolve(opts.cwd, entry)).then(
+          (stats) => stats.isSymbolicLink(),
+          () => false
+        )
+      )
+    );
+    if (links.some(Boolean)) return null;
   }
 
   const grep = await runGit(
@@ -195,14 +234,17 @@ export async function gitGrepCandidates(
       '--untracked',
       '--no-exclude-standard',
       '-F',
-      ...(opts.skipBinary ? ['-I'] : ['-a']),
+      // ALWAYS -a: -I trusts .gitattributes (`*.svg binary`, `-diff`) and so
+      // skipped text files the walk searches (review on #517). Every candidate
+      // still goes through the walk's own binary check in passesFilters.
+      '-a',
       ...(opts.caseSensitive ? [] : ['-i']),
       ...(opts.wholeWord ? ['-w'] : []),
       '-e',
       pattern,
       '--',
       '.',
-      ...opts.ignore.map((glob) => `:(exclude,glob)${glob}`),
+      ...excludes,
     ],
     left(),
     limit
