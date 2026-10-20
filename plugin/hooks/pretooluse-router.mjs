@@ -1133,7 +1133,8 @@ function searchAdvisory(payload, state, dirFor) {
   // the home directory that greps E:/repo got index hits from the home store --
   // observed live: `grep -n "test-start" ci.log` was answered with an openevolve
   // file under AppData/Roaming/Python, on every such call, for the word `start`.
-  const root = searchTargetDir(payload) || payload.cwd || process.cwd();
+  const target = searchTargetDir(payload);
+  const root = target || payload.cwd || process.cwd();
   if (isNotAProject(root)) return null;
 
   // THE SCOPE IS THE PROJECT, NOT THE WORKING DIRECTORY. A session started in
@@ -1157,7 +1158,11 @@ function searchAdvisory(payload, state, dirFor) {
     const b = fold(inner);
     return b === a || b.startsWith(`${a}/`);
   };
-  const scope = contains(projectRoot, root) ? projectRoot : root;
+  const display = contains(projectRoot, root) ? projectRoot : root;
+  // AN EXPLICIT TARGET IS THE SCOPE. Widening `Grep {path: "src"}` to the whole
+  // project reported hits from sibling directories the search does not cover
+  // (review on #512). Paths still display relative to the project.
+  const scope = target ? root : display;
   const told = new Set(state.advised || []);
   if (told.size >= SESSION_CAP) return null;
   const graph = load(dirFor(join(root, '__search__')));
@@ -1166,7 +1171,7 @@ function searchAdvisory(payload, state, dirFor) {
     // Displayed relative to the project, so the path reads the way the model
     // would write it, and scoped to the project, so nothing outside it is
     // reported as though it were this codebase.
-    root: scope,
+    root: display,
     scope,
     firstOfSession: !told.size,
   });

@@ -49,6 +49,10 @@ describe('what does not bound a search', () => {
     ['tail --lines=+N', 'grep -rn x . | tail --lines=+2'],
     ['head -n -N', 'grep -rn x . | head -n -1'],
     ['head --lines=-N', 'grep -rn x . | head --lines=-1'],
+    // Review on #512: xargs runs the command per batch of input, capping nothing.
+    ['xargs head', 'grep -rl TODO . | xargs head'],
+    ['xargs wc -l', 'grep -rl TODO . | xargs wc -l'],
+    ['xargs grep -c', 'grep -rl TODO . | xargs grep -c x'],
   ])('%s is still routed', (_label, command) => {
     expect(searchOutputBounded(command)).toBe(false);
     expect(verdict('Bash', { command })?.reason).toMatch(/smart_grep/);

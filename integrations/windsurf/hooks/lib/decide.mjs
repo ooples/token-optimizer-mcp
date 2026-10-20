@@ -379,7 +379,13 @@ function pipelineStages(command) {
 function boundsItsInput(stage) {
   const tokens = stage.match(/(?:"[^"]*"|'[^']*'|[^\s]+)/g) || [];
   let i = 0;
-  while (i < tokens.length && (/^\w+=/.test(tokens[i]) || COMMAND_PREFIX.test(tokens[i]))) i++;
+  while (i < tokens.length && (/^\w+=/.test(tokens[i]) || COMMAND_PREFIX.test(tokens[i]))) {
+    // `xargs head` runs head once per batch of input -- the first lines of EVERY
+    // file named -- so it caps nothing (review on #512). xargs stays a prefix for
+    // isRecursiveSearch, where it only locates the search tool.
+    if (/^xargs$/.test(tokens[i])) return false;
+    i++;
+  }
   if (i >= tokens.length) return false;
   const head = tokens[i].replace(/^.*[/\\]/, '');
   // NOT EVERY head/tail BOUNDS. `tail -n +N` / `tail +N` prints from line N to
