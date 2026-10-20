@@ -19,7 +19,8 @@ import {
   type TruncationReason,
 } from '../shared/bounded-traversal.js';
 import { relative, join, resolve } from 'path';
-import { execFile } from 'child_process';
+import { spawn } from 'child_process';
+import { access } from 'fs/promises';
 import { homedir } from 'os';
 import { CacheEngine, resolveCacheLocation } from '../../core/cache-engine.js';
 import { TokenCounter } from '../../core/token-counter.js';
@@ -59,16 +60,75 @@ const MAX_RESPONSE_TOKENS = 8_000;
  */
 const MAX_MATCH_LINE_CHARS = 2_000;
 
+/** Runs git with options LAST (the windows-hide guard reads the final argument). */
+function runGit(
+  args: string[],
+  timeoutMs: number,
+  limitBytes: number
+): Promise<{ code: number | null; stdout: Buffer } | null> {
+  return new Promise((done) => {
+    let settled = false;
+    const finish = (value: { code: number | null; stdout: Buffer } | null) => {
+      if (settled) return;
+      settled = true;
+      done(value);
+    };
+    try {
+      // spawn, not execFile: execFile buffers stdout itself under a 1 MiB
+      // default maxBuffer and killed git on large candidate lists (review on
+      // #517). Bytes are counted here instead, against an explicit cap.
+      const child = spawn('git', args, {
+        timeout: Math.max(1, timeoutMs),
+        windowsHide: true,
+      });
+      const chunks: Buffer[] = [];
+      let bytes = 0;
+      child.stdout?.on('data', (chunk: Buffer) => {
+        bytes += chunk.length;
+        if (bytes > limitBytes) {
+          child.kill();
+          finish(null);
+          return;
+        }
+        chunks.push(chunk);
+      });
+      child.on('error', () => finish(null));
+      child.on('close', (code) =>
+        finish({ code, stdout: Buffer.concat(chunks) })
+      );
+    } catch {
+      finish(null);
+    }
+  });
+}
+
+/** Splits `git ... -z` output into entries; never trims, so spaces in names survive. */
+const nulEntries = (stdout: Buffer): string[] =>
+  stdout
+    .toString('utf8')
+    .split('\0')
+    .filter((entry) => entry.length > 0);
+
 /**
  * The files under `opts.cwd` that contain a LITERAL pattern, per `git grep -l`,
  * or null when git cannot answer the same question the walk would.
  *
  * Same file set as the walk: tracked, untracked AND ignored files
  * (`--untracked --no-exclude-standard`), dotfiles included, with the walk's own
- * ignore globs passed as `:(exclude,glob)` pathspecs. Regex patterns are left to
- * the walk because JavaScript and git regex dialects differ; explicit `files`
- * globs too, because pathspec and minimatch glob semantics are not identical.
- * TOKEN_OPTIMIZER_GREP_BACKEND=walk turns it off.
+ * ignore globs passed as `:(exclude,glob)` pathspecs. Null -- the walk answers --
+ * whenever git's answer could be SMALLER than the walk's (review on #517):
+ *
+ * - regex patterns and explicit `files` globs (dialects differ);
+ * - `wholeWord` with a non-word first or last character (JS `\b` and `git -w`
+ *   disagree there);
+ * - case-insensitive non-ASCII patterns (git's `-i` folding depends on its
+ *   regex backend and locale; JS folds regardless);
+ * - any encoding but UTF-8 (git compares raw bytes);
+ * - a submodule or a nested repository anywhere under `opts.cwd`, which
+ *   `git grep --untracked` does not enter but the walk reads.
+ *
+ * Runs with `core.fsmonitor=` so the searched repository's own config cannot
+ * run a hook. TOKEN_OPTIMIZER_GREP_BACKEND=walk turns it off.
  */
 export async function gitGrepCandidates(
   pattern: string,
@@ -80,77 +140,77 @@ export async function gitGrepCandidates(
     wholeWord: boolean;
     skipBinary: boolean;
     ignore: string[];
+    encoding?: string;
   },
   timeoutMs: number
 ): Promise<string[] | null> {
   if (opts.regex || !pattern) return null;
   if (opts.files.length !== 1 || opts.files[0] !== '**/*') return null;
   if (process.env.TOKEN_OPTIMIZER_GREP_BACKEND === 'walk') return null;
-  const args = [
+  if (opts.wholeWord && !/^\w[\s\S]*\w$|^\w$/.test(pattern)) return null;
+  if (!opts.caseSensitive && /[^\x00-\x7F]/.test(pattern)) return null;
+  const encoding = String(opts.encoding ?? 'utf-8').toLowerCase();
+  if (encoding !== 'utf-8' && encoding !== 'utf8') return null;
+
+  const deadline = Date.now() + timeoutMs;
+  const left = () => Math.max(1, deadline - Date.now());
+  const base = [
     '-C',
     opts.cwd,
     '-c',
     'core.quotePath=false',
-    'grep',
-    '-l',
-    '--untracked',
-    '--no-exclude-standard',
-    '-F',
-    ...(opts.skipBinary ? ['-I'] : ['-a']),
-    ...(opts.caseSensitive ? [] : ['-i']),
-    ...(opts.wholeWord ? ['-w'] : []),
-    '-e',
-    pattern,
-    '--',
-    '.',
-    ...opts.ignore.map((glob) => `:(exclude,glob)${glob}`),
+    '-c',
+    'core.fsmonitor=',
   ];
-  return new Promise((done) => {
-    // Options LAST, with no callback after them: the windows-hide guard reads
-    // the final argument of every spawn call, and output is collected from the
-    // child's own events instead, capped at the same 64 MB maxBuffer would.
-    const limit = 64 * 1024 * 1024;
-    let settled = false;
-    const finish = (value: string[] | null) => {
-      if (settled) return;
-      settled = true;
-      done(value);
-    };
+  const limit = 64 * 1024 * 1024;
+
+  // Submodules are index entries of mode 160000.
+  const staged = await runGit([...base, 'ls-files', '-s', '-z'], left(), limit);
+  if (!staged || staged.code !== 0) return null;
+  if (nulEntries(staged.stdout).some((entry) => entry.startsWith('160000 ')))
+    return null;
+  // A nested repository is an untracked directory holding its own .git.
+  const others = await runGit(
+    [...base, 'ls-files', '-o', '--directory', '-z'],
+    left(),
+    limit
+  );
+  if (!others || others.code !== 0) return null;
+  for (const entry of nulEntries(others.stdout)) {
+    if (!entry.endsWith('/')) continue;
     try {
-      const child = execFile('git', args, {
-        encoding: 'utf8',
-        timeout: Math.max(1, timeoutMs),
-        windowsHide: true,
-      });
-      let stdout = '';
-      child.stdout?.on('data', (chunk: string) => {
-        stdout += chunk;
-        if (stdout.length > limit) {
-          child.kill();
-          finish(null);
-        }
-      });
-      child.on('error', () => finish(null));
-      child.on('close', (code) => {
-        // 0: matches; 1: none -- both are answers. Anything else (128: not a
-        // repository, a timeout's kill, git missing) is git declining, and the
-        // walk answers instead.
-        if (code !== 0 && code !== 1) {
-          finish(null);
-          return;
-        }
-        finish(
-          stdout
-            .split('\n')
-            .map((line) => line.trim())
-            .filter(Boolean)
-            .map((file) => resolve(opts.cwd, file))
-        );
-      });
+      await access(join(resolve(opts.cwd, entry), '.git'));
+      return null;
     } catch {
-      finish(null);
+      /* not a repository: the walk and git agree on it */
     }
-  });
+  }
+
+  const grep = await runGit(
+    [
+      ...base,
+      'grep',
+      '-l',
+      '-z',
+      '--untracked',
+      '--no-exclude-standard',
+      '-F',
+      ...(opts.skipBinary ? ['-I'] : ['-a']),
+      ...(opts.caseSensitive ? [] : ['-i']),
+      ...(opts.wholeWord ? ['-w'] : []),
+      '-e',
+      pattern,
+      '--',
+      '.',
+      ...opts.ignore.map((glob) => `:(exclude,glob)${glob}`),
+    ],
+    left(),
+    limit
+  );
+  // 0: matches; 1: none -- both are answers. Anything else (128: not a
+  // repository, a timeout's kill, git missing) is git declining.
+  if (!grep || (grep.code !== 0 && grep.code !== 1)) return null;
+  return nulEntries(grep.stdout).map((file) => resolve(opts.cwd, file));
 }
 
 export interface GrepMatch {

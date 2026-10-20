@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from '@jest/globals';
 import { execFileSync } from 'child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'fs';
+import { existsSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import {
@@ -122,5 +122,83 @@ describe('when git is not asked', () => {
 
   it('a repository with no match is an empty answer, not a fallback', async () => {
     expect(await gitGrepCandidates('ZZ_NOT_ANYWHERE', { ...base, cwd: repo }, 5_000)).toEqual([]);
+  });
+
+  // Review on #517: every case where git's answer could be SMALLER than the walk's.
+  it('wholeWord with a non-word edge, case-insensitive non-ASCII, and non-UTF-8 are left to the walk', async () => {
+    expect(await gitGrepCandidates('foo(', { ...base, cwd: repo, wholeWord: true }, 5_000)).toBeNull();
+    expect(await gitGrepCandidates('(foo', { ...base, cwd: repo, wholeWord: true }, 5_000)).toBeNull();
+    expect(await gitGrepCandidates('straße', { ...base, cwd: repo }, 5_000)).toBeNull();
+    expect(await gitGrepCandidates(NEEDLE, { ...base, cwd: repo, encoding: 'utf16le' }, 5_000)).toBeNull();
+    // ...while the plain cases still go to git.
+    expect(await gitGrepCandidates('NEEDLE_7Q', { ...base, cwd: repo, wholeWord: true }, 5_000)).not.toBeNull();
+    expect(await gitGrepCandidates('straße', { ...base, cwd: repo, caseSensitive: true }, 5_000)).toEqual([]);
+  });
+
+  it('a nested repository or a submodule is left to the walk', async () => {
+    const outer = mkdtempSync(join(tmpdir(), 'grep-nested-'));
+    try {
+      execFileSync('git', ['init', '-q', outer]);
+      writeFileSync(join(outer, 'top.ts'), `${NEEDLE}\n`);
+      expect(await gitGrepCandidates(NEEDLE, { ...base, cwd: outer }, 5_000)).toEqual([join(outer, 'top.ts')]);
+
+      const inner = join(outer, 'vendored');
+      execFileSync('git', ['init', '-q', inner]);
+      writeFileSync(join(inner, 'deep.ts'), `${NEEDLE}\n`);
+      expect(await gitGrepCandidates(NEEDLE, { ...base, cwd: outer }, 5_000)).toBeNull();
+
+      // A submodule is an index entry of mode 160000.
+      rmSync(inner, { recursive: true, force: true });
+      execFileSync('git', [
+        '-C', outer, 'update-index', '--add', '--cacheinfo',
+        `160000,${'1'.repeat(40)},sub`,
+      ]);
+      expect(await gitGrepCandidates(NEEDLE, { ...base, cwd: outer }, 5_000)).toBeNull();
+    } finally {
+      rmSync(outer, { recursive: true, force: true });
+    }
+  });
+
+  it('a filename with spaces and a quote survives the path parsing', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'grep-names-'));
+    try {
+      execFileSync('git', ['init', '-q', dir]);
+      const odd = join(dir, ' odd "name".ts');
+      writeFileSync(odd, `${NEEDLE}\n`);
+      expect(await gitGrepCandidates(NEEDLE, { ...base, cwd: dir }, 5_000)).toEqual([odd]);
+    } catch (error) {
+      // A filesystem that refuses `"` in names (Windows) cannot hold the case.
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT' && (error as NodeJS.ErrnoException).code !== 'EINVAL')
+        throw error;
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("the searched repository's core.fsmonitor hook does not run", async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'grep-fsmon-'));
+    try {
+      execFileSync('git', ['init', '-q', dir]);
+      writeFileSync(join(dir, 'a.ts'), `${NEEDLE}\n`);
+      const marker = join(dir, 'HOOK_RAN');
+      const hook = join(dir, 'hook.sh');
+      writeFileSync(hook, `#!/bin/sh\ntouch "${marker.replace(/\\/g, '/')}"\nexit 1\n`, { mode: 0o755 });
+      execFileSync('git', ['-C', dir, 'config', 'core.fsmonitor', hook.replace(/\\/g, '/')]);
+
+      expect(await gitGrepCandidates(NEEDLE, { ...base, cwd: dir }, 5_000)).toEqual([join(dir, 'a.ts')]);
+      expect(existsSync(marker)).toBe(false);
+
+      // The control: an ordinary git command in that repository DOES run it. If
+      // this platform's git cannot run the hook at all, the case above proves nothing.
+      try {
+        execFileSync('git', ['-C', dir, 'status', '--untracked-files=all'], { stdio: 'ignore' });
+      } catch {
+        /* a failing hook can fail status; only whether it ran matters */
+      }
+      if (!existsSync(marker)) return;
+      expect(existsSync(marker)).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
