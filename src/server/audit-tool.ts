@@ -30,6 +30,7 @@ interface AuditModules {
   routing: any;
   standing: any;
   wiki: any;
+  subagents: any;
 }
 
 let cached: AuditModules | null = null;
@@ -37,15 +38,17 @@ let cached: AuditModules | null = null;
 async function modules(): Promise<AuditModules | null> {
   if (cached) return cached;
   try {
-    const [audit, waste, cache, routing, standing, wiki] = await Promise.all([
-      import(coreUrl('audit.mjs')),
-      import(coreUrl('waste.mjs')),
-      import(coreUrl('cache.mjs')),
-      import(coreUrl('routing.mjs')),
-      import(coreUrl('standing.mjs')),
-      import(coreUrl('wiki.mjs')),
-    ]);
-    cached = { audit, waste, cache, routing, standing, wiki };
+    const [audit, waste, cache, routing, standing, wiki, subagents] =
+      await Promise.all([
+        import(coreUrl('audit.mjs')),
+        import(coreUrl('waste.mjs')),
+        import(coreUrl('cache.mjs')),
+        import(coreUrl('routing.mjs')),
+        import(coreUrl('standing.mjs')),
+        import(coreUrl('wiki.mjs')),
+        import(coreUrl('subagents.mjs')),
+      ]);
+    cached = { audit, waste, cache, routing, standing, wiki, subagents };
     return cached;
   } catch {
     return null;
@@ -177,6 +180,20 @@ export async function tokenAudit(input: {
     /* standing context is a bonus; never fail the audit over it */
   }
 
+  // SUBAGENTS RE-READ THEIR WHOLE FIXED CONTEXT ON EVERY TURN, and that was the
+  // largest cost of a multi-agent session this audit could not see: 88% of 4.09M
+  // tokens across nine agents was cache reads of a ~56k baseline, while the
+  // queue above reported 2.9k of re-read files. See hooks-core/subagents.mjs.
+  let tally = '';
+  try {
+    const agents = mods.subagents.subagentTally(mods.cache.transcriptFor(cwd));
+    const finding = mods.subagents.fixedContextFinding(agents);
+    if (finding) findings.push(finding);
+    tally = mods.subagents.renderTally(agents);
+  } catch {
+    /* subagent accounting is a bonus; never fail the audit over it */
+  }
+
   const out = mods.audit.renderAudit(dir, findings, {
     full: Boolean(input?.full),
     tier: input?.tier || 'opus',
@@ -194,7 +211,7 @@ export async function tokenAudit(input: {
     }
   }
 
-  return say(out.text);
+  return say(tally ? `${out.text}\n${tally}` : out.text);
 }
 
 export const AUDIT_TOOL = {

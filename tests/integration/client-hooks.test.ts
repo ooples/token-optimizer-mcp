@@ -211,7 +211,7 @@ describe('native CLI hook integrations', () => {
     });
 
     expect(codex.hookSpecificOutput.permissionDecisionReason).toContain(
-      'TOKEN_OPTIMIZER_MODE=off'
+      'TOKEN_OPTIMIZER_MODE=assist'
     );
   });
 

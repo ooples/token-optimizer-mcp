@@ -41,7 +41,9 @@ import {
 import { wikiDir, load, projectRootFor } from './lib/wiki.mjs';
 import { seedProject, alreadySeeded, seedDisabled } from './lib/seed.mjs';
 import { episodeMeta, featuresForArm } from './lib/experiment.mjs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { claudeSettingsPath, offModeNotice, retireStrays } from './lib/install-health.mjs';
 import {
   beginHookInvocation,
   errorFields,
@@ -136,7 +138,35 @@ async function restoration(parsed) {
 // Claude Code keeps its own entry point because its PreToolUse router does more
 // than the shared one; the standing notice is not a place it needs to differ.
 async function main() {
-if (mode() === MODE_OFF) return;
+if (mode() === MODE_OFF) {
+  // Off means off, with one exception: saying so. See offModeNotice.
+  const notice = offModeNotice();
+  if (notice) {
+    process.stdout.write(
+      JSON.stringify({ hookSpecificOutput: { hookEventName: 'SessionStart', additionalContext: notice } })
+    );
+  }
+  return;
+}
+// ANOTHER INSTALL OF OURS STILL HOOKED BESIDE THIS ONE is retired before anything
+// else runs, so this session is the last one that pays for it. See install-health.mjs.
+// PLUGIN INSTALLS ONLY: a script install's own installer already replaces stray
+// entries when it re-wires (wire.mjs isOurs recognises them). And never the real
+// settings file from a test run -- a spawned hook inherits JEST_WORKER_ID -- unless
+// the test pointed TOKEN_OPTIMIZER_SETTINGS at a file of its own.
+let retired = null;
+try {
+  const underTest = Boolean(process.env.JEST_WORKER_ID) && !process.env.TOKEN_OPTIMIZER_SETTINGS;
+  if (process.env.CLAUDE_PLUGIN_ROOT && !underTest)
+    retired = retireStrays(claudeSettingsPath(), {
+      ownHooksDir: dirname(fileURLToPath(import.meta.url)),
+    });
+  if (retired?.removed.length) {
+    writeHookEvent({ level: 'warn', event: 'install.strays-retired', strayCount: retired.removed.length });
+  }
+} catch (error) {
+  writeHookEvent({ level: 'warn', event: 'install.strays-failed', error: errorFields(error) });
+}
 const input = await readPayloadResult({ timeoutMs: 250 });
 const payload = input.payload || {};
 if (input.payload) invocation.bind(payload, null, input.bytes);
@@ -161,6 +191,17 @@ const blocks = [
     text: policyText(true, toolEvidence.names, toolEvidence.proven),
   },
 ];
+if (retired?.removed.length) {
+  blocks.push({
+    id: 'install',
+    volatility: 4,
+    text:
+      `token-optimizer removed ${retired.removed.length} hook entr${retired.removed.length === 1 ? 'y' : 'ies'} an older ` +
+      `install left in settings.json (backup: ${retired.backup}): ${retired.removed.join('; ')}. ` +
+      'They ran beside this install on every tool call. Tell the user once. ' +
+      'Set TOKEN_OPTIMIZER_KEEP_STRAY_HOOKS=1 to keep them.',
+  });
+}
 
 // THE ALWAYS-ON HALF OF DELIVERY. Trigger-fired injection answers "this
 // situation is happening now", which cannot cover a rule about how the work is

@@ -1378,7 +1378,7 @@ is coercive, and the person who needs it is mid-refusal, not reading a README:
 
 ```
 auth.ts is 91 KB. Call smart_read instead.
-(Not what you wanted? TOKEN_OPTIMIZER_MODE=off disables enforcement.)
+(Not what you wanted? TOKEN_OPTIMIZER_MODE=assist stops refusals and keeps everything else on.)
 ```
 
 **Removal is exact.** The installer records every file it wrote, with hashes.

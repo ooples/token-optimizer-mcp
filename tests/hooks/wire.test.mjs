@@ -283,6 +283,49 @@ describe('what we install says so, rather than being recognised by its path', ()
   });
 });
 
+describe('what an earlier install left behind is still ours', () => {
+  // Observed on one machine: a 7.4.3 plugin, a 5.5.0 npm-global install wired
+  // into settings.json, and a July dispatcher.ps1 all hooked every call. None of
+  // the last two was recognised, so the 5.5.0 router -- which predates `assist`
+  // and refuses under it -- kept denying calls the plugin allowed.
+  const NPM = 'C:/Users/u/AppData/Roaming/npm/node_modules/@ooples/token-optimizer-mcp/plugin/hooks';
+  const entry = (command) => ({ hooks: [{ type: 'command', command }] });
+
+  test.each([
+    ['the npm package router run in place', `node "${NPM}/pretooluse-router.mjs"`],
+    ['a retired Stop hook from the npm package', `node "${NPM}/stop-harvest.mjs"`],
+    ['an older layout without plugin/', 'node "/usr/lib/node_modules/@ooples/token-optimizer-mcp/hooks/session-start.mjs"'],
+    ['a retired filename in our own hooks directory', 'node "/home/u/.claude-global/hooks/token-optimizer/large-read-advisor.mjs"'],
+    ['the PowerShell dispatcher', 'powershell.exe -NoProfile -ExecutionPolicy Bypass -File "C:\\Users\\u\\.claude-global\\hooks\\dispatcher.ps1" -Phase PreToolUse'],
+    ['the shell dispatcher', 'bash "/home/u/.claude-global/hooks/dispatcher.sh" PreToolUse'],
+  ])('%s is recognised and removed by unwire', (_label, command) => {
+    const settings = { hooks: { PreToolUse: [entry(command)] } };
+
+    expect(wiredEntries(settings)).toHaveLength(1);
+    expect(unwire(settings).hooks).toBeUndefined();
+  });
+
+  test.each([
+    ['a package of theirs with our filename', 'node "/x/node_modules/@me/other-tool/plugin/hooks/stop.mjs"'],
+    ['a file of theirs inside our npm package dir', `node "${NPM}/my-own-logger.mjs"`],
+    ['a dispatcher of theirs elsewhere', 'powershell.exe -File "C:\\tools\\hooks\\dispatcher.ps1"'],
+    // Review on #511: a path passed along as an ARGUMENT is not the script run.
+    ['our dispatcher passed as an argument to their node script', 'node "/home/u/scripts/audit.mjs" "/home/u/.claude-global/hooks/dispatcher.sh"'],
+    ['our dispatcher passed as an argument to their shell script', 'bash /home/u/scripts/check.sh /home/u/.claude-global/hooks/dispatcher.sh'],
+    ['our dispatcher named after -File in a non-PowerShell command', 'node /home/u/x.mjs -File /home/u/.claude-global/hooks/dispatcher.ps1'],
+  ])('%s is not claimed', (_label, command) => {
+    expect(wiredEntries({ hooks: { Stop: [entry(command)] } })).toHaveLength(0);
+  });
+
+  test('a fresh wire replaces the stale npm entries instead of running beside them', () => {
+    const stale = { hooks: { PreToolUse: [entry(`node "${NPM}/pretooluse-router.mjs"`)] } };
+    const out = wire(stale, '/home/u/.claude-global/hooks/token-optimizer');
+
+    expect(JSON.stringify(out)).not.toContain('@ooples/token-optimizer-mcp/plugin/hooks');
+    expect(wiredEntries(out)).toHaveLength(WIRING.length);
+  });
+});
+
 describe('a wired command has to name a file that is there', () => {
   // An upgrade wired its own staging directory. That directory existed at the
   // moment it was written, so nothing complained; the OS cleaned it up later and

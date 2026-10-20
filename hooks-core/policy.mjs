@@ -404,6 +404,10 @@ function emptyState() {
     advised: [],
     routingAdvised: [],
     subagentBriefed: false,
+    // Consecutive single, unbatched shell commands, and whether the batching
+    // nudge has been given (see batchingNudge).
+    singleRun: 0,
+    batchNudged: false,
     seenUrls: {},
     toolCalls: 0,
     optimizerToolAbsentAt: {},
@@ -498,6 +502,8 @@ export function loadState(sessionId, agent) {
         ? parsed.routingAdvised.filter((kind) => typeof kind === 'string').slice(-200)
         : [],
       subagentBriefed: parsed.subagentBriefed === true,
+      singleRun: Number.isFinite(parsed.singleRun) && parsed.singleRun > 0 ? parsed.singleRun : 0,
+      batchNudged: parsed.batchNudged === true,
       toolCalls: Number.isFinite(parsed.toolCalls) && parsed.toolCalls > 0 ? parsed.toolCalls : 0,
       seenUrls:
         parsed.seenUrls && typeof parsed.seenUrls === 'object' && !Array.isArray(parsed.seenUrls)
@@ -685,6 +691,9 @@ export function saveState(sessionId, state, agent) {
         ...new Set([...(current.routingAdvised || []), ...(state.routingAdvised || [])]),
       ].slice(-200),
       subagentBriefed: Boolean(current.subagentBriefed || state.subagentBriefed),
+      // The caller's own view of the run: it just observed this call.
+      singleRun: Number(state.singleRun) || 0,
+      batchNudged: Boolean(current.batchNudged || state.batchNudged),
       // ADDED, NOT MAXED: what this caller counted goes on top of what the
       // locked read found, so a concurrent hook's call is not forgotten. See
       // `loadedCalls` above for why this one count is merged differently.
@@ -986,6 +995,55 @@ export function subagentBriefing(raw, state, { canRecord = false } = {}) {
   ].join('\n');
 }
 
+/** How many single, unbatched shell commands in a row earn the nudge. */
+export const BATCH_NUDGE_AFTER = 6;
+
+/**
+ * A shell command that runs ONE thing: no `&&`, `||`, `;`, pipe or newline
+ * outside quotes. A pipeline is still one turn of work, so it is not "single"
+ * in the sense that matters -- but a pipe is also a sign of batching, and the
+ * nudge is about turns, so piped commands reset the run as well.
+ */
+export function isSingleCommand(command) {
+  if (typeof command !== 'string' || !command.trim()) return false;
+  let quote = null;
+  for (let i = 0; i < command.length; i++) {
+    const c = command[i];
+    if (quote) {
+      if (c === quote && command[i - 1] !== '\\') quote = null;
+    } else if (c === '"' || c === "'") quote = c;
+    else if (c === ';' || c === '\n' || c === '|' || c === '&') return false;
+  }
+  return true;
+}
+
+/**
+ * Once per agent: "you are running one command per turn".
+ *
+ * EACH TURN RE-READS THE WHOLE CONTEXT. Measured on 2026-10-20: nine workflow
+ * agents started at ~56k tokens and took 105 turns between them, so 5.36M of
+ * 7.39M tokens were re-reads of that baseline, against 66k of tool output --
+ * and the transcripts show runs of one short command per turn (a status, a
+ * log, a grep) that one batched call would have answered. The briefing says to
+ * batch; this says it at the moment it is not happening, once, and then stays
+ * quiet.
+ */
+export function batchingNudge(payload, state) {
+  if (payload?.tool_name !== 'Bash') return null;
+  if (!isSingleCommand(payload.tool_input?.command)) {
+    state.singleRun = 0;
+    return null;
+  }
+  state.singleRun = (Number(state.singleRun) || 0) + 1;
+  if (state.batchNudged || state.singleRun < BATCH_NUDGE_AFTER) return null;
+  state.batchNudged = true;
+  return (
+    `That is ${state.singleRun} single shell commands in a row, one per turn. Every turn re-reads ` +
+    'this whole conversation, so batch independent commands into one call (`a && b`, `a; b`) ' +
+    'and run dependent ones in one script.'
+  );
+}
+
 /** Emits nothing and exits 0 -- the normal permission flow proceeds. */
 export function allow() {
   if (precedingContext) allowWithContext(null);
@@ -1139,7 +1197,12 @@ export function deny(reason) {
 export function withEscape(reason) {
   const text = String(reason || '');
   if (text.includes('TOKEN_OPTIMIZER_MODE')) return text;
-  return `${text} (Not what you wanted? TOKEN_OPTIMIZER_MODE=off disables enforcement.)`;
+  // ASSIST, NOT OFF. This named `off` as the way to stop refusals, but `off`
+  // stops the whole product -- routing, bounding, retrieval, harvest -- and it is
+  // what an agent being refused reaches for and writes into settings. One machine
+  // ran with it for four weeks after a session did exactly that. `assist` is the
+  // escape the sentence actually promised: everything on, no refusals.
+  return `${text} (Not what you wanted? TOKEN_OPTIMIZER_MODE=assist stops refusals and keeps everything else on.)`;
 }
 
 /** Lets the call through, attaching a note the model sees. */

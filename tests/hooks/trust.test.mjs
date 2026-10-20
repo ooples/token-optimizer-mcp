@@ -220,7 +220,7 @@ describe('the refusal carries its own off switch', () => {
     // Enforcement that hides its own disable is coercive. The person who needs
     // this is mid-refusal and not reading the README.
     expect(withEscape('auth.ts is 91 KB. Call smart_read instead.'))
-      .toMatch(/TOKEN_OPTIMIZER_MODE=off disables enforcement/);
+      .toMatch(/TOKEN_OPTIMIZER_MODE=assist stops refusals/);
   });
 
   test('it is not appended twice when the reason already says it', () => {
@@ -229,6 +229,6 @@ describe('the refusal carries its own off switch', () => {
   });
 
   test('an empty reason still produces the escape hatch', () => {
-    expect(withEscape('')).toMatch(/TOKEN_OPTIMIZER_MODE=off/);
+    expect(withEscape('')).toMatch(/TOKEN_OPTIMIZER_MODE=assist/);
   });
 });
