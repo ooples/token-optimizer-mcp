@@ -34,7 +34,7 @@ import {
   statSync,
 } from 'node:fs';
 import { join, dirname } from 'node:path';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 
 import {
@@ -900,6 +900,45 @@ describe('the advisory reaches the model on both paths', () => {
     });
     const out = JSON.parse(result.stdout || '{}').hookSpecificOutput || {};
     expect(out.updatedInput).toBeUndefined();
+  });
+
+  test('the scope follows where the search points, not where the session started', () => {
+    // Observed live: a session started in the home directory grepped a CI log
+    // under E:/ and was handed an index hit from AppData/Roaming/Python for the
+    // word `start`. The search's own `path` is what says which project it is.
+    const result = run(
+      { ...grep(fresh('target')), cwd: homedir(), tool_input: { pattern: 'parse_line', path: workspace } },
+      { TOKEN_OPTIMIZER_MODE: 'assist', TOKEN_OPTIMIZER_MCP_CAPABILITIES: '' }
+    );
+    const out = JSON.parse(result.stdout || '{}').hookSpecificOutput || {};
+    expect(out.additionalContext || '').toContain('parse.py');
+  });
+
+  test("a relative search path resolves against the session's directory, not the router's", () => {
+    // Review on #512: `Grep {path: "pipeline"}` was stat-ed relative to the hook
+    // process, whose directory is this repository, and scoped to the wrong tree.
+    const result = run(
+      { ...grep(fresh('relative')), tool_input: { pattern: 'parse_line', path: 'pipeline' } },
+      { TOKEN_OPTIMIZER_MODE: 'assist', TOKEN_OPTIMIZER_MCP_CAPABILITIES: '' }
+    );
+    const out = JSON.parse(result.stdout || '{}').hookSpecificOutput || {};
+    expect(out.additionalContext || '').toContain('parse.py');
+  });
+
+  test('a search scoped to the home directory itself is answered from nothing', () => {
+    // The home directory is not a project: every unrooted file the machine ever
+    // touched lives under it, so its "index" answers any common word.
+    const env = { TOKEN_OPTIMIZER_MODE: 'assist', TOKEN_OPTIMIZER_MCP_CAPABILITIES: '' };
+    // The control: the same search from the project IS answered, so silence
+    // below means the scope rule, not a router that never ran (review on #512).
+    const control = run(grep(fresh('home-control')), env);
+    expect(JSON.parse(control.stdout || '{}').hookSpecificOutput?.additionalContext).toContain('parse.py');
+
+    const result = run({ ...grep(fresh('home')), cwd: homedir() }, env);
+    expect(result.error).toBeUndefined();
+    expect(result.status).toBe(0);
+    const out = JSON.parse(result.stdout || '{}').hookSpecificOutput || {};
+    expect(out.additionalContext || '').not.toContain('parse.py');
   });
 
   test('the ROUTER stops advising once the session cap is reached', () => {

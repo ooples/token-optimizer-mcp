@@ -70,8 +70,8 @@ import { isFsSafePath } from './lib/paths.mjs';
 // large read for an outline of the same file.
 import { outlineRead, outlineShell, readNotice } from './lib/outline-rewrite.mjs';
 import { readFileSync, statSync, mkdirSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { homedir, tmpdir } from 'node:os';
+import { dirname, join, parse, resolve } from 'node:path';
 import {
   adviseSearch,
   searchPatternFromCommand,
@@ -1073,6 +1073,48 @@ function compactorFor(sessionId, command) {
  * results exactly as it would have, having paid a few tokens for a hint it can
  * ignore -- which is the only failure mode available to this.
  */
+/**
+ * The directory a search runs against, when the call says: Grep's `path`, or a
+ * shell search's leading `cd <dir> &&`. Null when it does not, so the caller
+ * falls back to the session's directory as before.
+ */
+function searchTargetDir(payload) {
+  const isDir = (p) => {
+    try {
+      return Boolean(p) && statSync(p).isDirectory();
+    } catch {
+      return false;
+    }
+  };
+  // RELATIVE TO THE SESSION, not to this process: the router's own directory is
+  // not where `Grep {path: "src"}` points (review on #512).
+  const base = payload.cwd || process.cwd();
+  const at = (p) => resolve(base, p);
+  const path = payload.tool_input?.path;
+  if (typeof path === 'string' && path) {
+    const full = at(path);
+    if (isDir(full)) return full;
+    const parent = dirname(full);
+    if (isDir(parent)) return parent;
+  }
+  const command = payload.tool_input?.command;
+  if (typeof command === 'string') {
+    const cd = /^\s*cd\s+("[^"]+"|'[^']+'|[^\s;&|]+)\s*(?:&&|;)/.exec(command);
+    if (cd) {
+      const dir = at(cd[1].replace(/^["']|["']$/g, ''));
+      if (isDir(dir)) return dir;
+    }
+  }
+  return null;
+}
+
+/** The home directory or a filesystem root is never a project to answer from. */
+function isNotAProject(dir) {
+  const fold = (s) => resolve(String(s)).replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+  const at = fold(dir);
+  return at === fold(homedir()) || at === fold(parse(resolve(String(dir))).root);
+}
+
 function searchAdvisory(payload, state, dirFor) {
   // EITHER SURFACE, RESOLVED HERE rather than at the two call sites, so the
   // Grep tool and a shell `grep` cannot drift into answering differently.
@@ -1087,7 +1129,12 @@ function searchAdvisory(payload, state, dirFor) {
       : searchPatternFromCommand(payload.tool_input?.command);
   if (typeof pattern !== 'string' || !pattern) return null;
 
-  const root = payload.cwd || process.cwd();
+  // WHERE THE SEARCH POINTS, NOT WHERE THE SESSION STARTED. A session launched in
+  // the home directory that greps E:/repo got index hits from the home store --
+  // observed live: `grep -n "test-start" ci.log` was answered with an openevolve
+  // file under AppData/Roaming/Python, on every such call, for the word `start`.
+  const root = searchTargetDir(payload) || payload.cwd || process.cwd();
+  if (isNotAProject(root)) return null;
 
   // THE SCOPE IS THE PROJECT, NOT THE WORKING DIRECTORY. A session started in
   // `repo/src` must still be told about a symbol in `repo/lib`, so scoping to
