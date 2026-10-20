@@ -18,7 +18,8 @@ import {
   type StreamState,
   type TruncationReason,
 } from '../shared/bounded-traversal.js';
-import { relative, join } from 'path';
+import { relative, join, resolve } from 'path';
+import { execFile } from 'child_process';
 import { homedir } from 'os';
 import { CacheEngine, resolveCacheLocation } from '../../core/cache-engine.js';
 import { TokenCounter } from '../../core/token-counter.js';
@@ -57,6 +58,87 @@ const MAX_RESPONSE_TOKENS = 8_000;
  * dump wearing a search result's clothes.
  */
 const MAX_MATCH_LINE_CHARS = 2_000;
+
+/**
+ * The files under `opts.cwd` that contain a LITERAL pattern, per `git grep -l`,
+ * or null when git cannot answer the same question the walk would.
+ *
+ * Same file set as the walk: tracked, untracked AND ignored files
+ * (`--untracked --no-exclude-standard`), dotfiles included, with the walk's own
+ * ignore globs passed as `:(exclude,glob)` pathspecs. Regex patterns are left to
+ * the walk because JavaScript and git regex dialects differ; explicit `files`
+ * globs too, because pathspec and minimatch glob semantics are not identical.
+ * TOKEN_OPTIMIZER_GREP_BACKEND=walk turns it off.
+ */
+export async function gitGrepCandidates(
+  pattern: string,
+  opts: {
+    cwd: string;
+    files: string[];
+    regex: boolean;
+    caseSensitive: boolean;
+    wholeWord: boolean;
+    skipBinary: boolean;
+    ignore: string[];
+  },
+  timeoutMs: number
+): Promise<string[] | null> {
+  if (opts.regex || !pattern) return null;
+  if (opts.files.length !== 1 || opts.files[0] !== '**/*') return null;
+  if (process.env.TOKEN_OPTIMIZER_GREP_BACKEND === 'walk') return null;
+  const args = [
+    '-C',
+    opts.cwd,
+    '-c',
+    'core.quotePath=false',
+    'grep',
+    '-l',
+    '--untracked',
+    '--no-exclude-standard',
+    '-F',
+    ...(opts.skipBinary ? ['-I'] : ['-a']),
+    ...(opts.caseSensitive ? [] : ['-i']),
+    ...(opts.wholeWord ? ['-w'] : []),
+    '-e',
+    pattern,
+    '--',
+    '.',
+    ...opts.ignore.map((glob) => `:(exclude,glob)${glob}`),
+  ];
+  return new Promise((done) => {
+    try {
+      execFile(
+        'git',
+        args,
+        {
+          encoding: 'utf8',
+          timeout: Math.max(1, timeoutMs),
+          maxBuffer: 64 * 1024 * 1024,
+          windowsHide: true,
+        },
+        (error, stdout) => {
+          // 0: matches; 1: none -- both are answers. Anything else (128: not a
+          // repository, a timeout, git missing) is git declining, and the walk
+          // answers instead.
+          const code = (error as { code?: unknown } | null)?.code;
+          if (error && code !== 1) {
+            done(null);
+            return;
+          }
+          done(
+            String(stdout || '')
+              .split('\n')
+              .map((line) => line.trim())
+              .filter(Boolean)
+              .map((file) => resolve(opts.cwd, file))
+          );
+        }
+      );
+    } catch {
+      done(null);
+    }
+  });
+}
 
 export interface GrepMatch {
   file: string; // File path
@@ -389,27 +471,43 @@ export class SmartGrepTool {
       const regexProbe = this.buildRegexProbe(pattern, opts);
       let regexWouldMatch = false;
 
-      for (const filePattern of opts.files) {
+      // IN A GIT CHECKOUT, GIT FINDS THE CANDIDATE FILES. The JS walk stats and
+      // reads every file in the tree; on a 5,000-file .NET repository it hit the
+      // 10 s deadline and returned a possibly-incomplete answer, where `git grep`
+      // lists the files containing the pattern in under a second. Candidates
+      // only: every candidate still goes through the same filters and the same
+      // per-line matching below, so the answer is the walk's answer, faster. Null
+      // (regex, explicit globs, not a repository, git missing or failing) keeps
+      // the walk exactly as it was.
+      const candidates = await gitGrepCandidates(pattern, opts, remainingMs());
+      const fileSource = (filePattern: string): AsyncIterable<string> =>
+        candidates
+          ? (async function* () {
+              yield* candidates;
+            })()
+          : boundedGlobStream(
+              filePattern,
+              {
+                cwd: opts.cwd,
+                absolute: true,
+                ignore: opts.ignore,
+                nodir: true,
+                deadlineMs: remainingMs(),
+                // `.github/`, `.claude/`, `.husky/` and every dotfile are ordinary
+                // project content, but glob skips anything dot-prefixed unless told
+                // otherwise -- so every CI workflow in the repository was invisible.
+                // Measured: searching a tree returned 0 matches over 654 files while
+                // reporting success, and naming `.github` explicitly in `path`
+                // returned 7 matches in 4 files. What is excluded stays the ignore
+                // list's job.
+                dot: true,
+              },
+              streamState
+            );
+
+      for (const filePattern of candidates ? ['**/*'] : opts.files) {
         if (searchTruncatedBy) break;
-        for await (const file of boundedGlobStream(
-          filePattern,
-          {
-            cwd: opts.cwd,
-            absolute: true,
-            ignore: opts.ignore,
-            nodir: true,
-            deadlineMs: remainingMs(),
-            // `.github/`, `.claude/`, `.husky/` and every dotfile are ordinary
-            // project content, but glob skips anything dot-prefixed unless told
-            // otherwise -- so every CI workflow in the repository was invisible.
-            // Measured: searching a tree returned 0 matches over 654 files while
-            // reporting success, and naming `.github` explicitly in `path`
-            // returned 7 matches in 4 files. What is excluded stays the ignore
-            // list's job.
-            dot: true,
-          },
-          streamState
-        )) {
+        for await (const file of fileSource(filePattern)) {
           if (Date.now() >= expiresAt) {
             searchTruncatedBy = 'deadline';
             break;
