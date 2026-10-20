@@ -1132,7 +1132,12 @@ export function deny(reason) {
 export function withEscape(reason) {
   const text = String(reason || '');
   if (text.includes('TOKEN_OPTIMIZER_MODE')) return text;
-  return `${text} (Not what you wanted? TOKEN_OPTIMIZER_MODE=off disables enforcement.)`;
+  // ASSIST, NOT OFF. This named `off` as the way to stop refusals, but `off`
+  // stops the whole product -- routing, bounding, retrieval, harvest -- and it is
+  // what an agent being refused reaches for and writes into settings. One machine
+  // ran with it for four weeks after a session did exactly that. `assist` is the
+  // escape the sentence actually promised: everything on, no refusals.
+  return `${text} (Not what you wanted? TOKEN_OPTIMIZER_MODE=assist stops refusals and keeps everything else on.)`;
 }
 
 /** Lets the call through, attaching a note the model sees. */
