@@ -132,8 +132,11 @@ describe('assist keeps the parts off destroys', () => {
     const assist = runHook(SESSION_START, payload, 'assist');
     const off = runHook(SESSION_START, payload, 'off');
 
-    // `off` exits before any event handling, so it can never emit context.
-    expect(off.stdout.trim()).toBe('');
+    // `off` exits before any event handling. The one thing it may say is that it
+    // is off (once a day, see install-health.mjs offModeNotice) -- never the
+    // policy, the graph or anything else assist delivers.
+    expect(off.stdout).not.toContain('Token optimization is active');
+    if (off.stdout.trim()) expect(off.stdout).toContain('token-optimizer is OFF');
     // assist must not: the graph, injection and harvest are the point of it.
     expect(assist.stdout.trim().length).toBeGreaterThan(0);
   });
