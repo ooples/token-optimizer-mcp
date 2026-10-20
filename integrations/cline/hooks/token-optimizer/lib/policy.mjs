@@ -970,13 +970,20 @@ export function isSubagentPayload(raw) {
  * server, and telling a model to call tools that do not exist cost a measured
  * turn per task when SessionStart did it.
  */
-export function subagentBriefing(raw, state) {
+export function subagentBriefing(raw, state, { canRecord = false } = {}) {
   if (!isSubagentPayload(raw) || state.subagentBriefed) return null;
   state.subagentBriefed = true;
   return [
     'Token Optimizer (shown once to this agent). Everything you read stays in context and is paid for again on every later turn, so:',
     '- If smart_read, smart_grep or smart_glob appear in your tools or deferred tools, load them once with ToolSearch("smart_read smart_grep smart_glob") and use them for large files and searches.',
     '- Otherwise read with Read and an offset/limit for the region you need, and search with Grep/Glob, rather than cat, grep -r or Get-Content of whole files.',
+    '- Each turn re-reads your whole context, so batch independent commands into one call rather than running them one per turn.',
+    // ONLY WHEN IT CAN BE DONE, for the reason the tool line above is conditional.
+    // Sibling agents and later sessions read what is recorded here: this is how
+    // one agent's dead end stops being every agent's dead end.
+    ...(canRecord
+      ? ['- Before your final report, record with wiki_write anything that cost real work and is not obvious from the code -- a dead end and why, a decision and what was rejected, a command that finally worked -- anchored to the file it is about.']
+      : []),
     '- Keep your final report short: it is the only part your caller reads.',
   ].join('\n');
 }
