@@ -73,19 +73,35 @@ const MATCH_WINDOW_AFTER = 280;
  * `ignore` plus our own store -- unless the search was pointed INTO the store,
  * which is the one case where searching it is what was asked.
  */
-export function withOwnStoreIgnored(ignore: string[], searchRoot: string): string[] {
+export function withOwnStoreIgnored(
+  ignore: string[],
+  searchRoot: string
+): string[] {
   const root = String(searchRoot || '').replace(/\\/g, '/');
   if (/(^|\/)\.token-optimizer(\/|$)/.test(root)) return ignore;
-  return ignore.includes(OWN_STORE_IGNORE) ? ignore : [...ignore, OWN_STORE_IGNORE];
+  return ignore.includes(OWN_STORE_IGNORE)
+    ? ignore
+    : [...ignore, OWN_STORE_IGNORE];
 }
 
 /** The text of `line` around a match at `index`, marked where it was cut. */
-export function matchWindow(line: string, index: number, matchLength: number): string {
+export function matchWindow(
+  line: string,
+  index: number,
+  matchLength: number
+): string {
   if (line.length <= MATCH_WINDOW_BEFORE + MATCH_WINDOW_AFTER) return line;
   const at = Math.max(0, Math.min(index, line.length));
   const start = Math.max(0, at - MATCH_WINDOW_BEFORE);
-  const end = Math.min(line.length, Math.max(at + matchLength, at + MATCH_WINDOW_AFTER));
-  return (start > 0 ? '...' : '') + line.slice(start, end) + (end < line.length ? '...' : '');
+  const end = Math.min(
+    line.length,
+    Math.max(at + matchLength, at + MATCH_WINDOW_AFTER)
+  );
+  return (
+    (start > 0 ? '...' : '') +
+    line.slice(start, end) +
+    (end < line.length ? '...' : '')
+  );
 }
 
 /**
