@@ -62,11 +62,12 @@ describe('strayEntries finds other installs', () => {
     expect(JSON.stringify(strays)).not.toContain('my_guard.py');
   });
 
-  test('an entry mixing a user hook with ours is left alone, as isOurs requires', () => {
-    // Stop holds the user's gate beside a stale stop-harvest.mjs: deleting the
-    // pair would destroy the user's hook, so the entry is not claimed.
-    const strays = strayEntries(observed());
-    expect(strays.some((s) => s.event === 'Stop')).toBe(false);
+  test('our hook inside an entry shared with a user hook is still found', () => {
+    // Stop holds the user's gate beside a stale stop-harvest.mjs. Whole-entry
+    // ownership left that harvester running forever on the observed machine.
+    const strays = strayEntries(observed()).filter((s) => s.event === 'Stop');
+    expect(strays).toHaveLength(1);
+    expect(strays[0].script).toContain('stop-harvest.mjs');
   });
 
   test("a script install's own entries are not strays of itself", () => {
@@ -100,7 +101,10 @@ describe('retireStrays removes them and keeps a backup', () => {
     expect(JSON.stringify(after)).not.toContain('pretooluse-router.mjs');
     expect(after.hooks.SessionStart).toBeUndefined();
     expect(JSON.stringify(after)).toContain('my_guard.py');
-    expect(JSON.stringify(after)).toContain('my_gate.py');
+    // The shared Stop entry keeps the user's gate and loses only our harvester.
+    expect(after.hooks.Stop).toEqual([
+      { hooks: [{ type: 'command', command: 'python "C:/Users/u/.claude/hooks/my_gate.py" stop' }] },
+    ]);
     expect(after.env).toEqual({ TOKEN_OPTIMIZER_MODE: 'assist' });
     expect(readdirSync(dir).some((f) => f.includes('token-optimizer-stray-1.bak'))).toBe(true);
     expect(JSON.parse(readFileSync(result.backup, 'utf8'))).toEqual(observed());

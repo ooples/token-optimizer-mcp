@@ -117,10 +117,15 @@ export function strayEntries(settings, ownHooksDir = null) {
   for (const [event, entries] of Object.entries(settings?.hooks || {})) {
     if (!Array.isArray(entries)) continue;
     entries.forEach((entry, index) => {
-      if (!isOurs(entry)) return;
-      for (const hook of entry.hooks) {
+      // PER HOOK, NOT PER ENTRY. isOurs requires every hook in an entry to be
+      // ours, which is right for wire/unwire -- they remove whole entries -- and
+      // wrong here: a 5.5.0 stop-harvest.mjs that shared a Stop entry with the
+      // user's own gate kept running forever. Retiring removes only our hook from
+      // such an entry, so nothing of the user's goes with it.
+      for (const hook of Array.isArray(entry?.hooks) ? entry.hooks : []) {
+        if (!isOurs({ hooks: [hook] })) continue;
         const script = scriptOf(hook?.command || '');
-        if (own && script && norm(dirname(script)) === own) return;
+        if (own && script && norm(dirname(script)) === own) continue;
         found.push({ event, index, command: hook?.command || '', script, version: versionNear(script) });
       }
     });
@@ -175,8 +180,13 @@ export function retireStrays(settingsPath, { ownHooksDir = null, env = process.e
     }
     const kept = entries
       .map((entry) =>
-        isOurs(entry)
-          ? { ...entry, hooks: entry.hooks.filter((h) => !strayCommands.has(h?.command || '')) }
+        Array.isArray(entry?.hooks)
+          ? {
+              ...entry,
+              hooks: entry.hooks.filter(
+                (h) => !(strayCommands.has(h?.command || '') && isOurs({ hooks: [h] }))
+              ),
+            }
           : entry
       )
       .filter((entry) => !Array.isArray(entry?.hooks) || entry.hooks.length);
