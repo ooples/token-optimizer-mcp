@@ -27,6 +27,9 @@ import { relevantFindingIdsForContext, sessionIndex, standingRules } from './inj
 const HEAD_BYTES = 256 * 1024;
 const MAX_TASK_CHARS = 4_000;
 
+/** The surface subagent deliveries are recorded under, distinct from 'session-start'. */
+export const SURFACE = 'subagent-briefing';
+
 function readHead(path) {
   const handle = openSync(path, 'r');
   try {
@@ -108,10 +111,12 @@ export function subagentKnowledge(graphs, task, { episode = {} } = {}) {
   for (const { dir, graph } of graphs || []) {
     if (!graph) continue;
     try {
-      const rules = standingRules(dir, graph, { episode });
+      // Recorded under their own surface, so the subagent deliveries are measured
+      // apart from SessionStart's rather than inflating its count (review on #516).
+      const rules = standingRules(dir, graph, { episode, surface: SURFACE });
       if (rules) blocks.push(rules);
       const relevant = relevantFindingIdsForContext(graph, task);
-      const index = relevant.length ? sessionIndex(dir, graph, { episode, relevantFindingIds: relevant }) : null;
+      const index = relevant.length ? sessionIndex(dir, graph, { episode, relevantFindingIds: relevant, surface: SURFACE }) : null;
       if (index) blocks.push(index);
     } catch {
       /* one unreadable graph does not cost the other */

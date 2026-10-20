@@ -19,6 +19,7 @@ import { agentTranscriptFor, subagentKnowledge, subagentTask } from '../../hooks
 import { load, nodeId, putEdge, putNode } from '../../hooks-core/wiki.mjs';
 import { indexFile } from '../../hooks-core/staleness.mjs';
 import { subagentBriefing } from '../../hooks-core/policy.mjs';
+import { readMetrics } from '../../hooks-core/metrics.mjs';
 
 const ROOT = join(fileURLToPath(new URL('.', import.meta.url)), '..', '..');
 const TASK = 'Fix the failing Layers D shard: the npx jest command fails, find the repository test runner.';
@@ -81,6 +82,16 @@ describe('the knowledge block', () => {
     seed('Run npm test instead of npx jest for this repository');
     const text = subagentKnowledge([{ dir: wiki, graph: load(wiki) }], TASK);
     expect(text).toContain('npm test');
+  });
+
+  test('its deliveries are recorded as subagent-briefing, never as session-start', () => {
+    // Review on #516: recorded as session-start, every subagent briefing would
+    // inflate the main session's injection measurement.
+    seed('Run npm test instead of npx jest for this repository');
+    subagentKnowledge([{ dir: wiki, graph: load(wiki) }], TASK);
+    const injects = readMetrics(wiki).filter((event) => event.kind === 'inject' || event.kind === 'index');
+    expect(injects.map((event) => event.surface)).toContain('subagent-briefing');
+    expect(injects.some((event) => event.surface === 'session-start')).toBe(false);
   });
 
   test('says nothing when nothing is relevant', () => {
