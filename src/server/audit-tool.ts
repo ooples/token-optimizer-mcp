@@ -38,15 +38,16 @@ let cached: AuditModules | null = null;
 async function modules(): Promise<AuditModules | null> {
   if (cached) return cached;
   try {
-    const [audit, waste, cache, routing, standing, wiki, subagents] = await Promise.all([
-      import(coreUrl('audit.mjs')),
-      import(coreUrl('waste.mjs')),
-      import(coreUrl('cache.mjs')),
-      import(coreUrl('routing.mjs')),
-      import(coreUrl('standing.mjs')),
-      import(coreUrl('wiki.mjs')),
-      import(coreUrl('subagents.mjs')),
-    ]);
+    const [audit, waste, cache, routing, standing, wiki, subagents] =
+      await Promise.all([
+        import(coreUrl('audit.mjs')),
+        import(coreUrl('waste.mjs')),
+        import(coreUrl('cache.mjs')),
+        import(coreUrl('routing.mjs')),
+        import(coreUrl('standing.mjs')),
+        import(coreUrl('wiki.mjs')),
+        import(coreUrl('subagents.mjs')),
+      ]);
     cached = { audit, waste, cache, routing, standing, wiki, subagents };
     return cached;
   } catch {
