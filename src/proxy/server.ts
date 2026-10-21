@@ -33,8 +33,8 @@ import {
   type ServerResponse,
 } from 'node:http';
 import { request as httpsRequest } from 'node:https';
+import { appendFile } from 'node:fs/promises';
 import {
-  appendFileSync,
   existsSync,
   mkdirSync,
   readdirSync,
@@ -1523,7 +1523,7 @@ function warmer(): KeepWarm {
       // On the same ledger as the turns, so a ping's cost is never invisible.
       if (ledger) {
         try {
-          appendFileSync(
+          void appendFile(
             ledger,
             JSON.stringify({
               ts: new Date().toISOString(),
@@ -1537,7 +1537,9 @@ function warmer(): KeepWarm {
                 cache_creation_input_tokens: o.cacheWrite,
               },
             }) + '\n'
-          );
+          ).catch(() => {
+            // The ledger is evidence, not control flow.
+          });
         } catch {
           // The ledger is evidence, not control flow.
         }
