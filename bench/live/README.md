@@ -78,6 +78,33 @@ profile: `smart_read`, `smart_write`, `smart_edit`, `smart_glob`, `smart_grep`,
 smaller advertised tool catalog. The default server profile remains `core`.
 File-only runs do not measure wiki, audit, or session-management functionality.
 
+## Multi-agent head-to-head
+
+`multi-agent.mjs` measures the product (hooks, MCP and proxy together) against
+control and HeadRoom on work that spawns subagents, where a single-agent toy
+hides the cost of context every agent re-reads on every call. A lead Claude Code
+agent fans out one subagent per package (`TASK=fix`: four seeded Python packages
+with 180 KB CI logs and hidden tests) or per question (`TASK=explore`: exact
+answers about a pinned snapshot of this repository).
+
+```powershell
+$env:TASK_VENV='<venv with pytest>'; $env:HEADROOM_PY='<python with headroom-ai>'
+$env:NEXT_PLUGIN_DIR='<this checkout>/plugin'; $env:NEXT_PKG='<this checkout>'
+$env:ARMS='control,headroom,ours-next'; $env:REPS='5'; node bench/live/multi-agent.mjs
+```
+
+- Every arm's traffic crosses this package's proxy; it compresses only for ours
+  and records otherwise. HeadRoom sits behind it with the environment its own
+  `wrap claude` sets, so their arm is their product.
+- The operator's own settings are excluded (`--setting-sources project,local`,
+  `ISOLATE=0` restores them), and each run's init event is checked to confirm
+  which plugin actually loaded: a mismatch is `INVALID`, not counted.
+- Usage comes from every agent's transcript (the provider's own usage blocks),
+  cross-checked against the recorder ledger (`recorded=N/N`). Cost counts output
+  at 5x input.
+- `SELFCHECK=1` proves the grader fails the seeded repo and passes the reference
+  fixes; `REGRADE=<out dir>` re-runs corrected hidden tests on finished runs.
+
 ## Rate-card cost scenarios
 
 After auditing a campaign, run `node bench/live/codex-cost.mjs CAMPAIGN` to write
