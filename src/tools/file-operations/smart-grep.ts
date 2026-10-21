@@ -385,9 +385,10 @@ export async function gitGrepCandidates(
 export interface GrepMatch {
   file: string; // File path
   lineNumber: number; // 1-based line number
-  column?: number; // 0-based column number (optional)
+  column?: number; // 0-based column of the first occurrence (optional)
+  columns?: number[]; // Every occurrence's column, when the line has several
   line: string; // The matched line
-  match: string; // The actual matched text
+  match?: string; // The matched text, when it differs from the pattern
   before?: string[]; // Context lines before match
   after?: string[]; // Context lines after match
 }
@@ -467,7 +468,9 @@ export interface SmartGrepResult {
   success: boolean;
   pattern: string;
   metadata: {
-    totalMatches: number;
+    totalMatches: number; // Matching lines
+    /** Occurrences, when a line held the pattern more than once. */
+    occurrences?: number;
     filesSearched: number;
     /**
      * True when a BOUND stopped the search, so the tree was not fully
@@ -733,6 +736,8 @@ export class SmartGrepTool {
       const allMatches: GrepMatch[] = [];
       const filesWithMatches = new Set<string>();
       const matchCounts = new Map<string, number>();
+      // Occurrences across all files; totalMatches counts matching LINES.
+      let occurrences = 0;
 
       // Would this pattern have matched as a regex? One test per FILE, not per
       // line, and abandoned the moment it answers yes -- the question is
@@ -819,13 +824,19 @@ export class SmartGrepTool {
               regexWouldMatch = true;
             }
 
+            let fileOccurrences = 0;
             for (let i = 0; i < lines.length; i++) {
               const line = lines[i];
               const matches = [...line.matchAll(searchPattern)];
+              if (matches.length === 0) continue;
+              if (fileMatches.length >= opts.maxMatchesPerFile) break;
+              fileOccurrences += matches.length;
 
-              for (const match of matches) {
-                if (fileMatches.length >= opts.maxMatchesPerFile) break;
-
+              // ONE RECORD PER LINE, as grep prints one. A record per
+              // occurrence sent a line holding the pattern twice back twice,
+              // full text each time: 4 of 18 records on one AiDotNet search.
+              const [match] = matches;
+              {
                 const grepMatch: GrepMatch = {
                   file: relative(opts.cwd, file),
                   lineNumber: i + 1, // 1-based
@@ -833,12 +844,17 @@ export class SmartGrepTool {
                   // unbounded line here is what turned dense matches into
                   // gigabytes of duplicated text.
                   line: matchWindow(line, match.index ?? 0, match[0].length),
-                  match: match[0],
+                  // Only when it says something: for a literal search the
+                  // matched text IS the pattern, on every record.
+                  ...(match[0] !== pattern ? { match: match[0] } : {}),
                 };
 
-                // Add column if requested
+                // Add column if requested: every occurrence on the line.
                 if (opts.includeColumn && match.index !== undefined) {
                   grepMatch.column = match.index;
+                  if (matches.length > 1) {
+                    grepMatch.columns = matches.map((m) => m.index ?? 0);
+                  }
                 }
 
                 // Add context if requested
@@ -868,7 +884,9 @@ export class SmartGrepTool {
 
             if (fileMatches.length > 0) {
               filesWithMatches.add(relative(opts.cwd, file));
-              matchCounts.set(relative(opts.cwd, file), fileMatches.length);
+              // Occurrences, as count mode has always reported them.
+              matchCounts.set(relative(opts.cwd, file), fileOccurrences);
+              occurrences += fileOccurrences;
               appendAll(allMatches, fileMatches);
             }
           } catch {
@@ -964,6 +982,7 @@ export class SmartGrepTool {
         pattern,
         metadata: {
           totalMatches,
+          ...(occurrences > totalMatches ? { occurrences } : {}),
           filesSearched,
           ...(searchTruncatedBy
             ? {
