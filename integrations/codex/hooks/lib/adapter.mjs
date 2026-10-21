@@ -1525,7 +1525,12 @@ async function runHook(clientName, event, invocation) {
             edits: state.edits,
             files: state.editedFiles,
             model: raw.model,
+            // CLAUDE CODE ONLY: turnEvidence reads Claude Code's transcript
+            // format. Another client's transcript could parse as a turn with
+            // no failures while its failures use another shape, which would
+            // suppress the prompt there (review on #520). Null keeps it.
             turn: (() => {
+              if (clientName !== 'claude-code') return null;
               try {
                 const turn = turnEvidence(transcriptPath);
                 return turn && { ...turn, corrected: CORRECTION_OPENER.test(turn.opening) };

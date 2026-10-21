@@ -44,7 +44,7 @@ beforeAll(() => {
     writeFileSync(join(dir, 'obj', 'Debug', 'gen.cs'), `${NEEDLE}\n`);
   }
   execFileSync('git', ['init', '-q', repo], { env: gitEnvironment() });
-  writeFileSync(join(repo, '.gitignore'), 'obj/\n*.log\n');
+  writeFileSync(join(repo, '.gitignore'), 'obj/\n*.log\ngenerated/\n');
   writeFileSync(join(repo, 'run.log'), `${NEEDLE}\n`);
   cache = new CacheEngine(join(root, 'cache-db'), 10);
 });
@@ -85,16 +85,54 @@ describe('inside a git checkout', () => {
     }
   });
 
-  it('says so when the only matches were in gitignored paths', async () => {
-    writeFileSync(join(repo, 'obj', 'Debug', 'only.cs'), 'ONLY_IN_GENERATED\n');
+  // Gitignored SOURCE, as AiDotNet keeps generated .cs under src/Generated/.
+  // Created by each test that needs it, so every test holds when run alone.
+  const generated = () => {
+    mkdirSync(join(repo, 'generated'), { recursive: true });
+    writeFileSync(join(repo, 'generated', 'only.g.cs'), 'ONLY_IN_GENERATED\n');
+  };
+
+  it('says so, naming the directory, when only gitignored files match', async () => {
+    generated();
     const result = await tool().grep('ONLY_IN_GENERATED', { path: repo });
 
     expect(result.metadata.totalMatches).toBe(0);
-    expect(result.hint).toMatch(/gitignored paths .*includeIgnored: true/);
+    expect(result.hint).toMatch(/1 gitignored file\(s\) contain it/);
+    expect(result.hint).toMatch(/path: "generated"/);
   });
 
-  it('stays quiet when a zero is a real zero', async () => {
-    const result = await tool().grep('ABSENT_EVERYWHERE_123', { path: plain });
+  it('following the hint finds it: a named gitignored path is searched', async () => {
+    generated();
+    expect(
+      files(
+        await tool().grep('ONLY_IN_GENERATED', {
+          path: join(repo, 'generated'),
+        })
+      )
+    ).toEqual(['only.g.cs']);
+    expect(
+      files(
+        await tool().grep('ONLY_IN_GENERATED', {
+          path: join(repo, 'generated', 'only.g.cs'),
+        })
+      )
+    ).toEqual(['only.g.cs']);
+  });
+
+  it('stays quiet on a real zero in a checkout with ignored files', async () => {
+    generated();
+    const result = await tool().grep('ABSENT_EVERYWHERE_123', { path: repo });
+    expect(result.metadata.totalMatches).toBe(0);
+    expect(result.hint).toBeUndefined();
+  });
+
+  it('stays quiet when only build output matches', async () => {
+    // Build output is not probed: on AiDotNet it is 3 GB.
+    writeFileSync(
+      join(repo, 'obj', 'Debug', 'build.cs'),
+      'ONLY_IN_BUILD_OUTPUT\n'
+    );
+    const result = await tool().grep('ONLY_IN_BUILD_OUTPUT', { path: repo });
     expect(result.metadata.totalMatches).toBe(0);
     expect(result.hint).toBeUndefined();
   });

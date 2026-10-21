@@ -97,6 +97,22 @@ describe('turnEvidence', () => {
     expect(turnEvidence(path).failures).toBe(0);
   });
 
+  test("the optimizer's own refusal is not a failure", () => {
+    // Claude Code records a hook denial as an error result; a redirect to
+    // smart_grep is not something the turn worked past (review on #520).
+    const path = transcript([
+      prompt('go'),
+      call('a', 'Bash'),
+      result(
+        'a',
+        'PreToolUse:Bash hook error: Call smart_grep instead. (Not what you wanted? ' +
+          'TOKEN_OPTIMIZER_MODE=assist stops refusals and keeps everything else on.)',
+        true
+      ),
+    ]);
+    expect(turnEvidence(path).failures).toBe(0);
+  });
+
   test('sees a wiki_write under any server prefix', () => {
     const path = transcript([
       prompt('go'),
@@ -143,7 +159,7 @@ describe('semanticHarvestPrompt, gated on the turn', () => {
 // THE WIRING, through the real Claude Code hooks: edits recorded by
 // post-tool.mjs, then stop.mjs reading the turn from transcript_path.
 describe('the Claude Code Stop hook', () => {
-  const PLUGIN = join(process.cwd(), 'plugin', 'hooks');
+  let PLUGIN = join(process.cwd(), 'plugin', 'hooks');
   const hook = (name, payload, workspace) =>
     spawnSync(process.execPath, [join(PLUGIN, `${name}.mjs`)], {
       cwd: workspace,
@@ -180,6 +196,8 @@ describe('the Claude Code Stop hook', () => {
             new_string: 'y',
           },
           tool_response: { success: true },
+          // Copilot's own success shape, so its post-tool counts the edit.
+          toolResult: { resultType: 'success', textResultForLlm: 'ok' },
         },
         workspace
       );
@@ -217,5 +235,22 @@ describe('the Claude Code Stop hook', () => {
     ]);
     expect(out.decision).toBe('block');
     expect(out.reason).toMatch(/semantic harvest/);
+  });
+
+  test('another client keeps the prompt: only Claude Code transcripts are read', () => {
+    // Copilot shares this Stop adapter, and its transcript need not record
+    // failures the way Claude Code's does (review on #520).
+    PLUGIN = join(process.cwd(), 'integrations', 'copilot', '.github', 'hooks');
+    try {
+      const out = stopAfterEdits([
+        prompt('rename it'),
+        call('a', 'Edit'),
+        result('a', 'ok'),
+      ]);
+      expect(out.decision).toBe('block');
+      expect(out.reason).toMatch(/semantic harvest/);
+    } finally {
+      PLUGIN = join(process.cwd(), 'plugin', 'hooks');
+    }
   });
 });

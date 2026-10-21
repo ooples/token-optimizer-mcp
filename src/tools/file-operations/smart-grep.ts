@@ -223,6 +223,43 @@ const MAX_IGNORED_GLOBS = 2_000;
  * path is searched, never wrongly skipped -- and both backends get the same
  * globs, so the walk and git still answer about the same files.
  */
+/**
+ * The hint for a zero that gitignored files explain. It names the ignored
+ * DIRECTORY to pass as `path` rather than only `includeIgnored`: in a .NET
+ * checkout includeIgnored also reads every bin/ and obj/ -- 3 GB on AiDotNet,
+ * where it hit the deadline -- while naming src/Generated took 1.2 s.
+ */
+export function gitignoredHint(hits: string[], globs: string[]): string {
+  const first = hits[0].replace(/\\/g, '/');
+  const dir = globs
+    .filter((glob) => glob.endsWith('/**'))
+    .map((glob) => glob.slice(0, -2))
+    .find((prefix) => first.startsWith(prefix));
+  return (
+    `No match outside gitignored paths, but ${hits.length} gitignored ` +
+    `file(s) contain it, such as ${first}. ` +
+    (dir
+      ? `Pass path: "${dir.replace(/\/$/, '')}" to search there`
+      : `Pass path: "${first}" to search it`) +
+    `, or includeIgnored: true to search everything.`
+  );
+}
+
+export async function isGitIgnored(
+  cwd: string,
+  target: string,
+  timeoutMs: number
+): Promise<boolean> {
+  // Exit 0: ignored. 1: not ignored. 128 or a timeout: not a repository, or
+  // git cannot say -- treated as not ignored, so the default stays in force.
+  const checked = await runGit(
+    ['-C', cwd, '-c', 'core.fsmonitor=', 'check-ignore', '-q', '--', target],
+    timeoutMs,
+    1024
+  );
+  return checked?.code === 0;
+}
+
 export async function gitIgnoredGlobs(
   cwd: string,
   timeoutMs: number
@@ -627,18 +664,25 @@ export class SmartGrepTool {
       // What .gitignore excludes is skipped by default -- see gitIgnoredGlobs.
       // Outside a checkout there is no .gitignore, so the common build-output
       // directories join the DEFAULT list (a caller's own list is theirs).
-      let skippedGitignored = 0;
-      let skippedExample = '';
+      // The ignore list before .gitignore joined it: what a zero answer is
+      // re-probed against, for the hint below.
+      const ignoreBeforeGitignore = opts.ignore;
+      let skippedGitignored = false;
+      let gitignoredGlobs: string[] = [];
       if (!opts.includeIgnored) {
-        const ignored = await gitIgnoredGlobs(
-          opts.cwd,
-          Math.max(1, Math.floor(opts.deadlineMs / 4))
-        );
+        const budget = Math.max(1, Math.floor(opts.deadlineMs / 4));
+        // A path the caller NAMED is searched even when it is gitignored:
+        // naming it is the request (review on #520). Inside an ignored
+        // directory git lists `./`, which would exclude everything.
+        const named = options.path
+          ? await isGitIgnored(opts.cwd, scope.file ?? '.', budget)
+          : false;
+        const ignored = named ? null : await gitIgnoredGlobs(opts.cwd, budget);
         if (ignored) {
           opts.ignore = [...opts.ignore, ...ignored];
-          skippedGitignored = ignored.length;
-          skippedExample = ignored.slice(0, 2).join(', ');
-        } else if (!options.ignore)
+          skippedGitignored = ignored.length > 0;
+          gitignoredGlobs = ignored;
+        } else if (!named && !options.ignore)
           opts.ignore = [...opts.ignore, ...BUILD_OUTPUT_IGNORE];
       }
 
@@ -977,6 +1021,24 @@ export class SmartGrepTool {
       const compressionRatio = 1;
 
       // Build result
+      // A zero that .gitignore explains: re-probe, with git, only the files the
+      // gitignore exclusion skipped. Literal patterns only -- gitGrepCandidates
+      // declines anything else -- so a regex zero never gets this hint.
+      let ignoredHits: string[] = [];
+      if (totalMatches === 0 && skippedGitignored && !searchTruncatedBy) {
+        const everywhere = await gitGrepCandidates(
+          pattern,
+          // Build output stays excluded: on AiDotNet it is 3 GB, and the probe
+          // is for gitignored SOURCE such as src/Generated/.
+          {
+            ...opts,
+            ignore: [...ignoreBeforeGitignore, ...BUILD_OUTPUT_IGNORE],
+          },
+          Math.max(1, Math.floor(opts.deadlineMs / 4))
+        );
+        ignoredHits = everywhere ?? [];
+      }
+
       const result: SmartGrepResult = {
         success: true,
         pattern,
@@ -1031,14 +1093,17 @@ export class SmartGrepTool {
                 `No literal match for "${pattern}", but it matches as a regular ` +
                 `expression. Patterns are literal unless you pass regex: true.`,
             }
-          : totalMatches === 0 && skippedGitignored > 0
+          : ignoredHits.length > 0
             ? {
                 // Gitignored is not always build output: AiDotNet keeps 4,115
                 // generated .cs files under a gitignored src/Generated/, and a
-                // bare zero there reads as "the symbol does not exist".
-                hint:
-                  `No match outside gitignored paths (${skippedGitignored} skipped, ` +
-                  `such as ${skippedExample}). Pass includeIgnored: true to search them.`,
+                // bare zero there reads as "the symbol does not exist". Only
+                // when the pattern IS in an ignored file: a hint on every empty
+                // search in a checkout would be noise (review on #520).
+                hint: gitignoredHint(
+                  ignoredHits.map((hit) => relative(opts.cwd, hit)),
+                  gitignoredGlobs
+                ),
               }
             : {}),
       };

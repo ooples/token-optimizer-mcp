@@ -518,8 +518,14 @@ function readTail(path, bytes) {
   }
 }
 
-/** A declined or interrupted call is the user's choice, not a failed attempt. */
-const NOT_A_FAILURE = /^\s*(?:The user doesn't want to proceed|\[Request interrupted)/;
+/**
+ * Not a failed attempt: a call the user declined or interrupted, or one this
+ * product refused -- every optimizer refusal carries policy.mjs#withEscape's
+ * footer, and a refusal is a redirect, not something worked past (review on
+ * #520).
+ */
+const NOT_A_FAILURE =
+  /^\s*(?:The user doesn't want to proceed|\[Request interrupted)|TOKEN_OPTIMIZER_MODE=assist stops refusals/;
 
 /**
  * What the CURRENT turn did, read from the transcript: the text the user opened
