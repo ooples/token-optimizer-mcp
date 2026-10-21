@@ -1074,7 +1074,7 @@ export function allowWithContext(context) {
     const output = {
       hookSpecificOutput: {
         hookEventName: 'PreToolUse',
-        additionalContext: withEscape(context),
+        additionalContext: context,
       },
     };
     const serialized = JSON.stringify(output);
@@ -1154,7 +1154,7 @@ export function allowWithRewrite(updatedInput, notice) {
       permissionDecision: 'allow',
       permissionDecisionReason: 'token-optimizer bounded this output',
       updatedInput,
-      ...(notice ? { additionalContext: withEscape(notice) } : {}),
+      ...(notice ? { additionalContext: notice } : {}),
     },
   };
   const serialized = JSON.stringify(output);
@@ -1195,6 +1195,12 @@ export function deny(reason) {
  *
  * Appended once. A reason that already names it -- because it came from a
  * remedy rule that says so -- is left as it is.
+ *
+ * REFUSALS ONLY. It used to ride on every advisory too -- the subagent
+ * briefing, a recalled finding, a bounding notice -- where nothing was refused,
+ * so "assist stops refusals" told an agent already in assist to switch to
+ * assist, on every injection. The blind-control harness had to strip it back
+ * out to measure the injection itself.
  */
 export function withEscape(reason) {
   const text = String(reason || '');

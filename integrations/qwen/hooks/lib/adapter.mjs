@@ -55,7 +55,7 @@ import {
   recordEpisodeOutcome,
   readMetrics,
 } from './metrics.mjs';
-import { derive, projectRootFromActivity } from './derive.mjs';
+import { CORRECTION_OPENER, derive, projectRootFromActivity } from './derive.mjs';
 import {
   contentHash,
   harvest,
@@ -90,6 +90,7 @@ import {
   archive,
   isArchived,
   toolSearchOutcomesFromTranscript,
+  turnEvidence,
 } from './transcript.mjs';
 import { harvestMode } from './harvest.mjs';
 import { canonicalPath, isFsSafePath } from './paths.mjs';
@@ -1524,6 +1525,19 @@ async function runHook(clientName, event, invocation) {
             edits: state.edits,
             files: state.editedFiles,
             model: raw.model,
+            // CLAUDE CODE ONLY: turnEvidence reads Claude Code's transcript
+            // format. Another client's transcript could parse as a turn with
+            // no failures while its failures use another shape, which would
+            // suppress the prompt there (review on #520). Null keeps it.
+            turn: (() => {
+              if (clientName !== 'claude-code') return null;
+              try {
+                const turn = turnEvidence(transcriptPath);
+                return turn && { ...turn, corrected: CORRECTION_OPENER.test(turn.opening) };
+              } catch {
+                return null;
+              }
+            })(),
             stopHookActive:
               raw.stop_hook_active === true ||
               raw.stopHookActive === true ||
@@ -1778,7 +1792,7 @@ async function runHook(clientName, event, invocation) {
           // Codex applies updatedInput only alongside an explicit allow.
           permissionDecision: 'allow',
           updatedInput: rewrite.input,
-          additionalContext: withEscape([told, rewrite.notice].filter(Boolean).join('\n\n')),
+          additionalContext: [told, rewrite.notice].filter(Boolean).join('\n\n'),
         },
       });
       process.exit(0);

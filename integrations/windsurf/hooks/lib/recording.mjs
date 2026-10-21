@@ -140,8 +140,16 @@ export function semanticHarvestPrompt({
   files = [],
   model = '',
   stopHookActive = false,
+  // What this turn did (transcript.mjs#turnEvidence plus a correction check),
+  // or null when unknown -- unknown keeps the prompt, as before.
+  turn = null,
 } = {}) {
   if (stopHookActive || edits < 1) return null;
+  // GATED ON EVIDENCE. Each firing is an extra turn that re-reads the whole
+  // context; measured, 4 of 10 recorded nothing. Ask only when the turn has
+  // something worth recording -- a failure that was worked past, or a user
+  // correction -- and never when it already called wiki_write.
+  if (turn && (turn.recorded || (!(turn.failures > 0) && !turn.corrected))) return null;
 
   const named = [...new Set(files)]
     .slice(0, 3)

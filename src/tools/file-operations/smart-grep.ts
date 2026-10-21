@@ -188,6 +188,111 @@ const nulEntries = (stdout: Buffer): string[] =>
     .filter((entry) => entry.length > 0);
 
 /**
+ * Build output the walk skips by default OUTSIDE a git checkout, where there is
+ * no .gitignore to say what is generated. Inside one, .gitignore says it.
+ */
+export const BUILD_OUTPUT_IGNORE = [
+  '**/bin/**',
+  '**/obj/**',
+  '**/target/**',
+  '**/out/**',
+  '**/coverage/**',
+  '**/__pycache__/**',
+  '**/.venv/**',
+  '**/venv/**',
+  '**/.gradle/**',
+  '**/.next/**',
+];
+
+/** Ignored entries above this many keep only the directories among them. */
+const MAX_IGNORED_GLOBS = 2_000;
+
+/**
+ * The files .gitignore excludes under `cwd`, as ignore globs relative to it, or
+ * null when `cwd` is not inside a git checkout (or git cannot say).
+ *
+ * WHY THIS IS THE DEFAULT. Searching a .NET checkout read every gitignored
+ * `bin/` and `obj/` -- 3 GB on AiDotNet -- because the default ignore list only
+ * named node_modules, .git, dist and build. Measured there: 8-10 s for a
+ * literal, against 1.8 s with build output skipped, and on a cold cache git
+ * used the whole deadline (see the deadline split in grep()). git grep and
+ * ripgrep both skip ignored files by default; `includeIgnored: true` reads them.
+ *
+ * `--directory` collapses an ignored directory to one `dir/` entry, so the list
+ * stays short. Entries containing glob metacharacters are left out -- such a
+ * path is searched, never wrongly skipped -- and both backends get the same
+ * globs, so the walk and git still answer about the same files.
+ */
+/**
+ * The hint for a zero that gitignored files explain. It names the ignored
+ * DIRECTORY to pass as `path` rather than only `includeIgnored`: in a .NET
+ * checkout includeIgnored also reads every bin/ and obj/ -- 3 GB on AiDotNet,
+ * where it hit the deadline -- while naming src/Generated took 1.2 s.
+ */
+export function gitignoredHint(hits: string[], globs: string[]): string {
+  const first = hits[0].replace(/\\/g, '/');
+  const dir = globs
+    .filter((glob) => glob.endsWith('/**'))
+    .map((glob) => glob.slice(0, -2))
+    .find((prefix) => first.startsWith(prefix));
+  return (
+    `No match outside gitignored paths, but ${hits.length} gitignored ` +
+    `file(s) contain it, such as ${first}. ` +
+    (dir
+      ? `Pass path: "${dir.replace(/\/$/, '')}" to search there`
+      : `Pass path: "${first}" to search it`) +
+    `, or includeIgnored: true to search everything.`
+  );
+}
+
+export async function isGitIgnored(
+  cwd: string,
+  target: string,
+  timeoutMs: number
+): Promise<boolean> {
+  // Exit 0: ignored. 1: not ignored. 128 or a timeout: not a repository, or
+  // git cannot say -- treated as not ignored, so the default stays in force.
+  const checked = await runGit(
+    ['-C', cwd, '-c', 'core.fsmonitor=', 'check-ignore', '-q', '--', target],
+    timeoutMs,
+    1024
+  );
+  return checked?.code === 0;
+}
+
+export async function gitIgnoredGlobs(
+  cwd: string,
+  timeoutMs: number
+): Promise<string[] | null> {
+  const listed = await runGit(
+    [
+      '-C',
+      cwd,
+      '-c',
+      'core.quotePath=false',
+      '-c',
+      'core.fsmonitor=',
+      'ls-files',
+      '-o',
+      '-i',
+      '--exclude-standard',
+      '--directory',
+      '-z',
+    ],
+    timeoutMs,
+    16 * 1024 * 1024
+  );
+  if (!listed || listed.code !== 0) return null;
+  let entries = nulEntries(listed.stdout).filter(
+    (entry) => !/[*?[\]{}()!]/.test(entry)
+  );
+  if (entries.length > MAX_IGNORED_GLOBS) {
+    entries = entries.filter((entry) => entry.endsWith('/'));
+  }
+  return entries.map((entry) => (entry.endsWith('/') ? `${entry}**` : entry));
+}
+
+/**
  * The files under `opts.cwd` that contain a LITERAL pattern, per `git grep -l`,
  * or null when git cannot answer the same question the walk would.
  *
@@ -317,9 +422,10 @@ export async function gitGrepCandidates(
 export interface GrepMatch {
   file: string; // File path
   lineNumber: number; // 1-based line number
-  column?: number; // 0-based column number (optional)
+  column?: number; // 0-based column of the first occurrence (optional)
+  columns?: number[]; // Every occurrence's column, when the line has several
   line: string; // The matched line
-  match: string; // The actual matched text
+  match?: string; // The matched text, when it differs from the pattern
   before?: string[]; // Context lines before match
   after?: string[]; // Context lines after match
 }
@@ -344,6 +450,12 @@ export interface SmartGrepOptions {
   excludeExtensions?: string[]; // Exclude these extensions
   skipBinary?: boolean; // Skip binary files (default: true)
   ignore?: string[]; // Patterns to ignore (default: node_modules, .git)
+  /**
+   * Also search files .gitignore excludes (default: false). Inside a git
+   * checkout they are skipped, as git grep and ripgrep skip them; outside one,
+   * BUILD_OUTPUT_IGNORE joins the default ignore list instead.
+   */
+  includeIgnored?: boolean;
 
   // Output options
   includeContext?: boolean; // Include before/after context (default: false)
@@ -393,7 +505,9 @@ export interface SmartGrepResult {
   success: boolean;
   pattern: string;
   metadata: {
-    totalMatches: number;
+    totalMatches: number; // Matching lines
+    /** Occurrences, when a line held the pattern more than once. */
+    occurrences?: number;
     filesSearched: number;
     /**
      * True when a BOUND stopped the search, so the tree was not fully
@@ -544,7 +658,33 @@ export class SmartGrepTool {
         maxFileSize: options.maxFileSize ?? 10 * 1024 * 1024, // 10MB default
         deadlineMs: traversalDeadlineMs(options.deadlineMs),
         encoding: options.encoding ?? 'utf-8',
+        includeIgnored: options.includeIgnored ?? false,
       };
+
+      // What .gitignore excludes is skipped by default -- see gitIgnoredGlobs.
+      // Outside a checkout there is no .gitignore, so the common build-output
+      // directories join the DEFAULT list (a caller's own list is theirs).
+      // The ignore list before .gitignore joined it: what a zero answer is
+      // re-probed against, for the hint below.
+      const ignoreBeforeGitignore = opts.ignore;
+      let skippedGitignored = false;
+      let gitignoredGlobs: string[] = [];
+      if (!opts.includeIgnored) {
+        const budget = Math.max(1, Math.floor(opts.deadlineMs / 4));
+        // A path the caller NAMED is searched even when it is gitignored:
+        // naming it is the request (review on #520). Inside an ignored
+        // directory git lists `./`, which would exclude everything.
+        const named = options.path
+          ? await isGitIgnored(opts.cwd, scope.file ?? '.', budget)
+          : false;
+        const ignored = named ? null : await gitIgnoredGlobs(opts.cwd, budget);
+        if (ignored) {
+          opts.ignore = [...opts.ignore, ...ignored];
+          skippedGitignored = ignored.length > 0;
+          gitignoredGlobs = ignored;
+        } else if (!named && !options.ignore)
+          opts.ignore = [...opts.ignore, ...BUILD_OUTPUT_IGNORE];
+      }
 
       // Check cache first
       const cacheKey = generateCacheKey('grep', {
@@ -640,6 +780,8 @@ export class SmartGrepTool {
       const allMatches: GrepMatch[] = [];
       const filesWithMatches = new Set<string>();
       const matchCounts = new Map<string, number>();
+      // Occurrences across all files; totalMatches counts matching LINES.
+      let occurrences = 0;
 
       // Would this pattern have matched as a regex? One test per FILE, not per
       // line, and abandoned the moment it answers yes -- the question is
@@ -656,7 +798,16 @@ export class SmartGrepTool {
       // per-line matching below, so the answer is the walk's answer, faster. Null
       // (regex, explicit globs, not a repository, git missing or failing) keeps
       // the walk exactly as it was.
-      const candidates = await gitGrepCandidates(pattern, opts, remainingMs());
+      //
+      // HALF THE REMAINING BUDGET, not all of it. When git used the whole
+      // deadline and declined, the walk it falls back to started with none
+      // left and the search answered 0 matches over 0 files -- measured on
+      // AiDotNet with a cold cache. The walk now always keeps half.
+      const candidates = await gitGrepCandidates(
+        pattern,
+        opts,
+        Math.max(1, Math.floor(remainingMs() / 2))
+      );
       const fileSource = (filePattern: string): AsyncIterable<string> =>
         candidates
           ? (async function* () {
@@ -717,13 +868,19 @@ export class SmartGrepTool {
               regexWouldMatch = true;
             }
 
+            let fileOccurrences = 0;
             for (let i = 0; i < lines.length; i++) {
               const line = lines[i];
               const matches = [...line.matchAll(searchPattern)];
+              if (matches.length === 0) continue;
+              if (fileMatches.length >= opts.maxMatchesPerFile) break;
+              fileOccurrences += matches.length;
 
-              for (const match of matches) {
-                if (fileMatches.length >= opts.maxMatchesPerFile) break;
-
+              // ONE RECORD PER LINE, as grep prints one. A record per
+              // occurrence sent a line holding the pattern twice back twice,
+              // full text each time: 4 of 18 records on one AiDotNet search.
+              const [match] = matches;
+              {
                 const grepMatch: GrepMatch = {
                   file: relative(opts.cwd, file),
                   lineNumber: i + 1, // 1-based
@@ -731,12 +888,17 @@ export class SmartGrepTool {
                   // unbounded line here is what turned dense matches into
                   // gigabytes of duplicated text.
                   line: matchWindow(line, match.index ?? 0, match[0].length),
-                  match: match[0],
+                  // Only when it says something: for a literal search the
+                  // matched text IS the pattern, on every record.
+                  ...(match[0] !== pattern ? { match: match[0] } : {}),
                 };
 
-                // Add column if requested
+                // Add column if requested: every occurrence on the line.
                 if (opts.includeColumn && match.index !== undefined) {
                   grepMatch.column = match.index;
+                  if (matches.length > 1) {
+                    grepMatch.columns = matches.map((m) => m.index ?? 0);
+                  }
                 }
 
                 // Add context if requested
@@ -766,7 +928,9 @@ export class SmartGrepTool {
 
             if (fileMatches.length > 0) {
               filesWithMatches.add(relative(opts.cwd, file));
-              matchCounts.set(relative(opts.cwd, file), fileMatches.length);
+              // Occurrences, as count mode has always reported them.
+              matchCounts.set(relative(opts.cwd, file), fileOccurrences);
+              occurrences += fileOccurrences;
               appendAll(allMatches, fileMatches);
             }
           } catch {
@@ -857,11 +1021,32 @@ export class SmartGrepTool {
       const compressionRatio = 1;
 
       // Build result
+      // A zero that .gitignore explains: re-probe, with git, only the files the
+      // gitignore exclusion skipped. Literal patterns only -- gitGrepCandidates
+      // declines anything else -- so a regex zero never gets this hint.
+      let ignoredHits: string[] = [];
+      if (totalMatches === 0 && skippedGitignored && !searchTruncatedBy) {
+        const everywhere = await gitGrepCandidates(
+          pattern,
+          // Build output stays excluded: on AiDotNet it is 3 GB, and the probe
+          // is for gitignored SOURCE such as src/Generated/.
+          {
+            ...opts,
+            ignore: [...ignoreBeforeGitignore, ...BUILD_OUTPUT_IGNORE],
+          },
+          Math.max(1, Math.floor(opts.deadlineMs / 4))
+        );
+        // The caller's extension, size and binary filters still apply, or the
+        // hint names a file that following it would not search.
+        ignoredHits = (everywhere ?? []).filter(passesFilters);
+      }
+
       const result: SmartGrepResult = {
         success: true,
         pattern,
         metadata: {
           totalMatches,
+          ...(occurrences > totalMatches ? { occurrences } : {}),
           filesSearched,
           ...(searchTruncatedBy
             ? {
@@ -910,7 +1095,19 @@ export class SmartGrepTool {
                 `No literal match for "${pattern}", but it matches as a regular ` +
                 `expression. Patterns are literal unless you pass regex: true.`,
             }
-          : {}),
+          : ignoredHits.length > 0
+            ? {
+                // Gitignored is not always build output: AiDotNet keeps 4,115
+                // generated .cs files under a gitignored src/Generated/, and a
+                // bare zero there reads as "the symbol does not exist". Only
+                // when the pattern IS in an ignored file: a hint on every empty
+                // search in a checkout would be noise (review on #520).
+                hint: gitignoredHint(
+                  ignoredHits.map((hit) => relative(opts.cwd, hit)),
+                  gitignoredGlobs
+                ),
+              }
+            : {}),
       };
 
       // Cache result
@@ -1233,13 +1430,19 @@ export const SMART_GREP_TOOL_DEFINITION = {
         type: 'array',
         items: { type: 'string' },
         description:
-          'Glob patterns to skip. Defaults exclude node_modules, .git, dist and build; pass [] to search everything.',
+          'Glob patterns to skip. Defaults exclude node_modules, .git, dist and build (and, outside a git checkout, common build output such as bin, obj and target); pass [] and includeIgnored: true to search everything.',
         default: [
           '**/node_modules/**',
           '**/.git/**',
           '**/dist/**',
           '**/build/**',
         ],
+      },
+      includeIgnored: {
+        type: 'boolean',
+        description:
+          'Also search files .gitignore excludes, such as bin/ and obj/ build output (default false).',
+        default: false,
       },
       includeColumn: {
         type: 'boolean',

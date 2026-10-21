@@ -69,15 +69,24 @@ const run = async (backend: 'git' | 'walk', options: Record<string, unknown> = {
 };
 
 describe('the git backend answers exactly what the walk answers', () => {
-  it('tracked, untracked, ignored and dot files alike; node_modules excluded', async () => {
+  it('tracked, untracked and dot files alike; gitignored and node_modules excluded', async () => {
     const walk = await run('walk');
     const git = await run('git');
 
     expect(git.files).toEqual(walk.files);
     expect(git.total).toBe(walk.total);
-    expect(git.files).toEqual(['.github/ci.yml', 'ignored.txt', 'tracked.ts', 'untracked.ts']);
+    expect(git.files).toEqual(['.github/ci.yml', 'tracked.ts', 'untracked.ts']);
     // The point: git read only the files that contain the needle.
     expect(git.searched).toBeLessThan(walk.searched);
+  });
+
+  it('with includeIgnored, gitignored files too -- still the same answer', async () => {
+    const walk = await run('walk', { includeIgnored: true });
+    const git = await run('git', { includeIgnored: true });
+
+    expect(git.files).toEqual(walk.files);
+    expect(git.total).toBe(walk.total);
+    expect(git.files).toEqual(['.github/ci.yml', 'ignored.txt', 'tracked.ts', 'untracked.ts']);
   });
 
   it('case sensitivity and whole-word behave the same', async () => {

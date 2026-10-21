@@ -517,6 +517,88 @@ function readTail(path, bytes) {
 }
 
 /**
+ * Not a failed attempt: a call the user declined or interrupted, or one this
+ * product refused -- every optimizer refusal carries policy.mjs#withEscape's
+ * footer, and a refusal is a redirect, not something worked past (review on
+ * #520).
+ */
+const NOT_A_FAILURE =
+  /^\s*(?:The user doesn't want to proceed|\[Request interrupted)|TOKEN_OPTIMIZER_MODE=assist stops refusals/;
+
+/**
+ * What the CURRENT turn did, read from the transcript: the text the user opened
+ * it with, how many tool calls failed, and whether wiki_write was already
+ * called. Null when no turn boundary can be found -- a client with no transcript,
+ * or a format this does not read -- so a caller keeps its old behaviour.
+ *
+ * WHY. The Stop hook's in-band harvest prompt costs a whole extra turn: on one
+ * measured session each firing re-read 1.1-1.4M input tokens to make one
+ * wiki_write call and restate the answer, and 4 of 10 firings recorded nothing.
+ * This is the evidence that decides whether a turn earned that cost.
+ */
+export function turnEvidence(transcriptPath, { scanBytes = 8 * 1024 * 1024 } = {}) {
+  if (!transcriptPath) return null;
+  const text = readTail(transcriptPath, scanBytes);
+  if (!text) return null;
+  const entries = [];
+  for (const line of text.split('\n')) {
+    if (!line.trim()) continue;
+    try {
+      entries.push(JSON.parse(line));
+    } catch {
+      /* a partial record */
+    }
+  }
+  const textOf = (content) =>
+    typeof content === 'string'
+      ? content
+      : Array.isArray(content)
+        ? content
+            .filter((block) => block && block.type === 'text')
+            .map((block) => String(block.text || ''))
+            .join('\n')
+        : '';
+  // The ENTRY's type, not its message's role: Claude Code also writes
+  // `api-request-blob` entries holding a copy of a user message -- the Stop
+  // hook's own feedback among them -- and "Stop hook feedback: ..." opens with
+  // a word CORRECTION_OPENER reads as a user correction.
+  const roleOf = (entry) => entry.type ?? (entry.message || entry).role;
+  // The turn opens at the last user entry that is a prompt: text, and no tool
+  // result. Meta entries (injected context, compaction summaries) are not one.
+  let start = -1;
+  for (let i = entries.length - 1; i >= 0; i--) {
+    const entry = entries[i];
+    const message = entry.message || entry;
+    if (roleOf(entry) !== 'user' || entry.isMeta || entry.isCompactSummary) continue;
+    const content = message.content;
+    if (Array.isArray(content) && content.some((block) => block && block.type === 'tool_result')) continue;
+    if (!textOf(content).trim()) continue;
+    start = i;
+    break;
+  }
+  if (start < 0) return null;
+  const opening = textOf((entries[start].message || entries[start]).content).trim();
+  const failed = new Set();
+  let recorded = false;
+  for (const entry of entries.slice(start + 1)) {
+    const role = roleOf(entry);
+    if (role !== 'user' && role !== 'assistant') continue;
+    const message = entry.message || entry;
+    const content = message.content;
+    if (!Array.isArray(content)) continue;
+    for (const block of content) {
+      if (!block) continue;
+      if (block.type === 'tool_use' && /wiki_write$/.test(String(block.name || ''))) recorded = true;
+      if (block.type === 'tool_result' && block.is_error === true) {
+        const body = typeof block.content === 'string' ? block.content : textOf(block.content);
+        if (!NOT_A_FAILURE.test(body)) failed.add(block.tool_use_id ?? `${failed.size}`);
+      }
+    }
+  }
+  return { opening, failures: failed.size, recorded };
+}
+
+/**
  * The failed COMMAND results a transcript holds, which no hook event carries.
  *
  * WHY THIS READER EXISTS. Claude Code never fires PostToolUse for a failed tool
