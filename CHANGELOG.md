@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.6.0](https://github.com/ooples/token-optimizer-mcp/compare/v7.5.1...v7.6.0) (2026-10-21)
+
+
+### Features
+
+* **audit:** report what each subagent cost, and the fixed context it re-read every turn ([#515](https://github.com/ooples/token-optimizer-mcp/issues/515)) ([e18724d](https://github.com/ooples/token-optimizer-mcp/commit/e18724d521241b1127598da64b7b52402a1a59cd))
+* **opencode:** serve both V1 and V2 plugin APIs ([#508](https://github.com/ooples/token-optimizer-mcp/issues/508)) ([3702a04](https://github.com/ooples/token-optimizer-mcp/commit/3702a044400431929605bbc08356178ca2c58f13))
+* **router:** nudge an agent once when it runs one shell command per turn ([#518](https://github.com/ooples/token-optimizer-mcp/issues/518)) ([d7ee7ed](https://github.com/ooples/token-optimizer-mcp/commit/d7ee7ed6833d5b10f3002141dde34685d8fe1ad5))
+* **subagents:** the first tool call carries what the graph knows about the agent's task ([#516](https://github.com/ooples/token-optimizer-mcp/issues/516)) ([0204866](https://github.com/ooples/token-optimizer-mcp/commit/02048666440ab809810454ffdd5a55a8d7459dfe))
+
+
+### Bug Fixes
+
+* **bench:** let the store-empty record re-decide the warm-only list ([#510](https://github.com/ooples/token-optimizer-mcp/issues/510)) ([27abcc2](https://github.com/ooples/token-optimizer-mcp/commit/27abcc2056ea208ea6a6efcfed62e6b2fbf8f3c4))
+* **install:** retire older installs hooked beside the plugin, and say when the product is off ([#511](https://github.com/ooples/token-optimizer-mcp/issues/511)) ([c0ea3d1](https://github.com/ooples/token-optimizer-mcp/commit/c0ea3d16e99f2a44ea167b7e1ff6ddbe3b03ae93))
+* pre-release review -- escape footer, smart_grep gitignore and per-line records, gated Stop harvest ([#520](https://github.com/ooples/token-optimizer-mcp/issues/520)) ([88923f7](https://github.com/ooples/token-optimizer-mcp/commit/88923f7979c3e4d285663cd09716dc44d6da89b9))
+* **router:** don't route bounded searches; scope the index to the search target ([#512](https://github.com/ooples/token-optimizer-mcp/issues/512)) ([70488b0](https://github.com/ooples/token-optimizer-mcp/commit/70488b07c3e229700f1d22af8236ec02b96ae463))
+* **router:** stop advising smart_edit after an edit whose result is one line ([#514](https://github.com/ooples/token-optimizer-mcp/issues/514)) ([500d1f9](https://github.com/ooples/token-optimizer-mcp/commit/500d1f9dead7f47eea232f94b4f3cb232cb6906e))
+* **smart_grep:** never search our own store, and return long lines as a window around the match ([#513](https://github.com/ooples/token-optimizer-mcp/issues/513)) ([d7c5b1c](https://github.com/ooples/token-optimizer-mcp/commit/d7c5b1c04d4ca74774479ca2670a2ea8437674a2))
+
+
+### Performance
+
+* **smart_grep:** let git grep pick candidate files inside a git checkout ([#517](https://github.com/ooples/token-optimizer-mcp/issues/517)) ([81278a4](https://github.com/ooples/token-optimizer-mcp/commit/81278a4776eede517283103d82a1ac93a9e8a032))
+
 ## [7.5.1](https://github.com/ooples/token-optimizer-mcp/compare/v7.5.0...v7.5.1) (2026-10-14)
 
 
