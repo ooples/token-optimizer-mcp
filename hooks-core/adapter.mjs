@@ -53,7 +53,7 @@ import {
   recordEpisodeOutcome,
   readMetrics,
 } from './metrics.mjs';
-import { derive, projectRootFromActivity } from './derive.mjs';
+import { CORRECTION_OPENER, derive, projectRootFromActivity } from './derive.mjs';
 import {
   contentHash,
   harvest,
@@ -88,6 +88,7 @@ import {
   archive,
   isArchived,
   toolSearchOutcomesFromTranscript,
+  turnEvidence,
 } from './transcript.mjs';
 import { harvestMode } from './harvest.mjs';
 import { canonicalPath, isFsSafePath } from './paths.mjs';
@@ -1522,6 +1523,14 @@ async function runHook(clientName, event, invocation) {
             edits: state.edits,
             files: state.editedFiles,
             model: raw.model,
+            turn: (() => {
+              try {
+                const turn = turnEvidence(transcriptPath);
+                return turn && { ...turn, corrected: CORRECTION_OPENER.test(turn.opening) };
+              } catch {
+                return null;
+              }
+            })(),
             stopHookActive:
               raw.stop_hook_active === true ||
               raw.stopHookActive === true ||

@@ -246,7 +246,7 @@ const CODE_SENSITIVE = /\b(test|tests|jest|vitest|pytest|mocha|build|compile|tsc
  * design: a missed correction costs one finding, a false one puts words in the
  * user's mouth at 0.6 confidence.
  */
-const CORRECTION_OPENER =
+export const CORRECTION_OPENER =
   /^\s*(?:no+[,.!\s]|nope\b|wrong\b|stop\b|don'?t\b|do not\b|never\b|revert\b|undo\b|that'?s (?:not|wrong)\b|you (?:broke|were told|didn'?t|did not|ignored)\b|i (?:said|told you|already said)\b|as i said\b|why did you\b)/i;
 
 /**
