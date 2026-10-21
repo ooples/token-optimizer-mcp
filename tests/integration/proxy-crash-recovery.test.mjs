@@ -241,6 +241,12 @@ describe('a connected MCP session survives a dead background proxy', () => {
           stdio: ['pipe', 'pipe', 'pipe'],
           env: {
             ...process.env,
+            // HERMETIC: the server under test must not inherit the caller's own
+            // endpoint. Run from inside a routed session, it did, and default
+            // routing correctly refused to edit settings for a process launched
+            // with someone else's ANTHROPIC_BASE_URL -- so the test failed only
+            // on a developer machine, never in CI.
+            ANTHROPIC_BASE_URL: undefined,
             TOKEN_OPTIMIZER_HOME: home,
             TOKEN_OPTIMIZER_SETTINGS: settings,
             TOKEN_OPTIMIZER_PROXY_CONTROL_PORT: String(port),
