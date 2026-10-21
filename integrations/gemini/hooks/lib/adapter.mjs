@@ -115,6 +115,8 @@ import { evaluateUcrGuards } from './ucr-guard.mjs';
 import { beginHookInvocation, noteHookOutput } from './observability.mjs';
 import { registerProject, registeredProjects } from './projects.mjs';
 import { runStopHarvest } from './stop-harvest.mjs';
+import { applyQuietEnv } from './quiet-env.mjs';
+import { compactToolResponse, outputCompactEnabled } from './output-compact.mjs';
 
 /**
  * An outline rewrite for this call, in the client's own input shape, or null.
@@ -1334,6 +1336,10 @@ async function runHook(clientName, event, invocation) {
         ),
       },
     ];
+    // Reduce at the source before anything runs: quiet defaults for the tools
+    // the agent will call, through the env file Claude Code sources for every
+    // later Bash call (quiet-env.mjs). A no-op for clients without one.
+    applyQuietEnv();
     const cwd = raw.cwd || raw.working_directory || process.cwd();
     const root = projectRootFor(join(cwd, '__session__'), cwd);
     registerProject({ root, graphDir: wikiDir(root), client: clientName });
@@ -1889,10 +1895,37 @@ async function runHook(clientName, event, invocation) {
   } catch {
     // Delivery is an optimization. Fail open.
   }
+  // THE RESULT ITSELF, COMPACTED BEFORE THE MODEL READS IT (output-compact.mjs).
+  // Claude Code only: its PostToolUse `updatedToolOutput` replaces the result,
+  // and no other client's post-tool event can. The full output stays one Read
+  // away in the artifact store.
+  let updatedToolOutput = null;
+  if (
+    event === 'post-tool' &&
+    clientName === 'claude-code' &&
+    features.routing &&
+    outputCompactEnabled()
+  ) {
+    try {
+      const cwd = payload.cwd || process.cwd();
+      updatedToolOutput = compactToolResponse({
+        tool: String(payload.tool_name || ''),
+        input: payload.tool_input,
+        response: raw.tool_response,
+        dir: wikiDir(projectRootFor(join(cwd, '__tool__'), cwd)),
+        sessionId: payload.session_id,
+      });
+    } catch {
+      updatedToolOutput = null;
+    }
+  }
   // A verdict that reached this point is advice, not a refusal: the call runs (or
   // has already run) either way. Say it once per session per kind -- see
-  // adviseOnce -- rather than on every matching call.
-  const advisory = verdict && adviseOnce(state, verdict) ? verdict.reason : null;
+  // adviseOnce -- rather than on every matching call. Not when the output was
+  // just compacted: "that search was unbounded, use smart_grep" after the
+  // result is already bounded is advice about a cost nobody paid.
+  const advisory =
+    verdict && !updatedToolOutput && adviseOnce(state, verdict) ? verdict.reason : null;
   // THE RECORDING GUIDANCE, ONCE, AFTER REAL WORK (#357, M5). It used to ride in
   // every SessionStart, where it is the largest fixed cost a small session pays
   // and buys nothing until there is something to record. The first edit is the
@@ -1922,7 +1955,15 @@ async function runHook(clientName, event, invocation) {
   ]
     .filter(Boolean)
     .join('\n\n');
-  if (context) {
+  if (updatedToolOutput) {
+    const withContext = context ? contextOutput(client, eventName, context) : null;
+    emit({
+      hookSpecificOutput: {
+        ...(withContext?.hookSpecificOutput ?? { hookEventName: eventName }),
+        updatedToolOutput,
+      },
+    });
+  } else if (context) {
     const output = contextOutput(client, eventName, context);
     if (output) emit(output);
   }

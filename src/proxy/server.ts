@@ -54,6 +54,7 @@ import {
   withAdvancedToolUse,
   DEFAULT_KEEP_RELEVANT,
   SMALL_TOOL_CHARS,
+  CORE_LOOP_TOOLS,
 } from '../compress/tools.js';
 import {
   accountingPath,
@@ -824,6 +825,7 @@ function compressBodyOnce(
           query: taskIn(parsed),
           keepRelevant: keepToolsFromEnv(),
           smallToolChars: smallToolCharsFromEnv(),
+          coreTools: coreToolsFromEnv(),
         });
         parsed = out.request;
         deferred = out.deferredCount;
@@ -1265,6 +1267,25 @@ export function smallToolCharsFromEnv(
   const n = Number(raw);
   if (!Number.isInteger(n) || n < 0) return SMALL_TOOL_CHARS;
   return n;
+}
+
+/**
+ * The tools never deferred: CORE_LOOP_TOOLS unless
+ * TOKEN_OPTIMIZER_PROXY_CORE_TOOLS names a comma-separated list, and `none`
+ * (or an empty list) restores deferring every eligible definition.
+ */
+export function coreToolsFromEnv(
+  env: NodeJS.ProcessEnv = process.env
+): ReadonlySet<string> {
+  const raw = env.TOKEN_OPTIMIZER_PROXY_CORE_TOOLS;
+  if (raw === undefined) return CORE_LOOP_TOOLS;
+  if (/^\s*none\s*$/i.test(raw)) return new Set();
+  return new Set(
+    raw
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean)
+  );
 }
 
 /**
