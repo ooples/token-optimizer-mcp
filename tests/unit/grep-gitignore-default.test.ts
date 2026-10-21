@@ -126,6 +126,17 @@ describe('inside a git checkout', () => {
     expect(result.hint).toBeUndefined();
   });
 
+  it("stays quiet when the ignored match fails the caller's filters", async () => {
+    // Following the hint with extensions: ['.ts'] would still find nothing.
+    generated();
+    const result = await tool().grep('ONLY_IN_GENERATED', {
+      path: repo,
+      extensions: ['.ts'],
+    });
+    expect(result.metadata.totalMatches).toBe(0);
+    expect(result.hint).toBeUndefined();
+  });
+
   it('stays quiet when only build output matches', async () => {
     // Build output is not probed: on AiDotNet it is 3 GB.
     writeFileSync(

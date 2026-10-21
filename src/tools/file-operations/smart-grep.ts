@@ -1036,7 +1036,9 @@ export class SmartGrepTool {
           },
           Math.max(1, Math.floor(opts.deadlineMs / 4))
         );
-        ignoredHits = everywhere ?? [];
+        // The caller's extension, size and binary filters still apply, or the
+        // hint names a file that following it would not search.
+        ignoredHits = (everywhere ?? []).filter(passesFilters);
       }
 
       const result: SmartGrepResult = {
