@@ -172,11 +172,11 @@ describe('the reorder (opt-in, pending the A/B)', () => {
     expect(JSON.stringify(b)).toBe(JSON.stringify(a));
   });
 
-  it('is off by default', () => {
-    expect(sharePrefixMode({})).toBe('marker');
+  it('is on by default, after the A/B held correctness on both harness tasks', () => {
+    expect(sharePrefixMode({})).toBe('reorder');
     expect(
-      sharePrefixMode({ TOKEN_OPTIMIZER_PROXY_SHARE_PREFIX: 'reorder' })
-    ).toBe('reorder');
+      sharePrefixMode({ TOKEN_OPTIMIZER_PROXY_SHARE_PREFIX: 'marker' })
+    ).toBe('marker');
     expect(sharePrefixMode({ TOKEN_OPTIMIZER_PROXY_SHARE_PREFIX: '0' })).toBe(
       'off'
     );

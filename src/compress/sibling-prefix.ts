@@ -163,7 +163,16 @@ export function shareSiblingPrefix(
   };
 }
 
-/** TOKEN_OPTIMIZER_PROXY_SHARE_PREFIX: on unless 0/false/off; `reorder` also moves the task. */
+/**
+ * TOKEN_OPTIMIZER_PROXY_SHARE_PREFIX: `reorder` by default, `marker` keeps the
+ * message order and only adds the marker, 0/false/off disables both.
+ *
+ * REORDER IS THE DEFAULT ON MEASUREMENT, as the user required (2026-10-21:
+ * "ship it only if correctness holds"). Isolated multi-agent harness, rotated
+ * arms, correctness from visible + hidden tests or exact answers:
+ *   fix task, n=5      marker 86.3% of control cost, reorder 74.4%, 10/10 pass
+ *   explore task, n=4  marker 89.0%,                  reorder 85.4%,  8/8 pass
+ */
 export function sharePrefixMode(
   env: NodeJS.ProcessEnv = process.env
 ): 'off' | 'marker' | 'reorder' {
@@ -171,6 +180,6 @@ export function sharePrefixMode(
     .trim()
     .toLowerCase();
   if (/^(0|false|no|off)$/.test(raw)) return 'off';
-  if (raw === 'reorder') return 'reorder';
-  return 'marker';
+  if (raw === 'marker') return 'marker';
+  return 'reorder';
 }
