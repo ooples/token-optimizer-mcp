@@ -1776,7 +1776,7 @@ async function runHook(clientName, event, invocation) {
           // Codex applies updatedInput only alongside an explicit allow.
           permissionDecision: 'allow',
           updatedInput: rewrite.input,
-          additionalContext: withEscape([told, rewrite.notice].filter(Boolean).join('\n\n')),
+          additionalContext: [told, rewrite.notice].filter(Boolean).join('\n\n'),
         },
       });
       process.exit(0);
