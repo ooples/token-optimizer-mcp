@@ -104,6 +104,12 @@ $env:ARMS='control,headroom,ours-next'; $env:REPS='5'; node bench/live/multi-age
   at 5x input.
 - `SELFCHECK=1` proves the grader fails the seeded repo and passes the reference
   fixes; `REGRADE=<out dir>` re-runs corrected hidden tests on finished runs.
+- A run whose calls did not all cross the recorder is `INVALID`; one where the
+  client never ran is `ERROR`. Neither counts toward an arm's mean.
+- Other variables: `EXPLORE_REPO` (a clone of this repository holding the pinned
+  snapshot; defaults to this checkout), `CLAUDE_BIN` (the `claude` executable; on
+  Windows it must be `claude.exe`, not an npm `.cmd` shim), `MODEL` (default
+  `sonnet`), `OUT`, `PORT_BASE`, `RUN_TIMEOUT_S`.
 
 ## Rate-card cost scenarios
 

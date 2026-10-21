@@ -805,6 +805,10 @@ function compressBodyOnce(
   // Set TOKEN_OPTIMIZER_PROXY_DEFER_TOOLS=0 to turn it off.
   let deferred = 0;
   let deferredChars = 0;
+  // Slimmed definitions must go out on EVERY turn: the tools array opens the
+  // cached prefix, so sending the client's bytes on a turn that declined to
+  // compress would flip it back and miss the whole prefix (review on #523).
+  let slimmedTools = false;
   if (deferToolsEnabled()) {
     // THE HOLDOUT, WHICH IS THE ONLY EVIDENCE THE BETA IS HONOURED. Everything
     // the prompt-level count claims rests on the provider actually declining to
@@ -846,6 +850,7 @@ function compressBodyOnce(
         parsed = out.request;
         deferred = out.deferredCount;
         deferredChars = out.deferredChars;
+        slimmedTools = (out.slimmedChars ?? 0) > 0;
       } catch {
         // Fails open like everything else here: a tools array we cannot rewrite
         // is forwarded as it arrived.
@@ -1012,7 +1017,10 @@ function compressBodyOnce(
   // A shared-prefix marker is sent even when nothing was removed: it is the
   // whole saving, and dropping it here would send the client's bytes instead.
   const added =
-    result.injectedChars > 0 || deferred > 0 || sharedPrefix !== 'none';
+    result.injectedChars > 0 ||
+    deferred > 0 ||
+    slimmedTools ||
+    sharedPrefix !== 'none';
   // WORTH THE RISK, not merely smaller. See MIN_SAVING_SHARE: a rewrite that
   // shaves a couple of percent still plants elisions the agent may read back,
   // and one such turn costs more than the whole saving.
@@ -2278,6 +2286,12 @@ export async function startProxy(options: ProxyOptions = {}): Promise<{
       const gate = coldGateEnabled()
         ? await enterColdGate(coldKey(next))
         : { release: () => {}, waitedMs: 0 };
+      // The client may have gone while this request waited at the gate; sending
+      // it now would bill a generation nobody reads (review on #523).
+      if (req.destroyed || res.destroyed || res.writableEnded) {
+        gate.release();
+        return;
+      }
       forward(
         upstream,
         req,

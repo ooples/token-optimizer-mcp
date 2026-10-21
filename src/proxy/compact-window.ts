@@ -67,6 +67,8 @@ export function compactWindowFromEnv(
 ): number | null {
   const raw = String(env.TOKEN_OPTIMIZER_COMPACT_WINDOW ?? '').trim();
   if (/^(0|false|no|off)$/i.test(raw)) return null;
+  // The global off switch turns this off too, and takes our value back out.
+  if (/^off$/i.test(String(env.TOKEN_OPTIMIZER_MODE ?? '').trim())) return null;
   if (!raw) return DEFAULT_COMPACT_WINDOW;
   const n = Number(raw.replace(/k$/i, '000'));
   return Number.isInteger(n) && n >= 100_000 && n <= 1_000_000

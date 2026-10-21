@@ -7,30 +7,24 @@ import { mkdtempSync, rmSync, readFileSync, writeFileSync, mkdirSync, existsSync
 import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { quietEnvScript, applyQuietEnv, QUIET_ENV_DEFAULTS } from '../../hooks-core/quiet-env.mjs';
+import { quietEnvScript, applyQuietEnv, QUIET_ENV_DEFAULTS, QUIET_ENV_MARKER } from '../../hooks-core/quiet-env.mjs';
 
 const root = mkdtempSync(join(tmpdir(), 'quiet-env-'));
 afterAll(() => rmSync(root, { recursive: true, force: true }));
 
 describe('quietEnvScript', () => {
-  test('exports every absent default and appends -q to PYTEST_ADDOPTS', () => {
+  test('guards every absent default in the sourcing shell', () => {
     const { script, names } = quietEnvScript({});
     expect(names).toEqual([...Object.keys(QUIET_ENV_DEFAULTS), 'PYTEST_ADDOPTS']);
-    expect(script).toContain("export GIT_PAGER='cat'\n");
-    expect(script).toContain("export PYTEST_ADDOPTS='-q'\n");
+    expect(script).toContain(`[ -n "\${GIT_PAGER+x}" ] || export GIT_PAGER='cat'\n`);
+    expect(script).toContain('*" -q "*) ;;');
   });
 
-  test('a value the user set wins, and PYTEST_ADDOPTS is augmented, not replaced', () => {
-    const { script, names } = quietEnvScript({ GIT_PAGER: 'less', PYTEST_ADDOPTS: "-x -k 'a b'" });
+  test('a value set in this process is skipped up front', () => {
+    const { script, names } = quietEnvScript({ GIT_PAGER: 'less' });
+    expect(names).toContain('PIP_QUIET');
     expect(names).not.toContain('GIT_PAGER');
     expect(script).not.toContain('GIT_PAGER');
-    expect(script).toContain(`export PYTEST_ADDOPTS='-x -k '\\''a b'\\'' -q'`);
-  });
-
-  test('an existing -q is left alone', () => {
-    const { names } = quietEnvScript({ PYTEST_ADDOPTS: '-q -x' });
-    expect(names).toContain('GIT_PAGER');
-    expect(names).not.toContain('PYTEST_ADDOPTS');
   });
 
   test('TOKEN_OPTIMIZER_QUIET_ENV=0 turns it off', () => {
@@ -41,12 +35,24 @@ describe('quietEnvScript', () => {
   const shell = process.platform === 'win32'
     ? [process.env.CLAUDE_CODE_GIT_BASH_PATH, 'C:/Program Files/Git/bin/bash.exe'].find((p) => p && existsSync(p))
     : 'bash';
-  (shell ? test : test.skip)('the exports survive a real POSIX shell', () => {
+  (shell ? test : test.skip)('in a real POSIX shell: defaults apply, the shell’s own values win, -q is appended once', () => {
     const file = join(root, 'env.sh');
     writeFileSync(file, '');
-    applyQuietEnv({ CLAUDE_ENV_FILE: file, PYTEST_ADDOPTS: "-k 'it''s'" });
-    const r = spawnSync(shell, ['-c', `. '${file.replace(/\\/g, '/')}' && printf '%s|%s' "$GIT_PAGER" "$PYTEST_ADDOPTS"`], { encoding: 'utf8' });
-    expect(r.stdout).toBe("cat|-k 'it''s' -q");
+    applyQuietEnv({ CLAUDE_ENV_FILE: file });
+    const run = (pre) =>
+      spawnSync(shell, ['-c', `${pre} . '${file.replace(/\\/g, '/')}' && printf '%s|%s|%s' "$GIT_PAGER" "$PIP_QUIET" "$PYTEST_ADDOPTS"`], { encoding: 'utf8' }).stdout;
+    expect(run('unset GIT_PAGER PIP_QUIET PYTEST_ADDOPTS;')).toBe('cat|1|-q');
+    // Set only in the sourcing shell (a profile export the hook never saw).
+    expect(run("export GIT_PAGER=less PYTEST_ADDOPTS='-x';")).toBe('less|1|-x -q');
+    expect(run("export PYTEST_ADDOPTS='-q -x';")).toMatch(/\|-q -x$/);
+  });
+
+  test('a repeated SessionStart does not append a second block', () => {
+    const file = join(root, 'env-twice.sh');
+    writeFileSync(file, '');
+    expect(applyQuietEnv({ CLAUDE_ENV_FILE: file }).length).toBeGreaterThan(0);
+    expect(applyQuietEnv({ CLAUDE_ENV_FILE: file })).toEqual([]);
+    expect(readFileSync(file, 'utf8').split(QUIET_ENV_MARKER).length).toBe(2);
   });
 
   test('without CLAUDE_ENV_FILE nothing is written', () => {
@@ -71,7 +77,8 @@ describe('the Claude Code SessionStart hook', () => {
       input: JSON.stringify({ hook_event_name: 'SessionStart', session_id: `quiet-${Date.now()}`, cwd: workspace, source: 'startup' }),
     });
     const written = readFileSync(envFile, 'utf8');
+    expect(written).toContain(QUIET_ENV_MARKER);
     expect(written).toContain("export GIT_PAGER='cat'");
-    expect(written).toContain("export PYTEST_ADDOPTS='-q'");
+    expect(written).toContain('-q');
   });
 });

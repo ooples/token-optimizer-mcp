@@ -73,6 +73,17 @@ const CLAUDE_BIN =
     const hit = (r.stdout ?? '')
       .split(/\r?\n/)
       .find((l) => /claude(\.exe)?$/i.test(l.trim()));
+    // An npm-installed claude.cmd cannot be spawned without a shell, and a shell
+    // would mangle the prompt: say so up front instead of failing every run.
+    if (
+      !hit &&
+      process.platform === 'win32' &&
+      !process.env.SELFCHECK &&
+      !process.env.REGRADE
+    )
+      console.error(
+        'claude.exe not found on PATH; set CLAUDE_BIN to the claude executable (not a .cmd shim)'
+      );
     return hit ? hit.trim() : 'claude';
   })();
 // TASK_VENV: a venv with pytest, put first on PATH for the agents too, so `python -m pytest` works for them.
@@ -426,7 +437,8 @@ const PROMPT = [
 // -- git show, git grep, ls, cat -- so this task asks four subagents factual
 // questions about a 4,779-file snapshot whose answers are known at a pinned
 // commit, and grades the answers exactly.
-const EXPLORE_REPO = process.env.EXPLORE_REPO ?? 'F:/token-review/tom-master';
+// This checkout by default: EXPLORE_COMMIT pins the snapshot whatever is checked out.
+const EXPLORE_REPO = resolve(process.env.EXPLORE_REPO ?? PKG);
 const EXPLORE_COMMIT = 'f0531cecceb3ccc925269ae0a2c9f254904808a2';
 const EXPLORE_ANSWERS = {
   proxy: {
@@ -458,20 +470,25 @@ const EXPLORE_PROMPT = [
 ].join(' ');
 
 function seedExplore(work) {
-  const r = spawnSync(
+  // A plain path, which git clones on every platform (a hand-built file:// URL
+  // came out as file://// for absolute POSIX paths). No --depth: a shallow clone
+  // of a local path is not honoured, and the pinned commit must be reachable.
+  const known = spawnSync(
     'git',
-    [
-      'clone',
-      '--quiet',
-      '--no-checkout',
-      '--depth',
-      '200',
-      `file:///${EXPLORE_REPO.replace(/\\/g, '/')}`,
-      work,
-    ],
+    ['-C', EXPLORE_REPO, 'cat-file', '-e', `${EXPLORE_COMMIT}^{commit}`],
     { encoding: 'utf8' }
   );
-  if (r.status !== 0) throw new Error(`clone: ${r.stderr}`);
+  if (known.status !== 0)
+    throw new Error(
+      `TASK=explore needs a token-optimizer-mcp clone containing ${EXPLORE_COMMIT}: set EXPLORE_REPO (now ${EXPLORE_REPO})`
+    );
+  const r = spawnSync(
+    'git',
+    ['clone', '--quiet', '--no-checkout', EXPLORE_REPO, work],
+    { encoding: 'utf8' }
+  );
+  if (r.status !== 0)
+    throw new Error(`clone of ${EXPLORE_REPO} failed: ${r.stderr}`);
   git(work, 'checkout', '-q', EXPLORE_COMMIT);
 }
 
@@ -544,6 +561,11 @@ function startProcess(cmd, args, env, errFile) {
   });
   const chunks = [];
   p.stderr.on('data', (d) => chunks.push(d));
+  // A missing binary must not crash the campaign: the run's readiness check
+  // then reports it as a SKIP.
+  p.on('error', (e) =>
+    chunks.push(Buffer.from(`spawn failed: ${e.message}\n`))
+  );
   p.on('exit', () => {
     try {
       writeFileSync(errFile, Buffer.concat(chunks));
@@ -562,6 +584,29 @@ function kill(p) {
       stdio: 'ignore',
     });
   else p.kill('SIGTERM');
+}
+
+/**
+ * Transcript totals plus the keep-warm pings the recorder saw: a ping is real
+ * spend that no agent transcript holds, so an arm's cost must include it.
+ */
+function withPings(totals, recorded) {
+  if (!totals || !recorded?.pingUsage) return totals;
+  const p = recorded.pingUsage;
+  const t = {
+    ...totals,
+    requests: totals.requests + recorded.pings,
+    pings: recorded.pings,
+    input: totals.input + p.input,
+    cacheWrite: totals.cacheWrite + p.cacheWrite,
+    cacheRead: totals.cacheRead + p.cacheRead,
+    output: totals.output + p.output,
+  };
+  t.weightedInput = Math.round(
+    t.input + t.cacheWrite * 1.25 + t.cacheRead * 0.1
+  );
+  t.allInput = t.input + t.cacheWrite + t.cacheRead;
+  return t;
 }
 
 function ledgerTotals(file) {
@@ -597,6 +642,15 @@ function ledgerTotals(file) {
     t.output += u.output_tokens ?? 0;
     t.cacheWrite += u.cache_creation_input_tokens ?? 0;
     t.cacheRead += u.cache_read_input_tokens ?? 0;
+    // Keep-warm pings are spent by the proxy itself and appear in no transcript.
+    if (j.path === 'keepwarm') {
+      t.pings = (t.pings ?? 0) + 1;
+      t.pingUsage ??= { input: 0, cacheWrite: 0, cacheRead: 0, output: 0 };
+      t.pingUsage.input += u.input_tokens ?? 0;
+      t.pingUsage.output += u.output_tokens ?? 0;
+      t.pingUsage.cacheWrite += u.cache_creation_input_tokens ?? 0;
+      t.pingUsage.cacheRead += u.cache_read_input_tokens ?? 0;
+    }
     t.beforeBytes += j.beforeBytes ?? 0;
     t.afterBytes += j.afterBytes ?? 0;
     t.compressed += j.compressed ? 1 : 0;
@@ -954,8 +1008,20 @@ async function runArm(arm, rep, position) {
     child.stdout.on('data', (d) => outChunks.push(d));
     child.stderr.on('data', (d) => errChunks.push(d));
     const timer = setTimeout(() => kill(child), RUN_TIMEOUT_S * 1000);
-    await new Promise((r) => child.on('exit', r));
+    // 'error' as well as 'exit': a spawn that fails (ENOENT) may never exit, and
+    // an unhandled 'error' would end the campaign and orphan the proxies. The
+    // run then has no requests and becomes an ERROR row below.
+    let spawnError = null;
+    await new Promise((r) => {
+      child.on('exit', r);
+      child.on('error', (e) => {
+        spawnError = e;
+        r();
+      });
+    });
     clearTimeout(timer);
+    if (spawnError)
+      errChunks.push(Buffer.from(`spawn failed: ${spawnError.message}\n`));
     const seconds = Math.round((Date.now() - started) / 1000);
     writeFileSync(stream, Buffer.concat(outChunks));
     writeFileSync(join(OUT, `${tag}.claude.err`), Buffer.concat(errChunks));
@@ -980,20 +1046,29 @@ async function runArm(arm, rep, position) {
     const v = TASK === 'explore' ? verdictExplore(work) : verdict(work, hidden);
     const recorded = ledgerTotals(ledger);
     const agents = agentBreakdown(init.session_id);
-    const totals = transcriptTotals(agents);
+    const totals = withPings(transcriptTotals(agents), recorded);
     // No measured request means the client never ran (auth, spawn, limit) -- an error, not a cheap FAIL.
     const ran = (totals?.requests ?? 0) > 0;
-    // Every call should have crossed this run's proxy; a shortfall means traffic escaped the instrument.
-    const ledgerCoverage =
-      totals && recorded ? recorded.requests / totals.requests : 0;
+    // Every call should have crossed this run's proxy; a shortfall means traffic
+    // escaped the instrument, so the arm's savings cannot be attributed to it.
+    // Keep-warm pings are recorded but are not in transcripts, so they are left
+    // out of the comparison.
+    const recordedCalls = recorded
+      ? recorded.requests - (recorded.pings ?? 0)
+      : 0;
+    const transcriptCalls = totals ? totals.requests - (totals.pings ?? 0) : 0;
+    const ledgerCoverage = transcriptCalls
+      ? recordedCalls / transcriptCalls
+      : 0;
     return {
       arm,
       rep,
       position,
       seconds,
+      task: TASK,
       verdict: !ran
         ? 'ERROR'
-        : !isolationOk
+        : !isolationOk || ledgerCoverage < 1
           ? 'INVALID'
           : v.pass
             ? 'PASS'
@@ -1162,8 +1237,19 @@ function regrade(dir) {
       r.verdict === 'ERROR'
     )
       continue;
+    // Only fix-task rows have hidden pytest suites; an explore row graded as one
+    // would crash on a missing test file or overwrite its exact-answer verdict.
+    // Rows written before `task` was recorded are treated as fix rows only when
+    // their work tree actually holds the seeded packages.
+    if (r.task && r.task !== 'fix') continue;
     const base = join(dir, `${r.arm}-${r.rep}`);
     if (!existsSync(join(base, 'hidden'))) continue;
+    if (
+      !existsSync(
+        join(base, 'work', 'pkgs', PACKAGES[0], 'tests', 'test_core.py')
+      )
+    )
+      continue;
     for (const p of PACKAGES)
       writeFileSync(
         join(base, 'hidden', `test_hidden_${p}.py`),
@@ -1184,7 +1270,12 @@ function regrade(dir) {
 function summarize(rows) {
   const by = {};
   for (const r of rows.filter(
-    (x) => x.ledger && x.verdict !== 'INVALID' && x.verdict !== 'SKIP'
+    // ERROR rows have no usage; counted, they would lower an arm's mean cost.
+    (x) =>
+      x.ledger &&
+      x.verdict !== 'INVALID' &&
+      x.verdict !== 'SKIP' &&
+      x.verdict !== 'ERROR'
   ))
     (by[r.arm] ??= []).push(r);
   const mean = (xs) =>

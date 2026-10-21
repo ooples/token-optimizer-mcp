@@ -22,7 +22,7 @@
  * already set always wins. TOKEN_OPTIMIZER_QUIET_ENV=0 turns the whole thing
  * off.
  */
-import { appendFileSync } from 'node:fs';
+import { appendFileSync, existsSync, readFileSync } from 'node:fs';
 
 /** name -> value, written only when the variable is absent. */
 export const QUIET_ENV_DEFAULTS = Object.freeze({
@@ -64,32 +64,41 @@ export function quietEnvEnabled(env = process.env) {
 /** POSIX single-quoting: the env file is sourced by the Bash tool's shell. */
 const quote = (value) => `'${String(value).replace(/'/g, `'\\''`)}'`;
 
+/** Marks our block in the env file, so a repeated SessionStart does not append it again. */
+export const QUIET_ENV_MARKER = '# token-optimizer quiet defaults';
+
 /**
- * The export lines for every default the environment does not already set, plus
- * `-q` appended to PYTEST_ADDOPTS (augmented, never replaced) unless present.
+ * The shell lines that set every default THE SOURCING SHELL does not already
+ * have, plus `-q` appended to PYTEST_ADDOPTS (augmented, never replaced).
+ *
+ * DECIDED IN THE SHELL, NOT IN THIS PROCESS (review on #523). Claude Code
+ * sources the env file in the shell that runs each later Bash command, and a
+ * value present only there -- a profile export, an earlier env-file line --
+ * is invisible to the hook. So each default is guarded by `${NAME+x}`, which is
+ * set-ness in that shell, and the `-q` test runs there too. A value set in this
+ * process is still skipped up front: it is certainly set in the shell as well.
  *
  * @returns {{ script: string, names: string[] }}
  */
 export function quietEnvScript(env = process.env) {
   if (!quietEnvEnabled(env)) return { script: '', names: [] };
-  const lines = [];
+  const lines = [QUIET_ENV_MARKER];
   const names = [];
   for (const [name, value] of Object.entries(QUIET_ENV_DEFAULTS)) {
     if (env[name] !== undefined) continue;
-    lines.push(`export ${name}=${quote(value)}`);
+    lines.push(`[ -n "\${${name}+x}" ] || export ${name}=${quote(value)}`);
     names.push(name);
   }
-  const addopts = String(env.PYTEST_ADDOPTS ?? '');
-  if (!addopts.split(/\s+/).includes('-q')) {
-    lines.push(`export PYTEST_ADDOPTS=${quote(`${addopts} -q`.trim())}`);
-    names.push('PYTEST_ADDOPTS');
-  }
-  return { script: lines.length ? `${lines.join('\n')}\n` : '', names };
+  lines.push(
+    'case " ${PYTEST_ADDOPTS-} " in *" -q "*) ;; *) export PYTEST_ADDOPTS="${PYTEST_ADDOPTS:+$PYTEST_ADDOPTS }-q" ;; esac'
+  );
+  names.push('PYTEST_ADDOPTS');
+  return { script: `${lines.join('\n')}\n`, names };
 }
 
 /**
- * Append the defaults to Claude Code's session env file. A no-op for clients
- * that do not provide CLAUDE_ENV_FILE, and fail-open like every hook.
+ * Append the defaults to Claude Code's session env file, once. A no-op for
+ * clients that do not provide CLAUDE_ENV_FILE, and fail-open like every hook.
  *
  * @returns {string[]} the variables written
  */
@@ -99,6 +108,7 @@ export function applyQuietEnv(env = process.env) {
   const { script, names } = quietEnvScript(env);
   if (!script) return [];
   try {
+    if (existsSync(file) && readFileSync(file, 'utf8').includes(QUIET_ENV_MARKER)) return [];
     appendFileSync(file, script);
     return names;
   } catch {

@@ -68,11 +68,23 @@ export function ttlOf(body: Buffer): number {
     : 5 * 60 * 1000;
 }
 
-/** The ping body: the same request, a few output tokens, no stream. Null when it cannot be built. */
+/**
+ * The ping body: the same request, a few output tokens, no stream. Null when it
+ * cannot be built.
+ *
+ * NOT FOR A FIXED THINKING BUDGET (review on #523). The API requires
+ * `max_tokens` above `thinking.budget_tokens`, and the thinking parameters are
+ * part of what the cache matches, so they cannot be dropped either. Raising
+ * `max_tokens` past a 16k budget would let one ping generate up to 16k output
+ * tokens, at output price -- so such a conversation is not pinged. Adaptive
+ * thinking, which Claude Code sends, has no budget and is pinged.
+ */
 export function pingBody(body: Buffer): Buffer | null {
   try {
     const parsed = JSON.parse(body.toString('utf8')) as Record<string, unknown>;
     if (!Array.isArray(parsed.messages)) return null;
+    const thinking = parsed.thinking as { type?: string; budget_tokens?: number } | undefined;
+    if (thinking?.type === 'enabled' && Number(thinking.budget_tokens) > 0) return null;
     return Buffer.from(
       JSON.stringify({ ...parsed, max_tokens: PING_MAX_TOKENS, stream: false }),
       'utf8'

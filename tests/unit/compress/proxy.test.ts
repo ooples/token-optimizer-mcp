@@ -1088,3 +1088,43 @@ describe('the model on the summary', () => {
     expect(compressBody(anonymous, noSpill).summary.model).toBeUndefined();
   });
 });
+
+describe('slimmed tool definitions go out on every turn (review on #523)', () => {
+  it('strips $schema even on a turn that compresses nothing', () => {
+    // Every tool is core, so nothing is deferred; nothing in the messages is
+    // compressible. The tools array opens the cached prefix, so the slimmed
+    // form must not flip back to the client's bytes on such a turn.
+    // Real-sized definitions, so removing `$schema` alone is far below the
+    // proxy's minimum saving share and a turn takes the decline branch.
+    const words = (seed: number) =>
+      Array.from({ length: 3000 }, (_, i) => `w${(i * 7919 + seed * 104729) % 100003}`).join(' ');
+    const tool = (name: string) => ({
+      name,
+      description: words(name.length),
+      input_schema: { $schema: 'https://json-schema.org/draft/2020-12/schema', type: 'object', properties: {} },
+    });
+    const body = Buffer.from(
+      JSON.stringify({
+        model: 'claude',
+        tools: [tool('Read'), tool('Bash'), tool('Edit')],
+        messages: [{ role: 'user', content: 'hello' }, { role: 'assistant', content: 'hi' }, { role: 'user', content: 'go on' }],
+      }),
+      'utf8'
+    );
+    // Turn after turn of one conversation, with the anchor store the running
+    // proxy keeps: every turn must send the same slimmed tools bytes.
+    const store = anchorStore();
+    const turn = (n: number) => {
+      const messages = [{ role: 'user', content: 'hello' }];
+      for (let i = 0; i < n; i++) messages.push({ role: 'assistant', content: `step ${i}` }, { role: 'user', content: `go on ${i}` });
+      return Buffer.from(JSON.stringify({ ...JSON.parse(body.toString('utf8')), messages }), 'utf8');
+    };
+    const toolsSent = [1, 2, 3, 4, 5, 6].map((n) => {
+      const out = compressBody(turn(n), spill, store);
+      return JSON.stringify(JSON.parse(out.body.toString('utf8')).tools);
+    });
+    for (const t of toolsSent) expect(t).toBe(toolsSent[0]);
+    expect(toolsSent[0]).not.toContain('$schema');
+    expect(JSON.parse(toolsSent[0]).map((t: { name: string }) => t.name)).toEqual(['Read', 'Bash', 'Edit']);
+  });
+});

@@ -30,6 +30,7 @@ import { join } from 'node:path';
 import { activateShells } from './managed-shell.mjs';
 import { activateWindowsCommands } from './windows-commands.mjs';
 import { removeDefaultRouting } from '../dist/proxy/default-routing.js';
+import { applyCompactWindow } from '../dist/proxy/compact-window.js';
 
 /** The settings file this machine actually uses. */
 const settingsPath =
@@ -61,10 +62,15 @@ if (apply) {
     console.log(
       `Left ${routing.path} alone: its base URL is no longer the one we wrote.`
     );
+  // The compaction window we wrote, taken back only while it still holds our value.
+  const compact = applyCompactWindow({ ...process.env, TOKEN_OPTIMIZER_COMPACT_WINDOW: 'off' });
+  if (compact === 'removed')
+    console.log('Removed the autoCompactWindow setting this install added.');
 } else {
   console.log(
     'Would remove default proxy routing from the Claude Code settings file.'
   );
+  console.log('Would remove the autoCompactWindow setting this install added, if unchanged.');
 }
 
 const manifest = readManifest();
