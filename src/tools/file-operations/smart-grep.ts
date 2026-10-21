@@ -60,6 +60,65 @@ const MAX_RESPONSE_TOKENS = 8_000;
  */
 const MAX_MATCH_LINE_CHARS = 2_000;
 
+/**
+ * A long matching line is returned as THIS MANY characters around the match.
+ *
+ * A 2,000-character prefix still put the match anywhere -- or nowhere -- in the
+ * text returned. Observed live: a JSONL snapshot line matched on a term ~3 KB in,
+ * and each "match" was 2,000 characters of YAML that did not contain it. A window
+ * starting just before the match keeps the locator and drops the rest.
+ */
+const MATCH_WINDOW_BEFORE = 120;
+const MATCH_WINDOW_AFTER = 280;
+
+/**
+ * `ignore` plus our own store -- unless the search was pointed INTO the store,
+ * which is the one case where searching it is what was asked.
+ */
+export function withOwnStoreIgnored(
+  ignore: string[],
+  searchRoot: string
+): string[] {
+  const root = String(searchRoot || '').replace(/\\/g, '/');
+  if (/(^|\/)\.token-optimizer(\/|$)/.test(root)) return ignore;
+  return ignore.includes(OWN_STORE_IGNORE)
+    ? ignore
+    : [...ignore, OWN_STORE_IGNORE];
+}
+
+/** The text of `line` around a match at `index`, marked where it was cut. */
+export function matchWindow(
+  line: string,
+  index: number,
+  matchLength: number
+): string {
+  if (line.length <= MATCH_WINDOW_BEFORE + MATCH_WINDOW_AFTER) return line;
+  const at = Math.max(0, Math.min(index, line.length));
+  const start = Math.max(0, at - MATCH_WINDOW_BEFORE);
+  const end = Math.min(
+    line.length,
+    Math.max(at + matchLength, at + MATCH_WINDOW_AFTER)
+  );
+  return (
+    (start > 0 ? '...' : '') +
+    line.slice(start, end) +
+    (end < line.length ? '...' : '')
+  );
+}
+
+/**
+ * This product's own store, which is never a search target.
+ *
+ * `.token-optimizer/` holds the knowledge graph and its file snapshots, so a
+ * search of a project returned matches from the snapshots -- one per indexed
+ * copy of a file -- ahead of the real file. Observed live: `gcServer` over a
+ * repository answered first with `.token-optimizer/wiki/snapshots.jsonl` lines,
+ * each a multi-KB snapshot, and the real workflow hits sat behind an expand
+ * handle. Appended to ANY ignore list, a caller's own included, because a caller
+ * narrowing the ignore list for bin/obj is not asking to search our store.
+ */
+const OWN_STORE_IGNORE = '**/.token-optimizer/**';
+
 /** The environment git runs in: ours, minus every GIT_* variable. */
 export function gitEnvironment(
   env: NodeJS.ProcessEnv = process.env
@@ -462,12 +521,15 @@ export class SmartGrepTool {
           '.lock',
         ],
         skipBinary: options.skipBinary ?? true,
-        ignore: options.ignore ?? [
-          '**/node_modules/**',
-          '**/.git/**',
-          '**/dist/**',
-          '**/build/**',
-        ],
+        ignore: withOwnStoreIgnored(
+          options.ignore ?? [
+            '**/node_modules/**',
+            '**/.git/**',
+            '**/dist/**',
+            '**/build/**',
+          ],
+          scope.cwd
+        ),
         includeContext: options.includeContext ?? false,
         contextBefore: options.contextBefore ?? 0,
         contextAfter: options.contextAfter ?? 0,
@@ -668,10 +730,7 @@ export class SmartGrepTool {
                   // A match record is a LOCATOR, not a file dump. An
                   // unbounded line here is what turned dense matches into
                   // gigabytes of duplicated text.
-                  line:
-                    line.length > MAX_MATCH_LINE_CHARS
-                      ? line.slice(0, MAX_MATCH_LINE_CHARS) + '...'
-                      : line,
+                  line: matchWindow(line, match.index ?? 0, match[0].length),
                   match: match[0],
                 };
 
@@ -682,16 +741,22 @@ export class SmartGrepTool {
 
                 // Add context if requested
                 if (opts.includeContext) {
+                  // Capped like the match line: context is the same text
+                  // duplicated per match, and it had no bound at all.
+                  const capped = (l: string) =>
+                    l.length > MAX_MATCH_LINE_CHARS
+                      ? l.slice(0, MAX_MATCH_LINE_CHARS) + '...'
+                      : l;
                   if (opts.contextBefore > 0) {
                     const start = Math.max(0, i - opts.contextBefore);
-                    grepMatch.before = lines.slice(start, i);
+                    grepMatch.before = lines.slice(start, i).map(capped);
                   }
                   if (opts.contextAfter > 0) {
                     const end = Math.min(
                       lines.length,
                       i + opts.contextAfter + 1
                     );
-                    grepMatch.after = lines.slice(i + 1, end);
+                    grepMatch.after = lines.slice(i + 1, end).map(capped);
                   }
                 }
 
