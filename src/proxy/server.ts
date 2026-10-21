@@ -57,6 +57,11 @@ import {
   CORE_LOOP_TOOLS,
 } from '../compress/tools.js';
 import {
+  shareSiblingPrefix,
+  sharePrefixMode,
+} from '../compress/sibling-prefix.js';
+import { coldKey, coldGateEnabled, enterColdGate } from './cold-gate.js';
+import {
   accountingPath,
   appendRecord,
   tapUsage,
@@ -837,6 +842,23 @@ function compressBodyOnce(
     }
   }
 
+  // SIBLING AGENTS SHARE THEIR IDENTICAL LEADING CONTEXT through the prompt
+  // cache: one more cache marker before each agent's own task, so the next
+  // sibling reads what the first one wrote. See sibling-prefix.ts.
+  let sharedPrefix = 'none';
+  const shareMode = sharePrefixMode();
+  if (shareMode !== 'off') {
+    try {
+      const out = shareSiblingPrefix(parsed, {
+        reorder: shareMode === 'reorder',
+      });
+      parsed = out.request;
+      sharedPrefix = out.applied;
+    } catch {
+      sharedPrefix = 'none';
+    }
+  }
+
   // A PROBE, NOT THE FEATURE. The substitution design in the plan turns on one
   // untested question -- will the API accept history whose older assistant turns
   // have had their `thinking` blocks removed? `frontier.ts` refuses to touch a
@@ -967,7 +989,10 @@ function compressBodyOnce(
   // deliberately added, which is the one case where growing the request is
   // the point. It is charged in the summary either way, and it only
   // happens on a turn the prefix was being rewritten anyway.
-  const added = result.injectedChars > 0 || deferred > 0;
+  // A shared-prefix marker is sent even when nothing was removed: it is the
+  // whole saving, and dropping it here would send the client's bytes instead.
+  const added =
+    result.injectedChars > 0 || deferred > 0 || sharedPrefix !== 'none';
   // WORTH THE RISK, not merely smaller. See MIN_SAVING_SHARE: a rewrite that
   // shaves a couple of percent still plants elisions the agent may read back,
   // and one such turn costs more than the whole saving.
@@ -1458,10 +1483,19 @@ function forward(
    * two, which is what makes the measurement cost no wall-clock time at all.
    * Awaiting it inside the usage tap is therefore free in the common case.
    */
-  tokens?: PendingCount
+  tokens?: PendingCount,
+  /** Called once when the upstream answers or fails: the cold gate's release. */
+  onAnswer?: () => void
 ): void {
+  let answered = false;
+  const answer = (): void => {
+    if (answered) return;
+    answered = true;
+    onAnswer?.();
+  };
   const path = requestPath(req.url);
   if (path === null) {
+    answer();
     res.writeHead(400, { 'content-type': 'text/plain' });
     res.end(
       'token-optimizer proxy: refusing a request target that names its own ' +
@@ -1525,6 +1559,9 @@ function forward(
     (upstreamRes) => {
       receivedResponse = true;
       upstreamHeadersMs = performance.now() - upstreamStarted;
+      // The response has begun, so the cache entry it is writing is readable:
+      // siblings held by the cold gate may go now.
+      answer();
       // HOP-BY-HOP HEADERS ARE STRIPPED IN BOTH DIRECTIONS, and doing it in
       // only one was a real defect rather than an untidiness.
       //
@@ -1632,8 +1669,12 @@ function forward(
     }
   );
 
-  res.once('close', () => upstreamReq.destroy());
+  res.once('close', () => {
+    answer();
+    upstreamReq.destroy();
+  });
   upstreamReq.on('error', (error) => {
+    answer();
     // A connection failure has no response stream for tapUsage to observe.
     // Keep the attempted request in the ledger with unknown usage, never zero.
     if (!receivedResponse && facts && observe) {
@@ -2132,6 +2173,10 @@ export async function startProxy(options: ProxyOptions = {}): Promise<{
         beforePrompt === null || afterPrompt === null
           ? undefined
           : trackCount(tokenAccounting.countPair(beforePrompt, afterPrompt));
+      // SIBLINGS GO OUT ONE AFTER ANOTHER, not together: see cold-gate.ts.
+      const gate = coldGateEnabled()
+        ? await enterColdGate(coldKey(next))
+        : { release: () => {}, waitedMs: 0 };
       forward(
         upstream,
         req,
@@ -2139,10 +2184,15 @@ export async function startProxy(options: ProxyOptions = {}): Promise<{
         next,
         // The per-request delta, not the proxy's running total: a ledger row
         // describes one request.
-        { ...summary, withheldUnits: spilledBlocks - spilledBefore },
+        {
+          ...summary,
+          withheldUnits: spilledBlocks - spilledBefore,
+          coldGateWaitMs: gate.waitedMs,
+        },
         performance.now() - transformStarted,
         observe,
-        counted
+        counted,
+        gate.release
       );
     })();
   });

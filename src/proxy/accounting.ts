@@ -93,6 +93,8 @@ function mergeUsage(usage: Record<string, unknown>, into: RequestUsage): void {
 /** What compression did to one request, as the summary already reports it. */
 export interface CompressionFacts {
   readonly compressed: boolean;
+  /** Milliseconds a sibling's first request waited on the cold gate (cold-gate.ts); absent or 0 when it did not. */
+  readonly coldGateWaitMs?: number;
   /**
    * Which arm of the output-shaper holdout the request was in, when one ran.
    *

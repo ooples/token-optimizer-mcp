@@ -497,3 +497,34 @@ describe('the core loop and redundant tools (multi-agent harness, 2026-10-21)', 
     expect(loaded(out)).not.toContain('Edit');
   });
 });
+
+describe('specialised tools are never kept by ranking', () => {
+  it('defers Artifact and friends even when the task text names them', () => {
+    const out = deferTools(
+      req({
+        tools: [
+          tool('Read', 1919),
+          described('Artifact', 'Publish an artifact page html report dashboard'),
+          described('ScheduleWakeup', 'Schedule a wakeup for a report dashboard'),
+          described('Agent', 'Launch a new agent'),
+        ],
+      }),
+      { query: 'publish an html report dashboard artifact', keepRelevant: 5 }
+    );
+    const tools = (out.request as unknown as { tools: Record<string, unknown>[] }).tools;
+    expect(tools.find((t) => t.name === 'Artifact')?.defer_loading).toBe(true);
+    expect(tools.find((t) => t.name === 'ScheduleWakeup')?.defer_loading).toBe(true);
+    expect(tools.find((t) => t.name === 'Agent')?.defer_loading).toBeUndefined();
+    expect(tools.find((t) => t.name === 'Read')?.defer_loading).toBeUndefined();
+  });
+
+  it('a forced specialised tool stays loaded', () => {
+    const out = deferTools(
+      req({ tools: [tool('Read', 1919), described('Artifact', 'Publish'), tool('Bash', 3000)], tool_choice: { type: 'tool', name: 'Artifact' } }),
+      { keepRelevant: 0 }
+    );
+    const tools = (out.request as unknown as { tools: Record<string, unknown>[] }).tools;
+    expect(tools.find((t) => t.name === 'Artifact')?.defer_loading).toBeUndefined();
+    expect(tools.some((t) => t.name === 'Artifact')).toBe(true);
+  });
+});

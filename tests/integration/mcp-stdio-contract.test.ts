@@ -245,6 +245,10 @@ describe('the server answers over stdio at all', () => {
     // the old wording told every subagent to fall back to cat and grep.
     expect(initializeResult?.instructions).toContain('listed as deferred');
     expect(initializeResult?.instructions).toContain('ToolSearch');
+    // ...but when one is needed, not up front: each mid-session load re-writes
+    // the prompt cache (9 ToolSearch-only turns, 137k cache writes in one run).
+    expect(initializeResult?.instructions).toContain('not up front');
+    expect(initializeResult?.instructions).not.toContain('before your first');
   });
 
   it('lists its tools', async () => {

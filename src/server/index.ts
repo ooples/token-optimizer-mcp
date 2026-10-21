@@ -369,19 +369,29 @@ const packageVersion = JSON.parse(
 // otherwise said to use native operations, so every subagent was told, by this
 // server, to read files with cat and search them with grep. Measured across 42
 // workflow subagents: 2,071 shell file reads, 9 Read calls, 0 smart_read calls.
+//
+// NOT UP FRONT, measured the other way on 2026-10-21. "Load them before your
+// first file read" turned into a ToolSearch-only turn in nearly every worker,
+// and each mid-session load changes what the client sends ahead of the
+// conversation, so the call after it re-wrote the prompt cache: in a 10-worker
+// run, 9 such turns and 137k cache-write tokens, for 1 smart_read and 3
+// smart_grep calls. Claude Code's built-in Read, Grep and Bash output is now
+// compacted by the hooks without any tool choice, so the load only pays when a
+// large read or broad search is actually at hand -- and then once, for all of
+// them together.
 const SERVER_INSTRUCTIONS =
   'Token optimization is mandatory routing policy, not a preference: use ' +
   'smart_read for large or repeated files, smart_grep for content search, ' +
   'smart_glob for file discovery, smart_edit for large edits, optimize_session ' +
   'when context is tight, and wiki_write for durable non-obvious conclusions. ' +
   'If these tools are listed as deferred (their schemas not yet loaded, as in ' +
-  'subagents), load the ones you need with ToolSearch -- a keyword search such ' +
-  'as ToolSearch("smart_read smart_grep smart_glob") finds them whatever ' +
-  'prefix this install gives them -- before your first ' +
-  'file read or search, and prefer them to printing files or searching through ' +
-  'the shell. Never call or redirect to an unlisted schema; use a bounded native ' +
-  'operation (a line range, a count, a filtered search) only when the required ' +
-  'optimizer tool is neither listed nor deferred.';
+  'subagents), load them with ToolSearch -- one keyword search such as ' +
+  'ToolSearch("smart_read smart_grep smart_glob") finds them whatever prefix ' +
+  'this install gives them -- the first time a large read or a broad search ' +
+  'comes up, not up front: every mid-session load re-writes the prompt cache, ' +
+  'and a short task may never need one. Never call or redirect to an unlisted ' +
+  'schema; use a bounded native operation (a line range, a count, a filtered ' +
+  'search) only when the required optimizer tool is neither listed nor deferred.';
 
 const server = new Server(
   {

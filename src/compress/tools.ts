@@ -178,6 +178,39 @@ export const CORE_LOOP_TOOLS: ReadonlySet<string> = new Set([
 const REDUNDANT_WITH: Readonly<Record<string, string>> = { PowerShell: 'Bash' };
 
 /**
+ * Specialised client tools: deferred, and never ranked into the kept set.
+ *
+ * Ranking keeps the five definitions whose text best matches the task, and with
+ * the core loop kept by name the candidates left are mostly these -- so
+ * ranking kept nearly all of them. Across the 10-worker campaign run (176
+ * calls) not one of them was called: Artifact alone is 35,306 characters in
+ * every request, SendFeedback 5,537, ScheduleWakeup 4,631, Workflow 5,355,
+ * ReportFindings 2,206, ListAgents 1,180. A session that wants one finds it
+ * through tool search; nothing is removed.
+ */
+const SPECIALISED_TOOLS: ReadonlySet<string> = new Set([
+  'Artifact',
+  'ArtifactComments',
+  'ArtifactData',
+  'SendFeedback',
+  'ReportFindings',
+  'ListAgents',
+  'ScheduleWakeup',
+  'Workflow',
+  'DesignSync',
+  'CronCreate',
+  'CronDelete',
+  'CronList',
+  'RemoteTrigger',
+  'PushNotification',
+  'SendUserFile',
+  'EnterWorktree',
+  'ExitWorktree',
+  'EnterPlanMode',
+  'ExitPlanMode',
+]);
+
+/**
  * A definition without the JSON-schema meta keys the provider does not need.
  *
  * `$schema` names the draft the schema was written against; it constrains
@@ -262,8 +295,11 @@ export function deferTools(
       .map((t) => (t as ToolLike | null)?.name)
       .filter((n): n is string => typeof n === 'string')
   );
+  // Never kept by ranking or by the size floor: a duplicate of a tool that is
+  // present, or a specialised tool no measured session called.
   const redundant = (name: string): boolean =>
-    REDUNDANT_WITH[name] !== undefined && present.has(REDUNDANT_WITH[name]);
+    SPECIALISED_TOOLS.has(name) ||
+    (REDUNDANT_WITH[name] !== undefined && present.has(REDUNDANT_WITH[name]));
   const candidates: { index: number; text: string }[] = [];
   tools.forEach((raw, index) => {
     if (typeof raw !== 'object' || raw === null) return;
