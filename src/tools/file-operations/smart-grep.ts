@@ -188,6 +188,74 @@ const nulEntries = (stdout: Buffer): string[] =>
     .filter((entry) => entry.length > 0);
 
 /**
+ * Build output the walk skips by default OUTSIDE a git checkout, where there is
+ * no .gitignore to say what is generated. Inside one, .gitignore says it.
+ */
+export const BUILD_OUTPUT_IGNORE = [
+  '**/bin/**',
+  '**/obj/**',
+  '**/target/**',
+  '**/out/**',
+  '**/coverage/**',
+  '**/__pycache__/**',
+  '**/.venv/**',
+  '**/venv/**',
+  '**/.gradle/**',
+  '**/.next/**',
+];
+
+/** Ignored entries above this many keep only the directories among them. */
+const MAX_IGNORED_GLOBS = 2_000;
+
+/**
+ * The files .gitignore excludes under `cwd`, as ignore globs relative to it, or
+ * null when `cwd` is not inside a git checkout (or git cannot say).
+ *
+ * WHY THIS IS THE DEFAULT. Searching a .NET checkout read every gitignored
+ * `bin/` and `obj/` -- 3 GB on AiDotNet -- because the default ignore list only
+ * named node_modules, .git, dist and build. Measured there: 8-10 s for a
+ * literal, against 1.8 s with build output skipped, and on a cold cache git
+ * used the whole deadline (see the deadline split in grep()). git grep and
+ * ripgrep both skip ignored files by default; `includeIgnored: true` reads them.
+ *
+ * `--directory` collapses an ignored directory to one `dir/` entry, so the list
+ * stays short. Entries containing glob metacharacters are left out -- such a
+ * path is searched, never wrongly skipped -- and both backends get the same
+ * globs, so the walk and git still answer about the same files.
+ */
+export async function gitIgnoredGlobs(
+  cwd: string,
+  timeoutMs: number
+): Promise<string[] | null> {
+  const listed = await runGit(
+    [
+      '-C',
+      cwd,
+      '-c',
+      'core.quotePath=false',
+      '-c',
+      'core.fsmonitor=',
+      'ls-files',
+      '-o',
+      '-i',
+      '--exclude-standard',
+      '--directory',
+      '-z',
+    ],
+    timeoutMs,
+    16 * 1024 * 1024
+  );
+  if (!listed || listed.code !== 0) return null;
+  let entries = nulEntries(listed.stdout).filter(
+    (entry) => !/[*?[\]{}()!]/.test(entry)
+  );
+  if (entries.length > MAX_IGNORED_GLOBS) {
+    entries = entries.filter((entry) => entry.endsWith('/'));
+  }
+  return entries.map((entry) => (entry.endsWith('/') ? `${entry}**` : entry));
+}
+
+/**
  * The files under `opts.cwd` that contain a LITERAL pattern, per `git grep -l`,
  * or null when git cannot answer the same question the walk would.
  *
@@ -344,6 +412,12 @@ export interface SmartGrepOptions {
   excludeExtensions?: string[]; // Exclude these extensions
   skipBinary?: boolean; // Skip binary files (default: true)
   ignore?: string[]; // Patterns to ignore (default: node_modules, .git)
+  /**
+   * Also search files .gitignore excludes (default: false). Inside a git
+   * checkout they are skipped, as git grep and ripgrep skip them; outside one,
+   * BUILD_OUTPUT_IGNORE joins the default ignore list instead.
+   */
+  includeIgnored?: boolean;
 
   // Output options
   includeContext?: boolean; // Include before/after context (default: false)
@@ -544,7 +618,21 @@ export class SmartGrepTool {
         maxFileSize: options.maxFileSize ?? 10 * 1024 * 1024, // 10MB default
         deadlineMs: traversalDeadlineMs(options.deadlineMs),
         encoding: options.encoding ?? 'utf-8',
+        includeIgnored: options.includeIgnored ?? false,
       };
+
+      // What .gitignore excludes is skipped by default -- see gitIgnoredGlobs.
+      // Outside a checkout there is no .gitignore, so the common build-output
+      // directories join the DEFAULT list (a caller's own list is theirs).
+      if (!opts.includeIgnored) {
+        const ignored = await gitIgnoredGlobs(
+          opts.cwd,
+          Math.max(1, Math.floor(opts.deadlineMs / 4))
+        );
+        if (ignored) opts.ignore = [...opts.ignore, ...ignored];
+        else if (!options.ignore)
+          opts.ignore = [...opts.ignore, ...BUILD_OUTPUT_IGNORE];
+      }
 
       // Check cache first
       const cacheKey = generateCacheKey('grep', {
@@ -656,7 +744,16 @@ export class SmartGrepTool {
       // per-line matching below, so the answer is the walk's answer, faster. Null
       // (regex, explicit globs, not a repository, git missing or failing) keeps
       // the walk exactly as it was.
-      const candidates = await gitGrepCandidates(pattern, opts, remainingMs());
+      //
+      // HALF THE REMAINING BUDGET, not all of it. When git used the whole
+      // deadline and declined, the walk it falls back to started with none
+      // left and the search answered 0 matches over 0 files -- measured on
+      // AiDotNet with a cold cache. The walk now always keeps half.
+      const candidates = await gitGrepCandidates(
+        pattern,
+        opts,
+        Math.max(1, Math.floor(remainingMs() / 2))
+      );
       const fileSource = (filePattern: string): AsyncIterable<string> =>
         candidates
           ? (async function* () {
@@ -1233,13 +1330,19 @@ export const SMART_GREP_TOOL_DEFINITION = {
         type: 'array',
         items: { type: 'string' },
         description:
-          'Glob patterns to skip. Defaults exclude node_modules, .git, dist and build; pass [] to search everything.',
+          'Glob patterns to skip. Defaults exclude node_modules, .git, dist and build (and, outside a git checkout, common build output such as bin, obj and target); pass [] and includeIgnored: true to search everything.',
         default: [
           '**/node_modules/**',
           '**/.git/**',
           '**/dist/**',
           '**/build/**',
         ],
+      },
+      includeIgnored: {
+        type: 'boolean',
+        description:
+          'Also search files .gitignore excludes, such as bin/ and obj/ build output (default false).',
+        default: false,
       },
       includeColumn: {
         type: 'boolean',
