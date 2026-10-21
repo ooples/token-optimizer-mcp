@@ -337,7 +337,7 @@ function ciLog(name, seed) {
         `_____________________ ${b.failing.split('::')[1]} _____________________`,
         '',
         `    def ${b.failing.split('::')[1]}():`,
-        `>       ${b.assertion.replace('assert', 'assert')}`,
+        `>       ${b.assertion}`,
         `E       ${b.assertion}`,
         '',
         `pkgs/${name}/tests/test_core.py:4: AssertionError`,
@@ -394,7 +394,7 @@ function seed(work, hidden, rep) {
       join(dir, p, 'core.py'),
       `"""Core ${p} rules."""\n` +
         filler(p, 25, k) +
-        BUGS[p].code.replace(/^/, '') +
+        BUGS[p].code +
         filler(p + '_tail', 15, k + 3)
     );
     writeFileSync(join(dir, 'tests', 'test_core.py'), BUGS[p].tests);
