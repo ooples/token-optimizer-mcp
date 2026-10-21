@@ -93,15 +93,19 @@ describe('the escape footer', () => {
 
   it('is not appended when a repeated search is bounded and let through', () => {
     // The second run of a command is bounded rather than refused: the call
-    // proceeds, so the off switch has nothing to switch off.
-    const out = route(
-      { tool_name: 'Bash', tool_input: { command: 'grep -rn needle .' } },
-      'enforce',
-      join(root, 'project')
-    );
+    // proceeds, so the off switch has nothing to switch off. Its own project
+    // and command, so it holds when selected alone.
+    const project = join(root, 'repeat-project');
+    mkdirSync(join(project, '.git'), { recursive: true });
+    const search = {
+      tool_name: 'Bash',
+      tool_input: { command: 'grep -rn repeated .' },
+    };
+    expect(route(search, 'enforce', project).permissionDecision).toBe('deny');
+    const out = route(search, 'enforce', project);
 
     expect(out.permissionDecision).toBe('allow');
-    expect(out.updatedInput.command).toMatch(/grep -rn needle/);
+    expect(out.updatedInput.command).toMatch(/grep -rn repeated/);
     expect(out.additionalContext).not.toMatch(/Not what you wanted/);
   });
 });

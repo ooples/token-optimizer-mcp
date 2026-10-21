@@ -624,13 +624,18 @@ export class SmartGrepTool {
       // What .gitignore excludes is skipped by default -- see gitIgnoredGlobs.
       // Outside a checkout there is no .gitignore, so the common build-output
       // directories join the DEFAULT list (a caller's own list is theirs).
+      let skippedGitignored = 0;
+      let skippedExample = '';
       if (!opts.includeIgnored) {
         const ignored = await gitIgnoredGlobs(
           opts.cwd,
           Math.max(1, Math.floor(opts.deadlineMs / 4))
         );
-        if (ignored) opts.ignore = [...opts.ignore, ...ignored];
-        else if (!options.ignore)
+        if (ignored) {
+          opts.ignore = [...opts.ignore, ...ignored];
+          skippedGitignored = ignored.length;
+          skippedExample = ignored.slice(0, 2).join(', ');
+        } else if (!options.ignore)
           opts.ignore = [...opts.ignore, ...BUILD_OUTPUT_IGNORE];
       }
 
@@ -1007,7 +1012,16 @@ export class SmartGrepTool {
                 `No literal match for "${pattern}", but it matches as a regular ` +
                 `expression. Patterns are literal unless you pass regex: true.`,
             }
-          : {}),
+          : totalMatches === 0 && skippedGitignored > 0
+            ? {
+                // Gitignored is not always build output: AiDotNet keeps 4,115
+                // generated .cs files under a gitignored src/Generated/, and a
+                // bare zero there reads as "the symbol does not exist".
+                hint:
+                  `No match outside gitignored paths (${skippedGitignored} skipped, ` +
+                  `such as ${skippedExample}). Pass includeIgnored: true to search them.`,
+              }
+            : {}),
       };
 
       // Cache result

@@ -85,6 +85,20 @@ describe('inside a git checkout', () => {
     }
   });
 
+  it('says so when the only matches were in gitignored paths', async () => {
+    writeFileSync(join(repo, 'obj', 'Debug', 'only.cs'), 'ONLY_IN_GENERATED\n');
+    const result = await tool().grep('ONLY_IN_GENERATED', { path: repo });
+
+    expect(result.metadata.totalMatches).toBe(0);
+    expect(result.hint).toMatch(/gitignored paths .*includeIgnored: true/);
+  });
+
+  it('stays quiet when a zero is a real zero', async () => {
+    const result = await tool().grep('ABSENT_EVERYWHERE_123', { path: plain });
+    expect(result.metadata.totalMatches).toBe(0);
+    expect(result.hint).toBeUndefined();
+  });
+
   it('reads them when includeIgnored is set', async () => {
     expect(
       files(await tool().grep(NEEDLE, { path: repo, includeIgnored: true }))
