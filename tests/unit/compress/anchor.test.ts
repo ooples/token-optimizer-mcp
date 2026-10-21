@@ -658,3 +658,78 @@ describe('the turn compression first bites freezes the boundary it used', () => 
     expect(second.removed).toBe(first.removed);
   });
 });
+
+describe('the cold turn (cache expired, user decision 2026-10-21)', () => {
+  it('rewrites a conversation it had left alone once the cache has expired', () => {
+    const store = anchorStore();
+    const first = anchorDecision(large(), store);
+    store.remember(first.key, first.record);
+    expect(anchorDecision(large(), store).reason).toBe('left-alone');
+
+    const cold = anchorDecision(large(), store, COLD_MESSAGE_LIMIT, {
+      cacheExpired: true,
+    });
+    expect(cold.reanchor).toBe(true);
+    expect(cold.reason).toBe('cache-expired');
+    expect(cold.record.anchored).toBe(true);
+  });
+
+  it('compresses the cached history on a cold turn and leaves it alone on a warm one', () => {
+    // A long build log returned by a tool, all of it behind the client's cache
+    // marker -- the content the strategy's compressors exist for.
+    const log = Array.from({ length: 1500 }, (_, i) =>
+      i === 900
+        ? 'ERROR test_settle failed: assert 10.23 == 10.24'
+        : `[2026-10-21T10:00:${String(i % 60).padStart(2, '0')}Z] INFO worker-${i % 7} processed batch ${i} ok in ${i % 13} ms`
+    ).join('\n');
+    const withLog = (): ProviderRequest => ({
+      system: 'You are a coding agent.',
+      messages: [
+        { role: 'user', content: [{ type: 'text', text: 'start here' }] },
+        {
+          role: 'assistant',
+          content: [
+            {
+              type: 'tool_use',
+              id: 't1',
+              name: 'Bash',
+              input: { command: 'make test' },
+            },
+          ],
+        },
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'tool_result',
+              tool_use_id: 't1',
+              content: log,
+              cache_control: { type: 'ephemeral' },
+            },
+          ],
+        },
+        ...Array.from({ length: COLD_MESSAGE_LIMIT + 1 }, (_, i) => ({
+          role: (i % 2 ? 'user' : 'assistant') as 'user' | 'assistant',
+          content: [{ type: 'text', text: `go on ${i}` }],
+        })),
+      ],
+    });
+    const store = () => {
+      const s = anchorStore();
+      const seen = anchorDecision(withLog(), s);
+      s.remember(seen.key, seen.record);
+      return s;
+    };
+    const size = (r: ProviderRequest) => JSON.stringify(r).length;
+    const warm = v1Frontier(withLog(), { anchors: store() });
+    const cold = v1Frontier(withLog(), {
+      anchors: store(),
+      cacheExpired: true,
+    });
+    expect(cold.anchor?.reason).toBe('cache-expired');
+    expect(size(cold.request)).toBeLessThan(size(withLog()) * 0.5);
+    expect(JSON.stringify(cold.request)).toContain('assert 10.23 == 10.24');
+    // Warm: the prefix the provider holds goes out exactly as it came in.
+    expect(size(warm.request)).toBeGreaterThanOrEqual(size(withLog()) - 64);
+  });
+});

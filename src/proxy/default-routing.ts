@@ -291,7 +291,7 @@ function inspect(
   };
 }
 
-function loadSettings(path: string): {
+export function loadSettings(path: string): {
   settings: Settings;
   existed: boolean;
   unreadable: boolean;
@@ -306,7 +306,7 @@ function loadSettings(path: string): {
   return { settings: parsed, existed: true, unreadable: false };
 }
 
-function saveSettings(path: string, settings: Settings): void {
+export function saveSettings(path: string, settings: Settings): void {
   if (existsSync(path)) {
     try {
       copyFileSync(path, `${path}.backup`);

@@ -38,7 +38,12 @@ import {
   optimizerToolsForHook,
   unreachableOptimizerTools,
 } from '../../hooks-core/capabilities.mjs';
-import { absentToolsFromTranscript } from '../../hooks-core/transcript.mjs';
+import { absentToolsFromTranscript } from '../../hooks-core/transcript.mjs';
+
+// These tests are about WHETHER the harvest prompt is generated; how it is
+// delivered (held for the next turn by default, 2026-10-21) is covered by
+// harvest-gate.test.mjs. Pin the continuation so the prompt is observable here.
+process.env.TOKEN_OPTIMIZER_HARVEST_TURN = '1';
 
 const ROOT = process.cwd();
 const BUNDLED = 'smart_read,smart_grep,wiki_write';

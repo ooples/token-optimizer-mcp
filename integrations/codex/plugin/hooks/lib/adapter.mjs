@@ -763,6 +763,17 @@ export function sessionTaskContext(raw = {}) {
     .join('\n');
 }
 
+/**
+ * Whether the Stop hook's harvest nudge is held for the next turn instead of
+ * continuing this one. Claude Code only: its PostToolUse context reaches the
+ * model on the next call, which is what delivery needs. Other clients keep the
+ * continuation, since they have no such channel wired.
+ */
+function harvestDeferred(clientName) {
+  if (clientName !== 'claude-code') return false;
+  return !/^(1|true|yes|on)$/i.test(String(process.env.TOKEN_OPTIMIZER_HARVEST_TURN ?? '').trim());
+}
+
 function emit(object) {
   const serialized = JSON.stringify(object);
   noteHookOutput(object, Buffer.byteLength(serialized, 'utf8'));
@@ -1549,10 +1560,21 @@ async function runHook(clientName, event, invocation) {
               raw.stopHookActive === true ||
               alreadyHarvested ||
               (clientName === 'cursor' && Number(raw.loop_count || 0) > 0),
+            deferred: harvestDeferred(clientName),
           })
         : null;
+    // NO TURN OF ITS OWN (user decision 2026-10-21). A blocking Stop continues
+    // the turn, and that continuation re-reads the whole context: 11 of them in
+    // one session at ~344k average context. In Claude Code the nudge is kept and
+    // delivered with the next turn's first tool result instead, a call that is
+    // being made anyway. TOKEN_OPTIMIZER_HARVEST_TURN=1 restores the old turn.
+    let stopPrompt = prompt;
     if (prompt) {
       state.harvestedEdits = Number(state.edits || 0);
+      if (harvestDeferred(clientName)) {
+        state.pendingHarvest = prompt;
+        stopPrompt = null;
+      }
       saveState(sessionId, state, agentScope);
     }
     // THE OUT-OF-BAND HARVEST, which no client was running.
@@ -1593,11 +1615,11 @@ async function runHook(clientName, event, invocation) {
       // one from ending.
     }
 
-    if (prompt && client.stopStyle === 'followup') {
-      emit({ followup_message: prompt, ...(harvestNotice ? { systemMessage: harvestNotice } : {}) });
+    if (stopPrompt && client.stopStyle === 'followup') {
+      emit({ followup_message: stopPrompt, ...(harvestNotice ? { systemMessage: harvestNotice } : {}) });
     } else {
       emit({
-        ...(prompt ? { decision: client.stopDecision, reason: prompt } : {}),
+        ...(stopPrompt ? { decision: client.stopDecision, reason: stopPrompt } : {}),
         ...(harvestNotice ? { systemMessage: harvestNotice } : {}),
       });
     }
@@ -1945,6 +1967,14 @@ async function runHook(clientName, event, invocation) {
     ((Number(state.edits) || 0) >= 1 ||
       (Number(state.toolCalls) || 0) >= GUIDANCE_AFTER_CALLS);
   if (guided) state.recordingGuided = true;
+  // The previous turn's harvest nudge, held back by the Stop hook so it never
+  // cost a turn of its own, rides on this result -- once.
+  const pendingHarvest =
+    event === 'post-tool' && typeof state.pendingHarvest === 'string'
+      ? state.pendingHarvest
+      : null;
+  // Cleared explicitly, so saveState knows this caller changed it.
+  if (pendingHarvest) state.pendingHarvest = null;
   saveState(payload.session_id, state, agentScope);
 
   const context = [
@@ -1952,6 +1982,7 @@ async function runHook(clientName, event, invocation) {
     graphContext,
     guided ? recordingGuidance() : null,
     recordingContext,
+    pendingHarvest,
   ]
     .filter(Boolean)
     .join('\n\n');

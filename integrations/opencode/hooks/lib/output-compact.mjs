@@ -23,7 +23,6 @@
  * byte-exact for the same reason); any line that names a failure, which is
  * the signal a debug loop exists to carry.
  */
-import { createHash } from 'node:crypto';
 import { capture, artifactPath } from './expand.mjs';
 
 /** Below this an output is left exactly as it is. */
@@ -101,7 +100,9 @@ function namesIn(lines, limit = 5) {
   const files = new Set();
   for (const l of lines) {
     for (const m of l.matchAll(/\b([A-Z][A-Za-z]*(?:Error|Exception|Warning))\b/g)) errors.add(m[1]);
-    for (const m of l.matchAll(/[\w./\\-]+\.(?:py|ts|tsx|js|mjs|cs|go|rs|java|kt|rb|php|cpp|c|h)\b/g)) files.add(m[0]);
+    // A start boundary and a length cap keep this linear: unanchored, `[\w./\\-]+`
+    // retried from every position of a long path-character run (733 ms on 32k chars).
+    for (const m of l.matchAll(/(?<![\w./\\-])[\w./\\-]{1,200}\.(?:py|ts|tsx|js|mjs|cs|go|rs|java|kt|rb|php|cpp|c|h)\b/g)) files.add(m[0]);
     if (errors.size >= limit && files.size >= limit) break;
   }
   return { errors: [...errors].slice(0, limit), files: [...files].slice(0, limit) };
@@ -292,7 +293,3 @@ export function compactToolResponse({ tool, input, response, dir, sessionId = nu
   }
   return null;
 }
-
-/** Stable identity for tests and telemetry. */
-export const responseDigest = (response) =>
-  createHash('sha256').update(JSON.stringify(response ?? null)).digest('hex').slice(0, 12);

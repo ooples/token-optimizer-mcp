@@ -213,7 +213,26 @@ describe('the Claude Code Stop hook', () => {
       },
       workspace
     );
-    return out.stdout ? JSON.parse(out.stdout) : {};
+    const parsed = out.stdout ? JSON.parse(out.stdout) : {};
+    // The NEXT turn's first tool call, in the same session.
+    parsed.nextToolCall = () => {
+      writeFileSync(join(workspace, 'c.ts'), 'x\n');
+      const next = hook(
+        'post-tool',
+        {
+          hook_event_name: 'PostToolUse',
+          session_id,
+          transcript_path,
+          cwd: workspace,
+          tool_name: 'Edit',
+          tool_input: { file_path: join(workspace, 'c.ts'), old_string: 'x', new_string: 'y' },
+          tool_response: { success: true },
+        },
+        workspace
+      );
+      return next.stdout ? JSON.parse(next.stdout) : {};
+    };
+    return parsed;
   };
 
   test('a clean turn ends without the extra harvest turn', () => {
@@ -225,7 +244,9 @@ describe('the Claude Code Stop hook', () => {
     expect(out.decision).toBeUndefined();
   });
 
-  test('a turn that worked past a failure is asked to record it', () => {
+  test('a turn that worked past a failure is asked to record it -- on the next turn, not with one of its own', () => {
+    // User decision 2026-10-21: a blocking Stop continues the turn and re-reads
+    // the whole context, so the nudge rides on the next turn's first tool result.
     const out = stopAfterEdits([
       prompt('make the test pass'),
       call('a', 'Bash'),
@@ -233,8 +254,12 @@ describe('the Claude Code Stop hook', () => {
       call('b', 'Edit'),
       result('b', 'ok'),
     ]);
-    expect(out.decision).toBe('block');
-    expect(out.reason).toMatch(/semantic harvest/);
+    expect(out.decision).toBeUndefined();
+    const next = out.nextToolCall();
+    expect(next.hookSpecificOutput.additionalContext).toMatch(/Semantic harvest for the previous turn/);
+    expect(next.hookSpecificOutput.additionalContext).not.toMatch(/restating the answer/);
+    // Once: the call after that carries no nudge.
+    expect(JSON.stringify(out.nextToolCall())).not.toMatch(/Semantic harvest/);
   });
 
   test('another client keeps the prompt: only Claude Code transcripts are read', () => {

@@ -141,6 +141,10 @@ export function semanticHarvestPrompt({
   // What this turn did (transcript.mjs#turnEvidence plus a correction check),
   // or null when unknown -- unknown keeps the prompt, as before.
   turn = null,
+  // DELIVERED LATER, NOT AS A TURN OF ITS OWN (user decision 2026-10-21):
+  // the wording for a nudge that rides on the next turn's first tool result,
+  // where there is no answer to protect and nothing to "finish".
+  deferred = false,
 } = {}) {
   if (stopHookActive || edits < 1) return null;
   // GATED ON EVIDENCE. Each firing is an extra turn that re-reads the whole
@@ -157,6 +161,18 @@ export function semanticHarvestPrompt({
   const actor = String(model || '').trim()
     ? ` You are the active ${String(model).trim()} model that did the reasoning.`
     : ' You are the active model that did the reasoning.';
+
+  if (deferred)
+    return (
+      'Semantic harvest for the previous turn.' +
+      actor +
+      subject +
+      ' If that work produced a durable, non-obvious conclusion -- a failed approach and why, ' +
+      'a decision and its rejected alternative, or a command that finally worked -- call ' +
+      'wiki_write for it with a real file anchor, alongside the current task: the concrete ' +
+      'evidence, when it applies, a calibrated confidenceLabel (verified/probable/speculative), ' +
+      'its scope, and what would invalidate it. If there is none, ignore this note.'
+    );
 
   return (
     'Before finishing, perform the semantic harvest yourself.'

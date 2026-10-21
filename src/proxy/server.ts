@@ -34,6 +34,7 @@ import {
 } from 'node:http';
 import { request as httpsRequest } from 'node:https';
 import {
+  appendFileSync,
   existsSync,
   mkdirSync,
   readdirSync,
@@ -62,6 +63,12 @@ import {
 } from '../compress/sibling-prefix.js';
 import { coldKey, coldGateEnabled, enterColdGate } from './cold-gate.js';
 import {
+  KeepWarm,
+  keepWarmEnabled,
+  maxPingsFromEnv,
+  ttlOf,
+} from './keep-warm.js';
+import {
   accountingPath,
   appendRecord,
   tapUsage,
@@ -78,7 +85,11 @@ import {
   createTransformationLog,
   type TransformationLog,
 } from './transformations.js';
-import { anchorStore, type AnchorStore } from '../compress/anchor.js';
+import {
+  anchorStore,
+  conversationKey as anchorConversationKey,
+  type AnchorStore,
+} from '../compress/anchor.js';
 import { serialiseKeepingPrefix } from './cached-prefix.js';
 import { batchGuidance } from '../compress/batch-guidance.js';
 import { injectKnowledge } from '../compress/knowledge.js';
@@ -955,6 +966,13 @@ function compressBodyOnce(
   // whether that costs the model something it needed is the one question no
   // offline instrument can answer.
   const substitute = featureEnabled(FeatureName.Substitution);
+  // THE COLD TURN (user decision 2026-10-21): when this conversation's provider
+  // cache has certainly expired, the whole prefix is re-written this turn
+  // whatever we send, so the strategy may compress all of it. Keyed the same
+  // way keep-warm tracks it, so whichever body goes out maps back here.
+  const convKey = anchorConversationKey(parsed);
+  bodyKeys.set(body, convKey);
+  const cacheExpired = keepWarmEnabled() && warmer().expired(convKey);
   let result: StrategyResult;
   try {
     result = (substitute ? v4Substitute : v1Frontier)(parsed, {
@@ -964,6 +982,7 @@ function compressBodyOnce(
       sharedGraph,
       tuning,
       suppressKnowledge,
+      cacheExpired,
     });
   } catch {
     return unchanged('compression threw');
@@ -985,6 +1004,7 @@ function compressBodyOnce(
     >
   );
   const next = Buffer.from(spliced ?? compact, 'utf8');
+  bodyKeys.set(next, convKey);
   // Never send more than we were given -- UNLESS a knowledge block was
   // deliberately added, which is the one case where growing the request is
   // the point. It is charged in the summary either way, and it only
@@ -1468,6 +1488,65 @@ export function promptSideBody(
   }
 }
 
+/**
+ * A conversation's identity for keep-warm: the hash of the first 96 KB of what
+ * was sent, which is tools, system and the opening turn -- stable across the
+ * conversation's turns, and no JSON parse on the request path.
+ */
+function warmKey(body: Buffer): string {
+  return (
+    bodyKeys.get(body) ??
+    createHash('sha256')
+      .update(body.subarray(0, 96 * 1024))
+      .digest('hex')
+      .slice(0, 24)
+  );
+}
+
+/**
+ * The conversation each outgoing body belongs to (anchor.ts conversationKey),
+ * set where the request is transformed, so keep-warm and the cold-turn check
+ * agree on identity. A body this never saw falls back to a prefix hash.
+ */
+const bodyKeys = new WeakMap<Buffer, string>();
+
+let keepWarmInstance: KeepWarm | null = null;
+function warmer(): KeepWarm {
+  if (keepWarmInstance) return keepWarmInstance;
+  const ledger = process.env.TOKEN_OPTIMIZER_PROXY_ACCOUNTING;
+  const margin = Number(process.env.TOKEN_OPTIMIZER_PROXY_KEEPWARM_MARGIN_MS);
+  keepWarmInstance = new KeepWarm({
+    maxPings: maxPingsFromEnv(),
+    // For verification runs: fire sooner than just before expiry.
+    ...(Number.isFinite(margin) && margin >= 0 ? { marginMs: margin } : {}),
+    onPing: (o) => {
+      // On the same ledger as the turns, so a ping's cost is never invisible.
+      if (ledger) {
+        try {
+          appendFileSync(
+            ledger,
+            JSON.stringify({
+              ts: new Date().toISOString(),
+              path: 'keepwarm',
+              status: o.status,
+              keepWarm: { ping: o.ping, ok: o.ok },
+              usage: {
+                input_tokens: o.input,
+                output_tokens: o.output,
+                cache_read_input_tokens: o.cacheRead,
+                cache_creation_input_tokens: o.cacheWrite,
+              },
+            }) + '\n'
+          );
+        } catch {
+          // The ledger is evidence, not control flow.
+        }
+      }
+    },
+  });
+  return keepWarmInstance;
+}
+
 function forward(
   upstream: string,
   req: IncomingMessage,
@@ -1562,6 +1641,26 @@ function forward(
       // The response has begun, so the cache entry it is writing is readable:
       // siblings held by the cold gate may go now.
       answer();
+      // A large conversation's cache is held warm across the next idle gap
+      // (keep-warm.ts), from the exact bytes just sent.
+      if (
+        upstreamRes.statusCode === 200 &&
+        req.method === 'POST' &&
+        target.pathname.endsWith('/messages') &&
+        keepWarmEnabled()
+      ) {
+        try {
+          warmer().seen(warmKey(body), {
+            upstream: `${target.protocol}//${target.host}`,
+            path: target.pathname + target.search,
+            headers,
+            body,
+            ttlMs: ttlOf(body),
+          });
+        } catch {
+          // Keep-warm is an optimisation; a request never pays for it failing.
+        }
+      }
       // HOP-BY-HOP HEADERS ARE STRIPPED IN BOTH DIRECTIONS, and doing it in
       // only one was a real defect rather than an untidiness.
       //

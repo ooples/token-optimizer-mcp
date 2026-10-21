@@ -416,6 +416,8 @@ function emptyState() {
     optimizerToolOkAt: {},
     optimizerTools: [],
     optimizerToolsObservedAt: 0,
+    // The harvest nudge the Stop hook held for the next turn (null when none).
+    pendingHarvest: null,
   };
 }
 
@@ -430,9 +432,24 @@ function emptyState() {
  * exactly the kind of quiet failure that never gets reported.
  */
 /** Remembers a snapshot's starting count and returns it. */
+/**
+ * The harvest nudge each snapshot was loaded with, for the same reason as
+ * loadedCalls: saveState must tell "this caller set or cleared it" from "this
+ * caller merely loaded it", or a hook process that loaded before Stop wrote the
+ * nudge would erase it on its own save.
+ */
+const loadedHarvest = new WeakMap();
+
 function tracked(state) {
   loadedCalls.set(state, Number(state.toolCalls) || 0);
+  loadedHarvest.set(state, state.pendingHarvest ?? null);
   return state;
+}
+
+/** Did this caller change the nudge it loaded (or is the state hand-built)? */
+function changedHarvest(state) {
+  if (!loadedHarvest.has(state)) return Object.prototype.hasOwnProperty.call(state, 'pendingHarvest');
+  return (state.pendingHarvest ?? null) !== loadedHarvest.get(state);
 }
 
 export function loadState(sessionId, agent) {
@@ -511,6 +528,10 @@ export function loadState(sessionId, agent) {
         parsed.seenUrls && typeof parsed.seenUrls === 'object' && !Array.isArray(parsed.seenUrls)
           ? parsed.seenUrls
           : {},
+      // See loadedHarvest: saveState keeps a newer stored nudge unless this
+      // caller changed what it loaded.
+      pendingHarvest:
+        typeof parsed.pendingHarvest === 'string' ? parsed.pendingHarvest : null,
       // Written through stampTool (capabilities.mjs) and merged by saveState,
       // but never read back, so #469's availability timestamps were lost on
       // every reload.
@@ -709,6 +730,13 @@ export function saveState(sessionId, state, agent) {
         Number(state.toolCalls) || 0
       ),
       seenUrls: { ...(current.seenUrls || {}), ...(state.seenUrls || {}) },
+      // The Stop hook's harvest nudge, held for the next turn (adapter.mjs
+      // harvestDeferred). The caller that SET or CLEARED it wins; a caller that
+      // never touched it keeps whatever is stored, so a concurrent post-tool
+      // that loaded before Stop wrote cannot erase it.
+      pendingHarvest: changedHarvest(state)
+        ? (state.pendingHarvest ?? null)
+        : (current.pendingHarvest ?? null),
       // An inventory is a point-in-time observation, not an append-only set.
       // Union would resurrect a tool after a newer host payload explicitly
       // reported an empty or reduced catalog. Latest evidence wins, including
