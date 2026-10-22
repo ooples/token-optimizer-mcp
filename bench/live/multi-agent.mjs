@@ -132,7 +132,14 @@ const ARM = {
   'alt-a': { plugin: false, proxyNull: true, alt: true, env: ALT_A_ENV },
   ours: { plugin: true, proxyNull: false, alt: false },
   'ours-hooks': { plugin: true, proxyNull: true, alt: false },
-  'ours-next': { plugin: 'next', proxyNull: false, alt: false },
+  // The pack pinned on, so a runner's own opt-out cannot make this arm and
+  // `ours-next-nopack` the same.
+  'ours-next': {
+    plugin: 'next',
+    proxyNull: false,
+    alt: false,
+    proxyEnv: { TOKEN_OPTIMIZER_PROXY_REPO_PACK: '1' },
+  },
   // A frozen earlier build (PREV_PKG + PREV_PLUGIN_DIR), for before/after A/Bs of one change.
   'ours-prev': { plugin: 'prev', proxyNull: false, alt: false },
   // The A/B run before the reorder became the default: marker only, no task move.
@@ -726,14 +733,25 @@ function startProcess(cmd, args, env, errFile) {
   return p;
 }
 
-function kill(p) {
-  if (!p || p.exitCode !== null) return;
-  // By PID only, and only processes this runner started (tree, on Windows).
+/**
+ * Stop one process this runner started, by PID only (its tree, on Windows),
+ * and WAIT for it to exit: every rep of an arm reuses the arm's ports, and the
+ * rotation can run the same arm twice in a row, so a proxy still shutting down
+ * would answer the next run's readiness check. SIGKILL after 5 s.
+ */
+async function kill(p) {
+  if (!p || p.exitCode !== null || p.signalCode !== null) return;
+  const exited = new Promise((r) => p.once('exit', r));
   if (process.platform === 'win32')
     spawnSync('taskkill', ['/PID', String(p.pid), '/T', '/F'], {
       stdio: 'ignore',
     });
   else p.kill('SIGTERM');
+  const timer = (ms) => new Promise((r) => setTimeout(() => r('timeout'), ms));
+  if ((await Promise.race([exited, timer(5000)])) === 'timeout') {
+    p.kill('SIGKILL');
+    await Promise.race([exited, timer(2000)]);
+  }
 }
 
 /**
@@ -1200,7 +1218,7 @@ async function runArm(arm, rep, position) {
       errChunks = [];
     child.stdout.on('data', (d) => outChunks.push(d));
     child.stderr.on('data', (d) => errChunks.push(d));
-    const timer = setTimeout(() => kill(child), RUN_TIMEOUT_S * 1000);
+    const timer = setTimeout(() => void kill(child), RUN_TIMEOUT_S * 1000);
     // 'error' as well as 'exit': a spawn that fails (ENOENT) may never exit, and
     // an unhandled 'error' would end the campaign and orphan the proxies. The
     // run then has no requests and becomes an ERROR row below.
@@ -1293,7 +1311,7 @@ async function runArm(arm, rep, position) {
       sessionId: init.session_id,
     };
   } finally {
-    for (const p of procs.reverse()) kill(p);
+    for (const p of procs.reverse()) await kill(p);
   }
 }
 

@@ -42,7 +42,8 @@ import {
   unlink,
   writeFile,
 } from 'node:fs/promises';
-import { basename, dirname, join, resolve } from 'node:path';
+import { homedir } from 'node:os';
+import { basename, delimiter, dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import type { Block, Message, ProviderRequest } from '../compress/frontier.js';
 import { isSubagentRequest } from '../compress/subagent-context.js';
@@ -86,6 +87,64 @@ export function taskPackEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
   return /^(1|true|yes|on)$/i.test(
     String(env.TOKEN_OPTIMIZER_PROXY_REPO_PACK_TASK ?? '').trim()
   );
+}
+
+/**
+ * WHERE A PACK MAY BE BUILT FROM. A path in the request is the client's claim,
+ * not an authorisation: anything that can reach the proxy could name any
+ * repository and have its tree and history read and sent upstream. A pack is
+ * built only for a directory at or under a root the user vouched for:
+ *   - a project root the SessionStart hook registered when a session started
+ *     there (hooks-core/projects.mjs, `~/.token-optimizer/projects.jsonl`),
+ *   - the proxy's own project root, and
+ *   - TOKEN_OPTIMIZER_PROXY_REPO_ROOTS (path-delimited), for a proxy used
+ *     without the hooks.
+ */
+export function projectRegistryFile(
+  env: NodeJS.ProcessEnv = process.env
+): string {
+  return (
+    env.TOKEN_OPTIMIZER_PROJECT_REGISTRY ||
+    join(homedir(), '.token-optimizer', 'projects.jsonl')
+  );
+}
+
+export async function trustedRoots(
+  env: NodeJS.ProcessEnv = process.env,
+  extra: readonly string[] = []
+): Promise<string[]> {
+  const roots = [...extra];
+  for (const r of String(env.TOKEN_OPTIMIZER_PROXY_REPO_ROOTS ?? '').split(
+    delimiter
+  ))
+    if (r.trim()) roots.push(r.trim());
+  try {
+    const raw = await readFile(projectRegistryFile(env), 'utf8');
+    for (const line of raw.split('\n')) {
+      try {
+        const root = (JSON.parse(line) as { root?: unknown }).root;
+        if (typeof root === 'string' && root) roots.push(root);
+      } catch {
+        // A torn line from a concurrent append.
+      }
+    }
+  } catch {
+    // No registry: only the configured roots.
+  }
+  return [...new Set(roots)];
+}
+
+/** `dir` is one of `roots` or inside one, however either is spelled. */
+export function isUnderRoot(dir: string, roots: readonly string[]): boolean {
+  const norm = (p: string): string => {
+    const r = resolve(p).replace(/\\/g, '/').replace(/\/$/, '');
+    return process.platform === 'win32' ? r.toLowerCase() : r;
+  };
+  const d = norm(dir);
+  return roots.some((root) => {
+    const r = norm(root);
+    return d === r || d.startsWith(`${r}/`);
+  });
 }
 
 export function packCharsFromEnv(env: NodeJS.ProcessEnv = process.env): number {
@@ -218,6 +277,28 @@ export type GitRunner = (
 ) => Promise<string | null>;
 
 /**
+ * The proxy's environment without git's repository-location variables: a
+ * `GIT_DIR` or `GIT_WORK_TREE` inherited from a hook or script would override
+ * `-C` and resolve, or pack, a different repository.
+ */
+export function gitEnv(
+  env: NodeJS.ProcessEnv = process.env
+): NodeJS.ProcessEnv {
+  const out = { ...env };
+  for (const k of [
+    'GIT_DIR',
+    'GIT_WORK_TREE',
+    'GIT_INDEX_FILE',
+    'GIT_COMMON_DIR',
+    'GIT_OBJECT_DIRECTORY',
+    'GIT_ALTERNATE_OBJECT_DIRECTORIES',
+    'GIT_NAMESPACE',
+  ])
+    delete out[k];
+  return out;
+}
+
+/**
  * Async, never sync, and never starting git's fsmonitor daemon: the daemon
  * inherits the caller's pipes, so a call that starts it never sees them close.
  */
@@ -248,7 +329,11 @@ export const runGit: GitRunner = (cwd, args, timeoutMs = GIT_TIMEOUT_MS) =>
           cwd,
           ...args,
         ],
-        { stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true }
+        {
+          stdio: ['ignore', 'pipe', 'ignore'],
+          windowsHide: true,
+          env: gitEnv(),
+        }
       );
     } catch {
       done(null);
@@ -710,6 +795,8 @@ export interface RepoPacksOptions {
   readonly findingsFor?: (root: string) => Promise<readonly PackFinding[]>;
   /** The task-path pack; defaults to taskPackEnabled(). */
   readonly taskPlacement?: boolean;
+  /** Roots a pack may be built under (see trustedRoots); defaults to trustedRoots(). */
+  readonly roots?: () => Promise<readonly string[]>;
 }
 
 /** Packs and per-conversation pins, in memory and on disk. */
@@ -721,6 +808,7 @@ export class RepoPacks {
   private readonly now: () => number;
   private readonly findingsFor?: RepoPacksOptions['findingsFor'];
   private readonly taskPlacement: boolean;
+  private readonly roots: () => Promise<readonly string[]>;
   private readonly pins = new Map<string, string>();
   private readonly texts = new Map<string, string>();
   private readonly builds = new Map<string, Promise<string | null>>();
@@ -734,6 +822,7 @@ export class RepoPacks {
     this.now = options.now ?? Date.now;
     this.findingsFor = options.findingsFor;
     this.taskPlacement = options.taskPlacement ?? taskPackEnabled();
+    this.roots = options.roots ?? (() => trustedRoots());
   }
 
   /** The pack this request should carry, if any. `convKey` is computed on the client's request. */
@@ -771,10 +860,15 @@ export class RepoPacks {
         ? 'task'
         : null;
     if (!placement) return none('no-repo');
+    const roots = await this.roots();
+    if (placement === 'system' && !isUnderRoot(cwd as string, roots)) {
+      await this.pin(key, 'none');
+      return none('untrusted');
+    }
     const build =
       placement === 'system'
         ? this.packFor(cwd as string)
-        : this.taskRepo(taskOf(request)).then((r) =>
+        : this.taskRepo(taskOf(request), roots).then((r) =>
             r ? this.current(r) : null
           );
     let timer: NodeJS.Timeout | undefined;
@@ -794,25 +888,30 @@ export class RepoPacks {
   }
 
   /** The repository a task is about, among those it names by absolute path. */
-  private async taskRepo(task: string): Promise<Repo | null> {
+  private async taskRepo(
+    task: string,
+    roots: readonly string[]
+  ): Promise<Repo | null> {
     // IN PARALLEL, and each repository's pack starts building the moment it
     // resolves: a slow path (a drive spinning up took 2.4 s, measured) then
     // overlaps the build instead of preceding it, and the chosen pack is
     // already in flight when the choice is made.
     const resolved = await Promise.all(
-      [...new Set(pathsIn(task).flatMap(candidateDirs))].map(async (dir) => {
-        let repo = this.repos.get(dir);
-        if (!repo) {
-          repo = resolveRepo(dir, (cwd, args) =>
-            this.git(cwd, args, RESOLVE_TIMEOUT_MS)
-          );
-          this.repos.set(dir, repo);
-          setTimeout(() => this.repos.delete(dir), 60_000).unref?.();
-        }
-        const r = await repo;
-        if (r) void this.current(r);
-        return r;
-      })
+      [...new Set(pathsIn(task).flatMap(candidateDirs))]
+        .filter((dir) => isUnderRoot(dir, roots))
+        .map(async (dir) => {
+          let repo = this.repos.get(dir);
+          if (!repo) {
+            repo = resolveRepo(dir, (cwd, args) =>
+              this.git(cwd, args, RESOLVE_TIMEOUT_MS)
+            );
+            this.repos.set(dir, repo);
+            setTimeout(() => this.repos.delete(dir), 60_000).unref?.();
+          }
+          const r = await repo;
+          if (r) void this.current(r);
+          return r;
+        })
     );
     const found = new Map<string, Repo>();
     for (const r of resolved)

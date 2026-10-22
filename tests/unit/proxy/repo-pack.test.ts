@@ -5,12 +5,15 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   buildPack,
+  gitEnv,
   injectPack,
   isNewConversation,
+  isUnderRoot,
   PACK_HEADING,
   RepoPacks,
   repoPackEnabled,
   resolveRepo,
+  trustedRoots,
   workingRepoOf,
   type GitRunner,
 } from '../../../src/proxy/repo-pack.js';
@@ -20,9 +23,21 @@ let root: string;
 let repo: string;
 let worktree: string;
 
+// The temp repositories below are where these packs may be built from.
+const roots = process.env.TOKEN_OPTIMIZER_PROXY_REPO_ROOTS;
+beforeAll(() => {
+  process.env.TOKEN_OPTIMIZER_PROXY_REPO_ROOTS = tmpdir();
+});
+afterAll(() => {
+  if (roots === undefined) delete process.env.TOKEN_OPTIMIZER_PROXY_REPO_ROOTS;
+  else process.env.TOKEN_OPTIMIZER_PROXY_REPO_ROOTS = roots;
+});
+
+// Scrubbed: a GIT_DIR from a hook-driven run would override `-C`.
 const git = (cwd: string, ...args: string[]): string =>
   execFileSync('git', ['-c', 'core.fsmonitor=false', '-C', cwd, ...args], {
     encoding: 'utf8',
+    env: gitEnv(),
   });
 
 function commit(message: string, files: Record<string, string>): void {
@@ -195,5 +210,63 @@ describe('repository pack', () => {
       'pinned'
     );
     expect((await packs.forRequest(request(repo), 'slow')).text).toBeNull();
+  });
+});
+
+describe('where a pack may be built from', () => {
+  it('never runs git on a directory outside every trusted root', async () => {
+    const calls: string[] = [];
+    const spy: GitRunner = async (cwd) => {
+      calls.push(cwd);
+      return null;
+    };
+    const packs = new RepoPacks({
+      dir: mkdtempSync(join(root, 'store-')),
+      git: spy,
+      roots: async () => [join(root, 'elsewhere')],
+    });
+    const out = await packs.forRequest(request(repo), 'untrusted');
+    expect(out.reason).toBe('untrusted');
+    expect(out.text).toBeNull();
+    expect(calls).toEqual([]);
+  });
+
+  it('trusts a root the SessionStart hook registered, and the configured roots', async () => {
+    const registry = join(mkdtempSync(join(root, 'reg-')), 'projects.jsonl');
+    writeFileSync(
+      registry,
+      `${JSON.stringify({ v: 1, root: '/work/registered' })}\n{torn`
+    );
+    const got = await trustedRoots(
+      {
+        TOKEN_OPTIMIZER_PROJECT_REGISTRY: registry,
+        TOKEN_OPTIMIZER_PROXY_REPO_ROOTS: ['/work/a', '/work/b'].join(
+          process.platform === 'win32' ? ';' : ':'
+        ),
+      },
+      ['/work/project']
+    );
+    expect(got).toEqual(
+      expect.arrayContaining([
+        '/work/registered',
+        '/work/a',
+        '/work/b',
+        '/work/project',
+      ])
+    );
+  });
+
+  it('matches a root or what is inside it, never a sibling sharing its prefix', () => {
+    expect(isUnderRoot('/work/repo', ['/work/repo'])).toBe(true);
+    expect(isUnderRoot('/work/repo/sub', ['/work/repo/'])).toBe(true);
+    expect(isUnderRoot('/work/repo-2', ['/work/repo'])).toBe(false);
+    expect(isUnderRoot('/work', ['/work/repo'])).toBe(false);
+  });
+
+  it('runs git without the caller’s repository-location variables', () => {
+    const env = gitEnv({ GIT_DIR: '/x/.git', GIT_WORK_TREE: '/x', PATH: 'p' });
+    expect(env.GIT_DIR).toBeUndefined();
+    expect(env.GIT_WORK_TREE).toBeUndefined();
+    expect(env.PATH).toBe('p');
   });
 });

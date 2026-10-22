@@ -144,6 +144,7 @@ import {
   RepoPacks,
   repoPackEnabled,
   samePath,
+  trustedRoots,
   type RepoPacksOptions,
 } from './repo-pack.js';
 import {
@@ -908,6 +909,8 @@ function compressBodyOnce(
     const out = routeReadOnlySubagent(parsed);
     parsed = out.request;
     routedModel = out.to !== null;
+    // The ledger prices what is sent, not what the client asked for.
+    if (out.to) model = out.to;
   } catch {
     routedModel = false;
   }
@@ -2249,6 +2252,13 @@ export async function startProxy(options: ProxyOptions = {}): Promise<{
   const repoPacks =
     options.repoPack !== false && repoPackEnabled(process.env)
       ? new RepoPacks({
+          // Only a root given explicitly: a shared proxy's cwd says nothing
+          // about the sessions it serves (repo-pack.ts, trustedRoots).
+          roots: () =>
+            trustedRoots(
+              process.env,
+              options.projectRoot ? [options.projectRoot] : []
+            ),
           findingsFor: (root) =>
             knowledgeOn && !samePath(root, graphRoot)
               ? loadFindings(root)
@@ -2360,6 +2370,11 @@ export async function startProxy(options: ProxyOptions = {}): Promise<{
       const generates = /\/(messages|chat\/completions)\/?$/.test(
         (requestPath(req.url) ?? '').split('?')[0]
       );
+      // The Anthropic Messages route alone: a Chat Completions body has no
+      // top-level `system`, and a strict upstream rejects one.
+      const anthropicMessages = /\/messages\/?$/.test(
+        (requestPath(req.url) ?? '').split('?')[0]
+      );
       const guidance = generates ? batchGuidance() : null;
       let guidanceChars = 0;
       if (guidance !== null) {
@@ -2381,10 +2396,7 @@ export async function startProxy(options: ProxyOptions = {}): Promise<{
       // nothing to the cached prefix, so it is set on every Messages request.
       // BEFORE the pack, which keys its hand-off to this exact body buffer; a
       // re-serialisation after it lost the task pack (caught by its test).
-      if (
-        (clearing || compaction) &&
-        /\/messages\/?$/.test((requestPath(req.url) ?? '').split('?')[0])
-      ) {
+      if ((clearing || compaction) && anthropicMessages) {
         try {
           const parsed = JSON.parse(body.toString('utf8')) as ProviderRequest;
           let out = clearing
@@ -2410,7 +2422,7 @@ export async function startProxy(options: ProxyOptions = {}): Promise<{
       // every later turn carries the same bytes (repo-pack.ts).
       let packChars = 0;
       const beforeTask: { kind: 'pack' | 'prefetch'; text: string }[] = [];
-      if (generates && repoPacks) {
+      if (anthropicMessages && repoPacks) {
         try {
           const parsed = JSON.parse(body.toString('utf8')) as ProviderRequest;
           const pack = await repoPacks.forRequest(
@@ -2435,7 +2447,7 @@ export async function startProxy(options: ProxyOptions = {}): Promise<{
       // THE ISSUE OR PR A SUBAGENT WAS ASSIGNED, fetched before its first
       // call (prefetch.ts). Keyed like the pack, on this conversation's own
       // request, so every turn carries the same bytes.
-      if (generates && prefetcher) {
+      if (anthropicMessages && prefetcher) {
         try {
           const parsed = JSON.parse(body.toString('utf8')) as ProviderRequest;
           const fetched = await prefetcher.forRequest(

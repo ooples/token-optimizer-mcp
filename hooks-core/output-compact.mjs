@@ -340,8 +340,10 @@ export function compactToolResponse({
     return null;
   }
   if (tool === 'Grep' && typeof response.content === 'string') {
-    const done = compactText(response.content, { command: '' });
-    if (!done) return null;
+    // Lossless first: each file's path once instead of on every line.
+    const grouped = groupGrepByFile(response.content);
+    const done = compactText(grouped ?? response.content, { command: '' });
+    if (!done) return grouped ? { ...response, content: grouped } : null;
     const ref = capture(dir, response.content, {
       tool,
       command: input?.pattern ?? null,
@@ -355,6 +357,54 @@ export function compactToolResponse({
     };
   }
   return null;
+}
+
+/** Below this a Grep result is left exactly as it is. */
+export const GREP_GROUP_MIN_CHARS = 1000;
+const GREP_GROUP_HEADER = '[grouped by file: each path once, then its line:text]';
+
+/**
+ * A content-mode Grep result with each file's path stated once, as `rg
+ * --heading` prints it, instead of on every line. Lossless: every line number
+ * and every matched or context line is kept verbatim.
+ *
+ * WHY. Claude Code prints `path:line:text` for each hit, and a path is often a
+ * third of the line. On the exploration benchmark, grouping took Grep results
+ * to 79.8% of their size (223k to 178k characters over 87 results), and every
+ * later call of the agent re-reads them.
+ *
+ * SAFE ON ANY PATH. A path is taken only from a match line (`path:N:`), and the
+ * lines after it are folded only while they start with that exact path and a
+ * line number -- so a path with `-12-` in it, a drive letter, or a context line
+ * before a file's first match is never mis-split; such a line passes verbatim.
+ * Null when nothing would shrink by a tenth.
+ */
+export function groupGrepByFile(text) {
+  const source = String(text ?? '');
+  if (source.length < GREP_GROUP_MIN_CHARS) return null;
+  const out = [GREP_GROUP_HEADER];
+  let path = null;
+  for (const line of source.split('\n')) {
+    if (path !== null && (line.startsWith(`${path}:`) || line.startsWith(`${path}-`))) {
+      const rest = line.slice(path.length + 1);
+      if (/^\d+[:-]/.test(rest)) {
+        out.push(rest);
+        continue;
+      }
+    }
+    // Bounded, so a long line is scanned in linear time (regex-linearity.test.mjs).
+    const m = /^([^\n]{1,400}?):(\d{1,9}):/.exec(line);
+    if (m) {
+      path = m[1];
+      out.push(path, line.slice(path.length + 1));
+      continue;
+    }
+    // `--` between context groups keeps the current file; anything else ends it.
+    if (line !== '--') path = null;
+    out.push(line);
+  }
+  const grouped = out.join('\n');
+  return grouped.length <= source.length * 0.9 ? grouped : null;
 }
 
 /** A worker's report longer than this reaches its caller as a lean handoff. */

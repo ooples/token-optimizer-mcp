@@ -1106,6 +1106,35 @@ describe('the model on the summary', () => {
     expect(out.summary.model).toBe('claude-sonnet-5');
   });
 
+  it('names the model actually sent when a read-only subagent is routed down', () => {
+    const body = Buffer.from(
+      JSON.stringify({
+        model: 'claude-opus-5-5',
+        system: [
+          {
+            type: 'text',
+            text: 'x-anthropic-billing-header: cc_version=2.1.302; cc_is_subagent=true;',
+          },
+        ],
+        messages: [
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: rows(80) },
+              { type: 'text', text: 'This is a read-only audit of X.' },
+            ],
+          },
+        ],
+      }),
+      'utf8'
+    );
+    const out = compressBody(body, spill);
+    expect(JSON.parse(out.body.toString('utf8')).model).toBe(
+      'claude-sonnet-5-5'
+    );
+    expect(out.summary.model).toBe('claude-sonnet-5-5');
+  });
+
   it('names the model of a request it declined after parsing it', () => {
     const body = Buffer.from(
       JSON.stringify({ model: 'claude-sonnet-5', prompt: 'x'.repeat(9000) }),
@@ -1222,9 +1251,13 @@ it('answers a sibling first request that passed the cold gate', async () => {
 it('carries the repository pack, marker moved onto it, identically on every turn', async () => {
   const { execFileSync } = await import('node:child_process');
   const { writeFileSync } = await import('node:fs');
+  const { gitEnv } = await import('../../../src/proxy/repo-pack.js');
   const repo = mkdtempSync(join(tmpdir(), 'proxy-pack-repo-'));
+  // Scrubbed: a GIT_DIR from a hook-driven run would override `-C`.
   const git = (...args: string[]) =>
-    execFileSync('git', ['-c', 'core.fsmonitor=false', '-C', repo, ...args]);
+    execFileSync('git', ['-c', 'core.fsmonitor=false', '-C', repo, ...args], {
+      env: gitEnv(),
+    });
   git('init', '-q', '-b', 'master');
   writeFileSync(join(repo, 'a.ts'), 'export function a() {}\n');
   git('add', '-A');
@@ -1249,7 +1282,10 @@ it('carries the repository pack, marker moved onto it, identically on every turn
     projectRoot: EMPTY_PROJECT,
     upstream: provider.url,
     knowledge: false,
-    repoPack: { dir: mkdtempSync(join(tmpdir(), 'proxy-pack-store-')) },
+    repoPack: {
+      dir: mkdtempSync(join(tmpdir(), 'proxy-pack-store-')),
+      roots: async () => [repo],
+    },
   });
   servers.push(proxy.server);
   const turn = (messages: unknown[]) =>
@@ -1290,9 +1326,13 @@ it('carries the repository pack, marker moved onto it, identically on every turn
 it("puts a subagent's task-path pack after the shared prefix, identically each turn", async () => {
   const { execFileSync } = await import('node:child_process');
   const { writeFileSync } = await import('node:fs');
+  const { gitEnv } = await import('../../../src/proxy/repo-pack.js');
   const repo = mkdtempSync(join(tmpdir(), 'proxy-task-pack-'));
+  // Scrubbed: a GIT_DIR from a hook-driven run would override `-C`.
   const git = (...args: string[]) =>
-    execFileSync('git', ['-c', 'core.fsmonitor=false', '-C', repo, ...args]);
+    execFileSync('git', ['-c', 'core.fsmonitor=false', '-C', repo, ...args], {
+      env: gitEnv(),
+    });
   git('init', '-q', '-b', 'master');
   writeFileSync(join(repo, 'a.ts'), 'export function a() {}\n');
   git('add', '-A');
@@ -1320,6 +1360,7 @@ it("puts a subagent's task-path pack after the shared prefix, identically each t
     repoPack: {
       dir: mkdtempSync(join(tmpdir(), 'proxy-task-pack-store-')),
       taskPlacement: true,
+      roots: async () => [repo],
     },
   });
   servers.push(proxy.server);

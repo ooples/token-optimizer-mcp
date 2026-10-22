@@ -87,7 +87,15 @@ export function routeReadOnlySubagent(
 ): RouteResult {
   const model = String((request as { model?: unknown }).model ?? '');
   const none = { request, from: null, to: null };
-  if (mode === 'off' || !model || !isReadOnlySubagent(request)) return none;
+  // A provider-qualified id (`anthropic/claude-opus-5`) names a route a bare
+  // model id would lose.
+  if (
+    mode === 'off' ||
+    !model ||
+    model.includes('/') ||
+    !isReadOnlySubagent(request)
+  )
+    return none;
   const to =
     mode === 'down' ? (DOWN.find(([re]) => re.test(model))?.[1] ?? null) : mode;
   if (!to || to === model) return none;

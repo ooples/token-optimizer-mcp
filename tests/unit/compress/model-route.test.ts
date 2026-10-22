@@ -29,6 +29,12 @@ describe('read-only subagents one tier down', () => {
     expect(routeReadOnlySubagent(subagent('some-other-model', '(read-only) audit'), 'down').to).toBeNull();
   });
 
+  it('leaves a provider-qualified model id alone, in either mode', () => {
+    const qualified = subagent('anthropic/claude-opus-5', 'This is a read-only audit of X.');
+    expect(routeReadOnlySubagent(qualified, 'down').to).toBeNull();
+    expect(routeReadOnlySubagent(qualified, 'claude-haiku-5-5').to).toBeNull();
+  });
+
   it('decides the same way on every turn of a conversation', () => {
     const turn1 = subagent('claude-opus-5-5', 'You are a read-only research agent.');
     const turn2 = { ...turn1, messages: [...(turn1.messages ?? []), { role: 'assistant', content: 'ok' }] } as ProviderRequest;

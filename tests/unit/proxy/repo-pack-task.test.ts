@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import {
   candidateDirs,
   chooseRepo,
+  gitEnv,
   injectPackBeforeTask,
   pathsIn,
   PACK_HEADING,
@@ -21,9 +22,21 @@ let alpha: string;
 let beta: string;
 let betaWorktree: string;
 
+// The temp repositories below are where these packs may be built from.
+const roots = process.env.TOKEN_OPTIMIZER_PROXY_REPO_ROOTS;
+beforeAll(() => {
+  process.env.TOKEN_OPTIMIZER_PROXY_REPO_ROOTS = tmpdir();
+});
+afterAll(() => {
+  if (roots === undefined) delete process.env.TOKEN_OPTIMIZER_PROXY_REPO_ROOTS;
+  else process.env.TOKEN_OPTIMIZER_PROXY_REPO_ROOTS = roots;
+});
+
+// Scrubbed: a GIT_DIR from a hook-driven run would override `-C`.
 const git = (cwd: string, ...args: string[]): string =>
   execFileSync('git', ['-c', 'core.fsmonitor=false', '-C', cwd, ...args], {
     encoding: 'utf8',
+    env: gitEnv(),
   });
 
 function makeRepo(dir: string, file: string): void {

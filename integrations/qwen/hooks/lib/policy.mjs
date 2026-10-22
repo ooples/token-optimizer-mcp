@@ -1032,7 +1032,8 @@ export function subagentBriefing(raw, state) {
   // recorded mechanically (the sibling blackboard), so neither load pays.
   return [
     'Token Optimizer (shown once to this agent). Everything you read stays in context and is paid for again on every later turn, so:',
-    '- Read with Read and an offset/limit for the region you need, and search with Grep/Glob, rather than cat, grep -r or Get-Content of whole files. Their large output is compacted for you.',
+    '- Read with Read and an offset/limit for the region you need, and search with Grep/Glob, rather than cat, grep -r or Get-Content of whole files.',
+    '- Bound every search: narrow Grep with path or glob and set head_limit (about 30); use files_with_matches first when you only need where something is.',
     '- Do not load optimizer tools (smart_read, smart_grep, smart_glob, wiki_*) with ToolSearch: each load re-writes your cached context and the built-in tools already cover them.',
     '- Each turn re-reads your whole context, so batch independent commands into one call rather than running them one per turn.',
     ...(repoAskEnabled()
