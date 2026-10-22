@@ -1,0 +1,687 @@
+/**
+ * The shared repository pack: one snapshot of a repository, identical for every
+ * agent and instance working on it, in the cached prefix.
+ *
+ * WHAT IT REPLACES. Measured on a 10-agent campaign, each worker spent its first
+ * two to four calls -- at 40-60k context apiece -- on `git branch -a`, `ls` and
+ * `git show master:file`, re-discovering what its siblings had already found.
+ * Every one of those calls re-reads the whole context, so a discovery turn costs
+ * far more than the tokens of its answer.
+ *
+ * WHY IT IS CHEAP. The prompt cache is shared across conversations with an
+ * identical prefix. The pack is built once per repository and base commit and
+ * served byte for byte to everyone, so one agent writes it (1.25x) and every
+ * other agent and instance on the repository reads it (0.1x).
+ *
+ * BYTE-STABILITY, three ways:
+ *   - Built from git OBJECTS at the base branch tip (`origin/HEAD`, else
+ *     master/main), never the working tree, so every worktree of a repository
+ *     gets the same bytes.
+ *   - Kept on disk, so separate proxies and instances serve the bytes the first
+ *     builder wrote instead of rebuilding their own.
+ *   - PINNED PER CONVERSATION. A conversation keeps the pack it started with for
+ *     its whole life, even after a commit moves the base: changing the prefix
+ *     mid-conversation would re-write everything behind it. A conversation that
+ *     started without one never gets one, for the same reason.
+ *
+ * WHERE. Appended to `system`, carrying the system prompt's last cache marker,
+ * so the pack sits inside the most widely shared cached region without
+ * spending a marker.
+ *
+ * TOKEN_OPTIMIZER_PROXY_REPO_PACK=0 turns it off;
+ * TOKEN_OPTIMIZER_PROXY_REPO_PACK_CHARS sets its budget.
+ */
+import { execFile } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import {
+  mkdir,
+  readFile,
+  readdir,
+  rename,
+  stat,
+  unlink,
+  writeFile,
+} from 'node:fs/promises';
+import { basename, dirname, join, resolve } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import type { Block, ProviderRequest } from '../compress/frontier.js';
+import { optimizerHome } from './default-routing.js';
+
+export const DEFAULT_PACK_CHARS = 24_000;
+/** A pack for an unchanged base is rebuilt at most this often (branch list, findings). */
+export const REBUILD_MS = 60 * 60_000;
+/** How long a conversation's pin, and the pack it names, are kept. */
+export const PIN_MS = 24 * 60 * 60_000;
+/** Longest a new conversation waits for a pack being built. */
+export const MAX_WAIT_MS = 5_000;
+const GIT_TIMEOUT_MS = 10_000;
+
+/** First line of every pack; also how an already-injected request is recognised. */
+export const PACK_HEADING = '# Repository pack:';
+
+export function repoPackEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  return !/^(0|false|no|off)$/i.test(
+    String(env.TOKEN_OPTIMIZER_PROXY_REPO_PACK ?? '').trim()
+  );
+}
+
+export function packCharsFromEnv(env: NodeJS.ProcessEnv = process.env): number {
+  const n = Number(env.TOKEN_OPTIMIZER_PROXY_REPO_PACK_CHARS);
+  return Number.isFinite(n) && n >= 2_000 ? Math.floor(n) : DEFAULT_PACK_CHARS;
+}
+
+function textsOf(request: ProviderRequest): string[] {
+  const out: string[] = [];
+  const add = (content: unknown): void => {
+    if (typeof content === 'string') out.push(content);
+    else if (Array.isArray(content))
+      for (const b of content)
+        if (typeof (b as Block)?.text === 'string')
+          out.push(String((b as Block).text));
+  };
+  add(request.system);
+  for (const m of request.messages ?? []) add(m?.content);
+  return out;
+}
+
+/**
+ * The session's working directory, when the client says it is a git repository.
+ * Claude Code states both in its environment section.
+ */
+export function workingRepoOf(request: ProviderRequest): string | null {
+  for (const text of textsOf(request)) {
+    const m =
+      /Primary working directory: ([^\n]+)\n[\s\S]{0,200}?Is a git repository: (true|false)/.exec(
+        text
+      );
+    if (m) return m[2] === 'true' ? m[1].trim() : null;
+  }
+  return null;
+}
+
+/** No assistant turn yet: the only request on which a pack may be added. */
+export function isNewConversation(request: ProviderRequest): boolean {
+  return !(request.messages ?? []).some((m) => m?.role === 'assistant');
+}
+
+/** An agent loop rather than one of the client's small utility calls. */
+function isAgentic(request: ProviderRequest): boolean {
+  const tools = (request as { tools?: unknown }).tools;
+  return Array.isArray(tools) && tools.length > 0;
+}
+
+function alreadyPacked(request: ProviderRequest): boolean {
+  return textsOf(request).some((t) => t.startsWith(PACK_HEADING));
+}
+
+/**
+ * Append the pack to `system`, moving the system prompt's last cache marker onto
+ * it so the cached region ends after the pack. No marker is added.
+ */
+export function injectPack(
+  request: ProviderRequest,
+  text: string
+): ProviderRequest {
+  const system = request.system;
+  if (Array.isArray(system) && system.length > 0) {
+    const last = system[system.length - 1] as Block & {
+      cache_control?: unknown;
+    };
+    if (last?.cache_control) {
+      const { cache_control, ...bare } = last;
+      return {
+        ...request,
+        system: [
+          ...system.slice(0, -1),
+          bare as Block,
+          { type: 'text', text, cache_control } as Block,
+        ],
+      };
+    }
+    return { ...request, system: [...system, { type: 'text', text } as Block] };
+  }
+  const existing = typeof system === 'string' ? system : '';
+  return { ...request, system: `${existing}${existing ? '\n\n' : ''}${text}` };
+}
+
+/** The same directory, however it was spelled. */
+export function samePath(a: string, b: string): boolean {
+  const norm = (p: string): string => {
+    const r = resolve(p).replace(/\\/g, '/').replace(/\/$/, '');
+    return process.platform === 'win32' ? r.toLowerCase() : r;
+  };
+  return norm(a) === norm(b);
+}
+
+export type GitRunner = (cwd: string, args: string[]) => Promise<string | null>;
+
+/**
+ * Async, never sync, and never starting git's fsmonitor daemon: the daemon
+ * inherits the caller's pipes, so a call that starts it never sees them close.
+ */
+export const runGit: GitRunner = (cwd, args) =>
+  new Promise((resolve) => {
+    let settled = false;
+    const done = (v: string | null): void => {
+      if (!settled) {
+        settled = true;
+        resolve(v);
+      }
+    };
+    const timer = setTimeout(() => done(null), GIT_TIMEOUT_MS);
+    try {
+      execFile(
+        'git',
+        [
+          '-c',
+          'core.fsmonitor=false',
+          '-c',
+          'core.quotepath=false',
+          '-C',
+          cwd,
+          ...args,
+        ],
+        {
+          maxBuffer: 64 * 1024 * 1024,
+          windowsHide: true,
+          timeout: GIT_TIMEOUT_MS,
+          encoding: 'utf8',
+        },
+        (error, stdout) => {
+          clearTimeout(timer);
+          done(error ? null : String(stdout));
+        }
+      ).stdin?.end();
+    } catch {
+      clearTimeout(timer);
+      done(null);
+    }
+  });
+
+export interface Repo {
+  readonly top: string;
+  readonly commonDir: string;
+  readonly baseRef: string;
+  readonly baseSha: string;
+}
+
+export async function resolveRepo(
+  dir: string,
+  git: GitRunner = runGit
+): Promise<Repo | null> {
+  const out = await git(dir, [
+    'rev-parse',
+    '--path-format=absolute',
+    '--show-toplevel',
+    '--git-common-dir',
+  ]);
+  const [top, commonDir] = (out ?? '').split(/\r?\n/).map((s) => s.trim());
+  if (!top || !commonDir) return null;
+  const head = (
+    await git(dir, [
+      'symbolic-ref',
+      '--short',
+      '-q',
+      'refs/remotes/origin/HEAD',
+    ])
+  )?.trim();
+  for (const ref of [
+    head,
+    'origin/master',
+    'origin/main',
+    'master',
+    'main',
+    'HEAD',
+  ]) {
+    if (!ref) continue;
+    const sha = (
+      await git(dir, ['rev-parse', '--verify', '-q', `${ref}^{commit}`])
+    )?.trim();
+    if (sha)
+      return {
+        top,
+        commonDir: commonDir.replace(/\\/g, '/').replace(/\/$/, ''),
+        baseRef: ref,
+        baseSha: sha,
+      };
+  }
+  return null;
+}
+
+const OUTLINEABLE = /\.(ts|tsx|js|jsx|mjs|cjs|py|go|rs|java|rb|php|cs)$/i;
+const MANIFESTS =
+  /^(package\.json|pyproject\.toml|setup\.py|Cargo\.toml|go\.mod|Makefile|CMakeLists\.txt|pom\.xml|build\.gradle(\.kts)?|Gemfile|composer\.json|[^/]+\.sln|Directory\.Build\.props|global\.json)$/;
+
+interface PackFinding {
+  claim: string;
+  key?: string;
+  confidence?: number;
+  confidenceLabel?: string;
+  scope?: string;
+  stale?: boolean;
+  retired?: boolean;
+  pinned?: boolean;
+}
+
+export interface BuildOptions {
+  readonly budget: number;
+  readonly git?: GitRunner;
+  readonly findings?: readonly PackFinding[];
+}
+
+type Symbols = (
+  path: string,
+  text: string
+) => { name: string; line?: number; indent?: number }[];
+let symbolsModule: Promise<Symbols | null> | null = null;
+function loadSymbols(): Promise<Symbols | null> {
+  symbolsModule ??= (async () => {
+    try {
+      const here = new URL('.', import.meta.url);
+      const url = pathToFileURL(
+        fileURLToPath(new URL('../../hooks-core/symbols.mjs', here))
+      ).href;
+      return ((await import(url)) as { extractSymbols: Symbols })
+        .extractSymbols;
+    } catch {
+      return null;
+    }
+  })();
+  return symbolsModule;
+}
+
+function section(title: string, lines: string[], cap: number): string {
+  if (!lines.length) return '';
+  let out = `\n## ${title}\n`;
+  for (const line of lines) {
+    if (out.length + line.length + 1 > cap) {
+      out += '...\n';
+      break;
+    }
+    out += `${line}\n`;
+  }
+  return out;
+}
+
+function structureOf(files: string[]): string[] {
+  const dirs = new Map<string, number>();
+  const rootFiles: string[] = [];
+  for (const f of files) {
+    const parts = f.split('/');
+    if (parts.length === 1) {
+      rootFiles.push(f);
+      continue;
+    }
+    dirs.set(parts[0] + '/', (dirs.get(parts[0] + '/') ?? 0) + 1);
+    if (parts.length > 2) {
+      const sub = `${parts[0]}/${parts[1]}/`;
+      dirs.set(sub, (dirs.get(sub) ?? 0) + 1);
+    }
+  }
+  const lines = [...dirs.entries()]
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    .map(([d, n]) => `${d.split('/').length > 2 ? '  ' : ''}${d} (${n} files)`);
+  if (rootFiles.length)
+    lines.push(`root files: ${rootFiles.sort().join(', ')}`);
+  return lines;
+}
+
+/** The pack text. Deterministic for a given repository state. */
+export async function buildPack(
+  repo: Repo,
+  options: BuildOptions
+): Promise<string | null> {
+  const git = options.git ?? runGit;
+  const sha = repo.baseSha;
+  const budget = options.budget;
+  const listing = await git(repo.top, ['ls-tree', '-r', '-z', sha]);
+  if (listing === null) return null;
+  // "<mode> blob <id>\t<path>": the blob id is what tells a synced copy from its source.
+  const blobOf = new Map<string, string>();
+  for (const entry of listing.split('\0')) {
+    const tab = entry.indexOf('\t');
+    if (tab > 0)
+      blobOf.set(entry.slice(tab + 1), entry.slice(0, tab).split(' ')[2] ?? '');
+  }
+  const files = [...blobOf.keys()];
+  const inTree = blobOf;
+
+  const [log, refs, churn] = await Promise.all([
+    git(repo.top, [
+      'log',
+      '-n',
+      '25',
+      '--format=%h %ad %s',
+      '--date=short',
+      sha,
+    ]),
+    git(repo.top, [
+      'for-each-ref',
+      '--sort=-committerdate',
+      '--count=40',
+      '--format=%(refname:short) %(objectname:short) %(committerdate:short)',
+      'refs/heads',
+      'refs/remotes',
+    ]),
+    git(repo.top, ['log', '-n', '300', '--format=', '--name-only', sha]),
+  ]);
+
+  // The REPOSITORY's name, not this worktree's folder: every worktree must get the same bytes.
+  const name = /\.git$/.test(repo.commonDir)
+    ? basename(dirname(repo.commonDir))
+    : basename(repo.commonDir);
+  let text =
+    `${PACK_HEADING} ${name} @ ${sha.slice(0, 10)} (${repo.baseRef})\n` +
+    `A shared snapshot of this repository, built from git at ${repo.baseRef} ${sha.slice(0, 10)} and ` +
+    'identical for every agent working on it, so it is read from the prompt cache. It shows the committed ' +
+    'base branch, not uncommitted changes or newer commits. Use it instead of re-listing branches, the tree ' +
+    'or history; ask git only for state newer than this.\n';
+
+  // Build and test commands: what an agent otherwise reads package.json for.
+  const manifestLines: string[] = files
+    .filter((f) => MANIFESTS.test(f))
+    .map((f) => `manifest: ${f}`);
+  if (inTree.has('package.json')) {
+    const pkg = await git(repo.top, ['show', `${sha}:package.json`]);
+    try {
+      const scripts =
+        (JSON.parse(pkg ?? '{}') as { scripts?: Record<string, string> })
+          .scripts ?? {};
+      // The everyday commands first; the long tail of tooling scripts after.
+      const rank = (k: string): number =>
+        /^(build|test|lint|typecheck|format|check|start|dev)(:|$)/.test(k)
+          ? 0
+          : 1;
+      for (const [k, v] of Object.entries(scripts).sort(
+        ([a], [b]) => rank(a) - rank(b) || (a < b ? -1 : 1)
+      ))
+        manifestLines.push(`npm run ${k}: ${String(v).slice(0, 140)}`);
+    } catch {
+      // A package.json that does not parse simply contributes no scripts.
+    }
+  }
+  text += section('Build and test', manifestLines, Math.floor(budget * 0.12));
+  text += section(
+    `Tree at ${repo.baseRef} (${files.length} tracked files)`,
+    structureOf(files),
+    Math.floor(budget * 0.2)
+  );
+  text += section(
+    'Branches, most recent first',
+    (refs ?? '').split(/\r?\n/).filter(Boolean),
+    Math.floor(budget * 0.08)
+  );
+  text += section(
+    `Recent commits on ${repo.baseRef}`,
+    (log ?? '').split(/\r?\n/).filter(Boolean),
+    Math.floor(budget * 0.1)
+  );
+
+  const facts = (options.findings ?? [])
+    .filter(
+      (f) =>
+        !f.retired &&
+        !f.stale &&
+        f.scope !== 'global' &&
+        (f.confidence ?? 0.9) >= 0.5
+    )
+    .filter((f) => f.confidenceLabel !== 'speculative')
+    .sort(
+      (a, b) =>
+        Number(!!b.pinned) - Number(!!a.pinned) ||
+        (b.confidence ?? 0.9) - (a.confidence ?? 0.9) ||
+        String(a.key ?? a.claim).localeCompare(String(b.key ?? b.claim))
+    )
+    .map((f) => `- ${f.claim.replace(/\s+/g, ' ').slice(0, 300)}`);
+  text += section(
+    'Established facts (from the shared knowledge graph)',
+    facts,
+    Math.floor(budget * 0.15)
+  );
+
+  // The most-changed source files, outlined with line numbers, filling what is left.
+  const counts = new Map<string, number>();
+  for (const f of (churn ?? '').split(/\r?\n/))
+    if (f && inTree.has(f) && OUTLINEABLE.test(f))
+      counts.set(f, (counts.get(f) ?? 0) + 1);
+  // One outline per distinct CONTENT: a file synced into several places is outlined once.
+  const seenBlobs = new Set<string>();
+  const hot = [...counts.entries()]
+    // Ties go to the shallower path: the source, not the copy synced deeper.
+    .sort(
+      ([a, x], [b, y]) =>
+        y - x || a.split('/').length - b.split('/').length || (a < b ? -1 : 1)
+    )
+    .map(([f]) => f)
+    .filter((f) => {
+      const blob = blobOf.get(f) || f;
+      if (seenBlobs.has(blob)) return false;
+      seenBlobs.add(blob);
+      return true;
+    })
+    .slice(0, 24);
+  const outlined: [string, number][] = [];
+  const extract = await loadSymbols();
+  if (extract && hot.length) {
+    let outlines =
+      '\n## Outlines of the most-changed files (line numbers at the base commit)\n';
+    for (const file of hot) {
+      const room = budget - text.length - outlines.length;
+      if (room < 400) break;
+      const source = await git(repo.top, ['show', `${sha}:${file}`]);
+      if (!source || source.length > 400_000) continue;
+      const lines = source.split(/\r?\n/);
+      // A synced copy with a header of its own: same name, near-identical length.
+      const twin = [...outlined].some(
+        ([n, len]) =>
+          n === basename(file) &&
+          Math.abs(len - lines.length) <= Math.max(3, len * 0.02)
+      );
+      if (twin) continue;
+      outlined.push([basename(file), lines.length]);
+      let block = `### ${file} (${lines.length} lines)\n`;
+      for (const s of extract(file, source).slice(0, 40)) {
+        const raw = (lines[(s.line ?? 1) - 1] ?? s.name).trim();
+        const line = `${String(s.line ?? '').padStart(5)} ${raw.length > 110 ? `${raw.slice(0, 107)}...` : raw}\n`;
+        if (block.length + line.length > Math.min(room, 2_400)) break;
+        block += line;
+      }
+      outlines += block;
+    }
+    text += outlines;
+  }
+  return text.length > budget
+    ? text.slice(0, text.lastIndexOf('\n', budget) + 1)
+    : text;
+}
+
+const digest = (s: string): string =>
+  createHash('sha256').update(s).digest('hex').slice(0, 24);
+
+async function writeAtomic(path: string, text: string): Promise<void> {
+  const tmp = `${path}.${process.pid}.${Date.now()}.tmp`;
+  await writeFile(tmp, text, 'utf8');
+  await rename(tmp, path);
+}
+
+export interface PackOutcome {
+  readonly text: string | null;
+  /** 'pinned' | 'new' | 'not-new' | 'no-repo' | 'not-agentic' | 'timeout' | 'unbuilt' | 'already' | 'off' */
+  readonly reason: string;
+}
+
+export interface RepoPacksOptions {
+  readonly dir?: string;
+  readonly git?: GitRunner;
+  readonly budget?: number;
+  readonly maxWaitMs?: number;
+  readonly now?: () => number;
+  /** Findings for a repository root; the proxy passes its graph loader. */
+  readonly findingsFor?: (root: string) => Promise<readonly PackFinding[]>;
+}
+
+/** Packs and per-conversation pins, in memory and on disk. */
+export class RepoPacks {
+  private readonly dir: string;
+  private readonly git: GitRunner;
+  private readonly budget: number;
+  private readonly maxWaitMs: number;
+  private readonly now: () => number;
+  private readonly findingsFor?: RepoPacksOptions['findingsFor'];
+  private readonly pins = new Map<string, string>();
+  private readonly texts = new Map<string, string>();
+  private readonly builds = new Map<string, Promise<string | null>>();
+  private readonly repos = new Map<string, Promise<Repo | null>>();
+
+  constructor(options: RepoPacksOptions = {}) {
+    this.dir = options.dir ?? join(optimizerHome(), 'repo-packs');
+    this.git = options.git ?? runGit;
+    this.budget = options.budget ?? packCharsFromEnv();
+    this.maxWaitMs = options.maxWaitMs ?? MAX_WAIT_MS;
+    this.now = options.now ?? Date.now;
+    this.findingsFor = options.findingsFor;
+  }
+
+  /** The pack this request should carry, if any. `convKey` is computed on the client's request. */
+  async forRequest(
+    request: ProviderRequest,
+    convKey: string
+  ): Promise<PackOutcome> {
+    if (alreadyPacked(request)) return { text: null, reason: 'already' };
+    if (!isAgentic(request)) return { text: null, reason: 'not-agentic' };
+    const pinned = await this.pinOf(convKey);
+    if (pinned !== undefined)
+      return {
+        text: pinned === 'none' ? null : await this.textOf(pinned),
+        reason: 'pinned',
+      };
+    if (!isNewConversation(request)) return { text: null, reason: 'not-new' };
+    const cwd = workingRepoOf(request);
+    if (!cwd) return { text: null, reason: 'no-repo' };
+    const build = this.packFor(cwd);
+    let timer: NodeJS.Timeout | undefined;
+    const hash = await Promise.race([
+      build,
+      new Promise<'timeout'>((r) => {
+        timer = setTimeout(() => r('timeout'), this.maxWaitMs);
+      }),
+    ]);
+    clearTimeout(timer);
+    if (hash === 'timeout' || hash === null) {
+      await this.pin(convKey, 'none');
+      return { text: null, reason: hash === null ? 'unbuilt' : 'timeout' };
+    }
+    await this.pin(convKey, hash);
+    return { text: await this.textOf(hash), reason: 'new' };
+  }
+
+  private async pinOf(convKey: string): Promise<string | undefined> {
+    const mem = this.pins.get(convKey);
+    if (mem !== undefined) return mem;
+    try {
+      const v = (
+        await readFile(join(this.dir, 'pins', convKey), 'utf8')
+      ).trim();
+      if (v) this.pins.set(convKey, v);
+      return v || undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  private async pin(convKey: string, hash: string): Promise<void> {
+    this.pins.set(convKey, hash);
+    if (this.pins.size > 5_000)
+      this.pins.delete(this.pins.keys().next().value as string);
+    try {
+      await mkdir(join(this.dir, 'pins'), { recursive: true });
+      await writeAtomic(join(this.dir, 'pins', convKey), hash);
+    } catch {
+      // A pin kept only in memory still holds for this proxy's life.
+    }
+  }
+
+  private async textOf(hash: string): Promise<string | null> {
+    const mem = this.texts.get(hash);
+    if (mem !== undefined) return mem;
+    try {
+      const t = await readFile(join(this.dir, 'packs', `${hash}.txt`), 'utf8');
+      this.texts.set(hash, t);
+      return t;
+    } catch {
+      return null;
+    }
+  }
+
+  /** The current pack's hash for the repository at `cwd`, building it once. */
+  private packFor(cwd: string): Promise<string | null> {
+    let repo = this.repos.get(cwd);
+    if (!repo) {
+      repo = resolveRepo(cwd, this.git);
+      this.repos.set(cwd, repo);
+      // Re-resolved after a while so a moved base is seen.
+      setTimeout(() => this.repos.delete(cwd), 60_000).unref?.();
+    }
+    return repo.then((r) => (r ? this.current(r) : null));
+  }
+
+  private current(repo: Repo): Promise<string | null> {
+    const id = digest(repo.commonDir);
+    const flight = this.builds.get(id);
+    if (flight) return flight;
+    const run = (async () => {
+      const latest = join(this.dir, 'latest', id);
+      try {
+        const [sha, hash, built] = (await readFile(latest, 'utf8')).split('\n');
+        if (
+          sha === repo.baseSha &&
+          hash &&
+          this.now() - Number(built) < REBUILD_MS &&
+          (await this.textOf(hash)) !== null
+        )
+          return hash;
+      } catch {
+        // No pack yet for this repository.
+      }
+      const findings = this.findingsFor
+        ? await this.findingsFor(repo.top).catch(() => [])
+        : [];
+      const text = await buildPack(repo, {
+        budget: this.budget,
+        git: this.git,
+        findings,
+      });
+      if (!text) return null;
+      const hash = digest(text);
+      this.texts.set(hash, text);
+      try {
+        await mkdir(join(this.dir, 'packs'), { recursive: true });
+        await mkdir(join(this.dir, 'latest'), { recursive: true });
+        await writeAtomic(join(this.dir, 'packs', `${hash}.txt`), text);
+        await writeAtomic(latest, `${repo.baseSha}\n${hash}\n${this.now()}`);
+      } catch {
+        // Served from memory; another proxy builds its own.
+      }
+      void this.sweep();
+      return hash;
+    })().finally(() => this.builds.delete(id));
+    this.builds.set(id, run);
+    return run;
+  }
+
+  /** Drop pins and packs nobody has used for PIN_MS. */
+  private async sweep(): Promise<void> {
+    for (const sub of ['pins', 'packs']) {
+      try {
+        const dir = join(this.dir, sub);
+        for (const name of await readdir(dir)) {
+          const path = join(dir, name);
+          const s = await stat(path);
+          if (this.now() - s.mtimeMs > PIN_MS) await unlink(path);
+        }
+      } catch {
+        // Best effort.
+      }
+    }
+  }
+}

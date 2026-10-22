@@ -140,6 +140,13 @@ const ARM = {
     alt: false,
     proxyEnv: { TOKEN_OPTIMIZER_PROXY_SHARE_PREFIX: 'marker' },
   },
+  // The repository pack's A/B: everything ours-next does, without the pack.
+  'ours-next-nopack': {
+    plugin: 'next',
+    proxyNull: false,
+    alt: false,
+    proxyEnv: { TOKEN_OPTIMIZER_PROXY_REPO_PACK: '0' },
+  },
 };
 
 const PACKAGES = ['pricing', 'inventory', 'schedule', 'ledger'];
@@ -902,6 +909,8 @@ async function runArm(arm, rep, position) {
       ...process.env,
       TOKEN_OPTIMIZER_PROXY: '1',
       TOKEN_OPTIMIZER_PROXY_ACCOUNTING: ledger,
+      // Run-local state (repository packs and their pins) for the proxy too.
+      TOKEN_OPTIMIZER_HOME: join(state, 'home'),
     };
     if (cfg.proxyNull) proxyEnv.TOKEN_OPTIMIZER_PROXY_NULL = '1';
     Object.assign(proxyEnv, cfg.proxyEnv ?? {});

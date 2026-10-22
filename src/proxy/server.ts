@@ -123,7 +123,14 @@ import { assignArm, OUTPUT_ARM, type OutputArm } from './output-savings.js';
 import { createEchoScanner, echoEnabled, extractTextValues } from './echo.js';
 import { withResponsesKnowledge } from './responses-knowledge.js';
 import type { Finding } from '../compress/knowledge.js';
-import { loadFindingsFrom } from './findings.js';
+import { loadFindings, loadFindingsFrom } from './findings.js';
+import {
+  injectPack,
+  RepoPacks,
+  repoPackEnabled,
+  samePath,
+  type RepoPacksOptions,
+} from './repo-pack.js';
 import {
   presetFromEnv,
   resolveProxyTuning,
@@ -230,6 +237,8 @@ export interface ProxyOptions {
   readonly projectRoot?: string;
   /** Disable graph injection when a client chooses its working tree after launch. */
   readonly knowledge?: boolean;
+  /** The shared repository pack (repo-pack.ts); `false` turns it off. */
+  readonly repoPack?: false | RepoPacksOptions;
   /** Named starting point for the dials. Defaults to the environment's. */
   readonly preset?: PresetName | string;
   /**
@@ -1013,7 +1022,9 @@ function compressBodyOnce(
   // 400 on accounts the check is enforced for. Server-side context editing and
   // compaction are exempt; our own rewrite is not, so it stands down here.
   const cacheExpired =
-    keepWarmEnabled() && warmer().expired(convKey) && !hasThinkingHistory(parsed);
+    keepWarmEnabled() &&
+    warmer().expired(convKey) &&
+    !hasThinkingHistory(parsed);
   let result: StrategyResult;
   try {
     result = (substitute ? v4Substitute : v1Frontier)(parsed, {
@@ -2155,6 +2166,21 @@ export async function startProxy(options: ProxyOptions = {}): Promise<{
   // `project` claims about trees other than this one, and only the loader knows
   // which graph it opened.
 
+  // THE SHARED REPOSITORY PACK, keyed by each request's own repository rather
+  // than this process's: one supervisor proxy serves every session. Findings go
+  // in only for a repository other than the one the knowledge block already
+  // covers, so the two never repeat each other.
+  const repoPacks =
+    options.repoPack !== false && repoPackEnabled(process.env)
+      ? new RepoPacks({
+          findingsFor: (root) =>
+            knowledgeOn && !samePath(root, graphRoot)
+              ? loadFindings(root)
+              : Promise.resolve([]),
+          ...(options.repoPack ?? {}),
+        })
+      : null;
+
   const guessing = upstreamIsDefault(options);
   const limit = bodyLimitFor(options);
 
@@ -2257,6 +2283,30 @@ export async function startProxy(options: ProxyOptions = {}): Promise<{
         }
       }
 
+      // THE REPOSITORY PACK, likewise ahead of every early return: the first
+      // request of a conversation is the only one that may gain it, and it is
+      // also the one with nothing yet to compress. Pinned per conversation, so
+      // every later turn carries the same bytes (repo-pack.ts).
+      let packChars = 0;
+      if (generates && repoPacks) {
+        try {
+          const parsed = JSON.parse(body.toString('utf8')) as ProviderRequest;
+          const pack = await repoPacks.forRequest(
+            parsed,
+            anchorConversationKey(parsed)
+          );
+          if (pack.text) {
+            body = Buffer.from(
+              JSON.stringify(injectPack(parsed, pack.text)),
+              'utf8'
+            );
+            packChars = pack.text.length;
+          }
+        } catch {
+          // Never the reason a request fails.
+        }
+      }
+
       const transformStarted = performance.now();
       const spilledBefore = spilledBlocks;
       const { body: next, summary } = compressBody(
@@ -2299,7 +2349,7 @@ export async function startProxy(options: ProxyOptions = {}): Promise<{
         // out would let the block read as free in the ledger, and that is
         // exactly how an A/B of the knowledge block once read its own effect
         // as zero.
-        injectedChars: (summary.injectedChars ?? 0) + guidanceChars,
+        injectedChars: (summary.injectedChars ?? 0) + guidanceChars + packChars,
         elisions: summary.elisions,
         spilledBlocks: spilledBlocks - spilledBefore,
         // COUNTED ON THE WAY IN, BEFORE THIS REQUEST IS REWRITTEN. A unit the
@@ -2342,7 +2392,11 @@ export async function startProxy(options: ProxyOptions = {}): Promise<{
       // it now would bill a generation nobody reads (review on #523). The SOCKET
       // says so, not `req.destroyed`: a fully read request auto-destroys, so that
       // flag is true for every request here and dropped them all unanswered.
-      if (req.socket?.destroyed !== false || res.destroyed || res.writableEnded) {
+      if (
+        req.socket?.destroyed !== false ||
+        res.destroyed ||
+        res.writableEnded
+      ) {
         gate.release();
         return;
       }
@@ -2357,6 +2411,7 @@ export async function startProxy(options: ProxyOptions = {}): Promise<{
           ...summary,
           withheldUnits: spilledBlocks - spilledBefore,
           coldGateWaitMs: gate.waitedMs,
+          ...(packChars > 0 ? { repoPackChars: packChars } : {}),
         },
         performance.now() - transformStarted,
         observe,

@@ -37,7 +37,9 @@ function declaredTask(request: ProviderRequest): string {
     typeof content === 'string'
       ? [content]
       : Array.isArray(content)
-        ? content.filter((b) => (b as Block)?.type === 'text').map((b) => String((b as Block).text ?? ''))
+        ? content
+            .filter((b) => (b as Block)?.type === 'text')
+            .map((b) => String((b as Block).text ?? ''))
         : [];
   return texts[texts.length - 1] ?? '';
 }
@@ -51,7 +53,8 @@ function declaredTask(request: ProviderRequest): string {
  */
 const READ_ONLY_TASK =
   /\(read-only\b|\bread-only:|\bread-only (?:agent|task|mode|review|audit|triage|research|investigation|exploration)\b|\b(?:this|you) (?:is|are) (?:a |an )?read-only\b/i;
-const READ_ONLY_AGENT = /\bread-only (?:search|exploration|research) agent\b|\bYou are a (?:file search|read-only)\b/i;
+const READ_ONLY_AGENT =
+  /\bread-only (?:search|exploration|research) agent\b|\bYou are a (?:file search|read-only)\b/i;
 
 /** Is this subagent declared read-only by its task or by its agent type's system prompt? */
 export function isReadOnlySubagent(request: ProviderRequest): boolean {
@@ -63,7 +66,9 @@ export function isReadOnlySubagent(request: ProviderRequest): boolean {
   return READ_ONLY_TASK.test(declaredTask(request));
 }
 
-export function readOnlyRouteFromEnv(env: NodeJS.ProcessEnv = process.env): 'off' | 'down' | string {
+export function readOnlyRouteFromEnv(
+  env: NodeJS.ProcessEnv = process.env
+): 'off' | 'down' | string {
   const raw = String(env.TOKEN_OPTIMIZER_PROXY_READONLY_ROUTE ?? '').trim();
   if (/^(0|false|no|off)$/i.test(raw)) return 'off';
   if (!raw || /^(1|true|yes|on|down)$/i.test(raw)) return 'down';
@@ -83,7 +88,12 @@ export function routeReadOnlySubagent(
   const model = String((request as { model?: unknown }).model ?? '');
   const none = { request, from: null, to: null };
   if (mode === 'off' || !model || !isReadOnlySubagent(request)) return none;
-  const to = mode === 'down' ? (DOWN.find(([re]) => re.test(model))?.[1] ?? null) : mode;
+  const to =
+    mode === 'down' ? (DOWN.find(([re]) => re.test(model))?.[1] ?? null) : mode;
   if (!to || to === model) return none;
-  return { request: { ...request, model: to } as ProviderRequest, from: model, to };
+  return {
+    request: { ...request, model: to } as ProviderRequest,
+    from: model,
+    to,
+  };
 }

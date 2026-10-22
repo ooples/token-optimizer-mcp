@@ -95,6 +95,8 @@ export interface CompressionFacts {
   readonly compressed: boolean;
   /** Milliseconds a sibling's first request waited on the cold gate (cold-gate.ts); absent or 0 when it did not. */
   readonly coldGateWaitMs?: number;
+  /** Characters of the shared repository pack this request carried (repo-pack.ts). */
+  readonly repoPackChars?: number;
   /**
    * Which arm of the output-shaper holdout the request was in, when one ran.
    *

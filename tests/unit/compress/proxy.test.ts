@@ -1178,3 +1178,55 @@ it('answers a sibling first request that passed the cold gate', async () => {
   expect(await reply.text()).toBe('{"ok":"gate"}');
   expect(provider.seen.body).toContain('the task');
 });
+
+it('carries the repository pack, marker moved onto it, identically on every turn', async () => {
+  const { execFileSync } = await import('node:child_process');
+  const { writeFileSync } = await import('node:fs');
+  const repo = mkdtempSync(join(tmpdir(), 'proxy-pack-repo-'));
+  const git = (...args: string[]) => execFileSync('git', ['-c', 'core.fsmonitor=false', '-C', repo, ...args]);
+  git('init', '-q', '-b', 'master');
+  writeFileSync(join(repo, 'a.ts'), 'export function a() {}\n');
+  git('add', '-A');
+  git('-c', 'user.email=t@example.com', '-c', 'user.name=t', '-c', 'commit.gpgsign=false', 'commit', '-q', '-m', 'init');
+  const bodies: string[] = [];
+  const provider = await upstream((raw) => {
+    bodies.push(raw);
+    return {};
+  });
+  const proxy = await startProxy({
+    projectRoot: EMPTY_PROJECT,
+    upstream: provider.url,
+    knowledge: false,
+    repoPack: { dir: mkdtempSync(join(tmpdir(), 'proxy-pack-store-')) },
+  });
+  servers.push(proxy.server);
+  const turn = (messages: unknown[]) =>
+    fetch(`http://127.0.0.1:${proxy.port}/v1/messages`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        tools: [{ name: 'Read', input_schema: { type: 'object' } }],
+        system: [
+          {
+            type: 'text',
+            text: ` - Primary working directory: ${repo}\n - Is a git repository: true\n`,
+            cache_control: { type: 'ephemeral' },
+          },
+        ],
+        messages,
+      }),
+    }).then((r) => r.text());
+  await turn([{ role: 'user', content: 'Fix it.' }]);
+  await turn([
+    { role: 'user', content: 'Fix it.' },
+    { role: 'assistant', content: 'Looking.' },
+    { role: 'user', content: 'Go on.' },
+  ]);
+  const systems = bodies.map((b) => (JSON.parse(b) as { system: { text: string; cache_control?: unknown }[] }).system);
+  expect(systems[0]).toHaveLength(2);
+  expect(systems[0][0].cache_control).toBeUndefined();
+  expect(systems[0][1].text).toMatch(/^# Repository pack: /);
+  expect(systems[0][1].cache_control).toEqual({ type: 'ephemeral' });
+  expect(systems[1][1].text).toBe(systems[0][1].text);
+  rmSync(repo, { recursive: true, force: true });
+});

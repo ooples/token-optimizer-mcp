@@ -1059,14 +1059,17 @@ signal, a power cut -- the directory is left behind in your OS temp directory
 and is safe to delete by hand. Running with the proxy off writes no spills at
 all.
 
-### Four switches, and what each one trades
+### The main switches, and what each one trades
 
-| variable                           | default    | what it does                                               |
-| ---------------------------------- | ---------- | ---------------------------------------------------------- |
-| `TOKEN_OPTIMIZER_PROXY`            | on         | the compression proxy itself; set `0` to opt out           |
-| `TOKEN_OPTIMIZER_COMPRESSION`      | `balanced` | `balanced`, `aggressive`, `conservative`, `lossless`       |
-| `TOKEN_OPTIMIZER_PROXY_KNOWLEDGE`  | on         | put what this project already learned in the cached prefix |
-| `TOKEN_OPTIMIZER_PROXY_NET_SAVING` | off        | never send upstream more bytes than the client gave        |
+| variable                               | default    | what it does                                                              |
+| -------------------------------------- | ---------- | ------------------------------------------------------------------------- |
+| `TOKEN_OPTIMIZER_PROXY`                | on         | the compression proxy itself; set `0` to opt out                          |
+| `TOKEN_OPTIMIZER_COMPRESSION`          | `balanced` | `balanced`, `aggressive`, `conservative`, `lossless`                      |
+| `TOKEN_OPTIMIZER_PROXY_KNOWLEDGE`      | on         | put what this project already learned in the cached prefix                |
+| `TOKEN_OPTIMIZER_PROXY_NET_SAVING`     | off        | never send upstream more bytes than the client gave                       |
+| `TOKEN_OPTIMIZER_PROXY_REPO_PACK`      | on         | one shared snapshot of the repository for every agent on it               |
+| `TOKEN_OPTIMIZER_PROXY_TRIM_SUBAGENTS` | on         | drop the memory index, skill text and unused tool lists from subagents    |
+| `TOKEN_OPTIMIZER_PROXY_READONLY_ROUTE` | `down`     | declared read-only subagents one model tier down; `0` to keep their model |
 
 Both of the `on` rows said `off` here until 7.1.0, which was wrong about the
 shipped code rather than a change of default: an unset value has always meant
