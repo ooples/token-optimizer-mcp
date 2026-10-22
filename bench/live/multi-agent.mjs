@@ -133,6 +133,8 @@ const ARM = {
   ours: { plugin: true, proxyNull: false, alt: false },
   'ours-hooks': { plugin: true, proxyNull: true, alt: false },
   'ours-next': { plugin: 'next', proxyNull: false, alt: false },
+  // A frozen earlier build (PREV_PKG + PREV_PLUGIN_DIR), for before/after A/Bs of one change.
+  'ours-prev': { plugin: 'prev', proxyNull: false, alt: false },
   // The A/B run before the reorder became the default: marker only, no task move.
   'ours-next-marker': {
     plugin: 'next',
@@ -146,6 +148,68 @@ const ARM = {
     proxyNull: false,
     alt: false,
     proxyEnv: { TOKEN_OPTIMIZER_PROXY_REPO_PACK: '0' },
+  },
+  // One feature off each, for attribution against `ours-next`.
+  'ours-next-noprefetch': {
+    plugin: 'next',
+    proxyNull: false,
+    alt: false,
+    proxyEnv: { TOKEN_OPTIMIZER_PROXY_PREFETCH: '0' },
+  },
+  'ours-next-noterse': {
+    plugin: 'next',
+    proxyNull: false,
+    alt: false,
+    proxyEnv: { TOKEN_OPTIMIZER_PROXY_WORKER_TERSE: '0' },
+  },
+  // Hook-side features, switched off in the CLIENT's environment (the hooks run there).
+  'ours-next-norepeats': {
+    plugin: 'next',
+    proxyNull: false,
+    alt: false,
+    env: { TOKEN_OPTIMIZER_REPEATS: '0' },
+  },
+  'ours-next-noboard': {
+    plugin: 'next',
+    proxyNull: false,
+    alt: false,
+    env: { TOKEN_OPTIMIZER_BLACKBOARD: '0' },
+  },
+  'ours-next-nohandoff': {
+    plugin: 'next',
+    proxyNull: false,
+    alt: false,
+    env: { TOKEN_OPTIMIZER_LEAN_HANDOFF: '0' },
+  },
+  'ours-next-noask': {
+    plugin: 'next',
+    proxyNull: false,
+    alt: false,
+    env: { TOKEN_OPTIMIZER_REPO_ASK: '0' },
+  },
+  // Server-side compaction (opt-in) at its minimum trigger, for the long task.
+  'ours-next-compact': {
+    plugin: 'next',
+    proxyNull: false,
+    alt: false,
+    proxyEnv: {
+      TOKEN_OPTIMIZER_PROXY_COMPACT: '1',
+      TOKEN_OPTIMIZER_PROXY_COMPACT_TRIGGER: '50000',
+    },
+  },
+  // Turn coalescing: the batching instruction in every request's system prompt.
+  'ours-next-batch': {
+    plugin: 'next',
+    proxyNull: false,
+    alt: false,
+    proxyEnv: { TOKEN_OPTIMIZER_BATCH_GUIDANCE: '1' },
+  },
+  // Server-side clearing of old tool results off (context-edit.ts), for its A/B.
+  'ours-next-noclear': {
+    plugin: 'next',
+    proxyNull: false,
+    alt: false,
+    proxyEnv: { TOKEN_OPTIMIZER_PROXY_CLEAR_TOOL_USES: '0' },
   },
   // The pack's size: every call re-reads it, so it has to remove more than it adds.
   'ours-next-pack8k': {
@@ -438,6 +502,20 @@ const PROMPT = [
   'and report the result in at most two lines.',
 ].join(' ');
 
+// ---------------------------------------------- TASK=loop: an edit/test loop --
+//
+// The fix task's four broken packages, worked by ONE agent that runs the whole
+// suite after every fix: the same command again and again with output that
+// changes, and files re-read after editing. Diff-only repeats target exactly
+// this, and no fan-out worker ever does it. Graded like the fix task.
+const LOOP_PROMPT = [
+  'This repository has four Python packages under pkgs/ (pricing, inventory, schedule, ledger). Each has a failing test;',
+  'the CI log of the failing pipeline for each package is in ci-logs/<package>.log. Do the work yourself: do not use the Agent',
+  'tool or start subagents. Fix the packages one at a time, root cause from the CI log and the source, fixing the source and',
+  'never the tests. After EACH fix, run `python -m pytest -q` for the whole repository and read its output before moving on,',
+  'and re-read the file you changed to confirm the edit. When all four pass, report the result in at most two lines.',
+].join(' ');
+
 // ------------------------------------------------- TASK=explore: a real repo --
 //
 // The fix task is small enough that agents grep the logs and never produce big
@@ -477,6 +555,36 @@ const EXPLORE_PROMPT = [
   'naming the ignored directory when only gitignored files match?',
 ].join(' ');
 
+// --------------------------------------- TASK=long: one agent, a long session --
+//
+// Clearing old tool results (context-edit.ts) only pays once a conversation is
+// long, and no fan-out worker gets there. This is the explore questions worked
+// by ONE agent, section by section, reading every file it relies on in full and
+// keeping notes -- a session that grows the way a long main session does --
+// graded by the same exact answers.
+const LONG_PROMPT = [
+  'This is the token-optimizer-mcp repository. Answer the questions below from the code yourself: do not use the Agent tool or start subagents.',
+  'Work through the sections strictly one at a time, in this order: proxy, bound, expand, grep. For each section, read every file you rely on in full with Read',
+  "(no line ranges), cite file:line, and append that section's answers to notes.md before you start the next section.",
+  'When all four are done, write answers.json at the repository root with exactly this shape and nothing else:',
+  '{"proxy":{"keepConstant":"","keepValue":0,"routingFn":""},"bound":{"bytes":0,"envVar":"","tailShare":0},"expand":{"ttlDays":0,"regenMs":0},"grep":{"maxGlobs":0,"hintFn":""}}.',
+  'Do not modify any other file. Questions --',
+  ...EXPLORE_PROMPT.slice(EXPLORE_PROMPT.indexOf('Questions --') + 'Questions --'.length).trim().split(/(?<=\?) (?=[a-z]+: )/),
+].join(' ');
+
+// ------------------------------- TASK=overlap: siblings repeating each other --
+//
+// The explore fan-out, but every subagent must first establish the same three
+// facts about the repository before its own section -- the duplicated sibling
+// work the blackboard and duplicate detection are for. Graded by the same
+// exact answers.
+const OVERLAP_PROMPT = EXPLORE_PROMPT.replace(
+  'Each subagent finds its answers in the code',
+  'Each subagent first establishes, from the repository itself, (1) the exact npm script that runs the unit tests,' +
+    ' (2) the directory that holds the hook sources shared by every client integration, and (3) the file that defines' +
+    " the compression proxy's HTTP server -- and states them at the top of its reply -- then finds its answers in the code"
+);
+
 function seedExplore(work) {
   // A plain path, which git clones on every platform (a hand-built file:// URL
   // came out as file://// for absolute POSIX paths). No --depth: a shallow clone
@@ -500,7 +608,7 @@ function seedExplore(work) {
   git(work, 'checkout', '-q', EXPLORE_COMMIT);
 }
 
-function verdictExplore(work) {
+function verdictExplore(work, allowed = /answers\.json$/) {
   let got = null;
   try {
     got = JSON.parse(readFileSync(join(work, 'answers.json'), 'utf8'));
@@ -525,7 +633,7 @@ function verdictExplore(work) {
     encoding: 'utf8',
   })
     .stdout.split('\n')
-    .filter((l) => l.trim() && !/answers\.json$/.test(l));
+    .filter((l) => l.trim() && !allowed.test(l));
   return {
     visible: correct === fields.length,
     hidden: true,
@@ -844,7 +952,8 @@ async function runArm(arm, rep, position) {
   if (TASK === 'campaign') {
     if (!CAMPAIGN_SCRIPT || !existsSync(CAMPAIGN_SCRIPT))
       throw new Error('TASK=campaign needs CAMPAIGN_SCRIPT, a Workflow script');
-  } else if (TASK === 'explore') seedExplore(work);
+  } else if (TASK === 'explore' || TASK === 'long' || TASK === 'overlap')
+    seedExplore(work);
   else seed(work, hidden, rep);
   const ledger = join(OUT, `${tag}.ledger.jsonl`);
   const base =
@@ -928,7 +1037,9 @@ async function runArm(arm, rep, position) {
     const proxyPkg =
       cfg.plugin === 'next' && process.env.NEXT_PKG
         ? resolve(process.env.NEXT_PKG)
-        : PKG;
+        : cfg.plugin === 'prev' && process.env.PREV_PKG
+          ? resolve(process.env.PREV_PKG)
+          : PKG;
     procs.push(
       startProcess(
         process.execPath,
@@ -1001,7 +1112,13 @@ async function runArm(arm, rep, position) {
         ? campaignPrompt()
         : TASK === 'explore'
           ? EXPLORE_PROMPT
-          : PROMPT,
+          : TASK === 'long'
+            ? LONG_PROMPT
+            : TASK === 'overlap'
+              ? OVERLAP_PROMPT
+              : TASK === 'loop'
+                ? LOOP_PROMPT
+                : PROMPT,
       '--model',
       MODEL,
       '--permission-mode',
@@ -1023,6 +1140,17 @@ async function runArm(arm, rep, position) {
           note: 'NEXT_PLUGIN_DIR not set',
         };
       args.push('--plugin-dir', process.env.NEXT_PLUGIN_DIR);
+    }
+    if (cfg.plugin === 'prev') {
+      if (!process.env.PREV_PLUGIN_DIR || !process.env.PREV_PKG)
+        return {
+          arm,
+          rep,
+          position,
+          verdict: 'SKIP',
+          note: 'PREV_PKG / PREV_PLUGIN_DIR not set',
+        };
+      args.push('--plugin-dir', process.env.PREV_PLUGIN_DIR);
     }
     const env = {
       ...process.env,
@@ -1111,7 +1239,11 @@ async function runArm(arm, rep, position) {
         ? verdictCampaign(agentBreakdown(init.session_id), result)
         : TASK === 'explore'
           ? verdictExplore(work)
-          : verdict(work, hidden);
+          : TASK === 'long'
+            ? verdictExplore(work, /(answers\.json|notes\.md)$/)
+            : TASK === 'overlap'
+              ? verdictExplore(work)
+              : verdict(work, hidden);
     const recorded = ledgerTotals(ledger);
     const agents = agentBreakdown(init.session_id);
     const totals = withPings(transcriptTotals(agents), recorded);
