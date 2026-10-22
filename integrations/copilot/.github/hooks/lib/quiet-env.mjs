@@ -9,9 +9,8 @@
  * emit less costs nothing to compress and cannot mangle anything, because the
  * omitted text was never produced.
  *
- * PARITY, THEN SOME. HeadRoom's `wrap claude` sets this list (0.41.0
- * headroom/cli/wrap.py, _QUIET_CLI_DEFAULTS) but only for sessions launched
- * through its wrapper. A Claude Code SessionStart hook can append `export`
+ * NO WRAPPER NEEDED. Setting these where a launcher starts the client only
+ * reaches sessions started through that launcher. A Claude Code SessionStart hook can append `export`
  * lines to the file named by CLAUDE_ENV_FILE, and every later Bash call of the
  * session sees them -- subagents included (verified on 2.1.302). So a plugin
  * install gets the defaults with no wrapper at all.
@@ -108,7 +107,11 @@ export function applyQuietEnv(env = process.env) {
   const { script, names } = quietEnvScript(env);
   if (!script) return [];
   try {
-    if (existsSync(file) && readFileSync(file, 'utf8').includes(QUIET_ENV_MARKER)) return [];
+    if (
+      existsSync(file) &&
+      readFileSync(file, 'utf8').includes(QUIET_ENV_MARKER)
+    )
+      return [];
     appendFileSync(file, script);
     return names;
   } catch {

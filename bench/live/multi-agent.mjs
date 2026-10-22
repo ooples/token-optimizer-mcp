@@ -6,16 +6,19 @@
  *
  * WHY THIS EXISTS. ab.sh measures one agent on a two-function repo, and every
  * arm in it runs with whatever plugin the user has installed -- so "control"
- * and the competitor arm still had our hooks and MCP tools, and no run ever
- * compared the PRODUCT (hooks + MCP + proxy) with HeadRoom. A real 10-agent
- * campaign then spent 11.3M input tokens in 12 minutes, most of it on context
- * each agent re-reads every call, which a single-agent toy cannot show.
+ * and an alternative's arm still had our hooks and MCP tools, and no run ever
+ * compared the PRODUCT (hooks + MCP + proxy) with an alternative. A real
+ * 10-agent campaign then spent 11.3M input tokens in 12 minutes, most of it on
+ * context each agent re-reads every call, which a single-agent toy cannot show.
  *
  * SAME INSTRUMENT FOR EVERY ARM. Every arm's traffic passes through our proxy;
  * it compresses only in the arms that are ours, and in null mode it only
- * records. HeadRoom sits BEHIND the recorder, so the usage block of the
- * provider's response -- what was actually billed for the request their
- * compressor sent -- is what we count, not anyone's own savings report.
+ * records. An alternative (`alt-a`) sits behind the recorder, so the usage
+ * block of the provider's response -- what was actually billed for the request
+ * it sent -- is what we count, not anyone's own savings report. The repository
+ * does not name it: its launch command, launch environment and upstream
+ * variable come from the operator's environment (ALT_A_CMD, ALT_A_ENV,
+ * ALT_A_UPSTREAM_VAR), and the arm is skipped when they are unset.
  *
  * ISOLATION IS CHECKED, NOT ASSUMED. Each run's stream-json init event lists
  * the plugins and MCP servers that actually loaded; a run whose arm says
@@ -27,9 +30,11 @@
  * process.
  *
  * Usage (PowerShell):
- *   $env:ARMS='control,headroom,ours'; $env:REPS='3'; node bench/live/multi-agent.mjs
+ *   $env:ARMS='control,alt-a,ours'; $env:REPS='3'; node bench/live/multi-agent.mjs
  * Env: ARMS, REPS (multiple of the arm count balances position), MODEL
- * (default sonnet), OUT, HEADROOM_PY (python with headroom-ai installed),
+ * (default sonnet), OUT, ALT_A_CMD (the alternative's proxy command, `{port}`
+ * marks its listen port), ALT_A_ENV (JSON: the environment its own launcher
+ * gives the client), ALT_A_UPSTREAM_VAR (the variable it reads its upstream from),
  * PKG (our package root providing dist/proxy/cli.js; default this checkout),
  * NEXT_PLUGIN_DIR (plugin directory for the ours-next arm), RUN_TIMEOUT_S.
  */
@@ -48,13 +53,19 @@ import { fileURLToPath } from 'node:url';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const PKG = resolve(process.env.PKG ?? join(HERE, '..', '..'));
-const ARMS = (process.env.ARMS ?? 'control,headroom,ours')
+const ARMS = (process.env.ARMS ?? 'control,ours')
   .split(',')
   .map((s) => s.trim())
   .filter(Boolean);
 const REPS = Number(process.env.REPS ?? ARMS.length);
 const MODEL = process.env.MODEL ?? 'sonnet';
-const HEADROOM_PY = process.env.HEADROOM_PY ?? 'python';
+/** The alternative's proxy command, split on spaces; `{port}` is replaced with its port. */
+const ALT_A_CMD = (process.env.ALT_A_CMD ?? '')
+  .trim()
+  .split(/\s+/)
+  .filter(Boolean);
+const altCommand = (port) =>
+  ALT_A_CMD.map((part) => part.replace('{port}', String(port)));
 const RUN_TIMEOUT_S = Number(process.env.RUN_TIMEOUT_S ?? 1200);
 const STAMP = new Date().toISOString().replace(/[:.]/g, '-');
 const OUT = resolve(
@@ -97,54 +108,37 @@ const PY =
   process.env.PYTHON ?? (VENV_BIN ? join(VENV_BIN, 'python') : 'python');
 
 /**
- * Each arm: whether our plugin loads, how our proxy treats traffic, and
- * whether HeadRoom is behind it. `ours` is the product as a user installs it:
- * the installed plugin plus the compression proxy. `ours-next` swaps in a
- * plugin directory built from a branch.
+ * The environment the alternative's own launcher gives the client (ALT_A_ENV,
+ * a JSON object), so its arm is the product as its users run it and not a bare
+ * proxy. Filled only where absent, like any launcher would.
  */
-/**
- * HeadRoom's own launch environment, so their arm is their PRODUCT and not a
- * bare proxy: `headroom wrap claude` (0.41.0 headroom/cli/wrap.py
- * _QUIET_CLI_DEFAULTS and _configure_quiet_cli_env) fills these "reduce at
- * source" defaults when absent and appends -q to PYTEST_ADDOPTS. It also sets
- * ENABLE_TOOL_SEARCH=true, which every arm inherits from this process.
- */
-const HEADROOM_WRAP_ENV = {
-  GIT_PAGER: 'cat',
-  PIP_QUIET: '1',
-  PIP_DISABLE_PIP_VERSION_CHECK: '1',
-  npm_config_fund: 'false',
-  npm_config_audit: 'false',
-  npm_config_progress: 'false',
-  npm_config_update_notifier: 'false',
-  DO_NOT_TRACK: '1',
-  DOTNET_CLI_TELEMETRY_OPTOUT: '1',
-  DOTNET_NOLOGO: '1',
-  NEXT_TELEMETRY_DISABLED: '1',
-  GATSBY_TELEMETRY_DISABLED: '1',
-  ASTRO_TELEMETRY_DISABLED: '1',
-  NG_CLI_ANALYTICS: 'false',
-  HOMEBREW_NO_ENV_HINTS: '1',
-};
+const ALT_A_ENV = (() => {
+  try {
+    const parsed = JSON.parse(process.env.ALT_A_ENV ?? '{}');
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    throw new Error('ALT_A_ENV must be a JSON object of environment variables');
+  }
+})();
 
+/**
+ * Each arm: whether our plugin loads, how our proxy treats traffic, and
+ * whether the alternative is behind it. `ours` is the product as a user
+ * installs it: the installed plugin plus the compression proxy. `ours-next`
+ * swaps in a plugin directory built from a branch.
+ */
 const ARM = {
-  control: { plugin: false, proxyNull: true, headroom: false },
-  headroom: {
-    plugin: false,
-    proxyNull: true,
-    headroom: true,
-    env: HEADROOM_WRAP_ENV,
-    pytestQuiet: true,
-  },
-  ours: { plugin: true, proxyNull: false, headroom: false },
-  'ours-hooks': { plugin: true, proxyNull: true, headroom: false },
-  'ours-next': { plugin: 'next', proxyNull: false, headroom: false },
-  // The A/B the user asked for before the reorder ships: same build, task moved after the shared turn.
-  'ours-next-reorder': {
+  control: { plugin: false, proxyNull: true, alt: false },
+  'alt-a': { plugin: false, proxyNull: true, alt: true, env: ALT_A_ENV },
+  ours: { plugin: true, proxyNull: false, alt: false },
+  'ours-hooks': { plugin: true, proxyNull: true, alt: false },
+  'ours-next': { plugin: 'next', proxyNull: false, alt: false },
+  // The A/B run before the reorder became the default: marker only, no task move.
+  'ours-next-marker': {
     plugin: 'next',
     proxyNull: false,
-    headroom: false,
-    proxyEnv: { TOKEN_OPTIMIZER_PROXY_SHARE_PREFIX: 'reorder' },
+    alt: false,
+    proxyEnv: { TOKEN_OPTIMIZER_PROXY_SHARE_PREFIX: 'marker' },
   },
 };
 
@@ -531,6 +525,38 @@ function verdictExplore(work) {
 
 const TASK = process.env.TASK ?? 'fix';
 
+/**
+ * TASK=campaign: a real multi-agent workload, replayed. CAMPAIGN_SCRIPT is a
+ * Workflow script (generated from a real run's agent tasks, read-only), and the
+ * lead runs it through the Workflow tool -- the agent type whose requests carry
+ * the client's full injected context. Run it with ISOLATE=0 so every arm sees
+ * the operator's real environment, as the original run did.
+ */
+const CAMPAIGN_SCRIPT = process.env.CAMPAIGN_SCRIPT
+  ? resolve(process.env.CAMPAIGN_SCRIPT)
+  : null;
+const CAMPAIGN_AGENTS = Number(process.env.CAMPAIGN_AGENTS ?? 10);
+/** A replay counts when every one of its agents ran and the lead finished. */
+function verdictCampaign(agents, result) {
+  // agentBreakdown keeps the last two path segments; a worker's file is agent-<id>.jsonl.
+  const workers = (agents ?? []).filter((a) =>
+    /(^|\/)agent-[^/]+\.jsonl$/.test(a.file)
+  ).length;
+  const finished = /\bDONE\b/.test(String(result?.result ?? ''));
+  const pass = workers >= CAMPAIGN_AGENTS && finished;
+  return {
+    visible: pass,
+    hidden: true,
+    testsUntouched: true,
+    pass,
+    workers,
+    finished,
+  };
+}
+const campaignPrompt = () =>
+  `Use a workflow: call the Workflow tool once with scriptPath "${CAMPAIGN_SCRIPT}" and no other arguments, ` +
+  'exactly as given. Wait until the workflow has finished, then reply with the single word DONE.';
+
 // --------------------------------------------------------------- the arms --
 
 const alive = async (port) => {
@@ -801,7 +827,10 @@ async function runArm(arm, rep, position) {
   mkdirSync(work, { recursive: true });
   mkdirSync(hidden, { recursive: true });
   mkdirSync(state, { recursive: true });
-  if (TASK === 'explore') seedExplore(work);
+  if (TASK === 'campaign') {
+    if (!CAMPAIGN_SCRIPT || !existsSync(CAMPAIGN_SCRIPT))
+      throw new Error('TASK=campaign needs CAMPAIGN_SCRIPT, a Workflow script');
+  } else if (TASK === 'explore') seedExplore(work);
   else seed(work, hidden, rep);
   const ledger = join(OUT, `${tag}.ledger.jsonl`);
   const base =
@@ -809,18 +838,22 @@ async function runArm(arm, rep, position) {
     Object.keys(ARM).indexOf(arm) * 10;
   const procs = [];
   try {
-    // HEADROOM_BEHIND=1 puts the recorder BEHIND HeadRoom (claude -> headroom -> recorder -> provider),
-    // so a capture shows the bytes HeadRoom actually forwarded; the default keeps it in front.
-    const behind = cfg.headroom && process.env.HEADROOM_BEHIND === '1';
+    if (cfg.alt && ALT_A_CMD.length === 0)
+      return { arm, rep, position, verdict: 'SKIP', note: 'ALT_A_CMD not set' };
+    // ALT_BEHIND=1 puts the recorder BEHIND the alternative (claude -> alternative -> recorder ->
+    // provider), so a capture shows the bytes it actually forwarded; the default keeps it in front.
+    // Needs ALT_A_UPSTREAM_VAR, the variable the alternative reads its upstream from.
+    const behind = cfg.alt && process.env.ALT_BEHIND === '1';
     let upstream = null;
-    if (cfg.headroom && !behind) {
+    if (cfg.alt && !behind) {
       const hp = base + 1;
+      const [cmd, ...cmdArgs] = altCommand(hp);
       procs.push(
         startProcess(
-          HEADROOM_PY,
-          ['-m', 'headroom.cli', 'proxy', '--port', String(hp)],
+          cmd,
+          cmdArgs,
           { ...process.env },
-          join(OUT, `${tag}.headroom.err`)
+          join(OUT, `${tag}.alt.err`)
         )
       );
       if (!(await waitAlive(hp, 45)))
@@ -829,7 +862,7 @@ async function runArm(arm, rep, position) {
           rep,
           position,
           verdict: 'SKIP',
-          note: 'headroom proxy never came up',
+          note: 'alternative proxy never came up',
         };
       upstream = `http://127.0.0.1:${hp}`;
     }
@@ -904,16 +937,23 @@ async function runArm(arm, rep, position) {
       };
     let clientBase = base;
     if (behind) {
+      const upstreamVar = process.env.ALT_A_UPSTREAM_VAR;
+      if (!upstreamVar)
+        return {
+          arm,
+          rep,
+          position,
+          verdict: 'SKIP',
+          note: 'ALT_BEHIND=1 needs ALT_A_UPSTREAM_VAR',
+        };
       const hp = base + 1;
+      const [cmd, ...cmdArgs] = altCommand(hp);
       procs.push(
         startProcess(
-          HEADROOM_PY,
-          ['-m', 'headroom.cli', 'proxy', '--port', String(hp)],
-          {
-            ...process.env,
-            ANTHROPIC_TARGET_API_URL: `http://127.0.0.1:${base}`,
-          },
-          join(OUT, `${tag}.headroom.err`)
+          cmd,
+          cmdArgs,
+          { ...process.env, [upstreamVar]: `http://127.0.0.1:${base}` },
+          join(OUT, `${tag}.alt.err`)
         )
       );
       if (!(await waitAlive(hp, 45)))
@@ -922,7 +962,7 @@ async function runArm(arm, rep, position) {
           rep,
           position,
           verdict: 'SKIP',
-          note: 'headroom proxy never came up',
+          note: 'alternative proxy never came up',
         };
       clientBase = hp;
     }
@@ -941,7 +981,11 @@ async function runArm(arm, rep, position) {
     };
     const args = [
       '-p',
-      TASK === 'explore' ? EXPLORE_PROMPT : PROMPT,
+      TASK === 'campaign'
+        ? campaignPrompt()
+        : TASK === 'explore'
+          ? EXPLORE_PROMPT
+          : PROMPT,
       '--model',
       MODEL,
       '--permission-mode',
@@ -979,12 +1023,7 @@ async function runArm(arm, rep, position) {
       TOKEN_OPTIMIZER_HOME: join(state, 'home'),
     };
     for (const [k, val] of Object.entries(cfg.env ?? {}))
-      if (!(k in env)) env[k] = val;
-    if (
-      cfg.pytestQuiet &&
-      !(env.PYTEST_ADDOPTS ?? '').split(/\s+/).includes('-q')
-    )
-      env.PYTEST_ADDOPTS = `${env.PYTEST_ADDOPTS ?? ''} -q`.trim();
+      if (!(k in env)) env[k] = String(val);
     // A nested run must not believe it is the parent session.
     for (const k of Object.keys(env))
       if (
@@ -997,8 +1036,12 @@ async function runArm(arm, rep, position) {
     const stream = join(OUT, `${tag}.stream.jsonl`);
     // The binary itself, never through a shell: on Windows `shell: true` joins the
     // arguments unescaped and the multi-word prompt never reaches the client intact.
+    // CAMPAIGN_CWD: where the replayed session ran. Claude Code keys auto-memory
+    // (and project settings) by working directory, so a replay from a fresh
+    // folder has no memory index while the original run carried 18k characters.
+    const runCwd = TASK === 'campaign' && process.env.CAMPAIGN_CWD ? resolve(process.env.CAMPAIGN_CWD) : work;
     const child = spawn(CLAUDE_BIN, args, {
-      cwd: work,
+      cwd: runCwd,
       env,
       stdio: ['ignore', 'pipe', 'pipe'],
       windowsHide: true,
@@ -1043,7 +1086,12 @@ async function runArm(arm, rep, position) {
     const loaded = JSON.stringify([init.plugins ?? [], init.mcp_servers ?? []]);
     const oursLoaded = /token-optimizer/.test(loaded);
     const isolationOk = cfg.plugin ? oursLoaded : !oursLoaded;
-    const v = TASK === 'explore' ? verdictExplore(work) : verdict(work, hidden);
+    const v =
+      TASK === 'campaign'
+        ? verdictCampaign(agentBreakdown(init.session_id), result)
+        : TASK === 'explore'
+          ? verdictExplore(work)
+          : verdict(work, hidden);
     const recorded = ledgerTotals(ledger);
     const agents = agentBreakdown(init.session_id);
     const totals = withPings(transcriptTotals(agents), recorded);

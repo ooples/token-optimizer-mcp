@@ -81,21 +81,25 @@ File-only runs do not measure wiki, audit, or session-management functionality.
 ## Multi-agent head-to-head
 
 `multi-agent.mjs` measures the product (hooks, MCP and proxy together) against
-control and HeadRoom on work that spawns subagents, where a single-agent toy
+control and an alternative on work that spawns subagents, where a single-agent toy
 hides the cost of context every agent re-reads on every call. A lead Claude Code
 agent fans out one subagent per package (`TASK=fix`: four seeded Python packages
 with 180 KB CI logs and hidden tests) or per question (`TASK=explore`: exact
 answers about a pinned snapshot of this repository).
 
 ```powershell
-$env:TASK_VENV='<venv with pytest>'; $env:HEADROOM_PY='<python with headroom-ai>'
+$env:TASK_VENV='<venv with pytest>'
+$env:ALT_A_CMD='<the alternative proxy command, {port} for its port>'   # optional; arm skipped when unset
+$env:ALT_A_ENV='<JSON: the environment its own launcher gives the client>'
 $env:NEXT_PLUGIN_DIR='<this checkout>/plugin'; $env:NEXT_PKG='<this checkout>'
-$env:ARMS='control,headroom,ours-next'; $env:REPS='5'; node bench/live/multi-agent.mjs
+$env:ARMS='control,alt-a,ours-next'; $env:REPS='5'; node bench/live/multi-agent.mjs
 ```
 
 - Every arm's traffic crosses this package's proxy; it compresses only for ours
-  and records otherwise. HeadRoom sits behind it with the environment its own
-  `wrap claude` sets, so their arm is their product.
+  and records otherwise. The alternative (`alt-a`) sits behind it with the
+  environment its own launcher sets, so that arm is the product as its users run
+  it. The repository does not name it; `ALT_A_CMD`, `ALT_A_ENV` and, for
+  `ALT_BEHIND=1`, `ALT_A_UPSTREAM_VAR` come from the operator's environment.
 - The operator's own settings are excluded (`--setting-sources project,local`,
   `ISOLATE=0` restores them), and each run's init event is checked to confirm
   which plugin actually loaded: a mismatch is `INVALID`, not counted.

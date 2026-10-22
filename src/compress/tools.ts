@@ -171,9 +171,9 @@ export const CORE_LOOP_TOOLS: ReadonlySet<string> = new Set([
  *
  * Claude Code on Windows offers PowerShell beside Bash; it is the largest
  * definition in a subagent's request (8,947 characters, about 2.2k tokens of
- * every call) and the harness agents never called it. HeadRoom 0.41 deletes it
- * from the request outright. Deferring keeps it reachable through tool search
- * for the session that does want it, so nothing is lost.
+ * every call) and the harness agents never called it. Deferring rather than
+ * removing keeps it reachable through tool search for the session that does
+ * want it, so nothing is lost.
  */
 const REDUNDANT_WITH: Readonly<Record<string, string>> = { PowerShell: 'Bash' };
 
