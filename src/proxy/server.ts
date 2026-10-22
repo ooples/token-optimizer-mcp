@@ -63,6 +63,7 @@ import {
 } from '../compress/sibling-prefix.js';
 import { coldKey, coldGateEnabled, enterColdGate } from './cold-gate.js';
 import {
+  isSubagentRequest,
   trimSubagentContext,
   trimSubagentsEnabled,
 } from '../compress/subagent-context.js';
@@ -116,6 +117,7 @@ import { compressChatCompletions } from './chat-completions.js';
 import {
   shapeOutput,
   shaperEnabled,
+  workerTerseEnabled,
   holdoutFraction,
   type WireFormat,
 } from './output-shaper.js';
@@ -124,10 +126,21 @@ import { createEchoScanner, echoEnabled, extractTextValues } from './echo.js';
 import { withResponsesKnowledge } from './responses-knowledge.js';
 import type { Finding } from '../compress/knowledge.js';
 import { loadFindings, loadFindingsFrom } from './findings.js';
+import { Prefetcher, prefetchEnabled } from './prefetch.js';
+import {
+  addCompaction,
+  addToolClearing,
+  CLEAR_TOOL_USES,
+  clearingFromEnv,
+  COMPACT,
+  COMPACT_BETA,
+  compactionFromEnv,
+  CONTEXT_MANAGEMENT_BETA,
+  withBeta,
+} from '../compress/context-edit.js';
 import {
   injectPack,
   injectPackBeforeTask,
-  injectTaskPack,
   RepoPacks,
   repoPackEnabled,
   samePath,
@@ -239,6 +252,10 @@ export interface ProxyOptions {
   readonly projectRoot?: string;
   /** Disable graph injection when a client chooses its working tree after launch. */
   readonly knowledge?: boolean;
+  /** First-turn prefetch of a subagent's assigned issue or PR (prefetch.ts); `false` turns it off. */
+  readonly prefetch?: false | ConstructorParameters<typeof Prefetcher>[0];
+  /** Server-side clearing of old tool results (context-edit.ts); `false` turns it off. */
+  readonly clearToolUses?: false;
   /** The shared repository pack (repo-pack.ts); `false` turns it off. */
   readonly repoPack?: false | RepoPacksOptions;
   /** Named starting point for the dials. Defaults to the environment's. */
@@ -537,6 +554,10 @@ function compressBodyOnce(
   wireFormat?: 'chat-completions',
   suppressKnowledge?: boolean
 ): CompressedBody {
+  // READ ONCE, FROM THE BUFFER THE HANDLER KEYED: shaping below may replace
+  // `body`, and a lookup after that missed (caught by the prefetch and pack
+  // tests when the worker output budget began shaping subagents).
+  const handedOff = taskBlocks.get(body);
   // THE MODEL, LEARNED AS SOON AS THE BODY PARSES AND CARRIED BY EVERY RETURN
   // BELOW IT. `unchanged` closes over this variable rather than taking it as an
   // argument, so a refusal reached after the parse still names the model it
@@ -714,11 +735,14 @@ function compressBodyOnce(
         : 'messages';
   const conversationKey = conversationKeyFor(asRecord);
   const holdout = holdoutFraction();
+  const workerBudget =
+    !shaperEnabled() && workerTerseEnabled() && isSubagentRequest(parsed);
   const shaped = shapeOutput(asRecord, {
     wireFormat: shapeFormat,
-    enabled: shaperEnabled(),
-    holdout,
+    enabled: shaperEnabled() || workerBudget,
+    holdout: workerBudget ? 0 : holdout,
     conversationKey,
+    verbosityOnly: workerBudget,
   });
   // THE ARM INTO THE LEDGER, WHICH IS WHERE THE MEASUREMENT IS MADE. The
   // anonymous telemetry below counts arms in aggregate and cannot answer the
@@ -906,9 +930,7 @@ function compressBodyOnce(
   const shareMode = sharePrefixMode();
   if (shareMode !== 'off') {
     try {
-      const out = shareSiblingPrefix(parsed, {
-        reorder: shareMode === 'reorder',
-      });
+      const out = shareSiblingPrefix(parsed);
       parsed = out.request;
       sharedPrefix = out.applied;
     } catch {
@@ -916,24 +938,23 @@ function compressBodyOnce(
     }
   }
 
-  // A SUBAGENT'S TASK-PATH REPOSITORY PACK (repo-pack.ts), after the reorder
-  // has made the task a turn of its own, so it follows everything siblings on
-  // other repositories share.
+  // WHAT GOES JUST BEFORE A SUBAGENT'S TASK -- its task-path repository pack
+  // (repo-pack.ts) and the issue or PR it was assigned (prefetch.ts) -- after
+  // the sibling marker, so it follows everything siblings share, and on every
+  // turn the same bytes.
   let taskPackChars = 0;
-  const taskPack = taskPacks.get(body);
-  if (taskPack) {
-    // Claude Code sends the system-role listing on a subagent's FIRST request
-    // only (captured: turn 1 `user, system`; turn 2 on `user, assistant, user`),
-    // so the reorder applies once and every later turn carries the pack just
-    // before the task in the first turn instead. Measured with the reordered
-    // shape alone, the pack reached 10 of ~115 requests: one per worker.
-    const out =
-      sharedPrefix === 'reordered'
-        ? injectTaskPack(parsed, taskPack)
-        : injectPackBeforeTask(parsed, taskPack);
+  let prefetchChars = 0;
+  const beforeTask = handedOff;
+  if (beforeTask?.length) {
+    const out = injectPackBeforeTask(
+      parsed,
+      beforeTask.map((b) => b.text)
+    );
     if (out) {
       parsed = out;
-      taskPackChars = taskPack.length;
+      for (const b of beforeTask)
+        if (b.kind === 'pack') taskPackChars += b.text.length;
+        else prefetchChars += b.text.length;
     }
   }
 
@@ -1056,7 +1077,15 @@ function compressBodyOnce(
       findings,
       sharedGraph,
       tuning,
-      suppressKnowledge,
+      // NOT INTO A SUBAGENT'S SYSTEM PROMPT. Its conversation key is its
+      // siblings' too (system prompt + first text block, identical across a
+      // fan-out), so the anchor record that should replay the block collides:
+      // measured on a 10-worker campaign, the block rode on each worker's first
+      // request and on none of its next 92, and that one change in `system`
+      // re-wrote ~14k tokens per worker on call 2 -- ~17% of the run's cost for
+      // 771 characters of findings. A subagent gets its findings once, through
+      // the hook briefing on its first tool call (hooks-core/briefing.mjs).
+      suppressKnowledge: suppressKnowledge || isSubagentRequest(parsed),
       cacheExpired,
     });
   } catch {
@@ -1093,7 +1122,8 @@ function compressBodyOnce(
     routedModel ||
     trimmedChars > 0 ||
     sharedPrefix !== 'none' ||
-    taskPackChars > 0;
+    taskPackChars > 0 ||
+    prefetchChars > 0;
   // WORTH THE RISK, not merely smaller. See MIN_SAVING_SHARE: a rewrite that
   // shaves a couple of percent still plants elisions the agent may read back,
   // and one such turn costs more than the whole saving.
@@ -1172,8 +1202,13 @@ function compressBodyOnce(
       deferredToolChars: deferredChars,
       anchorReason: result.anchor?.reason,
       elisions: result.elisions.length,
-      ...(added ? { injectedChars: result.injectedChars + taskPackChars } : {}),
+      ...(added
+        ? {
+            injectedChars: result.injectedChars + taskPackChars + prefetchChars,
+          }
+        : {}),
       ...(taskPackChars > 0 ? { repoPackChars: taskPackChars } : {}),
+      ...(prefetchChars > 0 ? { prefetchChars } : {}),
       ...named(),
     },
   };
@@ -1605,8 +1640,11 @@ function hasThinkingHistory(request: { messages?: unknown[] }): boolean {
  * agree on identity. A body this never saw falls back to a prefix hash.
  */
 const bodyKeys = new WeakMap<Buffer, string>();
-/** A subagent's task-path repository pack, for compressBodyOnce to place. */
-const taskPacks = new WeakMap<Buffer, string>();
+/** What compressBodyOnce places just before a subagent's task, by request body. */
+const taskBlocks = new WeakMap<
+  Buffer,
+  { kind: 'pack' | 'prefetch'; text: string }[]
+>();
 
 let keepWarmInstance: KeepWarm | null = null;
 function warmer(): KeepWarm {
@@ -1721,6 +1759,17 @@ function forward(
   if (facts?.deferredTools)
     headers['anthropic-beta'] = withAdvancedToolUse(
       req.headers['anthropic-beta']
+    );
+  // The clearing edit is only honoured under its beta (context-edit.ts).
+  if (body.includes(CLEAR_TOOL_USES))
+    headers['anthropic-beta'] = withBeta(
+      headers['anthropic-beta'],
+      CONTEXT_MANAGEMENT_BETA
+    );
+  if (body.includes(COMPACT))
+    headers['anthropic-beta'] = withBeta(
+      headers['anthropic-beta'],
+      COMPACT_BETA
     );
 
   const upstreamStarted = performance.now();
@@ -2208,6 +2257,15 @@ export async function startProxy(options: ProxyOptions = {}): Promise<{
         })
       : null;
 
+  const clearing =
+    options.clearToolUses === false ? null : clearingFromEnv(process.env);
+  const compaction = compactionFromEnv(process.env);
+
+  const prefetcher =
+    options.prefetch === false || !prefetchEnabled(process.env)
+      ? null
+      : new Prefetcher(options.prefetch ?? {});
+
   const guessing = upstreamIsDefault(options);
   const limit = bodyLimitFor(options);
 
@@ -2310,11 +2368,40 @@ export async function startProxy(options: ProxyOptions = {}): Promise<{
         }
       }
 
+      // OLD TOOL RESULTS CLEARED SERVER-SIDE once a conversation is long enough
+      // for that to pay (context-edit.ts). Configuration, not prompt: it adds
+      // nothing to the cached prefix, so it is set on every Messages request.
+      // BEFORE the pack, which keys its hand-off to this exact body buffer; a
+      // re-serialisation after it lost the task pack (caught by its test).
+      if (
+        (clearing || compaction) &&
+        /\/messages\/?$/.test((requestPath(req.url) ?? '').split('?')[0])
+      ) {
+        try {
+          const parsed = JSON.parse(body.toString('utf8')) as ProviderRequest;
+          let out = clearing
+            ? addToolClearing(parsed, clearing)
+            : { request: parsed, added: false };
+          if (compaction) {
+            const compacted = addCompaction(out.request, compaction);
+            out = {
+              request: compacted.request,
+              added: out.added || compacted.added,
+            };
+          }
+          if (out.added)
+            body = Buffer.from(JSON.stringify(out.request), 'utf8');
+        } catch {
+          // Never the reason a request fails.
+        }
+      }
+
       // THE REPOSITORY PACK, likewise ahead of every early return: the first
       // request of a conversation is the only one that may gain it, and it is
       // also the one with nothing yet to compress. Pinned per conversation, so
       // every later turn carries the same bytes (repo-pack.ts).
       let packChars = 0;
+      const beforeTask: { kind: 'pack' | 'prefetch'; text: string }[] = [];
       if (generates && repoPacks) {
         try {
           const parsed = JSON.parse(body.toString('utf8')) as ProviderRequest;
@@ -2329,14 +2416,31 @@ export async function startProxy(options: ProxyOptions = {}): Promise<{
             );
             packChars = pack.text.length;
           } else if (pack.text && pack.placement === 'task') {
-            // Placed by compressBodyOnce, after the sibling reorder has made
-            // the task a turn of its own; this body is the one it receives.
-            taskPacks.set(body, pack.text);
+            // Placed by compressBodyOnce just before the task.
+            beforeTask.push({ kind: 'pack', text: pack.text });
           }
         } catch {
           // Never the reason a request fails.
         }
       }
+
+      // THE ISSUE OR PR A SUBAGENT WAS ASSIGNED, fetched before its first
+      // call (prefetch.ts). Keyed like the pack, on this conversation's own
+      // request, so every turn carries the same bytes.
+      if (generates && prefetcher) {
+        try {
+          const parsed = JSON.parse(body.toString('utf8')) as ProviderRequest;
+          const fetched = await prefetcher.forRequest(
+            parsed,
+            anchorConversationKey(parsed)
+          );
+          if (fetched.text)
+            beforeTask.push({ kind: 'prefetch', text: fetched.text });
+        } catch {
+          // Never the reason a request fails.
+        }
+      }
+      if (beforeTask.length) taskBlocks.set(body, beforeTask);
 
       const transformStarted = performance.now();
       const spilledBefore = spilledBlocks;

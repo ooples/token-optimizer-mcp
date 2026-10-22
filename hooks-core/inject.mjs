@@ -1126,7 +1126,7 @@ export function sessionIndex(dir, graph, { episode = {}, relevantFindingIds = []
     // Staleness checks can touch disk, so bound the candidates BEFORE serving
     // them rather than checking an arbitrarily large graph on SessionStart.
     const candidate = [...selected, finding];
-    const preview = renderSessionIndex(allFindings.length, candidate);
+    const preview = renderSessionIndex(allFindings.length, candidate, surface);
     if (estimate(preview) > budget) break;
     selected.push(finding);
   }
@@ -1139,11 +1139,11 @@ export function sessionIndex(dir, graph, { episode = {}, relevantFindingIds = []
   if (!served.length) return null;
   // A stale marker is longer than the fresh preview used for candidate
   // selection. Trim from the lowest-ranked end until the ACTUAL message fits.
-  while (served.length && estimate(renderSessionIndex(allFindings.length, served)) > budget) {
+  while (served.length && estimate(renderSessionIndex(allFindings.length, served, surface)) > budget) {
     served.pop();
   }
   if (!served.length) return null;
-  const text = renderSessionIndex(allFindings.length, served);
+  const text = renderSessionIndex(allFindings.length, served, surface);
   const spent = estimate(text);
   const findingIds = served.map((finding) => finding.key);
 
@@ -1175,7 +1175,7 @@ export function sessionIndex(dir, graph, { episode = {}, relevantFindingIds = []
   return text;
 }
 
-function renderSessionIndex(total, findings) {
+function renderSessionIndex(total, findings, surface = 'session-start') {
   const lines = findings.map((finding) => {
     const freshness = finding.stale && finding.staleEvidence
       ? ` [STALE: ${finding.staleReason || 'anchor evidence changed'}]`
@@ -1194,8 +1194,7 @@ function renderSessionIndex(total, findings) {
   });
   return `# Project wiki (${total} findings, ${findings.length} listed)
 
-Established in previous sessions. Call wiki_query with a key for detail, or just
-work -- findings anchored to a file are surfaced automatically when you touch it.
+${surface === 'session-start' ? 'Established in previous sessions. Call wiki_query with a key for detail, or just\nwork -- findings anchored to a file are surfaced automatically when you touch it.' : 'Established in previous sessions. Findings anchored to a file are surfaced\nautomatically when you touch it.'}
 
 ${lines.join('\n')}`;
 }

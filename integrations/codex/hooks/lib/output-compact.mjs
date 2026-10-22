@@ -336,6 +336,11 @@ export function compactToolResponse({
     }
     return replaced;
   }
+  if ((tool === 'Agent' || tool === 'Task') && Array.isArray(response.content)) {
+    const lean = leanHandoff(response, { dir, sessionId, tool });
+    if (lean) return lean;
+    return null;
+  }
   if (tool === 'Grep' && typeof response.content === 'string') {
     const done = compactText(response.content, { command: '' });
     if (!done) return null;
@@ -352,4 +357,75 @@ export function compactToolResponse({
     };
   }
   return null;
+}
+
+/** A worker's report longer than this reaches its caller as a lean handoff. */
+export const HANDOFF_MIN_CHARS = 4000;
+/** What the caller reads in place of a long report. */
+export const HANDOFF_BUDGET = 2400;
+
+export function leanHandoffEnabled(env = process.env) {
+  return !OFF.test(String(env.TOKEN_OPTIMIZER_LEAN_HANDOFF ?? '').trim());
+}
+
+/** A line a caller acts on: a file:line citation, a figure, a heading, a verdict. */
+const CITATION = /(?<![\w./\\-])[\w./\\-]{1,200}\.\w{1,12}:\d+/;
+// A bare number is not a signal: narration is full of them ("step 12").
+const REPORT_SIGNAL =
+  /\b\d[\d_,.]{0,20}\s?(?:%|ms|s|KB|MB|GB|tokens?|passed|failed|errors?|files?|lines?|tests?)\b|^#{1,4}\s|^\s*(?:[-*]|\d+\.)\s+\*\*|\b(?:PASS|FAIL|fixed|root cause|answer|result|blocked|error)\b/i;
+
+/**
+ * Lean handoffs: a subagent's long report, as its caller receives it.
+ *
+ * A worker's final report enters its caller's context in full and is re-read
+ * on every one of the caller's later calls -- the caller being the agent with
+ * the largest context in the run. Kept: the opening (where a report puts its
+ * conclusion), every line that cites a file:line, a figure, a heading or a
+ * verdict, and the ending; the full report one Read away in the artifact store.
+ * TOKEN_OPTIMIZER_LEAN_HANDOFF=0 turns it off.
+ */
+export function leanHandoff(response, { dir, sessionId = null, tool = 'Agent' }) {
+  if (!leanHandoffEnabled()) return null;
+  const text = response.content
+    .filter((b) => b?.type === 'text' && typeof b.text === 'string')
+    .map((b) => b.text)
+    .join('\n');
+  if (text.length <= HANDOFF_MIN_CHARS) return null;
+  const lines = text.split('\n');
+  const keep = new Array(lines.length).fill(false);
+  let used = 0;
+  const take = (i) => {
+    if (i < 0 || i >= lines.length || keep[i]) return true;
+    if (used + lines[i].length + 1 > HANDOFF_BUDGET) return false;
+    keep[i] = true;
+    used += lines[i].length + 1;
+    return true;
+  };
+  // The opening, where a report states its conclusion.
+  for (let i = 0, n = 0; i < lines.length && n < HANDOFF_BUDGET * 0.35; i++) {
+    if (!take(i)) break;
+    n += lines[i].length + 1;
+  }
+  // The ending, then every line a caller acts on.
+  for (let i = lines.length - 1, n = 0; i >= 0 && n < HANDOFF_BUDGET * 0.15; i--) {
+    if (!take(i)) break;
+    n += lines[i].length + 1;
+  }
+  // Citations first -- they are what a caller acts on -- then the other signals.
+  for (const re of [CITATION, REPORT_SIGNAL])
+    for (let i = 0; i < lines.length; i++) if (re.test(lines[i]) && !take(i)) break;
+  const ref = capture(dir, text, { tool, command: null, sessionId, shape: 'handoff' });
+  if (!ref) return null;
+  const out = [];
+  let gap = 0;
+  lines.forEach((l, i) => {
+    if (keep[i]) {
+      if (gap) out.push(`  [… ${gap} lines …]`);
+      gap = 0;
+      out.push(l);
+    } else gap++;
+  });
+  if (gap) out.push(`  [… ${gap} lines …]`);
+  const notice = `[lean handoff: ${text.length} characters reported, the lines above kept; the full report: Read ${artifactPath(dir, ref)}]`;
+  return { ...response, content: [{ type: 'text', text: `${out.join('\n')}\n${notice}` }] };
 }

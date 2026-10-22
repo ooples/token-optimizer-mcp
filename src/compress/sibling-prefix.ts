@@ -17,15 +17,12 @@
  * `cache_control` field, and the same request shape always gets it in the same
  * place, so later turns of the same conversation stay byte-stable.
  *
- * THE REORDER (opt-in, pending an A/B -- the user's decision 2026-10-21). In a
- * plain `claude -p` subagent the shared run is short and the large identical
- * block comes AFTER the task: messages[1], a system-role turn listing deferred
- * tools and skills (~20k characters), already ending at Claude Code's marker.
- * Moving the task block into its own user turn after that one makes the whole
- * run shareable. That changes the order the model reads its instructions in,
- * which is why it is off until measured.
+ * WHAT IS NOT SHARED. In a plain subagent the large listing of deferred tools
+ * and skills arrives AFTER the task, as messages[1] -- a system-role turn. It
+ * cannot be moved ahead of the task: the API requires a system-role turn to
+ * precede an assistant turn or end the array (see sharePrefixMode).
  */
-import type { ProviderRequest, Block, Message } from './frontier.js';
+import type { ProviderRequest, Block } from './frontier.js';
 
 /** The API's limit on cache_control markers per request. */
 export const MAX_CACHE_MARKERS = 4;
@@ -41,8 +38,8 @@ interface Marker {
 
 export interface SiblingPrefixResult {
   readonly request: ProviderRequest;
-  /** 'marker' when a marker was added, 'reordered' when the task was moved too. */
-  readonly applied: 'none' | 'marker' | 'reordered';
+  /** 'marker' when a marker was added. */
+  readonly applied: 'none' | 'marker';
   readonly sharedChars: number;
 }
 
@@ -55,7 +52,7 @@ const markerOf = (block: unknown): Marker | null => {
 };
 
 /** Every marker in prefix order: tools, then system, then messages. */
-export function markersInOrder(
+function markersInOrder(
   request: ProviderRequest
 ): { path: string; marker: Marker }[] {
   const out: { path: string; marker: Marker }[] = [];
@@ -95,8 +92,7 @@ const isText = (b: unknown): b is Block =>
   (b as Block | null)?.type === 'text' && typeof (b as Block).text === 'string';
 
 export function shareSiblingPrefix(
-  request: ProviderRequest,
-  options: { reorder?: boolean } = {}
+  request: ProviderRequest
 ): SiblingPrefixResult {
   const none = { request, applied: 'none' as const, sharedChars: 0 };
   const messages = request.messages;
@@ -121,32 +117,6 @@ export function shareSiblingPrefix(
     ? { type: 'ephemeral', ttl }
     : { type: 'ephemeral' };
 
-  const second = messages[1] as Message | undefined;
-  const canReorder =
-    options.reorder === true &&
-    second?.role === 'system' &&
-    Array.isArray(second.content) &&
-    second.content.some((b) => markerOf(b));
-
-  if (canReorder) {
-    const shared = blocks.slice(0, taskIndex);
-    const sharedChars =
-      JSON.stringify(shared).length +
-      JSON.stringify(second?.content ?? []).length;
-    // The marker at the end of messages[1] already exists; the task follows it in a turn of its own.
-    const reordered: Message[] = [
-      { ...first, content: shared },
-      second as Message,
-      { role: 'user', content: [blocks[taskIndex]] },
-      ...messages.slice(2),
-    ];
-    return {
-      request: { ...request, messages: reordered },
-      applied: 'reordered',
-      sharedChars,
-    };
-  }
-
   const shared = blocks.slice(0, taskIndex);
   const sharedChars = JSON.stringify(shared).length;
   if (sharedChars < MIN_SHARED_CHARS) return none;
@@ -164,22 +134,23 @@ export function shareSiblingPrefix(
 }
 
 /**
- * TOKEN_OPTIMIZER_PROXY_SHARE_PREFIX: `reorder` by default, `marker` keeps the
- * message order and only adds the marker, 0/false/off disables both.
+ * TOKEN_OPTIMIZER_PROXY_SHARE_PREFIX: the marker by default; 0/false/off
+ * disables it. (`reorder` and `marker` are both accepted and mean the marker.)
  *
- * REORDER IS THE DEFAULT ON MEASUREMENT, as the user required (2026-10-21:
- * "ship it only if correctness holds"). Isolated multi-agent harness, rotated
- * arms, correctness from visible + hidden tests or exact answers:
- *   fix task, n=5      marker 86.3% of control cost, reorder 74.4%, 10/10 pass
- *   explore task, n=4  marker 89.0%,                  reorder 85.4%,  8/8 pass
+ * THE REORDER WAS REMOVED: IT WAS AN INVALID REQUEST. Moving the task into a
+ * turn after the system-role listing produced `user, system, user`, which the
+ * API rejects ("messages.1: role 'system' must precede an 'assistant' message
+ * or end the array"). Every first request it touched failed with a 400 -- 11
+ * per 10-agent campaign run -- and Claude Code recovered by rebuilding the
+ * request in a different shape. Its measured advantage over the marker
+ * (fix task 74.4% vs 86.3% of control) was that fallback shape, bought with a
+ * rejected request per conversation, not the reorder.
  */
 export function sharePrefixMode(
   env: NodeJS.ProcessEnv = process.env
-): 'off' | 'marker' | 'reorder' {
+): 'off' | 'marker' {
   const raw = String(env.TOKEN_OPTIMIZER_PROXY_SHARE_PREFIX ?? '')
     .trim()
     .toLowerCase();
-  if (/^(0|false|no|off)$/.test(raw)) return 'off';
-  if (raw === 'marker') return 'marker';
-  return 'reorder';
+  return /^(0|false|no|off)$/.test(raw) ? 'off' : 'marker';
 }

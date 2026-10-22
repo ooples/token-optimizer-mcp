@@ -149,33 +149,31 @@ describe('the shared-prefix marker', () => {
   });
 });
 
-describe('the reorder (opt-in, pending the A/B)', () => {
-  it('moves the task into its own user turn after the shared system turn', () => {
-    const out = shareSiblingPrefix(subagent('fix pricing'), { reorder: true });
-    expect(out.applied).toBe('reordered');
-    const msgs = out.request.messages as {
-      role: string;
-      content: Record<string, unknown>[];
-    }[];
-    expect(msgs.map((m) => m.role)).toEqual(['user', 'system', 'user']);
-    expect(String(msgs[2].content[0].text)).toMatch(/^fix pricing /);
-    expect(msgs[0].content).toHaveLength(2);
+describe('a Claude Code subagent with its system-role listing', () => {
+  // The API: "role 'system' must precede an 'assistant' message or end the array".
+  const validOrder = (roles: string[]): boolean =>
+    roles.every(
+      (role, i) =>
+        role !== 'system' ||
+        i === roles.length - 1 ||
+        roles[i + 1] === 'assistant'
+    );
+
+  it('keeps an order the API accepts: the marker goes before the task, nothing moves', () => {
+    const request = subagent('fix pricing');
+    // A real worker's shared leading blocks run to ~30k characters.
+    (m0(request)[0] as { text: string }).text = 'context '.repeat(800);
+    const out = shareSiblingPrefix(request);
+    expect(out.applied).toBe('marker');
+    const msgs = out.request.messages as { role: string }[];
+    expect(msgs.map((m) => m.role)).toEqual(['user', 'system']);
+    expect(validOrder(msgs.map((m) => m.role))).toBe(true);
   });
 
-  it('makes siblings identical through the end of the shared system turn', () => {
-    const a = shareSiblingPrefix(subagent('fix pricing'), {
-      reorder: true,
-    }).request.messages?.slice(0, 2);
-    const b = shareSiblingPrefix(subagent('fix ledger'), {
-      reorder: true,
-    }).request.messages?.slice(0, 2);
-    expect(JSON.stringify(b)).toBe(JSON.stringify(a));
-  });
-
-  it('is on by default, after the A/B held correctness on both harness tasks', () => {
-    expect(sharePrefixMode({})).toBe('reorder');
+  it('marks by default; reorder is no longer a mode', () => {
+    expect(sharePrefixMode({})).toBe('marker');
     expect(
-      sharePrefixMode({ TOKEN_OPTIMIZER_PROXY_SHARE_PREFIX: 'marker' })
+      sharePrefixMode({ TOKEN_OPTIMIZER_PROXY_SHARE_PREFIX: 'reorder' })
     ).toBe('marker');
     expect(sharePrefixMode({ TOKEN_OPTIMIZER_PROXY_SHARE_PREFIX: '0' })).toBe(
       'off'

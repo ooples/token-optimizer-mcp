@@ -97,6 +97,8 @@ export interface CompressionFacts {
   readonly coldGateWaitMs?: number;
   /** Characters of the shared repository pack this request carried (repo-pack.ts). */
   readonly repoPackChars?: number;
+  /** Characters of the assigned issue or PR prefetched before the first call (prefetch.ts). */
+  readonly prefetchChars?: number;
   /**
    * Which arm of the output-shaper holdout the request was in, when one ran.
    *

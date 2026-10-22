@@ -178,8 +178,9 @@ it('forwards Anthropic tool-search references and beta headers unchanged', async
   const sent = JSON.parse(provider.seen.body!);
   expect(sent.messages).toEqual(payload.messages);
   expect(sent.tools).toEqual(payload.tools);
+  // The client's betas pass through; the clearing edit adds its own (context-edit.ts).
   expect(provider.seen.headers?.['anthropic-beta']).toBe(
-    'advanced-tool-use-2025-11-20'
+    'advanced-tool-use-2025-11-20,context-management-2025-06-27'
   );
 });
 
@@ -778,6 +779,45 @@ describe('the cached-knowledge block', () => {
     // beside a deliberate addition would be a false report.
     expect(out.summary.injectedChars).toBeGreaterThan(0);
   });
+
+  it("never puts findings in a subagent's system prompt, so it cannot flap between turns", () => {
+    // A subagent's conversation key is its siblings' too; the block rode on its
+    // first request and on none after, re-writing its whole context on call 2.
+    const finding = {
+      key: 'k',
+      type: 'failure',
+      claim: 'npm install bumps zod and breaks tsc; use npm ci',
+      confidence: 0.95,
+      confidenceLabel: 'verified',
+    };
+    const system = [
+      {
+        type: 'text',
+        text: 'x-anthropic-billing-header: cc_is_subagent=true;',
+      },
+      { type: 'text', text: 'You are a coding agent.' },
+    ];
+    const anchors = anchorStore();
+    const turn = (messages: unknown[]) =>
+      JSON.parse(
+        compressBody(
+          Buffer.from(JSON.stringify({ system, messages }), 'utf8'),
+          spill,
+          anchors,
+          [finding]
+        ).body.toString('utf8')
+      ) as { system: unknown };
+    const first = turn([
+      { role: 'user', content: [{ type: 'text', text: rows(80) }] },
+    ]);
+    const second = turn([
+      { role: 'user', content: [{ type: 'text', text: rows(80) }] },
+      { role: 'assistant', content: 'ok' },
+      { role: 'user', content: 'go on' },
+    ]);
+    expect(JSON.stringify(first.system)).not.toContain('npm ci');
+    expect(second.system).toEqual(first.system);
+  });
 });
 
 describe('what the proxy refuses to buffer or forward', () => {
@@ -1314,8 +1354,9 @@ it("puts a subagent's task-path pack after the shared prefix, identically each t
               { type: 'text', text: task },
             ],
           },
-          // Claude Code sends the system-role listing on the first request only.
-          ...(later.length ? later : [{ role: 'system', content: [listing] }]),
+          // The listing stays at messages[1] on every turn (captured).
+          { role: 'system', content: [listing] },
+          ...later,
         ],
       }),
     }).then((r) => r.text());
@@ -1331,18 +1372,183 @@ it("puts a subagent's task-path pack after the shared prefix, identically each t
     }[];
   };
   const sent = bodies.map((b) => JSON.parse(b) as Sent);
-  // Turn 1, reordered: the pack heads the task's own turn, after the listing.
-  expect(sent[0].messages[2].role).toBe('user');
-  expect(sent[0].messages[2].content[0].text).toMatch(/^# Repository pack: /);
-  expect(sent[0].messages[2].content[1].text).toBe(task);
-  expect(sent[0].messages[2].content[0].cache_control).toEqual({
-    type: 'ephemeral',
-  });
-  // Later turns, no listing: the same pack just before the task.
-  const later = sent[1].messages[0].content;
-  expect(later[later.length - 2].text).toBe(
-    sent[0].messages[2].content[0].text
-  );
-  expect(later[later.length - 1].text).toBe(task);
+  for (const s of sent) {
+    // An order the API accepts: a system turn precedes an assistant turn or ends the array.
+    const roles = s.messages.map((m) => m.role);
+    expect(
+      roles.every(
+        (r, i) =>
+          r !== 'system' ||
+          i === roles.length - 1 ||
+          roles[i + 1] === 'assistant'
+      )
+    ).toBe(true);
+    // The pack sits just before the task, after the sibling marker.
+    const first = s.messages[0].content;
+    expect(first[first.length - 1].text).toBe(task);
+    expect(first[first.length - 2].text).toMatch(/^# Repository pack: /);
+    expect(first[first.length - 3].cache_control).toEqual({
+      type: 'ephemeral',
+    });
+  }
+  const pack = (s: Sent) =>
+    s.messages[0].content[s.messages[0].content.length - 2].text;
+  expect(pack(sent[1])).toBe(pack(sent[0]));
   rmSync(repo, { recursive: true, force: true });
+});
+
+it('asks the provider to clear old tool results, after the client’s own edits, under its beta', async () => {
+  const provider = await upstream(() => ({}));
+  const proxy = await startProxy({
+    projectRoot: EMPTY_PROJECT,
+    upstream: provider.url,
+    knowledge: false,
+    repoPack: false,
+  });
+  servers.push(proxy.server);
+  await fetch(`http://127.0.0.1:${proxy.port}/v1/messages`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'anthropic-beta': 'interleaved-thinking-2025-05-14',
+    },
+    body: JSON.stringify({
+      tools: [{ name: 'Read', input_schema: { type: 'object' } }],
+      context_management: {
+        edits: [{ type: 'clear_thinking_20251015', keep: 'all' }],
+      },
+      messages: [{ role: 'user', content: 'go' }],
+    }),
+  }).then((r) => r.text());
+  const sent = JSON.parse(provider.seen.body) as {
+    context_management: { edits: { type: string }[] };
+  };
+  expect(sent.context_management.edits.map((e) => e.type)).toEqual([
+    'clear_thinking_20251015',
+    'clear_tool_uses_20250919',
+  ]);
+  expect(String(provider.seen.headers?.['anthropic-beta'])).toBe(
+    'interleaved-thinking-2025-05-14,context-management-2025-06-27'
+  );
+});
+
+it("puts a subagent's assigned issue just before its task, identically on every turn", async () => {
+  const bodies: string[] = [];
+  const provider = await upstream((raw) => {
+    bodies.push(raw);
+    return {};
+  });
+  const proxy = await startProxy({
+    projectRoot: EMPTY_PROJECT,
+    upstream: provider.url,
+    knowledge: false,
+    repoPack: false,
+    prefetch: {
+      dir: mkdtempSync(join(tmpdir(), 'proxy-prefetch-')),
+      gh: async (args) =>
+        args[1].includes('/comments')
+          ? '[]'
+          : JSON.stringify({
+              title: 'Adam ignores decay',
+              state: 'open',
+              body: 'Repro here.',
+            }),
+    },
+  });
+  servers.push(proxy.server);
+  const task = 'Item: ISSUE ooples/AiDotNet #1159 (bug). Fix it.';
+  const turn = (later: unknown[]) =>
+    fetch(`http://127.0.0.1:${proxy.port}/v1/messages`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        tools: [{ name: 'Read', input_schema: { type: 'object' } }],
+        system: [
+          {
+            type: 'text',
+            text: 'x-anthropic-billing-header: cc_version=2.1.302; cc_is_subagent=true;',
+          },
+        ],
+        messages: [
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: 'shared leading context '.repeat(200) },
+              { type: 'text', text: task },
+            ],
+          },
+          ...later,
+        ],
+      }),
+    }).then((r) => r.text());
+  await turn([]);
+  await turn([
+    { role: 'assistant', content: 'Looking.' },
+    { role: 'user', content: 'Go on.' },
+  ]);
+  const firsts = bodies.map(
+    (b) =>
+      (JSON.parse(b) as { messages: { content: { text?: string }[] }[] })
+        .messages[0].content
+  );
+  for (const c of firsts) {
+    expect(c[c.length - 1].text).toBe(task);
+    expect(c[c.length - 2].text).toMatch(
+      /^# Prefetched for this task:[\s\S]*ooples\/AiDotNet#1159 \(issue, open\): Adam ignores decay/
+    );
+  }
+  expect(firsts[1][firsts[1].length - 2].text).toBe(
+    firsts[0][firsts[0].length - 2].text
+  );
+});
+
+describe('the worker output budget', () => {
+  const send = async (system: unknown[], env: Record<string, string> = {}) => {
+    const saved = { ...process.env };
+    Object.assign(process.env, env);
+    try {
+      const provider = await upstream(() => ({}));
+      const proxy = await startProxy({
+        projectRoot: EMPTY_PROJECT,
+        upstream: provider.url,
+        knowledge: false,
+        repoPack: false,
+        prefetch: false,
+      });
+      servers.push(proxy.server);
+      await fetch(`http://127.0.0.1:${proxy.port}/v1/messages`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          system,
+          output_config: { effort: 'high' },
+          messages: [{ role: 'user', content: 'go' }],
+        }),
+      }).then((r) => r.text());
+      return JSON.parse(provider.seen.body) as {
+        system: { text: string }[];
+        output_config: { effort: string };
+      };
+    } finally {
+      process.env = saved;
+    }
+  };
+  const sub = [{ type: 'text', text: 'billing: cc_is_subagent=true;' }];
+  const terse = (s: { system: { text: string }[] }) =>
+    s.system.some((b) => b.text.startsWith('Answer directly.'));
+
+  it('steers a subagent to terse output, without touching its effort', async () => {
+    const sent = await send(sub);
+    expect(terse(sent)).toBe(true);
+    expect(sent.output_config.effort).toBe('high');
+  });
+
+  it('leaves the main session alone, and turns off on request', async () => {
+    expect(terse(await send([{ type: 'text', text: 'main session' }]))).toBe(
+      false
+    );
+    expect(
+      terse(await send(sub, { TOKEN_OPTIMIZER_PROXY_WORKER_TERSE: '0' }))
+    ).toBe(false);
+  });
 });

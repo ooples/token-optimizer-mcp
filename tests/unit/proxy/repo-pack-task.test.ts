@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import {
   candidateDirs,
   chooseRepo,
-  injectTaskPack,
+  injectPackBeforeTask,
   pathsIn,
   PACK_HEADING,
   RepoPacks,
@@ -106,50 +106,39 @@ const listing = {
   cache_control: { type: 'ephemeral', ttl: '1h' },
 };
 
-/** A subagent's request after the sibling reorder. */
-function reordered(task: string, systemMarkers = 2): ProviderRequest {
-  return {
-    system: Array.from({ length: systemMarkers }, (_, i) => ({
-      type: 'text',
-      text: `s${i}`,
-      cache_control: { type: 'ephemeral', ttl: '1h' },
-    })),
-    messages: [
-      { role: 'user', content: [{ type: 'text', text: 'shared' }] },
-      { role: 'system', content: [listing] },
-      { role: 'user', content: [{ type: 'text', text: task }] },
-    ],
-  } as unknown as ProviderRequest;
-}
-
-describe('the pack in the task turn', () => {
-  it('goes first in the task turn, with a copy of the preceding marker', () => {
-    const out = injectTaskPack(
-      reordered('do it'),
+describe('the pack before the task', () => {
+  it('goes just before the task in the first turn, everything else untouched', () => {
+    const request = {
+      messages: [
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: 'shared' },
+            { type: 'text', text: 'do it' },
+          ],
+        },
+        { role: 'system', content: [listing] },
+      ],
+    } as unknown as ProviderRequest;
+    const out = injectPackBeforeTask(
+      request,
       `${PACK_HEADING} x`
     ) as unknown as {
-      messages: { content: { text: string; cache_control?: unknown }[] }[];
+      messages: { role: string; content: { text: string }[] }[];
     };
-    expect(out.messages[2].content.map((b) => b.text)).toEqual([
+    expect(out.messages[0].content.map((b) => b.text)).toEqual([
+      'shared',
       `${PACK_HEADING} x`,
       'do it',
     ]);
-    expect(out.messages[2].content[0].cache_control).toEqual({
-      type: 'ephemeral',
-      ttl: '1h',
-    });
     expect(out.messages[1].content[0]).toBe(listing);
   });
 
-  it('adds no marker past the limit, and refuses any other shape', () => {
-    const full = injectTaskPack(reordered('do it', 3), 'p') as unknown as {
-      messages: { content: { cache_control?: unknown }[] }[];
-    };
-    expect(full.messages[2].content[0].cache_control).toBeUndefined();
+  it('refuses a request whose first turn has no task block', () => {
     const plain = {
-      messages: [{ role: 'user', content: [{ type: 'text', text: 'a' }] }],
+      messages: [{ role: 'assistant', content: 'a' }],
     } as unknown as ProviderRequest;
-    expect(injectTaskPack(plain, 'p')).toBeNull();
+    expect(injectPackBeforeTask(plain, 'p')).toBeNull();
   });
 });
 

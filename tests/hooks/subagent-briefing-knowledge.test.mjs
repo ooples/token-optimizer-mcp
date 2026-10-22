@@ -100,17 +100,15 @@ describe('the knowledge block', () => {
   });
 });
 
-describe('the briefing asks for a record only when one can be made', () => {
-  test('wiki_write available', () => {
-    const text = subagentBriefing({ agent_id: 'x' }, {}, { canRecord: true });
-    expect(text).toContain('wiki_write');
-    expect(text).toContain('batch independent commands');
-  });
-
-  test('wiki_write absent', () => {
+describe('the briefing never asks for a tool load', () => {
+  // A load changes the tools array, the front of the prompt: the next call
+  // re-writes the agent's whole cached context.
+  test('it steers to the built-in tools and says why not to load', () => {
     const text = subagentBriefing({ agent_id: 'x' }, {});
     expect(text).toContain('Token Optimizer (shown once to this agent)');
-    expect(text).not.toContain('wiki_write');
+    expect(text).toContain('batch independent commands');
+    expect(text).toContain('Do not load optimizer tools');
+    expect(text).not.toMatch(/load them once|record with wiki_write/);
   });
 });
 
@@ -138,7 +136,8 @@ describe('end to end through the packaged router', () => {
     });
     const out = JSON.parse(result.stdout.trim() || '{}').hookSpecificOutput || {};
     expect(out.additionalContext).toContain('Token Optimizer (shown once to this agent)');
-    expect(out.additionalContext).toContain('wiki_write');
+    // Not an invitation to load a deferred tool: a load re-writes the agent's cached context.
+    expect(out.additionalContext).not.toMatch(/wiki_write|Call wiki_query/);
     expect(out.additionalContext).toContain('npm test');
   });
 });

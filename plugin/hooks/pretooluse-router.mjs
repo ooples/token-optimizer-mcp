@@ -50,6 +50,7 @@ import {
   sharedDir,
 } from './lib/wiki.mjs';
 import { subagentKnowledge, subagentTask } from './lib/briefing.mjs';
+import { boardFor } from './lib/blackboard.mjs';
 import {
   refusalPayload,
   substitutionFor,
@@ -195,9 +196,7 @@ try {
   state.toolCalls = (Number(state.toolCalls) || 0) + 1;
   // A subagent never sees SessionStart, so its first tool call carries the
   // guidance instead, on whichever exit this call takes.
-  const briefing = subagentBriefing(raw, state, {
-    canRecord: toolEvidence.names.has('wiki_write'),
-  });
+  const briefing = subagentBriefing(raw, state);
   // Counted on every Bash call, so it has to be saved on every exit that keeps
   // state -- which every exit below does via saveState.
   const batching = batchingNudge(payload, state);
@@ -220,7 +219,22 @@ try {
         /* the tool briefing still arrives without it */
       }
     }
-    precedeWith([briefing, knowledge, batching].filter(Boolean).join('\n\n'));
+    // WHAT SIBLINGS ALREADY RAN (blackboard.mjs), before this agent looks.
+    let board = null;
+    if (briefing) {
+      try {
+        board = boardFor({
+          sessionId: payload.session_id,
+          agent: String(raw.agent_id ?? raw.agentId ?? ''),
+          task: subagentTask(raw),
+        });
+      } catch {
+        board = null;
+      }
+    }
+    precedeWith(
+      [briefing, knowledge, board, batching].filter(Boolean).join('\n\n')
+    );
     saveState(payload.session_id, state, agentScope);
   }
   const ucrGuardVerdict = evaluateUcrGuards(

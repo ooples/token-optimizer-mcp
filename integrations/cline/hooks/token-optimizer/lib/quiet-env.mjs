@@ -22,6 +22,15 @@
  * off.
  */
 import { appendFileSync, existsSync, readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
+/** `repo_ask` in every agent's shell (ask.mjs); TOKEN_OPTIMIZER_REPO_ASK=0 leaves it out. */
+export function repoAskEnabled(env = process.env) {
+  return !/^(0|false|no|off)$/i.test(
+    String(env.TOKEN_OPTIMIZER_REPO_ASK ?? '').trim()
+  );
+}
+const ASK_PATH = fileURLToPath(new URL('./ask.mjs', import.meta.url));
 
 /** name -> value, written only when the variable is absent. */
 export const QUIET_ENV_DEFAULTS = Object.freeze({
@@ -92,6 +101,12 @@ export function quietEnvScript(env = process.env) {
     'case " ${PYTEST_ADDOPTS-} " in *" -q "*) ;; *) export PYTEST_ADDOPTS="${PYTEST_ADDOPTS:+$PYTEST_ADDOPTS }-q" ;; esac'
   );
   names.push('PYTEST_ADDOPTS');
+  // A shell function, not a tool: a deferred tool's load re-writes a subagent's
+  // cached context, and every Bash call of every agent sources this file.
+  if (repoAskEnabled(env)) {
+    lines.push(`repo_ask() { node ${quote(ASK_PATH)} "$@"; }`);
+    names.push('repo_ask');
+  }
   return { script: `${lines.join('\n')}\n`, names };
 }
 

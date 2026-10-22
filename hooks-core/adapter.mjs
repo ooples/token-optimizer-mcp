@@ -115,6 +115,9 @@ import { registerProject, registeredProjects } from './projects.mjs';
 import { runStopHarvest } from './stop-harvest.mjs';
 import { applyQuietEnv } from './quiet-env.mjs';
 import { compactToolResponse, outputCompactEnabled } from './output-compact.mjs';
+import { repeatResponse, repeatsEnabled } from './repeats.mjs';
+import { recordOnBoard } from './blackboard.mjs';
+import { artifactPath, capture } from './expand.mjs';
 
 /**
  * An outline rewrite for this call, in the client's own input shape, or null.
@@ -1928,13 +1931,45 @@ async function runHook(clientName, event, invocation) {
   ) {
     try {
       const cwd = payload.cwd || process.cwd();
-      updatedToolOutput = compactToolResponse({
-        tool: String(payload.tool_name || ''),
-        input: payload.tool_input,
-        response: raw.tool_response,
-        dir: wikiDir(projectRootFor(join(cwd, '__tool__'), cwd)),
-        sessionId: payload.session_id,
-      });
+      const dir = wikiDir(projectRootFor(join(cwd, '__tool__'), cwd));
+      const tool = String(payload.tool_name || '');
+      // A REPEAT FIRST (repeats.mjs): what the agent already has a few calls
+      // back is not sent again. Recorded on every call, rewritten or not.
+      if (repeatsEnabled())
+        updatedToolOutput = repeatResponse({
+          tool,
+          input: payload.tool_input,
+          response: raw.tool_response,
+          cwd,
+          call: Number(state.toolCalls) || 0,
+          state,
+          store: (text) => {
+            const ref = capture(dir, text, { tool, sessionId: payload.session_id, shape: 'repeat' });
+            return ref ? artifactPath(dir, ref) : null;
+          },
+        });
+      // THE SIBLING BLACKBOARD (blackboard.mjs): every read-only result, for
+      // the agents of this session that have not started yet.
+      if ((tool === 'Bash' || tool === 'PowerShell') && typeof raw.tool_response?.stdout === 'string') {
+        const output = raw.tool_response.stdout;
+        const ref = output.length > 1000 ? capture(dir, output, { tool, sessionId: payload.session_id, shape: 'board' }) : null;
+        recordOnBoard({
+          sessionId: payload.session_id,
+          agent: String(raw.agent_id ?? raw.agentId ?? ''),
+          command: payload.tool_input?.command,
+          cwd,
+          output,
+          artifact: ref ? artifactPath(dir, ref) : null,
+        });
+      }
+      if (!updatedToolOutput)
+        updatedToolOutput = compactToolResponse({
+          tool,
+          input: payload.tool_input,
+          response: raw.tool_response,
+          dir,
+          sessionId: payload.session_id,
+        });
     } catch {
       updatedToolOutput = null;
     }

@@ -829,6 +829,12 @@ const TOOL_ALIASES = new Map(
     // invalidation.
     notebookedit: 'Edit',
     notebook_edit: 'Edit',
+
+    // A subagent's report reaching its caller (lean handoffs, output-compact.mjs).
+    // Unmapped, the post-tool hook saw no tool name and exited before the
+    // handoff could be made.
+    agent: 'Agent',
+    task: 'Task',
   })
 );
 

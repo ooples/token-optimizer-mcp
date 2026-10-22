@@ -45,10 +45,6 @@ import {
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import type { Block, Message, ProviderRequest } from '../compress/frontier.js';
-import {
-  MAX_CACHE_MARKERS,
-  markersInOrder,
-} from '../compress/sibling-prefix.js';
 import { isSubagentRequest } from '../compress/subagent-context.js';
 import { optimizerHome } from './default-routing.js';
 
@@ -181,61 +177,17 @@ export function samePath(a: string, b: string): boolean {
 }
 
 /**
- * Put the pack at the head of a subagent's task turn, AFTER the prefix its
- * siblings share. Only in the shape the sibling-prefix reorder produces --
- * shared leading turn, the system-role listing, then the task in a turn of its
- * own -- and otherwise not at all (null).
- *
- * The pack carries a copy of the listing's cache marker when the request has a
- * marker to spare, so siblings on the same repository read it from the cache.
- * A copy of the PRECEDING marker always satisfies the API's ordering rule
- * (longer-lived markers first).
- */
-export function injectTaskPack(
-  request: ProviderRequest,
-  text: string
-): ProviderRequest | null {
-  const messages = request.messages;
-  const listing = messages?.[1];
-  const task = messages?.[2];
-  if (
-    !messages ||
-    listing?.role !== 'system' ||
-    task?.role !== 'user' ||
-    !Array.isArray(task.content) ||
-    !Array.isArray(listing.content)
-  )
-    return null;
-  const before = [...listing.content]
-    .reverse()
-    .map((b) => (b as Block & { cache_control?: unknown }).cache_control)
-    .find(Boolean);
-  const spare = markersInOrder(request).length < MAX_CACHE_MARKERS;
-  const block = {
-    type: 'text',
-    text,
-    ...(spare && before ? { cache_control: { ...(before as object) } } : {}),
-  } as Block;
-  return {
-    ...request,
-    messages: [
-      messages[0],
-      listing,
-      { ...task, content: [block, ...task.content] } as Message,
-      ...messages.slice(3),
-    ],
-  };
-}
-
-/**
- * The pack just before the task, inside the first user turn: the shape of a
- * subagent's later turns, which no longer carry the system-role listing. No
- * marker is added; Claude Code's own trailing marker caches it from then on.
+ * The pack just before the task, inside the first user turn: after the
+ * sibling marker, so siblings on other repositories still share everything
+ * before it. No marker is added; Claude Code's own markers cache it for the
+ * rest of the conversation.
  */
 export function injectPackBeforeTask(
   request: ProviderRequest,
-  text: string
+  text: string | readonly string[]
 ): ProviderRequest | null {
+  const texts = typeof text === 'string' ? [text] : text;
+  if (!texts.length) return null;
   const messages = request.messages;
   const first = messages?.[0];
   if (!messages || first?.role !== 'user' || !Array.isArray(first.content))
@@ -250,7 +202,7 @@ export function injectPackBeforeTask(
         ...first,
         content: [
           ...blocks.slice(0, task),
-          { type: 'text', text } as Block,
+          ...texts.map((t) => ({ type: 'text', text: t }) as Block),
           blocks[task],
         ],
       } as Message,
