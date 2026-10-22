@@ -1041,6 +1041,10 @@ async function runArm(arm, rep, position) {
       )
         delete env[k];
 
+    // In print mode the client stops a background workflow 10 minutes after its
+    // last turn; three of twelve campaign runs were cut off that way, which made
+    // them cheaper and invalid. The run's own RUN_TIMEOUT_S is the bound instead.
+    env.CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS = '0';
     const started = Date.now();
     const stream = join(OUT, `${tag}.stream.jsonl`);
     // The binary itself, never through a shell: on Windows `shell: true` joins the
