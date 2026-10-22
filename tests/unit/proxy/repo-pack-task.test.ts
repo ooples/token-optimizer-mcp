@@ -11,6 +11,7 @@ import {
   PACK_HEADING,
   RepoPacks,
   runGit,
+  taskPackEnabled,
   type GitRunner,
 } from '../../../src/proxy/repo-pack.js';
 import type { ProviderRequest } from '../../../src/compress/frontier.js';
@@ -182,7 +183,10 @@ function subagent(task: string, sub = true): ProviderRequest {
 
 describe('task-path packs for a session outside any repository', () => {
   it('packs the repository each sibling works on, separately pinned', async () => {
-    const packs = new RepoPacks({ dir: mkdtempSync(join(root, 'store-')) });
+    const packs = new RepoPacks({
+      dir: mkdtempSync(join(root, 'store-')),
+      taskPlacement: true,
+    });
     // Same conversation key for both, as Claude Code's siblings have.
     const onBeta = await packs.forRequest(
       subagent(`${rules()}Fix Alpha.Beta#1502 in ${betaWorktree}.`),
@@ -207,7 +211,10 @@ describe('task-path packs for a session outside any repository', () => {
   });
 
   it('leaves a main session and an ambiguous task alone', async () => {
-    const packs = new RepoPacks({ dir: mkdtempSync(join(root, 'store-')) });
+    const packs = new RepoPacks({
+      dir: mkdtempSync(join(root, 'store-')),
+      taskPlacement: true,
+    });
     expect(
       (await packs.forRequest(subagent(`${rules()}Fix Alpha#9.`, false), 'k'))
         .reason
@@ -246,6 +253,7 @@ describe('resolving the paths a task names', () => {
     const packs = new RepoPacks({
       dir: mkdtempSync(join(root, 'store-')),
       git,
+      taskPlacement: true,
       maxWaitMs: 10_000,
     });
     const started = Date.now();
@@ -258,4 +266,19 @@ describe('resolving the paths a task names', () => {
     expect(seen.every((t) => t !== undefined && t <= 2_500)).toBe(true);
     expect(Date.now() - started).toBeLessThan(8_000);
   }, 15_000); // waits out the 2.5 s resolution timeout on purpose
+});
+
+describe('the task-path pack is opt-in', () => {
+  it('stays off unless asked for, and the switch turns it on', async () => {
+    expect(taskPackEnabled({})).toBe(false);
+    expect(taskPackEnabled({ TOKEN_OPTIMIZER_PROXY_REPO_PACK_TASK: '1' })).toBe(
+      true
+    );
+    const packs = new RepoPacks({ dir: mkdtempSync(join(root, 'store-')) });
+    const out = await packs.forRequest(
+      subagent(`${rules()}Fix Alpha#9.`),
+      'default-off'
+    );
+    expect(out).toEqual({ text: null, reason: 'no-repo', placement: null });
+  });
 });

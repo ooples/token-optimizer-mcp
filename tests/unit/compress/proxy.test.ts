@@ -1277,7 +1277,10 @@ it("puts a subagent's task-path pack after the shared prefix, identically each t
     projectRoot: EMPTY_PROJECT,
     upstream: provider.url,
     knowledge: false,
-    repoPack: { dir: mkdtempSync(join(tmpdir(), 'proxy-task-pack-store-')) },
+    repoPack: {
+      dir: mkdtempSync(join(tmpdir(), 'proxy-task-pack-store-')),
+      taskPlacement: true,
+    },
   });
   servers.push(proxy.server);
   const task = `Fix the bug in ${repo} and report.`;

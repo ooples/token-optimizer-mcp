@@ -77,6 +77,21 @@ export function repoPackEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
   );
 }
 
+/**
+ * The task-path pack, for a subagent of a session started outside any
+ * repository, is OPT-IN (TOKEN_OPTIMIZER_PROXY_REPO_PACK_TASK=1), on
+ * measurement. Campaign replay, real environment, n=4 per arm, every turn
+ * carrying the pack: 107.4% of the same build's cost without it, with calls
+ * unchanged (107 vs 106). Those workers' discovery is issues and pull
+ * requests, which a repository snapshot does not replace, so every call paid
+ * to re-read it for nothing.
+ */
+export function taskPackEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  return /^(1|true|yes|on)$/i.test(
+    String(env.TOKEN_OPTIMIZER_PROXY_REPO_PACK_TASK ?? '').trim()
+  );
+}
+
 export function packCharsFromEnv(env: NodeJS.ProcessEnv = process.env): number {
   const n = Number(env.TOKEN_OPTIMIZER_PROXY_REPO_PACK_CHARS);
   return Number.isFinite(n) && n >= 2_000 ? Math.floor(n) : DEFAULT_PACK_CHARS;
@@ -741,6 +756,8 @@ export interface RepoPacksOptions {
   readonly now?: () => number;
   /** Findings for a repository root; the proxy passes its graph loader. */
   readonly findingsFor?: (root: string) => Promise<readonly PackFinding[]>;
+  /** The task-path pack; defaults to taskPackEnabled(). */
+  readonly taskPlacement?: boolean;
 }
 
 /** Packs and per-conversation pins, in memory and on disk. */
@@ -751,6 +768,7 @@ export class RepoPacks {
   private readonly maxWaitMs: number;
   private readonly now: () => number;
   private readonly findingsFor?: RepoPacksOptions['findingsFor'];
+  private readonly taskPlacement: boolean;
   private readonly pins = new Map<string, string>();
   private readonly texts = new Map<string, string>();
   private readonly builds = new Map<string, Promise<string | null>>();
@@ -763,6 +781,7 @@ export class RepoPacks {
     this.maxWaitMs = options.maxWaitMs ?? MAX_WAIT_MS;
     this.now = options.now ?? Date.now;
     this.findingsFor = options.findingsFor;
+    this.taskPlacement = options.taskPlacement ?? taskPackEnabled();
   }
 
   /** The pack this request should carry, if any. `convKey` is computed on the client's request. */
@@ -796,7 +815,7 @@ export class RepoPacks {
     // prefix before it.
     const placement: Placement | null = cwd
       ? 'system'
-      : isSubagentRequest(request)
+      : this.taskPlacement && isSubagentRequest(request)
         ? 'task'
         : null;
     if (!placement) return none('no-repo');
