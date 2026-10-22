@@ -212,6 +212,38 @@ export function injectTaskPack(
   };
 }
 
+/**
+ * The pack just before the task, inside the first user turn: the shape of a
+ * subagent's later turns, which no longer carry the system-role listing. No
+ * marker is added; Claude Code's own trailing marker caches it from then on.
+ */
+export function injectPackBeforeTask(
+  request: ProviderRequest,
+  text: string
+): ProviderRequest | null {
+  const messages = request.messages;
+  const first = messages?.[0];
+  if (!messages || first?.role !== 'user' || !Array.isArray(first.content))
+    return null;
+  const blocks = first.content as Block[];
+  const task = blocks.length - 1;
+  if (task < 0 || typeof blocks[task]?.text !== 'string') return null;
+  return {
+    ...request,
+    messages: [
+      {
+        ...first,
+        content: [
+          ...blocks.slice(0, task),
+          { type: 'text', text } as Block,
+          blocks[task],
+        ],
+      } as Message,
+      ...messages.slice(1),
+    ],
+  };
+}
+
 export type GitRunner = (
   cwd: string,
   args: string[],

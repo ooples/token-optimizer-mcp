@@ -1311,8 +1311,8 @@ it("puts a subagent's task-path pack after the shared prefix, identically each t
               { type: 'text', text: task },
             ],
           },
-          { role: 'system', content: [listing] },
-          ...later,
+          // Claude Code sends the system-role listing on the first request only.
+          ...(later.length ? later : [{ role: 'system', content: [listing] }]),
         ],
       }),
     }).then((r) => r.text());
@@ -1328,16 +1328,18 @@ it("puts a subagent's task-path pack after the shared prefix, identically each t
     }[];
   };
   const sent = bodies.map((b) => JSON.parse(b) as Sent);
-  for (const s of sent) {
-    expect(s.messages[2].role).toBe('user');
-    expect(s.messages[2].content[0].text).toMatch(/^# Repository pack: /);
-    expect(s.messages[2].content[1].text).toBe(task);
-  }
+  // Turn 1, reordered: the pack heads the task's own turn, after the listing.
+  expect(sent[0].messages[2].role).toBe('user');
+  expect(sent[0].messages[2].content[0].text).toMatch(/^# Repository pack: /);
+  expect(sent[0].messages[2].content[1].text).toBe(task);
   expect(sent[0].messages[2].content[0].cache_control).toEqual({
     type: 'ephemeral',
   });
-  expect(sent[1].messages[2].content[0].text).toBe(
+  // Later turns, no listing: the same pack just before the task.
+  const later = sent[1].messages[0].content;
+  expect(later[later.length - 2].text).toBe(
     sent[0].messages[2].content[0].text
   );
+  expect(later[later.length - 1].text).toBe(task);
   rmSync(repo, { recursive: true, force: true });
 });

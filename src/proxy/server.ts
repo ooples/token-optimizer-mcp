@@ -126,6 +126,7 @@ import type { Finding } from '../compress/knowledge.js';
 import { loadFindings, loadFindingsFrom } from './findings.js';
 import {
   injectPack,
+  injectPackBeforeTask,
   injectTaskPack,
   RepoPacks,
   repoPackEnabled,
@@ -920,8 +921,16 @@ function compressBodyOnce(
   // other repositories share.
   let taskPackChars = 0;
   const taskPack = taskPacks.get(body);
-  if (taskPack && sharedPrefix === 'reordered') {
-    const out = injectTaskPack(parsed, taskPack);
+  if (taskPack) {
+    // Claude Code sends the system-role listing on a subagent's FIRST request
+    // only (captured: turn 1 `user, system`; turn 2 on `user, assistant, user`),
+    // so the reorder applies once and every later turn carries the pack just
+    // before the task in the first turn instead. Measured with the reordered
+    // shape alone, the pack reached 10 of ~115 requests: one per worker.
+    const out =
+      sharedPrefix === 'reordered'
+        ? injectTaskPack(parsed, taskPack)
+        : injectPackBeforeTask(parsed, taskPack);
     if (out) {
       parsed = out;
       taskPackChars = taskPack.length;
