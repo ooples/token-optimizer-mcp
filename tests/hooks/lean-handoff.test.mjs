@@ -39,6 +39,8 @@ describe('lean handoffs', () => {
   test('a short report and the off switch pass through', () => {
     const dir = join(root, 'wiki2');
     expect(leanHandoff(agent('All four fixed; suite green.'), { dir })).toBeNull();
+    // One long paragraph: no line fits the budget, so nothing could be kept.
+    expect(leanHandoff(agent('word '.repeat(2000)), { dir })).toBeNull();
     process.env.TOKEN_OPTIMIZER_LEAN_HANDOFF = '0';
     try {
       expect(leanHandoff(agent(report()), { dir })).toBeNull();

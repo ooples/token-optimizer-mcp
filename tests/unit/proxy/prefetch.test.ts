@@ -123,6 +123,22 @@ describe('per conversation', () => {
     }
   });
 
+  it('a retry racing the first request gets the same bytes from one fetch', async () => {
+    const calls: string[][] = [];
+    const p = new Prefetcher({
+      dir: mkdtempSync(join(tmpdir(), 'prefetch-')),
+      gh: fakeGh(calls),
+    });
+    const req = subagent('Item: ISSUE ooples/AiDotNet #1159 (bug).');
+    const [a, b] = await Promise.all([
+      p.forRequest(req, 'r'),
+      p.forRequest(req, 'r'),
+    ]);
+    expect(b.text).toBe(a.text);
+    expect(a.text).not.toBeNull();
+    expect(calls).toHaveLength(2);
+  });
+
   it('leaves the main session, and a conversation already under way, alone', async () => {
     const p = new Prefetcher({
       dir: mkdtempSync(join(tmpdir(), 'prefetch-')),

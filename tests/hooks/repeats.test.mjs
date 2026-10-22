@@ -39,7 +39,10 @@ describe('diff-only repeats', () => {
   test('never points at a result that may have left the context', () => {
     const state = {};
     run(state, 1, pytest(2));
-    expect(run(state, 1 + REPEAT_WINDOW + 1, pytest(2))).toBeNull();
+    expect(run(state, 1 + REPEAT_WINDOW, pytest(2))).toBeNull();
+    // Within the window: the earlier result is one of the last REPEAT_WINDOW tool uses.
+    run(state, 10, pytest(2));
+    expect(run(state, 10 + REPEAT_WINDOW - 1, pytest(2))).not.toBeNull();
   });
 
   test('a different command, directory or small output passes through', () => {

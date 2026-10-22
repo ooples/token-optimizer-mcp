@@ -23,8 +23,10 @@ describe('what is recorded', () => {
   test('read-only commands only', () => {
     for (const c of ['git log --oneline -20', 'gh issue view 12 -R o/r', 'gh api repos/o/r/issues/12', 'ls -la src', 'grep -rn foo src | head -5', "sed -n '1,40p' a.ts"])
       expect(isReadOnlyCommand(c)).toBe(true);
-    for (const c of ['git commit -m x', 'npm install', 'gh api -X POST repos/o/r/issues', 'gh api repos/o/r/issues -f title=x', 'cat a > b', 'sed -i s/a/b/ f', 'rm -rf x'])
+    for (const c of ['git commit -m x', 'npm install', 'gh api -X POST repos/o/r/issues', 'gh api repos/o/r/issues -f title=x', 'cat a > b', 'sed -i s/a/b/ f', 'rm -rf x', 'find . -name "*.tmp" -delete', 'find . -exec touch {} +', 'git branch -D old', 'git branch --set-upstream-to=origin/main'])
       expect(isReadOnlyCommand(c)).toBe(false);
+    for (const c of ['git branch -a', 'grep -c TODO src/a.ts', 'ls -d */'])
+      expect(isReadOnlyCommand(c)).toBe(true);
   });
 
   test('a leading cd becomes the directory', () => {

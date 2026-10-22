@@ -9,18 +9,19 @@
  * bind thinking to the conversation it never invalidates a thinking block --
  * which a rewrite of history by this proxy would.
  *
- * THE CACHE DECIDES THE PARAMETERS. Clearing re-writes the cached prompt from
- * the first cleared result onward, about 1.15x the context behind it (1.25x
- * written instead of 0.1x read), once; it saves 0.1x the cleared tokens on
- * every later call. Clearing at least half of a 60k-token context therefore
- * pays back after about 20 more calls -- short agents never reach the trigger,
- * and long sessions, which run hundreds of calls at that size, gain on every
- * one after. `clear_at_least` makes each activation free enough to be worth
- * the re-write instead of trimming a little every turn.
+ * OPT-IN, MEASURED AGAINST. The client sends its whole history every turn, so
+ * the trigger is judged on the uncleared size: once a conversation passes it,
+ * EVERY later request clears, and `keep` moves the boundary forward with each
+ * new tool use. Each move re-writes the cached prompt from the newly cleared
+ * result onward (1.25x instead of 0.1x), and the model re-reads what it lost.
+ * On the long single-agent workload (3 reps each), the run that crossed the
+ * trigger cost 226k against 125k-164k without clearing: re-writes of 21k, 9k
+ * and 25k tokens after the first activation; runs that never crossed it were
+ * unchanged. It stays available for sessions long enough to amortise that.
  *
  * Results of Agent/Task calls are kept: they are the workers' deliverables.
  *
- * TOKEN_OPTIMIZER_PROXY_CLEAR_TOOL_USES=0 turns it off; _TRIGGER, _KEEP and
+ * TOKEN_OPTIMIZER_PROXY_CLEAR_TOOL_USES=1 turns it on; _TRIGGER, _KEEP and
  * _AT_LEAST set the trigger (input tokens), the tool uses kept, and the
  * minimum cleared per activation (input tokens).
  */
@@ -52,7 +53,7 @@ export function clearingFromEnv(
   env: NodeJS.ProcessEnv = process.env
 ): ClearingPolicy | null {
   const raw = String(env.TOKEN_OPTIMIZER_PROXY_CLEAR_TOOL_USES ?? '').trim();
-  if (/^(0|false|no|off)$/i.test(raw)) return null;
+  if (!/^(1|true|yes|on)$/i.test(raw)) return null;
   return {
     triggerTokens: positive(
       env.TOKEN_OPTIMIZER_PROXY_CLEAR_TOOL_USES_TRIGGER,

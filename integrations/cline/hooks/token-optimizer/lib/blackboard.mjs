@@ -47,7 +47,10 @@ export function boardPath(sessionId) {
 /** First words of commands that only read. Anything else is never recorded. */
 const READ_ONLY =
   /^(?:git\s+(?:log|show|diff|grep|ls-files|ls-tree|status|branch|rev-parse|blame|describe|tag\s+-l|remote\s+-v)|gh\s+(?:issue|pr)\s+(?:view|list|diff|checks)|gh\s+api\s+(?![^|;&]*(?:-X\s*(?:POST|PATCH|PUT|DELETE)|--method|\s-f\s|\s-F\s|--field|--input))|ls|cat|head|tail|grep|rg|find|wc|tree|jq|sed\s+-n|awk\s+(?!.*-i))\b/;
-const MUTATES = /(?:^|[^>])>(?!&)|>>|\btee\b|\brm\b|\bmv\b|\bcp\b|\bmkdir\b|\btouch\b|-i\b|--in-place/;
+const MUTATES = /(?:^|[^>])>(?!&)|>>|\btee\b|\brm\b|\bmv\b|\bcp\b|\bmkdir\b|\btouch\b|-i\b|--in-place|\s-(?:delete|exec(?:dir)?|ok|fprint\w*)\b/;
+/** `git branch` and `git tag` list by default and change refs with these. */
+const REF_CHANGE = /\s-(?:[dDmMcCf]|-(?:delete|move|copy|force|set-upstream-to|unset-upstream|edit-description))\b/;
+const mutates = (p) => MUTATES.test(p) || (/^git\s+(?:branch|tag)\b/.test(p) && REF_CHANGE.test(p));
 
 /** The command with a leading `cd <dir> &&` taken off, and that directory. */
 export function splitCd(command, cwd = '') {
@@ -64,7 +67,7 @@ export function isReadOnlyCommand(command) {
     .split(/&&|\|\||;|\|/)
     .map((p) => p.trim())
     .filter(Boolean);
-  return parts.length > 0 && parts.every((p) => READ_ONLY.test(p) && !MUTATES.test(p));
+  return parts.length > 0 && parts.every((p) => READ_ONLY.test(p) && !mutates(p));
 }
 
 /** The commit checked out in the repository containing `dir`, read from disk, or null. */

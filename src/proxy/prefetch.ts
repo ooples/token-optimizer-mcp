@@ -17,7 +17,11 @@
  * per reference so siblings share one fetch, and pinned per conversation like
  * the repository pack, so every turn carries the same bytes.
  *
- * TOKEN_OPTIMIZER_PROXY_PREFETCH=0 turns it off.
+ * OPT-IN (TOKEN_OPTIMIZER_PROXY_PREFETCH=1), MEASURED AGAINST. On the 10-agent
+ * campaign replay (3 runs each, 2026-10-22) it reached 59 requests per run, yet
+ * workers still made 17 `gh` calls of their own (22 without it), and the runs
+ * cost 683k-753k with it against 578k-694k without: every later turn re-reads
+ * the prefetched text, and the agents fetch what they want anyway.
  */
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -38,7 +42,7 @@ const COMMENTS = 5;
 const FRESH_MS = 10 * 60_000;
 
 export function prefetchEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
-  return !/^(0|false|no|off)$/i.test(
+  return /^(1|true|yes|on)$/i.test(
     String(env.TOKEN_OPTIMIZER_PROXY_PREFETCH ?? '').trim()
   );
 }
@@ -190,6 +194,8 @@ export class Prefetcher {
     { at: number; text: Promise<string | null> }
   >();
   private readonly pins = new Map<string, string>();
+  /** First requests in flight, so a retry racing the original pins the same bytes. */
+  private readonly pending = new Map<string, Promise<PrefetchOutcome>>();
 
   constructor(
     options: { dir?: string; gh?: GhRunner; now?: () => number } = {}
@@ -211,6 +217,18 @@ export class Prefetcher {
     if (pinned !== undefined)
       return { text: pinned === '' ? null : pinned, reason: 'pinned' };
     if (!isNewConversation(request)) return { text: null, reason: 'not-new' };
+    const inFlight = this.pending.get(key);
+    if (inFlight) return inFlight;
+    const outcome = this.first(key, task);
+    this.pending.set(key, outcome);
+    try {
+      return await outcome;
+    } finally {
+      this.pending.delete(key);
+    }
+  }
+
+  private async first(key: string, task: string): Promise<PrefetchOutcome> {
     const refs = assignedItems(task);
     if (!refs.length) {
       await this.pin(key, '');

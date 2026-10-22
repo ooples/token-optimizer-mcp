@@ -34,9 +34,15 @@ describe('repo_ask', () => {
     });
   });
 
-  test('is defined in every agent shell, and named in the subagent briefing, unless turned off', () => {
-    expect(quietEnvScript({}).script).toMatch(/^repo_ask\(\) \{ node '.+ask\.mjs' "\$@"; \}$/m);
-    expect(quietEnvScript({ TOKEN_OPTIMIZER_REPO_ASK: '0' }).script).not.toContain('repo_ask');
-    expect(subagentBriefing({ agent_id: 'x' }, {})).toContain('repo_ask "<question>"');
+  test('is opt-in: defined in every agent shell and named in the subagent briefing only when turned on', () => {
+    expect(quietEnvScript({ TOKEN_OPTIMIZER_REPO_ASK: '1' }).script).toMatch(/^repo_ask\(\) \{ node '.+ask\.mjs' "\$@"; \}$/m);
+    expect(quietEnvScript({}).script).not.toContain('repo_ask');
+    expect(subagentBriefing({ agent_id: 'x' }, {})).not.toContain('repo_ask');
+    process.env.TOKEN_OPTIMIZER_REPO_ASK = '1';
+    try {
+      expect(subagentBriefing({ agent_id: 'x' }, {})).toContain('repo_ask "<question>"');
+    } finally {
+      delete process.env.TOKEN_OPTIMIZER_REPO_ASK;
+    }
   });
 });

@@ -178,9 +178,9 @@ it('forwards Anthropic tool-search references and beta headers unchanged', async
   const sent = JSON.parse(provider.seen.body!);
   expect(sent.messages).toEqual(payload.messages);
   expect(sent.tools).toEqual(payload.tools);
-  // The client's betas pass through; the clearing edit adds its own (context-edit.ts).
+  // The client's betas pass through unchanged (clearing, which adds its own, is opt-in).
   expect(provider.seen.headers?.['anthropic-beta']).toBe(
-    'advanced-tool-use-2025-11-20,context-management-2025-06-27'
+    'advanced-tool-use-2025-11-20'
   );
 });
 
@@ -1404,6 +1404,7 @@ it('asks the provider to clear old tool results, after the client’s own edits,
     upstream: provider.url,
     knowledge: false,
     repoPack: false,
+    clearToolUses: true,
   });
   servers.push(proxy.server);
   await fetch(`http://127.0.0.1:${proxy.port}/v1/messages`, {

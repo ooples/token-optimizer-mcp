@@ -252,10 +252,10 @@ export interface ProxyOptions {
   readonly projectRoot?: string;
   /** Disable graph injection when a client chooses its working tree after launch. */
   readonly knowledge?: boolean;
-  /** First-turn prefetch of a subagent's assigned issue or PR (prefetch.ts); `false` turns it off. */
+  /** First-turn prefetch of a subagent's assigned issue or PR (prefetch.ts); opt-in: options turn it on, `false` keeps it off. */
   readonly prefetch?: false | ConstructorParameters<typeof Prefetcher>[0];
-  /** Server-side clearing of old tool results (context-edit.ts); `false` turns it off. */
-  readonly clearToolUses?: false;
+  /** Server-side clearing of old tool results (context-edit.ts); opt-in: `true` turns it on, `false` keeps it off. */
+  readonly clearToolUses?: boolean;
   /** The shared repository pack (repo-pack.ts); `false` turns it off. */
   readonly repoPack?: false | RepoPacksOptions;
   /** Named starting point for the dials. Defaults to the environment's. */
@@ -2258,13 +2258,21 @@ export async function startProxy(options: ProxyOptions = {}): Promise<{
       : null;
 
   const clearing =
-    options.clearToolUses === false ? null : clearingFromEnv(process.env);
+    options.clearToolUses === false
+      ? null
+      : clearingFromEnv(
+          options.clearToolUses
+            ? { ...process.env, TOKEN_OPTIMIZER_PROXY_CLEAR_TOOL_USES: '1' }
+            : process.env
+        );
   const compaction = compactionFromEnv(process.env);
 
+  // Opt-in (prefetch.ts): by the environment, or by passing its options.
   const prefetcher =
-    options.prefetch === false || !prefetchEnabled(process.env)
+    options.prefetch === false ||
+    (!options.prefetch && !prefetchEnabled(process.env))
       ? null
-      : new Prefetcher(options.prefetch ?? {});
+      : new Prefetcher(options.prefetch || {});
 
   const guessing = upstreamIsDefault(options);
   const limit = bodyLimitFor(options);

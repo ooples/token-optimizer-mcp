@@ -192,12 +192,14 @@ export function trimSubagentContext(request: ProviderRequest): TrimResult {
     const content = message?.content;
     if (!Array.isArray(content)) return message;
     let changed = false;
+    let droppedMarker: unknown;
     const blocks: unknown[] = [];
     for (const block of content as unknown[]) {
       if (isToolAddition(block)) {
         const server = serverOf(String(block.tool?.definition?.name ?? ''));
         if (server && !keepServer(server, task)) {
           changed = true;
+          droppedMarker ??= (block as Block).cache_control;
           continue;
         }
         blocks.push(block);
@@ -227,6 +229,13 @@ export function trimSubagentContext(request: ProviderRequest): TrimResult {
         blocks.push({ ...b, text: trimmed });
       } else blocks.push(block);
     }
+    // THE MARKER OUTLIVES THE BLOCK. Claude Code puts a subagent's last cache
+    // marker on the final tool_addition of its system-role listing; dropping
+    // that block without it left the first request cached only to the sibling
+    // prefix, and call 2 re-wrote the rest (explore: +10k writes per run).
+    const last = blocks[blocks.length - 1] as Block | undefined;
+    if (droppedMarker && last && !last.cache_control)
+      blocks[blocks.length - 1] = { ...last, cache_control: droppedMarker };
     return changed && blocks.length ? { ...message, content: blocks } : message;
   });
 

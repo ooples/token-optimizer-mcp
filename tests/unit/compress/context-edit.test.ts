@@ -53,13 +53,17 @@ describe('server-side clearing of old tool results', () => {
     ).toBe(false);
   });
 
-  it('is configurable and can be turned off', () => {
-    expect(clearingFromEnv({})).toEqual(DEFAULT_CLEARING);
+  it('is off unless turned on, and configurable', () => {
+    expect(clearingFromEnv({})).toBeNull();
     expect(
       clearingFromEnv({ TOKEN_OPTIMIZER_PROXY_CLEAR_TOOL_USES: '0' })
     ).toBeNull();
     expect(
+      clearingFromEnv({ TOKEN_OPTIMIZER_PROXY_CLEAR_TOOL_USES: '1' })
+    ).toEqual(DEFAULT_CLEARING);
+    expect(
       clearingFromEnv({
+        TOKEN_OPTIMIZER_PROXY_CLEAR_TOOL_USES: '1',
         TOKEN_OPTIMIZER_PROXY_CLEAR_TOOL_USES_TRIGGER: '90000',
       })?.triggerTokens
     ).toBe(90_000);

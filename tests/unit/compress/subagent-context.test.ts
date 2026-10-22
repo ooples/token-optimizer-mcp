@@ -134,6 +134,29 @@ describe('trimming a subagent\u2019s injected context', () => {
     expect(sent).toContain('"cache_control"');
   });
 
+  it('moves the cache marker of a dropped block onto the last block kept', () => {
+    const req = worker('Fix issue #12 in the repository.');
+    const listing = req.messages[1].content as Record<string, unknown>[];
+    // As Claude Code sends it: the marker on the LAST tool_addition, here one of an unmentioned server.
+    delete listing[2].cache_control;
+    listing.push({
+      type: 'tool_addition',
+      tool: {
+        type: 'tool_definition',
+        definition: { name: 'mcp__claude_ai_Gmail__authenticate' },
+      },
+      cache_control: { type: 'ephemeral', ttl: '1h' },
+    });
+    const kept = trimSubagentContext(req).request.messages[1]
+      .content as Record<string, unknown>[];
+    expect(JSON.stringify(kept)).not.toContain('Gmail');
+    expect(kept[kept.length - 1].cache_control).toEqual({
+      type: 'ephemeral',
+      ttl: '1h',
+    });
+    expect(kept.filter((b) => b.cache_control)).toHaveLength(1);
+  });
+
   it('keeps a server the task names', () => {
     const named = texts(
       trimSubagentContext(

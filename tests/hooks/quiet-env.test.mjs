@@ -30,7 +30,6 @@ describe('quietEnvScript', () => {
     expect(names).toEqual([
       ...Object.keys(QUIET_ENV_DEFAULTS),
       'PYTEST_ADDOPTS',
-      'repo_ask',
     ]);
     expect(script).toContain(
       `[ -n "\${GIT_PAGER+x}" ] || export GIT_PAGER='cat'\n`

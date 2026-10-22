@@ -1071,6 +1071,14 @@ all.
 | `TOKEN_OPTIMIZER_PROXY_REPO_PACK_TASK` | off        | also pack a subagent's task repository when the session runs outside a repo |
 | `TOKEN_OPTIMIZER_PROXY_TRIM_SUBAGENTS` | on         | drop the memory index, skill text and unused tool lists from subagents      |
 | `TOKEN_OPTIMIZER_PROXY_READONLY_ROUTE` | `down`     | declared read-only subagents one model tier down; `0` to keep their model   |
+| `TOKEN_OPTIMIZER_PROXY_PREFETCH`       | off        | fetch the issue or PR a subagent is assigned before its first turn          |
+| `TOKEN_OPTIMIZER_PROXY_WORKER_TERSE`   | on         | ask subagents for short reports (output is billed 5x input)                 |
+| `TOKEN_OPTIMIZER_PROXY_CLEAR_TOOL_USES`| off        | server-side clearing of old tool results; measured to cost more (see below) |
+| `TOKEN_OPTIMIZER_PROXY_COMPACT`        | off        | server-side compaction past `_TRIGGER` input tokens (min 50,000)            |
+| `TOKEN_OPTIMIZER_REPEATS`              | on         | a re-run command or re-read file returns only what changed                  |
+| `TOKEN_OPTIMIZER_BLACKBOARD`           | on         | a subagent's briefing lists read-only commands its siblings already ran     |
+| `TOKEN_OPTIMIZER_LEAN_HANDOFF`         | on         | a foreground subagent's report over 4,000 characters reaches the lead lean  |
+| `TOKEN_OPTIMIZER_REPO_ASK`             | off        | a `repo_ask "<question>"` shell command for agents, named in their briefing |
 
 Both of the `on` rows said `off` here until 7.1.0, which was wrong about the
 shipped code rather than a change of default: an unset value has always meant
@@ -1082,6 +1090,17 @@ the rest of the session, which pays on a long conversation and does not on a sho
 one. Turn it on and the block is dropped on any turn where sending it would hand
 upstream more bytes than the client handed us -- the wire never inflates, and the
 prefix knowledge is what you give up for that.
+
+`TOKEN_OPTIMIZER_PROXY_CLEAR_TOOL_USES` is off because the client re-sends its
+whole history every turn: once a conversation passes the trigger, every request
+clears, and the boundary moves forward with each new tool use, re-writing the
+cache from there each time while the model re-reads what was cleared. On the
+long single-agent benchmark the run that crossed the trigger cost about 1.5x the
+runs without clearing. `TOKEN_OPTIMIZER_REPO_ASK` is off because agents offered
+it never used it (0 calls across about 230 benchmark subagents); the briefing
+line was a cost on every agent. `TOKEN_OPTIMIZER_PROXY_PREFETCH` is off because
+on the 10-agent campaign replay the workers fetched their issues themselves
+anyway, and runs with it cost about 10% more than runs without.
 
 ### Rollout channels
 

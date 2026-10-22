@@ -10,7 +10,7 @@
  * ONLY WHILE THE EARLIER RESULT IS SURELY STILL THERE. A pointer to an earlier
  * output is only an answer if that output is still in the agent's context, so
  * this applies within REPEAT_WINDOW tool calls -- the same number of recent
- * results the server-side clearing always keeps (src/compress/context-edit.ts).
+ * results the opt-in server-side clearing keeps (src/compress/context-edit.ts).
  *
  *   Bash/PowerShell, same command, same output   one line naming the earlier call
  *   Bash/PowerShell, same command, changed       the changed lines only, each
@@ -134,7 +134,9 @@ export function repeatResponse({ tool, input, response, cwd = '', call, state, s
     for (const old of ids.sort((x, y) => state.repeats[x].call - state.repeats[y].call).slice(0, ids.length - MAX_KEYS))
       delete state.repeats[old];
 
-  if (!prior || call - prior.call > REPEAT_WINDOW || text.length < REPEAT_MIN_CHARS) return null;
+  // At most REPEAT_WINDOW - 1 calls between: the earlier result is then within
+  // the last REPEAT_WINDOW tool uses, which clearing with that `keep` never drops.
+  if (!prior || call - prior.call >= REPEAT_WINDOW || text.length < REPEAT_MIN_CHARS) return null;
   const same = prior.hash === digest(text);
 
   if (tool === 'Read') {

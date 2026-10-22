@@ -22,9 +22,14 @@
 import { appendFileSync, existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-/** `repo_ask` in every agent's shell (ask.mjs); TOKEN_OPTIMIZER_REPO_ASK=0 leaves it out. */
+/**
+ * `repo_ask` in every agent's shell (ask.mjs), OPT-IN: TOKEN_OPTIMIZER_REPO_ASK=1.
+ * Measured on 2026-10-22: offered in the briefing of about 230 subagents across
+ * five workloads, run 0 times -- they searched with Grep -- so the line was a
+ * cost on every agent with nothing saved.
+ */
 export function repoAskEnabled(env = process.env) {
-  return !/^(0|false|no|off)$/i.test(
+  return /^(1|true|yes|on)$/i.test(
     String(env.TOKEN_OPTIMIZER_REPO_ASK ?? '').trim()
   );
 }

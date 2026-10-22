@@ -150,11 +150,12 @@ const ARM = {
     proxyEnv: { TOKEN_OPTIMIZER_PROXY_REPO_PACK: '0' },
   },
   // One feature off each, for attribution against `ours-next`.
-  'ours-next-noprefetch': {
+  // Prefetch is opt-in (prefetch.ts): this arm turns it on.
+  'ours-next-prefetch': {
     plugin: 'next',
     proxyNull: false,
     alt: false,
-    proxyEnv: { TOKEN_OPTIMIZER_PROXY_PREFETCH: '0' },
+    proxyEnv: { TOKEN_OPTIMIZER_PROXY_PREFETCH: '1' },
   },
   'ours-next-noterse': {
     plugin: 'next',
@@ -181,11 +182,12 @@ const ARM = {
     alt: false,
     env: { TOKEN_OPTIMIZER_LEAN_HANDOFF: '0' },
   },
-  'ours-next-noask': {
+  // repo_ask is opt-in (quiet-env.mjs): this arm turns it on.
+  'ours-next-ask': {
     plugin: 'next',
     proxyNull: false,
     alt: false,
-    env: { TOKEN_OPTIMIZER_REPO_ASK: '0' },
+    env: { TOKEN_OPTIMIZER_REPO_ASK: '1' },
   },
   // Server-side compaction (opt-in) at its minimum trigger, for the long task.
   'ours-next-compact': {
@@ -204,12 +206,12 @@ const ARM = {
     alt: false,
     proxyEnv: { TOKEN_OPTIMIZER_BATCH_GUIDANCE: '1' },
   },
-  // Server-side clearing of old tool results off (context-edit.ts), for its A/B.
-  'ours-next-noclear': {
+  // Server-side clearing of old tool results (context-edit.ts, opt-in) on, for its A/B.
+  'ours-next-clear': {
     plugin: 'next',
     proxyNull: false,
     alt: false,
-    proxyEnv: { TOKEN_OPTIMIZER_PROXY_CLEAR_TOOL_USES: '0' },
+    proxyEnv: { TOKEN_OPTIMIZER_PROXY_CLEAR_TOOL_USES: '1' },
   },
   // The pack's size: every call re-reads it, so it has to remove more than it adds.
   'ours-next-pack8k': {

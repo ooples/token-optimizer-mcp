@@ -412,6 +412,8 @@ export function leanHandoff(response, { dir, sessionId = null, tool = 'Agent' })
   // Citations first -- they are what a caller acts on -- then the other signals.
   for (const re of [CITATION, REPORT_SIGNAL])
     for (let i = 0; i < lines.length; i++) if (re.test(lines[i]) && !take(i)) break;
+  // A report in a few long lines keeps too little to act on: it goes through whole.
+  if (used < HANDOFF_BUDGET / 2) return null;
   const ref = capture(dir, text, { tool, command: null, sessionId, shape: 'handoff' });
   if (!ref) return null;
   const out = [];

@@ -77,6 +77,8 @@ export function answer(question) {
       if (r) [, owner, repo] = r;
     }
     if (!owner) return 'no owner/repo given and no origin remote to infer one from';
+    // Names only: `..` would walk the API path elsewhere.
+    if (/^\.+$/.test(owner) || /^\.+$/.test(repo)) return `not a repository: ${owner}/${repo}`;
     const raw = run('gh', ['api', `repos/${owner}/${repo}/issues/${m[3]}`]);
     try {
       const it = JSON.parse(raw);
