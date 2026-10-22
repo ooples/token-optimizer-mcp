@@ -212,13 +212,17 @@ export function injectTaskPack(
   };
 }
 
-export type GitRunner = (cwd: string, args: string[]) => Promise<string | null>;
+export type GitRunner = (
+  cwd: string,
+  args: string[],
+  timeoutMs?: number
+) => Promise<string | null>;
 
 /**
  * Async, never sync, and never starting git's fsmonitor daemon: the daemon
  * inherits the caller's pipes, so a call that starts it never sees them close.
  */
-export const runGit: GitRunner = (cwd, args) =>
+export const runGit: GitRunner = (cwd, args, timeoutMs = GIT_TIMEOUT_MS) =>
   new Promise((resolve) => {
     let settled = false;
     const done = (v: string | null): void => {
@@ -231,7 +235,7 @@ export const runGit: GitRunner = (cwd, args) =>
     const timer = setTimeout(() => {
       child?.kill();
       done(null);
-    }, GIT_TIMEOUT_MS);
+    }, timeoutMs);
     let child: ReturnType<typeof spawn> | undefined;
     try {
       child = spawn(
@@ -285,35 +289,46 @@ export async function resolveRepo(
   ]);
   const [top, commonDir] = (out ?? '').split(/\r?\n/).map((s) => s.trim());
   if (!top || !commonDir) return null;
-  const head = (
-    await git(dir, [
-      'symbolic-ref',
-      '--short',
-      '-q',
-      'refs/remotes/origin/HEAD',
-    ])
-  )?.trim();
+  // ONE CALL for every candidate base, not a probe each: on the first request
+  // of a fan-out this sits on the path the agent is waiting on.
+  const refs = await git(dir, [
+    'for-each-ref',
+    '--format=%(refname:short)\t%(objectname)\t%(symref:short)',
+    'refs/remotes/origin/HEAD',
+    'refs/remotes/origin/master',
+    'refs/remotes/origin/main',
+    'refs/heads/master',
+    'refs/heads/main',
+  ]);
+  const sha = new Map<string, string>();
+  let originHead: string | undefined;
+  for (const line of (refs ?? '').split(/\r?\n/)) {
+    const [name, object, target] = line.split('\t');
+    if (!name || !object) continue;
+    // origin/HEAD prints as `origin`; its target names the default branch.
+    if (target) originHead = target;
+    else sha.set(name, object);
+  }
+  const shape = (baseRef: string, baseSha: string): Repo => ({
+    top,
+    commonDir: commonDir.replace(/\\/g, '/').replace(/\/$/, ''),
+    baseRef,
+    baseSha,
+  });
   for (const ref of [
-    head,
+    originHead,
     'origin/master',
     'origin/main',
     'master',
     'main',
-    'HEAD',
   ]) {
-    if (!ref) continue;
-    const sha = (
-      await git(dir, ['rev-parse', '--verify', '-q', `${ref}^{commit}`])
-    )?.trim();
-    if (sha)
-      return {
-        top,
-        commonDir: commonDir.replace(/\\/g, '/').replace(/\/$/, ''),
-        baseRef: ref,
-        baseSha: sha,
-      };
+    const found = ref ? sha.get(ref) : undefined;
+    if (ref && found) return shape(ref, found);
   }
-  return null;
+  const head = (
+    await git(dir, ['rev-parse', '--verify', '-q', 'HEAD^{commit}'])
+  )?.trim();
+  return head ? shape('HEAD', head) : null;
 }
 
 const OUTLINEABLE = /\.(ts|tsx|js|jsx|mjs|cjs|py|go|rs|java|rb|php|cs)$/i;
@@ -402,7 +417,7 @@ export async function buildPack(
   const git = options.git ?? runGit;
   const sha = repo.baseSha;
   const budget = options.budget;
-  const listing = await git(repo.top, ['ls-tree', '-r', '-z', sha]);
+  const listing = await git(repo.commonDir, ['ls-tree', '-r', '-z', sha]);
   if (listing === null) return null;
   // "<mode> blob <id>\t<path>": the blob id is what tells a synced copy from its source.
   const blobOf = new Map<string, string>();
@@ -415,7 +430,7 @@ export async function buildPack(
   const inTree = blobOf;
 
   const [log, refs, churn] = await Promise.all([
-    git(repo.top, [
+    git(repo.commonDir, [
       'log',
       '-n',
       '25',
@@ -423,7 +438,7 @@ export async function buildPack(
       '--date=short',
       sha,
     ]),
-    git(repo.top, [
+    git(repo.commonDir, [
       'for-each-ref',
       '--sort=-committerdate',
       '--count=40',
@@ -431,7 +446,7 @@ export async function buildPack(
       'refs/heads',
       'refs/remotes',
     ]),
-    git(repo.top, ['log', '-n', '300', '--format=', '--name-only', sha]),
+    git(repo.commonDir, ['log', '-n', '300', '--format=', '--name-only', sha]),
   ]);
 
   // The REPOSITORY's name, not this worktree's folder: every worktree must get the same bytes.
@@ -450,7 +465,7 @@ export async function buildPack(
     .filter((f) => MANIFESTS.test(f))
     .map((f) => `manifest: ${f}`);
   if (inTree.has('package.json')) {
-    const pkg = await git(repo.top, ['show', `${sha}:package.json`]);
+    const pkg = await git(repo.commonDir, ['show', `${sha}:package.json`]);
     try {
       const scripts =
         (JSON.parse(pkg ?? '{}') as { scripts?: Record<string, string> })
@@ -536,7 +551,7 @@ export async function buildPack(
     for (const file of hot) {
       const room = budget - text.length - outlines.length;
       if (room < 400) break;
-      const source = await git(repo.top, ['show', `${sha}:${file}`]);
+      const source = await git(repo.commonDir, ['show', `${sha}:${file}`]);
       if (!source || source.length > 400_000) continue;
       const lines = source.split(/\r?\n/);
       // A synced copy with a header of its own: same name, near-identical length.
@@ -608,26 +623,26 @@ export function pathsIn(text: string, max = 24): string[] {
   return out;
 }
 
-/** The path itself or its nearest existing ancestor directory, within a few levels. */
-async function nearestDir(path: string): Promise<string | null> {
-  let p = path;
-  for (let i = 0; i < 8; i++) {
-    try {
-      // Bounded: a path on a failing drive must not hold the request.
-      const s = await Promise.race([
-        stat(p),
-        new Promise<null>((r) => setTimeout(() => r(null), 1_000).unref?.()),
-      ]);
-      if (s?.isDirectory()) return p;
-    } catch {
-      // Not there; try the parent.
-    }
-    const up = dirname(p);
-    if (up === p) return null;
-    p = up;
-  }
-  return null;
+/**
+ * Directories worth asking git about for a path a task names: the path and
+ * its parent (it is often a file, or a worktree still to be created). Roots
+ * and one-segment paths are skipped: no repository is named that way.
+ *
+ * NO fs CALLS. A path on a failing drive held its stat calls for seconds and
+ * filled Node's file-system thread pool, so the stats for healthy paths
+ * behind them timed out and read as missing. Git runs in its own process.
+ */
+export function candidateDirs(path: string): string[] {
+  const clean = path.replace(/[\\/]+$/, '');
+  const deep = (p: string): boolean =>
+    p.split(/[\\/]/).filter(Boolean).length >= 2;
+  return [clean, dirname(clean)].filter(
+    (p, i, all) => deep(p) && all.indexOf(p) === i
+  );
 }
+
+/** Repository resolution normally takes 0.1-0.3 s; past this the path is not worth waiting for. */
+const RESOLVE_TIMEOUT_MS = 2_500;
 
 /** The repository's own name (not a worktree folder's). */
 export function repoNameOf(repo: Pick<Repo, 'commonDir'>): string {
@@ -777,19 +792,28 @@ export class RepoPacks {
 
   /** The repository a task is about, among those it names by absolute path. */
   private async taskRepo(task: string): Promise<Repo | null> {
+    // IN PARALLEL, and each repository's pack starts building the moment it
+    // resolves: a slow path (a drive spinning up took 2.4 s, measured) then
+    // overlaps the build instead of preceding it, and the chosen pack is
+    // already in flight when the choice is made.
+    const resolved = await Promise.all(
+      [...new Set(pathsIn(task).flatMap(candidateDirs))].map(async (dir) => {
+        let repo = this.repos.get(dir);
+        if (!repo) {
+          repo = resolveRepo(dir, (cwd, args) =>
+            this.git(cwd, args, RESOLVE_TIMEOUT_MS)
+          );
+          this.repos.set(dir, repo);
+          setTimeout(() => this.repos.delete(dir), 60_000).unref?.();
+        }
+        const r = await repo;
+        if (r) void this.current(r);
+        return r;
+      })
+    );
     const found = new Map<string, Repo>();
-    for (const path of pathsIn(task)) {
-      const dir = await nearestDir(path);
-      if (!dir) continue;
-      let repo = this.repos.get(dir);
-      if (!repo) {
-        repo = resolveRepo(dir, this.git);
-        this.repos.set(dir, repo);
-        setTimeout(() => this.repos.delete(dir), 60_000).unref?.();
-      }
-      const r = await repo;
+    for (const r of resolved)
       if (r && !found.has(r.commonDir)) found.set(r.commonDir, r);
-    }
     return chooseRepo(task, [...found.values()]);
   }
 
@@ -862,7 +886,9 @@ export class RepoPacks {
         // No pack yet for this repository.
       }
       const findings = this.findingsFor
-        ? await this.findingsFor(repo.top).catch(() => [])
+        ? await this.findingsFor(
+            /\.git$/.test(repo.commonDir) ? dirname(repo.commonDir) : repo.top
+          ).catch(() => [])
         : [];
       const text = await buildPack(repo, {
         budget: this.budget,

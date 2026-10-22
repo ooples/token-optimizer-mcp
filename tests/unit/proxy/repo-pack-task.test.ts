@@ -4,11 +4,14 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
+  candidateDirs,
   chooseRepo,
   injectTaskPack,
   pathsIn,
   PACK_HEADING,
   RepoPacks,
+  runGit,
+  type GitRunner,
 } from '../../../src/proxy/repo-pack.js';
 import type { ProviderRequest } from '../../../src/compress/frontier.js';
 
@@ -215,4 +218,44 @@ describe('task-path packs for a session outside any repository', () => {
     );
     expect(tie).toEqual({ text: null, reason: 'unbuilt', placement: null });
   });
+});
+
+describe('resolving the paths a task names', () => {
+  it('asks git about the path and its parent, never a root', () => {
+    expect(candidateDirs('C:/r/AiDotNet/src/a.cs')).toEqual([
+      'C:/r/AiDotNet/src/a.cs',
+      'C:/r/AiDotNet/src',
+    ]);
+    expect(candidateDirs('/claude.ai/code')).toEqual(['/claude.ai/code']);
+    expect(candidateDirs('/claude.ai')).toEqual([]);
+  });
+
+  it('bounds every resolution call, so an unreachable path cannot hold the first request', async () => {
+    const seen: (number | undefined)[] = [];
+    const hanging = `${root}/unreachable-drive/wt`;
+    const git: GitRunner = (cwd, args, timeoutMs) => {
+      if (args[0] === 'rev-parse' && args.includes('--git-common-dir'))
+        seen.push(timeoutMs);
+      // An unreachable path answers only when its call times out.
+      if (cwd.startsWith(`${root}/unreachable-drive`))
+        return new Promise((r) =>
+          setTimeout(() => r(null), timeoutMs ?? 60_000)
+        );
+      return runGit(cwd, args, timeoutMs);
+    };
+    const packs = new RepoPacks({
+      dir: mkdtempSync(join(root, 'store-')),
+      git,
+      maxWaitMs: 10_000,
+    });
+    const started = Date.now();
+    const out = await packs.forRequest(
+      subagent(`Work in ${hanging}. Repo ${alpha}. Fix Alpha#3.`),
+      'bounded'
+    );
+    expect(out.text).toContain(`${PACK_HEADING} Alpha @`);
+    expect(seen.length).toBeGreaterThan(0);
+    expect(seen.every((t) => t !== undefined && t <= 2_500)).toBe(true);
+    expect(Date.now() - started).toBeLessThan(8_000);
+  }, 15_000); // waits out the 2.5 s resolution timeout on purpose
 });
