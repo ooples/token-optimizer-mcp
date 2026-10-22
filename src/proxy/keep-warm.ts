@@ -89,10 +89,13 @@ export function pingBody(body: Buffer): Buffer | null {
   try {
     const parsed = JSON.parse(body.toString('utf8')) as Record<string, unknown>;
     if (!Array.isArray(parsed.messages)) return null;
-    const thinking = parsed.thinking as { type?: string; budget_tokens?: number } | undefined;
+    const thinking = parsed.thinking as
+      | { type?: string; budget_tokens?: number }
+      | undefined;
     if (thinking?.type === 'enabled') return null;
     // The other shapes `max_tokens: 0` rejects.
-    if ((parsed.output_config as { format?: unknown } | undefined)?.format) return null;
+    if ((parsed.output_config as { format?: unknown } | undefined)?.format)
+      return null;
     const choice = (parsed.tool_choice as { type?: string } | undefined)?.type;
     if (choice === 'tool' || choice === 'any') return null;
     return Buffer.from(
