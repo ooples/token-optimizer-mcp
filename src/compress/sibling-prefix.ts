@@ -55,7 +55,7 @@ const markerOf = (block: unknown): Marker | null => {
 };
 
 /** Every marker in prefix order: tools, then system, then messages. */
-function markersInOrder(
+export function markersInOrder(
   request: ProviderRequest
 ): { path: string; marker: Marker }[] {
   const out: { path: string; marker: Marker }[] = [];

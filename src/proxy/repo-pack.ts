@@ -31,7 +31,7 @@
  * TOKEN_OPTIMIZER_PROXY_REPO_PACK=0 turns it off;
  * TOKEN_OPTIMIZER_PROXY_REPO_PACK_CHARS sets its budget.
  */
-import { execFile } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
   mkdir,
@@ -44,10 +44,21 @@ import {
 } from 'node:fs/promises';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import type { Block, ProviderRequest } from '../compress/frontier.js';
+import type { Block, Message, ProviderRequest } from '../compress/frontier.js';
+import {
+  MAX_CACHE_MARKERS,
+  markersInOrder,
+} from '../compress/sibling-prefix.js';
+import { isSubagentRequest } from '../compress/subagent-context.js';
 import { optimizerHome } from './default-routing.js';
 
-export const DEFAULT_PACK_CHARS = 24_000;
+/**
+ * EVERY CALL RE-READS THE PACK, so it has to remove more than it adds. Measured
+ * (isolated harness, n=5 per arm, cost vs the same build without a pack): a 5k
+ * pack cut the fix task to 77%; on exploration of a 4.8k-file repository a 24k
+ * pack cost 102-111% and an 8k pack 100.4% -- fewer calls, more re-read.
+ */
+export const DEFAULT_PACK_CHARS = 8_000;
 /** A pack for an unchanged base is rebuilt at most this often (branch list, findings). */
 export const REBUILD_MS = 60 * 60_000;
 /** How long a conversation's pin, and the pack it names, are kept. */
@@ -55,6 +66,7 @@ export const PIN_MS = 24 * 60 * 60_000;
 /** Longest a new conversation waits for a pack being built. */
 export const MAX_WAIT_MS = 5_000;
 const GIT_TIMEOUT_MS = 10_000;
+const MAX_GIT_OUTPUT = 64 * 1024 * 1024;
 
 /** First line of every pack; also how an already-injected request is recognised. */
 export const PACK_HEADING = '# Repository pack:';
@@ -153,6 +165,53 @@ export function samePath(a: string, b: string): boolean {
   return norm(a) === norm(b);
 }
 
+/**
+ * Put the pack at the head of a subagent's task turn, AFTER the prefix its
+ * siblings share. Only in the shape the sibling-prefix reorder produces --
+ * shared leading turn, the system-role listing, then the task in a turn of its
+ * own -- and otherwise not at all (null).
+ *
+ * The pack carries a copy of the listing's cache marker when the request has a
+ * marker to spare, so siblings on the same repository read it from the cache.
+ * A copy of the PRECEDING marker always satisfies the API's ordering rule
+ * (longer-lived markers first).
+ */
+export function injectTaskPack(
+  request: ProviderRequest,
+  text: string
+): ProviderRequest | null {
+  const messages = request.messages;
+  const listing = messages?.[1];
+  const task = messages?.[2];
+  if (
+    !messages ||
+    listing?.role !== 'system' ||
+    task?.role !== 'user' ||
+    !Array.isArray(task.content) ||
+    !Array.isArray(listing.content)
+  )
+    return null;
+  const before = [...listing.content]
+    .reverse()
+    .map((b) => (b as Block & { cache_control?: unknown }).cache_control)
+    .find(Boolean);
+  const spare = markersInOrder(request).length < MAX_CACHE_MARKERS;
+  const block = {
+    type: 'text',
+    text,
+    ...(spare && before ? { cache_control: { ...(before as object) } } : {}),
+  } as Block;
+  return {
+    ...request,
+    messages: [
+      messages[0],
+      listing,
+      { ...task, content: [block, ...task.content] } as Message,
+      ...messages.slice(3),
+    ],
+  };
+}
+
 export type GitRunner = (cwd: string, args: string[]) => Promise<string | null>;
 
 /**
@@ -165,12 +224,17 @@ export const runGit: GitRunner = (cwd, args) =>
     const done = (v: string | null): void => {
       if (!settled) {
         settled = true;
+        clearTimeout(timer);
         resolve(v);
       }
     };
-    const timer = setTimeout(() => done(null), GIT_TIMEOUT_MS);
+    const timer = setTimeout(() => {
+      child?.kill();
+      done(null);
+    }, GIT_TIMEOUT_MS);
+    let child: ReturnType<typeof spawn> | undefined;
     try {
-      execFile(
+      child = spawn(
         'git',
         [
           '-c',
@@ -181,21 +245,25 @@ export const runGit: GitRunner = (cwd, args) =>
           cwd,
           ...args,
         ],
-        {
-          maxBuffer: 64 * 1024 * 1024,
-          windowsHide: true,
-          timeout: GIT_TIMEOUT_MS,
-          encoding: 'utf8',
-        },
-        (error, stdout) => {
-          clearTimeout(timer);
-          done(error ? null : String(stdout));
-        }
-      ).stdin?.end();
+        { stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true }
+      );
     } catch {
-      clearTimeout(timer);
       done(null);
+      return;
     }
+    const chunks: Buffer[] = [];
+    let size = 0;
+    child.stdout?.on('data', (chunk: Buffer) => {
+      size += chunk.length;
+      if (size > MAX_GIT_OUTPUT) {
+        child?.kill();
+        done(null);
+      } else chunks.push(chunk);
+    });
+    child.on('error', () => done(null));
+    child.on('close', (code) =>
+      done(code === 0 ? Buffer.concat(chunks).toString('utf8') : null)
+    );
   });
 
 export interface Repo {
@@ -504,10 +572,118 @@ async function writeAtomic(path: string, text: string): Promise<void> {
   await rename(tmp, path);
 }
 
+/** `system` when the session runs in the repository; `task` for a subagent's named one. */
+export type Placement = 'system' | 'task';
+
 export interface PackOutcome {
   readonly text: string | null;
   /** 'pinned' | 'new' | 'not-new' | 'no-repo' | 'not-agentic' | 'timeout' | 'unbuilt' | 'already' | 'off' */
   readonly reason: string;
+  readonly placement: Placement | null;
+}
+
+/** The task: the last text block of the client's first user turn. */
+export function taskOf(request: ProviderRequest): string {
+  const first = (request.messages ?? []).find((m) => m?.role === 'user');
+  const content = first?.content;
+  if (typeof content === 'string') return content;
+  if (!Array.isArray(content)) return '';
+  const texts = content
+    .filter((b) => typeof (b as Block)?.text === 'string')
+    .map((b) => String((b as Block).text));
+  return texts[texts.length - 1] ?? '';
+}
+
+const ABSOLUTE_PATH =
+  /(?<![\w.])(?:[A-Za-z]:[\\/]|\/(?=[\w.-]+\/))[^\s"'`<>|*?,;()]+/g;
+
+/** Absolute paths a text names, in order, without trailing punctuation. */
+export function pathsIn(text: string, max = 24): string[] {
+  const out: string[] = [];
+  for (const m of text.matchAll(ABSOLUTE_PATH)) {
+    const p = m[0].replace(/[.:]+$/, '');
+    if (p.length > 3 && !out.includes(p)) out.push(p);
+    if (out.length >= max) break;
+  }
+  return out;
+}
+
+/** The path itself or its nearest existing ancestor directory, within a few levels. */
+async function nearestDir(path: string): Promise<string | null> {
+  let p = path;
+  for (let i = 0; i < 8; i++) {
+    try {
+      // Bounded: a path on a failing drive must not hold the request.
+      const s = await Promise.race([
+        stat(p),
+        new Promise<null>((r) => setTimeout(() => r(null), 1_000).unref?.()),
+      ]);
+      if (s?.isDirectory()) return p;
+    } catch {
+      // Not there; try the parent.
+    }
+    const up = dirname(p);
+    if (up === p) return null;
+    p = up;
+  }
+  return null;
+}
+
+/** The repository's own name (not a worktree folder's). */
+export function repoNameOf(repo: Pick<Repo, 'commonDir'>): string {
+  return /\.git$/.test(repo.commonDir)
+    ? basename(dirname(repo.commonDir))
+    : basename(repo.commonDir);
+}
+
+const escapeRegExp = (s: string): string =>
+  s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/**
+ * Which of the repositories a task names it is ABOUT. Shared campaign rules
+ * name every repository to every agent, so presence alone is not enough:
+ *   1. a single declared one ("Repo owner/name", "repository: name");
+ *   2. else the single one its issue and PR references (`name#123`) point to;
+ *   3. else the strictly most-mentioned one.
+ * A tie gets no pack: none costs less than the wrong one.
+ */
+export function chooseRepo<R extends Pick<Repo, 'commonDir'>>(
+  task: string,
+  repos: readonly R[]
+): R | null {
+  if (repos.length <= 1) return repos[0] ?? null;
+  const named = repos.map((r) => ({ r, name: repoNameOf(r) }));
+  const whole = (name: string, suffix = ''): RegExp =>
+    new RegExp(
+      `(?<![\\w.])(?:[\\w.-]+/)?${escapeRegExp(name)}(?![\\w]|\\.[\\w])${suffix}`,
+      'gi'
+    );
+  const pick = (score: (name: string) => number): R | null => {
+    const scored = named
+      .map(({ r, name }) => ({ r, n: score(name) }))
+      .sort((a, b) => b.n - a.n);
+    return scored[0].n > 0 && scored[0].n > (scored[1]?.n ?? 0)
+      ? scored[0].r
+      : null;
+  };
+  const declared = pick(
+    (name) =>
+      (
+        task.match(
+          new RegExp(
+            `\\b(?:repo(?:sitory)?|project)\\b\\s*[:=]?\\s*(?:[\\w.-]+/)?${escapeRegExp(name)}(?![\\w]|\\.[\\w])`,
+            'gi'
+          )
+        ) ?? []
+      ).length
+  );
+  if (declared) return declared;
+  const counts = named.map(
+    ({ name }) => (task.match(whole(name, '#\\d+')) ?? []).length
+  );
+  if (counts.filter((n) => n > 0).length === 1)
+    return named[counts.findIndex((n) => n > 0)].r;
+  return pick((name) => (task.match(whole(name)) ?? []).length);
 }
 
 export interface RepoPacksOptions {
@@ -547,18 +723,42 @@ export class RepoPacks {
     request: ProviderRequest,
     convKey: string
   ): Promise<PackOutcome> {
-    if (alreadyPacked(request)) return { text: null, reason: 'already' };
-    if (!isAgentic(request)) return { text: null, reason: 'not-agentic' };
-    const pinned = await this.pinOf(convKey);
-    if (pinned !== undefined)
-      return {
-        text: pinned === 'none' ? null : await this.textOf(pinned),
-        reason: 'pinned',
-      };
-    if (!isNewConversation(request)) return { text: null, reason: 'not-new' };
+    const none = (reason: string): PackOutcome => ({
+      text: null,
+      reason,
+      placement: null,
+    });
+    if (alreadyPacked(request)) return none('already');
+    if (!isAgentic(request)) return none('not-agentic');
+    // KEYED BY THE TASK TOO. The conversation key is the system prompt plus the
+    // first text block, which every sibling of a fan-out shares; without the
+    // task, sibling 1's repository would be pinned onto sibling 2.
+    const key = digest(`${convKey}\0${taskOf(request)}`);
+    const pinned = await this.pinOf(key);
+    if (pinned !== undefined) {
+      const [placement, hash] = pinned.split(':');
+      if (!hash || (placement !== 'system' && placement !== 'task'))
+        return none('pinned');
+      return { text: await this.textOf(hash), reason: 'pinned', placement };
+    }
+    if (!isNewConversation(request)) return none('not-new');
     const cwd = workingRepoOf(request);
-    if (!cwd) return { text: null, reason: 'no-repo' };
-    const build = this.packFor(cwd);
+    // A session started in a repository packs it in `system`. A subagent of a
+    // session started elsewhere packs the repository its task is about, in its
+    // task turn, so siblings on different repositories still share all of the
+    // prefix before it.
+    const placement: Placement | null = cwd
+      ? 'system'
+      : isSubagentRequest(request)
+        ? 'task'
+        : null;
+    if (!placement) return none('no-repo');
+    const build =
+      placement === 'system'
+        ? this.packFor(cwd as string)
+        : this.taskRepo(taskOf(request)).then((r) =>
+            r ? this.current(r) : null
+          );
     let timer: NodeJS.Timeout | undefined;
     const hash = await Promise.race([
       build,
@@ -568,11 +768,29 @@ export class RepoPacks {
     ]);
     clearTimeout(timer);
     if (hash === 'timeout' || hash === null) {
-      await this.pin(convKey, 'none');
-      return { text: null, reason: hash === null ? 'unbuilt' : 'timeout' };
+      await this.pin(key, 'none');
+      return none(hash === null ? 'unbuilt' : 'timeout');
     }
-    await this.pin(convKey, hash);
-    return { text: await this.textOf(hash), reason: 'new' };
+    await this.pin(key, `${placement}:${hash}`);
+    return { text: await this.textOf(hash), reason: 'new', placement };
+  }
+
+  /** The repository a task is about, among those it names by absolute path. */
+  private async taskRepo(task: string): Promise<Repo | null> {
+    const found = new Map<string, Repo>();
+    for (const path of pathsIn(task)) {
+      const dir = await nearestDir(path);
+      if (!dir) continue;
+      let repo = this.repos.get(dir);
+      if (!repo) {
+        repo = resolveRepo(dir, this.git);
+        this.repos.set(dir, repo);
+        setTimeout(() => this.repos.delete(dir), 60_000).unref?.();
+      }
+      const r = await repo;
+      if (r && !found.has(r.commonDir)) found.set(r.commonDir, r);
+    }
+    return chooseRepo(task, [...found.values()]);
   }
 
   private async pinOf(convKey: string): Promise<string | undefined> {

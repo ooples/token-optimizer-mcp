@@ -190,7 +190,7 @@ describe('repository pack', () => {
       maxWaitMs: 50,
     });
     const out = await packs.forRequest(request(repo), 'slow');
-    expect(out).toEqual({ text: null, reason: 'timeout' });
+    expect(out).toEqual({ text: null, reason: 'timeout', placement: null });
     expect((await packs.forRequest(request(repo), 'slow')).reason).toBe(
       'pinned'
     );

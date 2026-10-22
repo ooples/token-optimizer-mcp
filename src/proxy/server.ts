@@ -126,6 +126,7 @@ import type { Finding } from '../compress/knowledge.js';
 import { loadFindings, loadFindingsFrom } from './findings.js';
 import {
   injectPack,
+  injectTaskPack,
   RepoPacks,
   repoPackEnabled,
   samePath,
@@ -914,6 +915,19 @@ function compressBodyOnce(
     }
   }
 
+  // A SUBAGENT'S TASK-PATH REPOSITORY PACK (repo-pack.ts), after the reorder
+  // has made the task a turn of its own, so it follows everything siblings on
+  // other repositories share.
+  let taskPackChars = 0;
+  const taskPack = taskPacks.get(body);
+  if (taskPack && sharedPrefix === 'reordered') {
+    const out = injectTaskPack(parsed, taskPack);
+    if (out) {
+      parsed = out;
+      taskPackChars = taskPack.length;
+    }
+  }
+
   // A PROBE, NOT THE FEATURE. The substitution design in the plan turns on one
   // untested question -- will the API accept history whose older assistant turns
   // have had their `thinking` blocks removed? `frontier.ts` refuses to touch a
@@ -1069,7 +1083,8 @@ function compressBodyOnce(
     slimmedTools ||
     routedModel ||
     trimmedChars > 0 ||
-    sharedPrefix !== 'none';
+    sharedPrefix !== 'none' ||
+    taskPackChars > 0;
   // WORTH THE RISK, not merely smaller. See MIN_SAVING_SHARE: a rewrite that
   // shaves a couple of percent still plants elisions the agent may read back,
   // and one such turn costs more than the whole saving.
@@ -1148,7 +1163,8 @@ function compressBodyOnce(
       deferredToolChars: deferredChars,
       anchorReason: result.anchor?.reason,
       elisions: result.elisions.length,
-      ...(added ? { injectedChars: result.injectedChars } : {}),
+      ...(added ? { injectedChars: result.injectedChars + taskPackChars } : {}),
+      ...(taskPackChars > 0 ? { repoPackChars: taskPackChars } : {}),
       ...named(),
     },
   };
@@ -1580,6 +1596,8 @@ function hasThinkingHistory(request: { messages?: unknown[] }): boolean {
  * agree on identity. A body this never saw falls back to a prefix hash.
  */
 const bodyKeys = new WeakMap<Buffer, string>();
+/** A subagent's task-path repository pack, for compressBodyOnce to place. */
+const taskPacks = new WeakMap<Buffer, string>();
 
 let keepWarmInstance: KeepWarm | null = null;
 function warmer(): KeepWarm {
@@ -2295,12 +2313,16 @@ export async function startProxy(options: ProxyOptions = {}): Promise<{
             parsed,
             anchorConversationKey(parsed)
           );
-          if (pack.text) {
+          if (pack.text && pack.placement === 'system') {
             body = Buffer.from(
               JSON.stringify(injectPack(parsed, pack.text)),
               'utf8'
             );
             packChars = pack.text.length;
+          } else if (pack.text && pack.placement === 'task') {
+            // Placed by compressBodyOnce, after the sibling reorder has made
+            // the task a turn of its own; this body is the one it receives.
+            taskPacks.set(body, pack.text);
           }
         } catch {
           // Never the reason a request fails.

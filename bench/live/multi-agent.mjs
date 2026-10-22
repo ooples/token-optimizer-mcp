@@ -147,6 +147,13 @@ const ARM = {
     alt: false,
     proxyEnv: { TOKEN_OPTIMIZER_PROXY_REPO_PACK: '0' },
   },
+  // The pack's size: every call re-reads it, so it has to remove more than it adds.
+  'ours-next-pack8k': {
+    plugin: 'next',
+    proxyNull: false,
+    alt: false,
+    proxyEnv: { TOKEN_OPTIMIZER_PROXY_REPO_PACK_CHARS: '8000' },
+  },
 };
 
 const PACKAGES = ['pricing', 'inventory', 'schedule', 'ledger'];

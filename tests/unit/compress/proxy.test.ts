@@ -1183,11 +1183,23 @@ it('carries the repository pack, marker moved onto it, identically on every turn
   const { execFileSync } = await import('node:child_process');
   const { writeFileSync } = await import('node:fs');
   const repo = mkdtempSync(join(tmpdir(), 'proxy-pack-repo-'));
-  const git = (...args: string[]) => execFileSync('git', ['-c', 'core.fsmonitor=false', '-C', repo, ...args]);
+  const git = (...args: string[]) =>
+    execFileSync('git', ['-c', 'core.fsmonitor=false', '-C', repo, ...args]);
   git('init', '-q', '-b', 'master');
   writeFileSync(join(repo, 'a.ts'), 'export function a() {}\n');
   git('add', '-A');
-  git('-c', 'user.email=t@example.com', '-c', 'user.name=t', '-c', 'commit.gpgsign=false', 'commit', '-q', '-m', 'init');
+  git(
+    '-c',
+    'user.email=t@example.com',
+    '-c',
+    'user.name=t',
+    '-c',
+    'commit.gpgsign=false',
+    'commit',
+    '-q',
+    '-m',
+    'init'
+  );
   const bodies: string[] = [];
   const provider = await upstream((raw) => {
     bodies.push(raw);
@@ -1222,11 +1234,110 @@ it('carries the repository pack, marker moved onto it, identically on every turn
     { role: 'assistant', content: 'Looking.' },
     { role: 'user', content: 'Go on.' },
   ]);
-  const systems = bodies.map((b) => (JSON.parse(b) as { system: { text: string; cache_control?: unknown }[] }).system);
+  const systems = bodies.map(
+    (b) =>
+      (JSON.parse(b) as { system: { text: string; cache_control?: unknown }[] })
+        .system
+  );
   expect(systems[0]).toHaveLength(2);
   expect(systems[0][0].cache_control).toBeUndefined();
   expect(systems[0][1].text).toMatch(/^# Repository pack: /);
   expect(systems[0][1].cache_control).toEqual({ type: 'ephemeral' });
   expect(systems[1][1].text).toBe(systems[0][1].text);
+  rmSync(repo, { recursive: true, force: true });
+});
+
+it("puts a subagent's task-path pack after the shared prefix, identically each turn", async () => {
+  const { execFileSync } = await import('node:child_process');
+  const { writeFileSync } = await import('node:fs');
+  const repo = mkdtempSync(join(tmpdir(), 'proxy-task-pack-'));
+  const git = (...args: string[]) =>
+    execFileSync('git', ['-c', 'core.fsmonitor=false', '-C', repo, ...args]);
+  git('init', '-q', '-b', 'master');
+  writeFileSync(join(repo, 'a.ts'), 'export function a() {}\n');
+  git('add', '-A');
+  git(
+    '-c',
+    'user.email=t@example.com',
+    '-c',
+    'user.name=t',
+    '-c',
+    'commit.gpgsign=false',
+    'commit',
+    '-q',
+    '-m',
+    'init'
+  );
+  const bodies: string[] = [];
+  const provider = await upstream((raw) => {
+    bodies.push(raw);
+    return {};
+  });
+  const proxy = await startProxy({
+    projectRoot: EMPTY_PROJECT,
+    upstream: provider.url,
+    knowledge: false,
+    repoPack: { dir: mkdtempSync(join(tmpdir(), 'proxy-task-pack-store-')) },
+  });
+  servers.push(proxy.server);
+  const task = `Fix the bug in ${repo} and report.`;
+  const listing = {
+    type: 'text',
+    text: 'deferred tools and skills '.repeat(200),
+    cache_control: { type: 'ephemeral' },
+  };
+  const turn = (later: unknown[]) =>
+    fetch(`http://127.0.0.1:${proxy.port}/v1/messages`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        tools: [{ name: 'Read', input_schema: { type: 'object' } }],
+        system: [
+          {
+            type: 'text',
+            text: 'x-anthropic-billing-header: cc_version=2.1.302; cc_is_subagent=true;',
+          },
+          {
+            type: 'text',
+            text: ` - Primary working directory: ${tmpdir()}\n - Is a git repository: false\n`,
+            cache_control: { type: 'ephemeral' },
+          },
+        ],
+        messages: [
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: 'shared leading context '.repeat(200) },
+              { type: 'text', text: task },
+            ],
+          },
+          { role: 'system', content: [listing] },
+          ...later,
+        ],
+      }),
+    }).then((r) => r.text());
+  await turn([]);
+  await turn([
+    { role: 'assistant', content: 'Looking.' },
+    { role: 'user', content: 'Go on.' },
+  ]);
+  type Sent = {
+    messages: {
+      role: string;
+      content: { text?: string; cache_control?: unknown }[];
+    }[];
+  };
+  const sent = bodies.map((b) => JSON.parse(b) as Sent);
+  for (const s of sent) {
+    expect(s.messages[2].role).toBe('user');
+    expect(s.messages[2].content[0].text).toMatch(/^# Repository pack: /);
+    expect(s.messages[2].content[1].text).toBe(task);
+  }
+  expect(sent[0].messages[2].content[0].cache_control).toEqual({
+    type: 'ephemeral',
+  });
+  expect(sent[1].messages[2].content[0].text).toBe(
+    sent[0].messages[2].content[0].text
+  );
   rmSync(repo, { recursive: true, force: true });
 });
