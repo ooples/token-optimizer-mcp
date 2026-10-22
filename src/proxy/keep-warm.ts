@@ -30,8 +30,14 @@ export const MIN_PREFIX_BYTES = 200_000;
 export const DEFAULT_MAX_PINGS = 3;
 /** Fire this long before the entry would expire. */
 export const MARGIN_MS = 4 * 60 * 1000;
-/** Output a ping may produce: a ping's only job is the read. */
-export const PING_MAX_TOKENS = 16;
+/**
+ * Output a ping may produce: none. `max_tokens: 0` runs prefill only -- the
+ * cache read that renews the entry -- and returns `content: []` with zero output
+ * tokens billed. It is rejected with `stream: true` (sent off here), a fixed
+ * thinking budget (not pinged, see pingBody), structured outputs and a forced
+ * tool_choice (both declined below).
+ */
+export const PING_MAX_TOKENS = 0;
 
 export interface WarmTarget {
   readonly upstream: string;
@@ -84,7 +90,11 @@ export function pingBody(body: Buffer): Buffer | null {
     const parsed = JSON.parse(body.toString('utf8')) as Record<string, unknown>;
     if (!Array.isArray(parsed.messages)) return null;
     const thinking = parsed.thinking as { type?: string; budget_tokens?: number } | undefined;
-    if (thinking?.type === 'enabled' && Number(thinking.budget_tokens) > 0) return null;
+    if (thinking?.type === 'enabled') return null;
+    // The other shapes `max_tokens: 0` rejects.
+    if ((parsed.output_config as { format?: unknown } | undefined)?.format) return null;
+    const choice = (parsed.tool_choice as { type?: string } | undefined)?.type;
+    if (choice === 'tool' || choice === 'any') return null;
     return Buffer.from(
       JSON.stringify({ ...parsed, max_tokens: PING_MAX_TOKENS, stream: false }),
       'utf8'

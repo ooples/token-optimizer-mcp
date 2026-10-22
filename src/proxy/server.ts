@@ -63,6 +63,11 @@ import {
 } from '../compress/sibling-prefix.js';
 import { coldKey, coldGateEnabled, enterColdGate } from './cold-gate.js';
 import {
+  trimSubagentContext,
+  trimSubagentsEnabled,
+} from '../compress/subagent-context.js';
+import { routeReadOnlySubagent } from '../compress/model-route.js';
+import {
   KeepWarm,
   keepWarmEnabled,
   maxPingsFromEnv,
@@ -858,6 +863,31 @@ function compressBodyOnce(
     }
   }
 
+  // A SUBAGENT'S INJECTED CONTEXT, trimmed before anything else reads the
+  // request: the memory index, skill descriptions and unmentioned servers'
+  // tools (subagent-context.ts). The main session is never touched.
+  // READ-ONLY SUBAGENTS ONE MODEL TIER DOWN (model-route.ts), decided from the
+  // task text so a conversation never switches model.
+  let routedModel = false;
+  try {
+    const out = routeReadOnlySubagent(parsed);
+    parsed = out.request;
+    routedModel = out.to !== null;
+  } catch {
+    routedModel = false;
+  }
+
+  let trimmedChars = 0;
+  if (trimSubagentsEnabled()) {
+    try {
+      const out = trimSubagentContext(parsed);
+      parsed = out.request;
+      trimmedChars = out.removedChars;
+    } catch {
+      trimmedChars = 0;
+    }
+  }
+
   // SIBLING AGENTS SHARE THEIR IDENTICAL LEADING CONTEXT through the prompt
   // cache: one more cache marker before each agent's own task, so the next
   // sibling reads what the first one wrote. See sibling-prefix.ts.
@@ -977,7 +1007,13 @@ function compressBodyOnce(
   // way keep-warm tracks it, so whichever body goes out maps back here.
   const convKey = anchorConversationKey(parsed);
   bodyKeys.set(body, convKey);
-  const cacheExpired = keepWarmEnabled() && warmer().expired(convKey);
+  // NOT WHEN THINKING BLOCKS ARE IN THE HISTORY. On models that bind thinking
+  // to the conversation (Opus 5.5, Sonnet 5.5, Haiku 5.5, Fable 5.1), a client-
+  // side rewrite of earlier turns invalidates every later thinking block -- a
+  // 400 on accounts the check is enforced for. Server-side context editing and
+  // compaction are exempt; our own rewrite is not, so it stands down here.
+  const cacheExpired =
+    keepWarmEnabled() && warmer().expired(convKey) && !hasThinkingHistory(parsed);
   let result: StrategyResult;
   try {
     result = (substitute ? v4Substitute : v1Frontier)(parsed, {
@@ -1020,6 +1056,8 @@ function compressBodyOnce(
     result.injectedChars > 0 ||
     deferred > 0 ||
     slimmedTools ||
+    routedModel ||
+    trimmedChars > 0 ||
     sharedPrefix !== 'none';
   // WORTH THE RISK, not merely smaller. See MIN_SAVING_SHARE: a rewrite that
   // shaves a couple of percent still plants elisions the agent may read back,
@@ -1509,6 +1547,20 @@ function warmKey(body: Buffer): string {
       .digest('hex')
       .slice(0, 24)
   );
+}
+
+/** Does any earlier turn carry a thinking block (which a history rewrite would invalidate)? */
+function hasThinkingHistory(request: { messages?: unknown[] }): boolean {
+  return (request.messages ?? []).some((m) => {
+    const content = (m as { content?: unknown })?.content;
+    return (
+      Array.isArray(content) &&
+      content.some((b) => {
+        const t = (b as { type?: string })?.type;
+        return t === 'thinking' || t === 'redacted_thinking';
+      })
+    );
+  });
 }
 
 /**
@@ -2287,8 +2339,10 @@ export async function startProxy(options: ProxyOptions = {}): Promise<{
         ? await enterColdGate(coldKey(next))
         : { release: () => {}, waitedMs: 0 };
       // The client may have gone while this request waited at the gate; sending
-      // it now would bill a generation nobody reads (review on #523).
-      if (req.destroyed || res.destroyed || res.writableEnded) {
+      // it now would bill a generation nobody reads (review on #523). The SOCKET
+      // says so, not `req.destroyed`: a fully read request auto-destroys, so that
+      // flag is true for every request here and dropped them all unanswered.
+      if (req.socket?.destroyed !== false || res.destroyed || res.writableEnded) {
         gate.release();
         return;
       }

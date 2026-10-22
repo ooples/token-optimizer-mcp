@@ -203,17 +203,31 @@ describe('keep-warm knows when a cache has certainly expired', () => {
 
 describe('review fixes on #523', () => {
   it('does not ping a request with a fixed thinking budget, and still pings adaptive thinking', () => {
-    const body = (thinking: object) => Buffer.from(JSON.stringify({ model: 'm', max_tokens: 64000, thinking, messages: [{ role: 'user', content: 'x' }] }));
-    expect(pingBody(body({ type: 'enabled', budget_tokens: 16000 }))).toBeNull();
+    const body = (thinking: object) =>
+      Buffer.from(
+        JSON.stringify({
+          model: 'm',
+          max_tokens: 64000,
+          thinking,
+          messages: [{ role: 'user', content: 'x' }],
+        })
+      );
+    expect(
+      pingBody(body({ type: 'enabled', budget_tokens: 16000 }))
+    ).toBeNull();
     const adaptive = pingBody(body({ type: 'adaptive' }));
-    expect(JSON.parse(adaptive!.toString()).thinking).toEqual({ type: 'adaptive' });
+    expect(JSON.parse(adaptive!.toString()).thinking).toEqual({
+      type: 'adaptive',
+    });
   });
 
   it('TOKEN_OPTIMIZER_MODE=off removes the window we wrote', () => {
     writeFileSync(settingsPath(), JSON.stringify({}));
     expect(applyCompactWindow(env)).toBe('written');
     expect(compactWindowFromEnv({ TOKEN_OPTIMIZER_MODE: 'off' })).toBeNull();
-    expect(applyCompactWindow({ ...env, TOKEN_OPTIMIZER_MODE: 'off' })).toBe('removed');
+    expect(applyCompactWindow({ ...env, TOKEN_OPTIMIZER_MODE: 'off' })).toBe(
+      'removed'
+    );
     expect(read().autoCompactWindow).toBeUndefined();
   });
 });
