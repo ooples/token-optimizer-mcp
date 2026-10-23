@@ -1069,6 +1069,12 @@ async function runArm(arm, rep, position) {
       TOKEN_OPTIMIZER_PROXY_ACCOUNTING: ledger,
       // Run-local state (repository packs and their pins) for the proxy too.
       TOKEN_OPTIMIZER_HOME: join(state, 'home'),
+      // THE DOCUMENTED DEFAULTS, PINNED: a value exported in the runner's shell
+      // would otherwise reach the baseline and every comparison arm alike, and
+      // an arm that changes one of these would measure nothing. Each arm's own
+      // proxyEnv is applied after.
+      TOKEN_OPTIMIZER_PROXY_REPO_PACK_POSITION: 'first',
+      TOKEN_OPTIMIZER_PROXY_READONLY_ROUTE: 'off',
     };
     if (cfg.proxyNull) proxyEnv.TOKEN_OPTIMIZER_PROXY_NULL = '1';
     Object.assign(proxyEnv, cfg.proxyEnv ?? {});

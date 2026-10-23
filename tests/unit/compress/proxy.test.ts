@@ -1128,22 +1128,27 @@ describe('the model on the summary', () => {
       }),
       'utf8'
     );
-    // Routing is opt-in; turned on here for the ledger's sake.
-    process.env.TOKEN_OPTIMIZER_PROXY_READONLY_ROUTE = 'down';
+    // Routing is opt-in; turned on here for the ledger's sake, and whatever
+    // the runner had set is restored after.
+    const before = process.env.TOKEN_OPTIMIZER_PROXY_READONLY_ROUTE;
     try {
+      process.env.TOKEN_OPTIMIZER_PROXY_READONLY_ROUTE = 'down';
       const out = compressBody(body, spill);
       expect(JSON.parse(out.body.toString('utf8')).model).toBe(
         'claude-sonnet-5-5'
       );
       expect(out.summary.model).toBe('claude-sonnet-5-5');
-    } finally {
+      // Off by default: the client's model goes out and is what the ledger prices.
       delete process.env.TOKEN_OPTIMIZER_PROXY_READONLY_ROUTE;
+      const plain = compressBody(body, spill);
+      expect(JSON.parse(plain.body.toString('utf8')).model).toBe(
+        'claude-opus-5-5'
+      );
+    } finally {
+      if (before === undefined)
+        delete process.env.TOKEN_OPTIMIZER_PROXY_READONLY_ROUTE;
+      else process.env.TOKEN_OPTIMIZER_PROXY_READONLY_ROUTE = before;
     }
-    // Off by default: the client's model goes out and is what the ledger prices.
-    const plain = compressBody(body, spill);
-    expect(JSON.parse(plain.body.toString('utf8')).model).toBe(
-      'claude-opus-5-5'
-    );
   });
 
   it('names the model of a request it declined after parsing it', () => {
