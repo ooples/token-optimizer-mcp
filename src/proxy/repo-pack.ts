@@ -197,14 +197,60 @@ function alreadyPacked(request: ProviderRequest): boolean {
 }
 
 /**
- * Append the pack to `system`, moving the system prompt's last cache marker onto
- * it so the cached region ends after the pack. No marker is added.
+ * Where the pack goes in `system` (TOKEN_OPTIMIZER_PROXY_REPO_PACK_POSITION):
+ * `first` (the default), right after the first cached block, or `last`, at
+ * the end.
+ *
+ * WHY FIRST. Claude Code's main system prompt embeds the per-directory memory
+ * path (`.claude/projects/<working dir>/memory`), so it differs per worktree
+ * and per instance directory. A pack after it, carrying the last marker, is
+ * re-written by every session in a new directory; a pack right after the
+ * identity block is part of a prefix every session on the repository shares.
+ * Measured on the exploration benchmark (n=5 per arm): 85.4% of control's
+ * cost with the pack first against 91.1% with it last.
+ */
+export function packPosition(
+  env: NodeJS.ProcessEnv = process.env
+): 'first' | 'last' {
+  return /^last$/i.test(
+    String(env.TOKEN_OPTIMIZER_PROXY_REPO_PACK_POSITION ?? '').trim()
+  )
+    ? 'last'
+    : 'first';
+}
+
+/**
+ * Add the pack to `system` and move one existing cache marker onto it, so a
+ * cached region ends right after the pack. No marker is added.
+ *   - `last`: appended, taking the system prompt's last marker.
+ *   - `first`: inserted after the FIRST marked block, taking that block's
+ *     marker; the later blocks keep theirs.
  */
 export function injectPack(
   request: ProviderRequest,
-  text: string
+  text: string,
+  position: 'first' | 'last' = packPosition()
 ): ProviderRequest {
   const system = request.system;
+  if (position === 'first' && Array.isArray(system)) {
+    const at = system.findIndex(
+      (b) => (b as { cache_control?: unknown })?.cache_control
+    );
+    if (at >= 0 && at < system.length - 1) {
+      const { cache_control, ...bare } = system[at] as Block & {
+        cache_control?: unknown;
+      };
+      return {
+        ...request,
+        system: [
+          ...system.slice(0, at),
+          bare as Block,
+          { type: 'text', text, cache_control } as Block,
+          ...system.slice(at + 1),
+        ],
+      };
+    }
+  }
   if (Array.isArray(system) && system.length > 0) {
     const last = system[system.length - 1] as Block & {
       cache_control?: unknown;

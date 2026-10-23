@@ -9,6 +9,7 @@ import {
   injectPack,
   isNewConversation,
   isUnderRoot,
+  packPosition,
   PACK_HEADING,
   RepoPacks,
   repoPackEnabled,
@@ -129,6 +130,33 @@ describe('repository pack', () => {
     expect(out.system[1].cache_control).toBeUndefined();
     expect(out.system[2].text).toBe(`${PACK_HEADING} demo`);
     expect(out.system[2].cache_control).toEqual({ type: 'ephemeral' });
+  });
+
+  it('first: goes right after the first cached block, ahead of a per-directory block, taking only that marker', () => {
+    const cc = (ttl: string) => ({ type: 'ephemeral', ttl });
+    const lead = {
+      model: 'm',
+      tools: [{ name: 'Read', input_schema: { type: 'object' } }],
+      system: [
+        { type: 'text', text: 'billing' },
+        { type: 'text', text: 'identity', cache_control: cc('1h') },
+        { type: 'text', text: 'memory at .claude/projects/<dir>/memory', cache_control: cc('1h') },
+      ],
+      messages: [{ role: 'user', content: 'go' }],
+    } as unknown as ProviderRequest;
+    const out = injectPack(lead, `${PACK_HEADING} demo`, 'first') as unknown as {
+      system: { text: string; cache_control?: unknown }[];
+    };
+    expect(out.system.map((b) => b.text)).toEqual(['billing', 'identity', `${PACK_HEADING} demo`, 'memory at .claude/projects/<dir>/memory']);
+    expect(out.system.map((b) => b.cache_control ?? null)).toEqual([null, null, cc('1h'), cc('1h')]);
+    // A system prompt with one marked block, or none, keeps the append.
+    const single = injectPack(request('/x'), `${PACK_HEADING} demo`, 'first') as unknown as { system: { text: string }[] };
+    expect(single.system[single.system.length - 1].text).toBe(`${PACK_HEADING} demo`);
+    // `first` is the default; `last` restores the append.
+    expect(packPosition({})).toBe('first');
+    expect(packPosition({ TOKEN_OPTIMIZER_PROXY_REPO_PACK_POSITION: 'last' })).toBe('last');
+    const appended = injectPack(lead, `${PACK_HEADING} demo`, 'last') as unknown as { system: { text: string }[] };
+    expect(appended.system[3].text).toBe(`${PACK_HEADING} demo`);
   });
 
   it('is the same bytes from every worktree, named for the repository', async () => {

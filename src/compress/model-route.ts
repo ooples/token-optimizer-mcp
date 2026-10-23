@@ -69,9 +69,15 @@ export function isReadOnlySubagent(request: ProviderRequest): boolean {
 export function readOnlyRouteFromEnv(
   env: NodeJS.ProcessEnv = process.env
 ): 'off' | 'down' | string {
+  // OPT-IN, MEASURED AGAINST. One tier down sounds cheaper, but the routed
+  // workers searched in many small calls -- about 20 Grep calls per run
+  // against 8-10 on their client's model -- and every call re-reads the whole
+  // context. Claude Code's own reported cost per run, routed vs not, on the
+  // tasks where routing applied: exploration $0.349 vs $0.255 (n=5 each),
+  // overlapping siblings $0.439 vs control's $0.373 (n=4).
   const raw = String(env.TOKEN_OPTIMIZER_PROXY_READONLY_ROUTE ?? '').trim();
-  if (/^(0|false|no|off)$/i.test(raw)) return 'off';
-  if (!raw || /^(1|true|yes|on|down)$/i.test(raw)) return 'down';
+  if (!raw || /^(0|false|no|off)$/i.test(raw)) return 'off';
+  if (/^(1|true|yes|on|down)$/i.test(raw)) return 'down';
   return raw;
 }
 
