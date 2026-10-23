@@ -44,7 +44,9 @@ describe('read-only subagents one tier down', () => {
   it('honours an explicit target and the off switch', () => {
     expect(routeReadOnlySubagent(subagent('claude-opus-5-5', '(read-only) list the files'), 'claude-haiku-5-5').to).toBe('claude-haiku-5-5');
     expect(readOnlyRouteFromEnv({ TOKEN_OPTIMIZER_PROXY_READONLY_ROUTE: '0' })).toBe('off');
-    expect(readOnlyRouteFromEnv({})).toBe('down');
+    // Opt-in: off unless asked for.
+    expect(readOnlyRouteFromEnv({})).toBe('off');
+    expect(readOnlyRouteFromEnv({ TOKEN_OPTIMIZER_PROXY_READONLY_ROUTE: '1' })).toBe('down');
     expect(isReadOnlySubagent(subagent('claude-opus-5-5', 'Write the fix.'))).toBe(false);
   });
 });

@@ -142,6 +142,8 @@ const ARM = {
   },
   // A frozen earlier build (PREV_PKG + PREV_PLUGIN_DIR), for before/after A/Bs of one change.
   'ours-prev': { plugin: 'prev', proxyNull: false, alt: false },
+  // A second frozen build (BASE_PKG + BASE_PLUGIN_DIR): with ours-prev, two baselines in one batch.
+  'ours-base': { plugin: 'base', proxyNull: false, alt: false },
   // The A/B run before the reorder became the default: marker only, no task move.
   'ours-next-marker': {
     plugin: 'next',
@@ -188,6 +190,26 @@ const ARM = {
     proxyNull: false,
     alt: false,
     env: { TOKEN_OPTIMIZER_LEAN_HANDOFF: '0' },
+  },
+  // The pack appended after the system prompt, as before (repo-pack.ts, packPosition).
+  'ours-next-packlast': {
+    plugin: 'next',
+    proxyNull: false,
+    alt: false,
+    proxyEnv: {
+      TOKEN_OPTIMIZER_PROXY_REPO_PACK: '1',
+      TOKEN_OPTIMIZER_PROXY_REPO_PACK_POSITION: 'last',
+    },
+  },
+  // Read-only subagents one model tier down (model-route.ts, opt-in).
+  'ours-next-route': {
+    plugin: 'next',
+    proxyNull: false,
+    alt: false,
+    proxyEnv: {
+      TOKEN_OPTIMIZER_PROXY_REPO_PACK: '1',
+      TOKEN_OPTIMIZER_PROXY_READONLY_ROUTE: 'down',
+    },
   },
   // repo_ask is opt-in (quiet-env.mjs): this arm turns it on.
   'ours-next-ask': {
@@ -1059,7 +1081,9 @@ async function runArm(arm, rep, position) {
         ? resolve(process.env.NEXT_PKG)
         : cfg.plugin === 'prev' && process.env.PREV_PKG
           ? resolve(process.env.PREV_PKG)
-          : PKG;
+          : cfg.plugin === 'base' && process.env.BASE_PKG
+            ? resolve(process.env.BASE_PKG)
+            : PKG;
     procs.push(
       startProcess(
         process.execPath,
@@ -1171,6 +1195,17 @@ async function runArm(arm, rep, position) {
           note: 'PREV_PKG / PREV_PLUGIN_DIR not set',
         };
       args.push('--plugin-dir', process.env.PREV_PLUGIN_DIR);
+    }
+    if (cfg.plugin === 'base') {
+      if (!process.env.BASE_PLUGIN_DIR || !process.env.BASE_PKG)
+        return {
+          arm,
+          rep,
+          position,
+          verdict: 'SKIP',
+          note: 'BASE_PKG / BASE_PLUGIN_DIR not set',
+        };
+      args.push('--plugin-dir', process.env.BASE_PLUGIN_DIR);
     }
     const env = {
       ...process.env,

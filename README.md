@@ -1070,7 +1070,8 @@ all.
 | `TOKEN_OPTIMIZER_PROXY_REPO_PACK`      | on         | one shared snapshot of the repository for every agent on it                 |
 | `TOKEN_OPTIMIZER_PROXY_REPO_PACK_TASK` | off        | also pack a subagent's task repository when the session runs outside a repo |
 | `TOKEN_OPTIMIZER_PROXY_TRIM_SUBAGENTS` | on         | drop the memory index, skill text and unused tool lists from subagents      |
-| `TOKEN_OPTIMIZER_PROXY_READONLY_ROUTE` | `down`     | declared read-only subagents one model tier down; `0` to keep their model   |
+| `TOKEN_OPTIMIZER_PROXY_READONLY_ROUTE` | off        | `down`: declared read-only subagents one model tier down (measured to cost more) |
+| `TOKEN_OPTIMIZER_PROXY_REPO_PACK_POSITION` | `first` | the pack right after the first cached system block; `last` appends it       |
 | `TOKEN_OPTIMIZER_PROXY_PREFETCH`       | off        | fetch the issue or PR a subagent is assigned before its first turn          |
 | `TOKEN_OPTIMIZER_PROXY_WORKER_TERSE`   | on         | ask subagents for short reports (output is billed 5x input)                 |
 | `TOKEN_OPTIMIZER_PROXY_CLEAR_TOOL_USES`| off        | server-side clearing of old tool results; measured to cost more (see below) |
@@ -1101,6 +1102,10 @@ it never used it (0 calls across about 230 benchmark subagents); the briefing
 line was a cost on every agent. `TOKEN_OPTIMIZER_PROXY_PREFETCH` is off because
 on the 10-agent campaign replay the workers fetched their issues themselves
 anyway, and runs with it cost about 10% more than runs without.
+`TOKEN_OPTIMIZER_PROXY_READONLY_ROUTE` is off because the routed subagents
+searched in many more, smaller calls and every call re-reads the whole context:
+on the exploration benchmark Claude Code reported $0.349 per run routed against
+$0.255 unrouted.
 
 ### Rollout channels
 

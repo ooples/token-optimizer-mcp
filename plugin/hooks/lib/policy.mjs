@@ -1030,10 +1030,14 @@ export function subagentBriefing(raw, state) {
   // wiki_write, which is deferred too. Large Read, Grep and Bash output is
   // compacted by the hooks without any tool choice, and what agents learn is
   // recorded mechanically (the sibling blackboard), so neither load pays.
+  // SEARCHES BATCHED, NOT ROUTED. The previous wording ("search with Grep/Glob
+  // rather than grep -r ... use files_with_matches first") moved agents from
+  // one batched shell search to one Grep per turn, and every extra turn
+  // re-reads the whole context. Measured on the exploration benchmark (n=5 per
+  // arm): 70.2% of control's cost with this line against 77.2% with the old two.
   return [
     'Token Optimizer (shown once to this agent). Everything you read stays in context and is paid for again on every later turn, so:',
-    '- Read with Read and an offset/limit for the region you need, and search with Grep/Glob, rather than cat, grep -r or Get-Content of whole files.',
-    '- Bound every search: narrow Grep with path or glob and set head_limit (about 30); use files_with_matches first when you only need where something is.',
+    '- Bound what you read and search: a line range rather than a whole file, a narrowed search with a result limit rather than an unbounded one. Several searches belong in ONE call (one Bash command, or several tool calls in one turn), not one per turn.',
     '- Do not load optimizer tools (smart_read, smart_grep, smart_glob, wiki_*) with ToolSearch: each load re-writes your cached context and the built-in tools already cover them.',
     '- Each turn re-reads your whole context, so batch independent commands into one call rather than running them one per turn.',
     ...(repoAskEnabled()
