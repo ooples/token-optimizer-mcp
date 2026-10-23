@@ -94,7 +94,8 @@ export interface RoutingResult {
     | 'unreadable'
     | 'unavailable'
     | 'foreign-proxy'
-    | 'user-owned';
+    | 'user-owned'
+    | 'caller-endpoint';
   readonly path?: string;
   readonly url?: string;
   readonly upstream?: string;
@@ -290,7 +291,7 @@ function inspect(
   };
 }
 
-function loadSettings(path: string): {
+export function loadSettings(path: string): {
   settings: Settings;
   existed: boolean;
   unreadable: boolean;
@@ -305,7 +306,7 @@ function loadSettings(path: string): {
   return { settings: parsed, existed: true, unreadable: false };
 }
 
-function saveSettings(path: string, settings: Settings): void {
+export function saveSettings(path: string, settings: Settings): void {
   if (existsSync(path)) {
     try {
       copyFileSync(path, `${path}.backup`);
@@ -514,6 +515,30 @@ export function originalUpstream(
 }
 
 /**
+ * Was this process given an endpoint by whoever launched it, rather than by the
+ * settings file we maintain?
+ *
+ * A value equal to our recorded route is ours (Claude Code read our entry and
+ * passed it on). A value equal to what settings.json says is the user's own
+ * gateway, which we insert ourselves in front of as designed. Anything else came
+ * from the launching process's environment.
+ */
+export function callerChoseEndpoint(
+  env: NodeJS.ProcessEnv = process.env
+): boolean {
+  const value = String(env[VARIABLE] ?? '').trim();
+  if (!value) return false;
+  const ours = Object.values(readRoutingManifest(env).entries).some(
+    (entry) => entry?.value === value
+  );
+  if (ours) return false;
+  const configured = loadSettings(claudeSettingsFile(env)).settings?.env?.[
+    VARIABLE
+  ];
+  return String(configured ?? '').trim() !== value;
+}
+
+/**
  * Ensure the route and write it where a client we did not launch will read it.
  *
  * Fire-and-forget: every failure inside is a reason to leave the user's configuration as it is, and
@@ -522,6 +547,14 @@ export function originalUpstream(
 export async function maintainDefaultRouting(
   env: NodeJS.ProcessEnv = process.env
 ): Promise<RoutingResult> {
+  // A PROCESS STARTED WITH ITS OWN ENDPOINT MUST NOT EDIT THE GLOBAL ONE. Our MCP server inherits
+  // the client's environment, so a client launched with ANTHROPIC_BASE_URL pointed somewhere other
+  // than our recorded route -- a benchmark recorder, a gateway, a nested `claude -p` -- was rewriting
+  // the user's ~/.claude/settings.json from inside that child. Observed 2026-10-21: Claude Code
+  // reloaded the rewritten file mid-run, every later request left the caller's recorder (1 of ~30
+  // recorded), and the entry was afterwards removed, so the user's next sessions lost routing.
+  // The settings entry is for clients WE route; one somebody else routed is left alone.
+  if (callerChoseEndpoint(env)) return { status: 'caller-endpoint' };
   try {
     const { ensureRoute } = await import('./supervisor.js');
     return await applyDefaultRouting(

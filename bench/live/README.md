@@ -78,6 +78,43 @@ profile: `smart_read`, `smart_write`, `smart_edit`, `smart_glob`, `smart_grep`,
 smaller advertised tool catalog. The default server profile remains `core`.
 File-only runs do not measure wiki, audit, or session-management functionality.
 
+## Multi-agent head-to-head
+
+`multi-agent.mjs` measures the product (hooks, MCP and proxy together) against
+control and an alternative on work that spawns subagents, where a single-agent toy
+hides the cost of context every agent re-reads on every call. A lead Claude Code
+agent fans out one subagent per package (`TASK=fix`: four seeded Python packages
+with 180 KB CI logs and hidden tests) or per question (`TASK=explore`: exact
+answers about a pinned snapshot of this repository).
+
+```powershell
+$env:TASK_VENV='<venv with pytest>'
+$env:ALT_A_CMD='<the alternative proxy command, {port} for its port>'   # optional; arm skipped when unset
+$env:ALT_A_ENV='<JSON: the environment its own launcher gives the client>'
+$env:NEXT_PLUGIN_DIR='<this checkout>/plugin'; $env:NEXT_PKG='<this checkout>'
+$env:ARMS='control,alt-a,ours-next'; $env:REPS='5'; node bench/live/multi-agent.mjs
+```
+
+- Every arm's traffic crosses this package's proxy; it compresses only for ours
+  and records otherwise. The alternative (`alt-a`) sits behind it with the
+  environment its own launcher sets, so that arm is the product as its users run
+  it. The repository does not name it; `ALT_A_CMD`, `ALT_A_ENV` and, for
+  `ALT_BEHIND=1`, `ALT_A_UPSTREAM_VAR` come from the operator's environment.
+- The operator's own settings are excluded (`--setting-sources project,local`,
+  `ISOLATE=0` restores them), and each run's init event is checked to confirm
+  which plugin actually loaded: a mismatch is `INVALID`, not counted.
+- Usage comes from every agent's transcript (the provider's own usage blocks),
+  cross-checked against the recorder ledger (`recorded=N/N`). Cost counts output
+  at 5x input.
+- `SELFCHECK=1` proves the grader fails the seeded repo and passes the reference
+  fixes; `REGRADE=<out dir>` re-runs corrected hidden tests on finished runs.
+- A run whose calls did not all cross the recorder is `INVALID`; one where the
+  client never ran is `ERROR`. Neither counts toward an arm's mean.
+- Other variables: `EXPLORE_REPO` (a clone of this repository holding the pinned
+  snapshot; defaults to this checkout), `CLAUDE_BIN` (the `claude` executable; on
+  Windows it must be `claude.exe`, not an npm `.cmd` shim), `MODEL` (default
+  `sonnet`), `OUT`, `PORT_BASE`, `RUN_TIMEOUT_S`.
+
 ## Rate-card cost scenarios
 
 After auditing a campaign, run `node bench/live/codex-cost.mjs CAMPAIGN` to write

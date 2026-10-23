@@ -206,15 +206,15 @@ describe('small definitions are never deferred', () => {
     expect(out.deferredCount).toBe(2);
   });
 
-  it('defers every deferrable definition by default, small ones included', () => {
-    // WHAT ACTUALLY SHIPS, pinned so a change to SMALL_TOOL_CHARS fails here
-    // rather than quietly altering behaviour in the field.
+  it('defers every deferrable definition outside the core loop, small ones included', () => {
+    // WHAT ACTUALLY SHIPS, pinned so a change to SMALL_TOOL_CHARS or
+    // CORE_LOOP_TOOLS fails here rather than quietly altering behaviour.
     //
-    // The exemption used to spare anything under 1,500 characters. Measured on
-    // a real capture that spared 88 of 115 definitions -- roughly 55KB left in
-    // the cached prefix, inside the region that is 66.9% of a request. Live,
-    // over sixteen runs with run-order position balanced, removing the
-    // exemption took weighted input from 100,818 to 49,053 with 4/4 passing.
+    // The size exemption used to spare anything under 1,500 characters: 88 of
+    // 115 definitions in a real capture, roughly 55KB left in the cached prefix.
+    // Removing it took weighted input from 100,818 to 49,053 (16 runs, 4/4
+    // passing), so the floor stays at zero -- for everything but the core loop,
+    // which is kept by name (see CORE_LOOP_TOOLS for the multi-agent evidence).
     const out = deferTools(
       req({
         tools: [
@@ -230,9 +230,11 @@ describe('small definitions are never deferred', () => {
       out.request as unknown as { tools: Record<string, unknown>[] }
     ).tools;
 
-    for (const name of ['Read', 'Bash', 'PowerShell', 'DesignSync'])
+    for (const name of ['PowerShell', 'DesignSync'])
       expect(tools.find((t) => t.name === name)?.defer_loading).toBe(true);
-    expect(out.deferredCount).toBe(4);
+    for (const name of ['Read', 'Bash'])
+      expect(tools.find((t) => t.name === name)?.defer_loading).toBeUndefined();
+    expect(out.deferredCount).toBe(2);
   });
 
   it('keeps the tools the task looks like it needs, so nothing is searched for', () => {
@@ -427,5 +429,102 @@ describe('the client discovery tool', () => {
     // exemption does not use up the relevance slot.
     expect(loaded.map((t) => t.name)).toContain('ToolSearch');
     expect(loaded.length).toBe(3);
+  });
+});
+
+describe('the core loop and redundant tools (multi-agent harness, 2026-10-21)', () => {
+  // Claude Code's built-ins as a subagent receives them on Windows, sized from a
+  // live capture: PowerShell is the largest, the core loop is small.
+  const windowsSubagent = () => [
+    described('Agent', 'Launch a new agent to handle complex multi-step tasks'),
+    tool('Bash', 3566),
+    tool('Edit', 964),
+    tool('Glob', 731),
+    tool('Grep', 3224),
+    described('PowerShell', 'Executes a PowerShell command python pytest packages'),
+    tool('Read', 1919),
+    described('Skill', 'Execute a skill within the main conversation'),
+    tool('ToolSearch', 1440),
+    tool('Write', 639),
+  ];
+  const loaded = (out: ReturnType<typeof deferTools>) =>
+    (out.request as unknown as { tools: Record<string, unknown>[] }).tools
+      .filter((t) => t.name && t.defer_loading !== true)
+      .map((t) => t.name);
+
+  it('never defers the core loop, whatever the task text matches', () => {
+    const out = deferTools(req({ tools: windowsSubagent() }), {
+      query: 'fix four Python packages, run pytest',
+      keepRelevant: 0,
+    });
+    expect(loaded(out)).toEqual(expect.arrayContaining(['Bash', 'Edit', 'Glob', 'Grep', 'Read', 'Write', 'ToolSearch']));
+  });
+
+  it('defers PowerShell beside Bash even when the task text ranks it first', () => {
+    const out = deferTools(req({ tools: windowsSubagent() }), {
+      query: 'PowerShell python pytest packages',
+      keepRelevant: 5,
+    });
+    expect(loaded(out)).not.toContain('PowerShell');
+    // Still reachable: deferred, not removed.
+    const all = (out.request as unknown as { tools: Record<string, unknown>[] }).tools;
+    expect(all.find((t) => t.name === 'PowerShell')?.defer_loading).toBe(true);
+  });
+
+  it('keeps PowerShell when it is the only shell', () => {
+    const tools = windowsSubagent().filter((t) => t.name !== 'Bash');
+    const out = deferTools(req({ tools }), { query: 'PowerShell', keepRelevant: 5 });
+    expect(loaded(out)).toContain('PowerShell');
+  });
+
+  it('strips $schema from every definition, kept or deferred, and nothing else', () => {
+    const withMeta = (t: Record<string, unknown>) => ({
+      ...t,
+      input_schema: { $schema: 'https://json-schema.org/draft/2020-12/schema', type: 'object', properties: { a: { type: 'string' } } },
+    });
+    const out = deferTools(req({ tools: windowsSubagent().map(withMeta) }), { keepRelevant: 0 });
+    const all = (out.request as unknown as { tools: { name?: string; input_schema?: Record<string, unknown> }[] }).tools;
+    for (const t of all.filter((x) => x.name && x.input_schema)) {
+      expect(t.input_schema).toEqual({ type: 'object', properties: { a: { type: 'string' } } });
+    }
+    expect(out.slimmedChars).toBeGreaterThan(0);
+  });
+
+  it('TOKEN_OPTIMIZER_PROXY_CORE_TOOLS=none restores deferring the core loop', () => {
+    const out = deferTools(req({ tools: windowsSubagent() }), { keepRelevant: 0, coreTools: new Set() });
+    const all = (out.request as unknown as { tools: Record<string, unknown>[] }).tools;
+    expect(all.find((t) => t.name === 'Edit')?.defer_loading).toBe(true);
+    expect(loaded(out)).not.toContain('Edit');
+  });
+});
+
+describe('specialised tools are never kept by ranking', () => {
+  it('defers Artifact and friends even when the task text names them', () => {
+    const out = deferTools(
+      req({
+        tools: [
+          tool('Read', 1919),
+          described('Artifact', 'Publish an artifact page html report dashboard'),
+          described('ScheduleWakeup', 'Schedule a wakeup for a report dashboard'),
+          described('Agent', 'Launch a new agent'),
+        ],
+      }),
+      { query: 'publish an html report dashboard artifact', keepRelevant: 5 }
+    );
+    const tools = (out.request as unknown as { tools: Record<string, unknown>[] }).tools;
+    expect(tools.find((t) => t.name === 'Artifact')?.defer_loading).toBe(true);
+    expect(tools.find((t) => t.name === 'ScheduleWakeup')?.defer_loading).toBe(true);
+    expect(tools.find((t) => t.name === 'Agent')?.defer_loading).toBeUndefined();
+    expect(tools.find((t) => t.name === 'Read')?.defer_loading).toBeUndefined();
+  });
+
+  it('a forced specialised tool stays loaded', () => {
+    const out = deferTools(
+      req({ tools: [tool('Read', 1919), described('Artifact', 'Publish'), tool('Bash', 3000)], tool_choice: { type: 'tool', name: 'Artifact' } }),
+      { keepRelevant: 0 }
+    );
+    const tools = (out.request as unknown as { tools: Record<string, unknown>[] }).tools;
+    expect(tools.find((t) => t.name === 'Artifact')?.defer_loading).toBeUndefined();
+    expect(tools.some((t) => t.name === 'Artifact')).toBe(true);
   });
 });

@@ -50,6 +50,7 @@ import {
   sharedDir,
 } from './lib/wiki.mjs';
 import { subagentKnowledge, subagentTask } from './lib/briefing.mjs';
+import { boardFor } from './lib/blackboard.mjs';
 import {
   refusalPayload,
   substitutionFor,
@@ -195,9 +196,7 @@ try {
   state.toolCalls = (Number(state.toolCalls) || 0) + 1;
   // A subagent never sees SessionStart, so its first tool call carries the
   // guidance instead, on whichever exit this call takes.
-  const briefing = subagentBriefing(raw, state, {
-    canRecord: toolEvidence.names.has('wiki_write'),
-  });
+  const briefing = subagentBriefing(raw, state);
   // Counted on every Bash call, so it has to be saved on every exit that keeps
   // state -- which every exit below does via saveState.
   const batching = batchingNudge(payload, state);
@@ -220,7 +219,22 @@ try {
         /* the tool briefing still arrives without it */
       }
     }
-    precedeWith([briefing, knowledge, batching].filter(Boolean).join('\n\n'));
+    // WHAT SIBLINGS ALREADY RAN (blackboard.mjs), before this agent looks.
+    let board = null;
+    if (briefing) {
+      try {
+        board = boardFor({
+          sessionId: payload.session_id,
+          agent: String(raw.agent_id ?? raw.agentId ?? ''),
+          task: subagentTask(raw),
+        });
+      } catch {
+        board = null;
+      }
+    }
+    precedeWith(
+      [briefing, knowledge, board, batching].filter(Boolean).join('\n\n')
+    );
     saveState(payload.session_id, state, agentScope);
   }
   const ucrGuardVerdict = evaluateUcrGuards(
@@ -610,7 +624,11 @@ ${nudge}`
       }
     }
 
-    if (payload.tool_name === 'Bash' && isOutputHeavy(payload.tool_input?.command)) {
+    if (
+      payload.tool_name === 'Bash' &&
+      !isPowerShellTool(raw) &&
+      isOutputHeavy(payload.tool_input?.command)
+    ) {
       const command = payload.tool_input.command;
       // First run of this command goes through untouched -- see seenPath.
       const bounded = seenBefore(payload.session_id, command)
@@ -841,6 +859,20 @@ function knownBesideOutline(payload) {
  * Claude Code's Bash tool is a POSIX shell (Git Bash on Windows), and its
  * PowerShell tool is named as such.
  */
+/**
+ * The PowerShell tool, which the payload normaliser files under `Bash`.
+ *
+ * The bound wrapper is POSIX shell -- `{ cmd\n} 2>&1 | { head -c H; tail -c T; }`
+ * -- and handed to PowerShell it is a parse error, so a valid command failed
+ * because of us: observed 2026-10-21, `cd F:/x; npx tsc --noEmit 2>&1 |
+ * Select-Object -First 8` came back "Missing closing ')'". PowerShell output is
+ * bounded after the fact instead (output-compact.mjs, PostToolUse), which needs
+ * no rewrite and cannot change what the command means.
+ */
+function isPowerShellTool(raw) {
+  return /powershell|pwsh/i.test(String(raw?.tool_name ?? raw?.toolName ?? raw?.tool ?? ''));
+}
+
 function shellOutlineSubstitution(payload, rawToolName, state) {
   return outlineShell({
     sessionId: payload.session_id || '',
@@ -976,7 +1008,7 @@ function compactorFor(sessionId, command) {
   // call was already going through untouched, and silently bounding output
   // there would be a new behaviour rather than a cheaper spelling of an
   // existing one.
-  if (payload.tool_name === 'Bash' && refusalsEnabled()) {
+  if (payload.tool_name === 'Bash' && !isPowerShellTool(raw) && refusalsEnabled()) {
     const command = payload.tool_input?.command;
     // Same rule on the refusal path: bounding output the model has not seen is
     // what drove the turn inflation, whatever brought us here.

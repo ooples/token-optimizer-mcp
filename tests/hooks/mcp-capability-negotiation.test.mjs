@@ -133,6 +133,26 @@ describe('fail-open routing', () => {
     tool_input: { pattern: 'needle', path: '.' },
   };
 
+  test('Claude Code’s own Grep and Glob are never redirected; another client’s search still is', () => {
+    const tools = new Set(['smart_grep', 'smart_glob']);
+    expect(decide({ ...grep, raw_tool_name: 'Grep' }, { seen: {} }, tools)).toBeNull();
+    expect(
+      decide({ tool_name: 'Glob', raw_tool_name: 'Glob', tool_input: { pattern: '**/*.ts' } }, { seen: {} }, tools)
+    ).toBeNull();
+    expect(
+      decide({ ...grep, raw_tool_name: 'search_file_content' }, { seen: {} }, tools)?.reason
+    ).toContain('smart_grep');
+    // Enforce is routing the user asked for: it still redirects.
+    const before = process.env.TOKEN_OPTIMIZER_MODE;
+    process.env.TOKEN_OPTIMIZER_MODE = 'enforce';
+    try {
+      expect(decide({ ...grep, raw_tool_name: 'Grep' }, { seen: {} }, tools)?.reason).toContain('smart_grep');
+    } finally {
+      if (before === undefined) delete process.env.TOKEN_OPTIMIZER_MODE;
+      else process.env.TOKEN_OPTIMIZER_MODE = before;
+    }
+  });
+
   test('the pure router allows native Grep when smart_grep is unproven', () => {
     expect(decide(grep, { seen: {} }, new Set())).toBeNull();
     expect(

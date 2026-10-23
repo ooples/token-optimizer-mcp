@@ -60,6 +60,23 @@ export interface ShaperOptions {
   readonly holdout?: number;
   /** Stable per-conversation key, so a conversation stays in or out of the holdout. */
   readonly conversationKey?: string;
+  /** The terse note only, never effort routing (the subagent output budget). */
+  readonly verbosityOnly?: boolean;
+}
+
+/**
+ * THE WORKER OUTPUT BUDGET: subagents get the terse note by default. Output
+ * bills at five times input, and a worker's prose goes to a caller that wants
+ * its result, not its narration. Only the note -- a constant block at the end
+ * of the system prompt, so the cached prefix never moves -- and never effort
+ * routing. TOKEN_OPTIMIZER_PROXY_WORKER_TERSE=0 turns it off.
+ */
+export function workerTerseEnabled(
+  env: NodeJS.ProcessEnv = process.env
+): boolean {
+  return !/^(0|false|no|off)$/i.test(
+    String(env.TOKEN_OPTIMIZER_PROXY_WORKER_TERSE ?? '').trim()
+  );
 }
 
 export interface ShaperResult {
@@ -259,7 +276,10 @@ export function shapeOutput(
     labels.push('output_shaper:verbosity');
   }
 
-  if (isResumption(shaped, opts.wireFormat)) {
+  // Effort routing changes `output_config.effort` turn by turn, and a change of
+  // effort invalidates the cached conversation; the worker budget (verbosity
+  // only) never does that.
+  if (!opts.verbosityOnly && isResumption(shaped, opts.wireFormat)) {
     const routed = routeEffort(shaped, opts.wireFormat);
     if (routed) {
       shaped = routed;

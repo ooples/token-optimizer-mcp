@@ -178,6 +178,7 @@ it('forwards Anthropic tool-search references and beta headers unchanged', async
   const sent = JSON.parse(provider.seen.body!);
   expect(sent.messages).toEqual(payload.messages);
   expect(sent.tools).toEqual(payload.tools);
+  // The client's betas pass through unchanged (clearing, which adds its own, is opt-in).
   expect(provider.seen.headers?.['anthropic-beta']).toBe(
     'advanced-tool-use-2025-11-20'
   );
@@ -778,6 +779,45 @@ describe('the cached-knowledge block', () => {
     // beside a deliberate addition would be a false report.
     expect(out.summary.injectedChars).toBeGreaterThan(0);
   });
+
+  it("never puts findings in a subagent's system prompt, so it cannot flap between turns", () => {
+    // A subagent's conversation key is its siblings' too; the block rode on its
+    // first request and on none after, re-writing its whole context on call 2.
+    const finding = {
+      key: 'k',
+      type: 'failure',
+      claim: 'npm install bumps zod and breaks tsc; use npm ci',
+      confidence: 0.95,
+      confidenceLabel: 'verified',
+    };
+    const system = [
+      {
+        type: 'text',
+        text: 'x-anthropic-billing-header: cc_is_subagent=true;',
+      },
+      { type: 'text', text: 'You are a coding agent.' },
+    ];
+    const anchors = anchorStore();
+    const turn = (messages: unknown[]) =>
+      JSON.parse(
+        compressBody(
+          Buffer.from(JSON.stringify({ system, messages }), 'utf8'),
+          spill,
+          anchors,
+          [finding]
+        ).body.toString('utf8')
+      ) as { system: unknown };
+    const first = turn([
+      { role: 'user', content: [{ type: 'text', text: rows(80) }] },
+    ]);
+    const second = turn([
+      { role: 'user', content: [{ type: 'text', text: rows(80) }] },
+      { role: 'assistant', content: 'ok' },
+      { role: 'user', content: 'go on' },
+    ]);
+    expect(JSON.stringify(first.system)).not.toContain('npm ci');
+    expect(second.system).toEqual(first.system);
+  });
 });
 
 describe('what the proxy refuses to buffer or forward', () => {
@@ -1066,6 +1106,35 @@ describe('the model on the summary', () => {
     expect(out.summary.model).toBe('claude-sonnet-5');
   });
 
+  it('names the model actually sent when a read-only subagent is routed down', () => {
+    const body = Buffer.from(
+      JSON.stringify({
+        model: 'claude-opus-5-5',
+        system: [
+          {
+            type: 'text',
+            text: 'x-anthropic-billing-header: cc_version=2.1.302; cc_is_subagent=true;',
+          },
+        ],
+        messages: [
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: rows(80) },
+              { type: 'text', text: 'This is a read-only audit of X.' },
+            ],
+          },
+        ],
+      }),
+      'utf8'
+    );
+    const out = compressBody(body, spill);
+    expect(JSON.parse(out.body.toString('utf8')).model).toBe(
+      'claude-sonnet-5-5'
+    );
+    expect(out.summary.model).toBe('claude-sonnet-5-5');
+  });
+
   it('names the model of a request it declined after parsing it', () => {
     const body = Buffer.from(
       JSON.stringify({ model: 'claude-sonnet-5', prompt: 'x'.repeat(9000) }),
@@ -1086,5 +1155,442 @@ describe('the model on the summary', () => {
       'utf8'
     );
     expect(compressBody(anonymous, noSpill).summary.model).toBeUndefined();
+  });
+});
+
+describe('slimmed tool definitions go out on every turn (review on #523)', () => {
+  it('strips $schema even on a turn that compresses nothing', () => {
+    // Every tool is core, so nothing is deferred; nothing in the messages is
+    // compressible. The tools array opens the cached prefix, so the slimmed
+    // form must not flip back to the client's bytes on such a turn.
+    // Real-sized definitions, so removing `$schema` alone is far below the
+    // proxy's minimum saving share and a turn takes the decline branch.
+    const words = (seed: number) =>
+      Array.from(
+        { length: 3000 },
+        (_, i) => `w${(i * 7919 + seed * 104729) % 100003}`
+      ).join(' ');
+    const tool = (name: string) => ({
+      name,
+      description: words(name.length),
+      input_schema: {
+        $schema: 'https://json-schema.org/draft/2020-12/schema',
+        type: 'object',
+        properties: {},
+      },
+    });
+    const body = Buffer.from(
+      JSON.stringify({
+        model: 'claude',
+        tools: [tool('Read'), tool('Bash'), tool('Edit')],
+        messages: [
+          { role: 'user', content: 'hello' },
+          { role: 'assistant', content: 'hi' },
+          { role: 'user', content: 'go on' },
+        ],
+      }),
+      'utf8'
+    );
+    // Turn after turn of one conversation, with the anchor store the running
+    // proxy keeps: every turn must send the same slimmed tools bytes.
+    const store = anchorStore();
+    const turn = (n: number) => {
+      const messages = [{ role: 'user', content: 'hello' }];
+      for (let i = 0; i < n; i++)
+        messages.push(
+          { role: 'assistant', content: `step ${i}` },
+          { role: 'user', content: `go on ${i}` }
+        );
+      return Buffer.from(
+        JSON.stringify({ ...JSON.parse(body.toString('utf8')), messages }),
+        'utf8'
+      );
+    };
+    const toolsSent = [1, 2, 3, 4, 5, 6].map((n) => {
+      const out = compressBody(turn(n), spill, store);
+      return JSON.stringify(JSON.parse(out.body.toString('utf8')).tools);
+    });
+    for (const t of toolsSent) expect(t).toBe(toolsSent[0]);
+    expect(toolsSent[0]).not.toContain('$schema');
+    expect(
+      JSON.parse(toolsSent[0]).map((t: { name: string }) => t.name)
+    ).toEqual(['Read', 'Bash', 'Edit']);
+  });
+});
+
+it('answers a sibling first request that passed the cold gate', async () => {
+  // A fully read request auto-destroys, so a disconnect check on `req.destroyed`
+  // dropped every request after the gate unanswered.
+  const provider = await upstream(() => ({ body: '{"ok":"gate"}' }));
+  const proxy = await startProxy({
+    projectRoot: EMPTY_PROJECT,
+    upstream: provider.url,
+    knowledge: false,
+  });
+  servers.push(proxy.server);
+  const reply = await fetch(`http://127.0.0.1:${proxy.port}/v1/messages`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      messages: [
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: 'shared context' },
+            { type: 'text', text: 'the task' },
+          ],
+        },
+      ],
+    }),
+    signal: AbortSignal.timeout(5000),
+  });
+  expect(await reply.text()).toBe('{"ok":"gate"}');
+  expect(provider.seen.body).toContain('the task');
+});
+
+it('carries the repository pack, marker moved onto it, identically on every turn', async () => {
+  const { execFileSync } = await import('node:child_process');
+  const { writeFileSync } = await import('node:fs');
+  const { gitEnv } = await import('../../../src/proxy/repo-pack.js');
+  const repo = mkdtempSync(join(tmpdir(), 'proxy-pack-repo-'));
+  // Scrubbed: a GIT_DIR from a hook-driven run would override `-C`.
+  const git = (...args: string[]) =>
+    execFileSync('git', ['-c', 'core.fsmonitor=false', '-C', repo, ...args], {
+      env: gitEnv(),
+    });
+  git('init', '-q', '-b', 'master');
+  writeFileSync(join(repo, 'a.ts'), 'export function a() {}\n');
+  git('add', '-A');
+  git(
+    '-c',
+    'user.email=t@example.com',
+    '-c',
+    'user.name=t',
+    '-c',
+    'commit.gpgsign=false',
+    'commit',
+    '-q',
+    '-m',
+    'init'
+  );
+  const bodies: string[] = [];
+  const provider = await upstream((raw) => {
+    bodies.push(raw);
+    return {};
+  });
+  const proxy = await startProxy({
+    projectRoot: EMPTY_PROJECT,
+    upstream: provider.url,
+    knowledge: false,
+    repoPack: {
+      dir: mkdtempSync(join(tmpdir(), 'proxy-pack-store-')),
+      roots: async () => [repo],
+    },
+  });
+  servers.push(proxy.server);
+  const turn = (messages: unknown[]) =>
+    fetch(`http://127.0.0.1:${proxy.port}/v1/messages`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        tools: [{ name: 'Read', input_schema: { type: 'object' } }],
+        system: [
+          {
+            type: 'text',
+            text: ` - Primary working directory: ${repo}\n - Is a git repository: true\n`,
+            cache_control: { type: 'ephemeral' },
+          },
+        ],
+        messages,
+      }),
+    }).then((r) => r.text());
+  await turn([{ role: 'user', content: 'Fix it.' }]);
+  await turn([
+    { role: 'user', content: 'Fix it.' },
+    { role: 'assistant', content: 'Looking.' },
+    { role: 'user', content: 'Go on.' },
+  ]);
+  const systems = bodies.map(
+    (b) =>
+      (JSON.parse(b) as { system: { text: string; cache_control?: unknown }[] })
+        .system
+  );
+  expect(systems[0]).toHaveLength(2);
+  expect(systems[0][0].cache_control).toBeUndefined();
+  expect(systems[0][1].text).toMatch(/^# Repository pack: /);
+  expect(systems[0][1].cache_control).toEqual({ type: 'ephemeral' });
+  expect(systems[1][1].text).toBe(systems[0][1].text);
+  rmSync(repo, { recursive: true, force: true });
+});
+
+it("puts a subagent's task-path pack after the shared prefix, identically each turn", async () => {
+  const { execFileSync } = await import('node:child_process');
+  const { writeFileSync } = await import('node:fs');
+  const { gitEnv } = await import('../../../src/proxy/repo-pack.js');
+  const repo = mkdtempSync(join(tmpdir(), 'proxy-task-pack-'));
+  // Scrubbed: a GIT_DIR from a hook-driven run would override `-C`.
+  const git = (...args: string[]) =>
+    execFileSync('git', ['-c', 'core.fsmonitor=false', '-C', repo, ...args], {
+      env: gitEnv(),
+    });
+  git('init', '-q', '-b', 'master');
+  writeFileSync(join(repo, 'a.ts'), 'export function a() {}\n');
+  git('add', '-A');
+  git(
+    '-c',
+    'user.email=t@example.com',
+    '-c',
+    'user.name=t',
+    '-c',
+    'commit.gpgsign=false',
+    'commit',
+    '-q',
+    '-m',
+    'init'
+  );
+  const bodies: string[] = [];
+  const provider = await upstream((raw) => {
+    bodies.push(raw);
+    return {};
+  });
+  const proxy = await startProxy({
+    projectRoot: EMPTY_PROJECT,
+    upstream: provider.url,
+    knowledge: false,
+    repoPack: {
+      dir: mkdtempSync(join(tmpdir(), 'proxy-task-pack-store-')),
+      taskPlacement: true,
+      roots: async () => [repo],
+    },
+  });
+  servers.push(proxy.server);
+  const task = `Fix the bug in ${repo} and report.`;
+  const listing = {
+    type: 'text',
+    text: 'deferred tools and skills '.repeat(200),
+    cache_control: { type: 'ephemeral' },
+  };
+  const turn = (later: unknown[]) =>
+    fetch(`http://127.0.0.1:${proxy.port}/v1/messages`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        tools: [{ name: 'Read', input_schema: { type: 'object' } }],
+        system: [
+          {
+            type: 'text',
+            text: 'x-anthropic-billing-header: cc_version=2.1.302; cc_is_subagent=true;',
+          },
+          {
+            type: 'text',
+            text: ` - Primary working directory: ${tmpdir()}\n - Is a git repository: false\n`,
+            cache_control: { type: 'ephemeral' },
+          },
+        ],
+        messages: [
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: 'shared leading context '.repeat(200) },
+              { type: 'text', text: task },
+            ],
+          },
+          // The listing stays at messages[1] on every turn (captured).
+          { role: 'system', content: [listing] },
+          ...later,
+        ],
+      }),
+    }).then((r) => r.text());
+  await turn([]);
+  await turn([
+    { role: 'assistant', content: 'Looking.' },
+    { role: 'user', content: 'Go on.' },
+  ]);
+  type Sent = {
+    messages: {
+      role: string;
+      content: { text?: string; cache_control?: unknown }[];
+    }[];
+  };
+  const sent = bodies.map((b) => JSON.parse(b) as Sent);
+  for (const s of sent) {
+    // An order the API accepts: a system turn precedes an assistant turn or ends the array.
+    const roles = s.messages.map((m) => m.role);
+    expect(
+      roles.every(
+        (r, i) =>
+          r !== 'system' ||
+          i === roles.length - 1 ||
+          roles[i + 1] === 'assistant'
+      )
+    ).toBe(true);
+    // The pack sits just before the task, after the sibling marker.
+    const first = s.messages[0].content;
+    expect(first[first.length - 1].text).toBe(task);
+    expect(first[first.length - 2].text).toMatch(/^# Repository pack: /);
+    expect(first[first.length - 3].cache_control).toEqual({
+      type: 'ephemeral',
+    });
+  }
+  const pack = (s: Sent) =>
+    s.messages[0].content[s.messages[0].content.length - 2].text;
+  expect(pack(sent[1])).toBe(pack(sent[0]));
+  rmSync(repo, { recursive: true, force: true });
+});
+
+it('asks the provider to clear old tool results, after the client’s own edits, under its beta', async () => {
+  const provider = await upstream(() => ({}));
+  const proxy = await startProxy({
+    projectRoot: EMPTY_PROJECT,
+    upstream: provider.url,
+    knowledge: false,
+    repoPack: false,
+    clearToolUses: true,
+  });
+  servers.push(proxy.server);
+  await fetch(`http://127.0.0.1:${proxy.port}/v1/messages`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'anthropic-beta': 'interleaved-thinking-2025-05-14',
+    },
+    body: JSON.stringify({
+      tools: [{ name: 'Read', input_schema: { type: 'object' } }],
+      context_management: {
+        edits: [{ type: 'clear_thinking_20251015', keep: 'all' }],
+      },
+      messages: [{ role: 'user', content: 'go' }],
+    }),
+  }).then((r) => r.text());
+  const sent = JSON.parse(provider.seen.body) as {
+    context_management: { edits: { type: string }[] };
+  };
+  expect(sent.context_management.edits.map((e) => e.type)).toEqual([
+    'clear_thinking_20251015',
+    'clear_tool_uses_20250919',
+  ]);
+  expect(String(provider.seen.headers?.['anthropic-beta'])).toBe(
+    'interleaved-thinking-2025-05-14,context-management-2025-06-27'
+  );
+});
+
+it("puts a subagent's assigned issue just before its task, identically on every turn", async () => {
+  const bodies: string[] = [];
+  const provider = await upstream((raw) => {
+    bodies.push(raw);
+    return {};
+  });
+  const proxy = await startProxy({
+    projectRoot: EMPTY_PROJECT,
+    upstream: provider.url,
+    knowledge: false,
+    repoPack: false,
+    prefetch: {
+      dir: mkdtempSync(join(tmpdir(), 'proxy-prefetch-')),
+      gh: async (args) =>
+        args[1].includes('/comments')
+          ? '[]'
+          : JSON.stringify({
+              title: 'Adam ignores decay',
+              state: 'open',
+              body: 'Repro here.',
+            }),
+    },
+  });
+  servers.push(proxy.server);
+  const task = 'Item: ISSUE ooples/AiDotNet #1159 (bug). Fix it.';
+  const turn = (later: unknown[]) =>
+    fetch(`http://127.0.0.1:${proxy.port}/v1/messages`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        tools: [{ name: 'Read', input_schema: { type: 'object' } }],
+        system: [
+          {
+            type: 'text',
+            text: 'x-anthropic-billing-header: cc_version=2.1.302; cc_is_subagent=true;',
+          },
+        ],
+        messages: [
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: 'shared leading context '.repeat(200) },
+              { type: 'text', text: task },
+            ],
+          },
+          ...later,
+        ],
+      }),
+    }).then((r) => r.text());
+  await turn([]);
+  await turn([
+    { role: 'assistant', content: 'Looking.' },
+    { role: 'user', content: 'Go on.' },
+  ]);
+  const firsts = bodies.map(
+    (b) =>
+      (JSON.parse(b) as { messages: { content: { text?: string }[] }[] })
+        .messages[0].content
+  );
+  for (const c of firsts) {
+    expect(c[c.length - 1].text).toBe(task);
+    expect(c[c.length - 2].text).toMatch(
+      /^# Prefetched for this task:[\s\S]*ooples\/AiDotNet#1159 \(issue, open\): Adam ignores decay/
+    );
+  }
+  expect(firsts[1][firsts[1].length - 2].text).toBe(
+    firsts[0][firsts[0].length - 2].text
+  );
+});
+
+describe('the worker output budget', () => {
+  const send = async (system: unknown[], env: Record<string, string> = {}) => {
+    const saved = { ...process.env };
+    Object.assign(process.env, env);
+    try {
+      const provider = await upstream(() => ({}));
+      const proxy = await startProxy({
+        projectRoot: EMPTY_PROJECT,
+        upstream: provider.url,
+        knowledge: false,
+        repoPack: false,
+        prefetch: false,
+      });
+      servers.push(proxy.server);
+      await fetch(`http://127.0.0.1:${proxy.port}/v1/messages`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          system,
+          output_config: { effort: 'high' },
+          messages: [{ role: 'user', content: 'go' }],
+        }),
+      }).then((r) => r.text());
+      return JSON.parse(provider.seen.body) as {
+        system: { text: string }[];
+        output_config: { effort: string };
+      };
+    } finally {
+      process.env = saved;
+    }
+  };
+  const sub = [{ type: 'text', text: 'billing: cc_is_subagent=true;' }];
+  const terse = (s: { system: { text: string }[] }) =>
+    s.system.some((b) => b.text.startsWith('Answer directly.'));
+
+  it('steers a subagent to terse output, without touching its effort', async () => {
+    const sent = await send(sub);
+    expect(terse(sent)).toBe(true);
+    expect(sent.output_config.effort).toBe('high');
+  });
+
+  it('leaves the main session alone, and turns off on request', async () => {
+    expect(terse(await send([{ type: 'text', text: 'main session' }]))).toBe(
+      false
+    );
+    expect(
+      terse(await send(sub, { TOKEN_OPTIMIZER_PROXY_WORKER_TERSE: '0' }))
+    ).toBe(false);
   });
 });

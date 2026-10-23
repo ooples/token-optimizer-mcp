@@ -115,6 +115,11 @@ import { evaluateUcrGuards } from './ucr-guard.mjs';
 import { beginHookInvocation, noteHookOutput } from './observability.mjs';
 import { registerProject, registeredProjects } from './projects.mjs';
 import { runStopHarvest } from './stop-harvest.mjs';
+import { applyQuietEnv } from './quiet-env.mjs';
+import { compactToolResponse, outputCompactEnabled } from './output-compact.mjs';
+import { repeatResponse, repeatsEnabled } from './repeats.mjs';
+import { recordOnBoard } from './blackboard.mjs';
+import { artifactPath, capture } from './expand.mjs';
 
 /**
  * An outline rewrite for this call, in the client's own input shape, or null.
@@ -761,6 +766,17 @@ export function sessionTaskContext(raw = {}) {
     .join('\n');
 }
 
+/**
+ * Whether the Stop hook's harvest nudge is held for the next turn instead of
+ * continuing this one. Claude Code only: its PostToolUse context reaches the
+ * model on the next call, which is what delivery needs. Other clients keep the
+ * continuation, since they have no such channel wired.
+ */
+function harvestDeferred(clientName) {
+  if (clientName !== 'claude-code') return false;
+  return !/^(1|true|yes|on)$/i.test(String(process.env.TOKEN_OPTIMIZER_HARVEST_TURN ?? '').trim());
+}
+
 function emit(object) {
   const serialized = JSON.stringify(object);
   noteHookOutput(object, Buffer.byteLength(serialized, 'utf8'));
@@ -1334,6 +1350,10 @@ async function runHook(clientName, event, invocation) {
         ),
       },
     ];
+    // Reduce at the source before anything runs: quiet defaults for the tools
+    // the agent will call, through the env file Claude Code sources for every
+    // later Bash call (quiet-env.mjs). A no-op for clients without one.
+    applyQuietEnv();
     const cwd = raw.cwd || raw.working_directory || process.cwd();
     const root = projectRootFor(join(cwd, '__session__'), cwd);
     registerProject({ root, graphDir: wikiDir(root), client: clientName });
@@ -1543,10 +1563,21 @@ async function runHook(clientName, event, invocation) {
               raw.stopHookActive === true ||
               alreadyHarvested ||
               (clientName === 'cursor' && Number(raw.loop_count || 0) > 0),
+            deferred: harvestDeferred(clientName),
           })
         : null;
+    // NO TURN OF ITS OWN (user decision 2026-10-21). A blocking Stop continues
+    // the turn, and that continuation re-reads the whole context: 11 of them in
+    // one session at ~344k average context. In Claude Code the nudge is kept and
+    // delivered with the next turn's first tool result instead, a call that is
+    // being made anyway. TOKEN_OPTIMIZER_HARVEST_TURN=1 restores the old turn.
+    let stopPrompt = prompt;
     if (prompt) {
       state.harvestedEdits = Number(state.edits || 0);
+      if (harvestDeferred(clientName)) {
+        state.pendingHarvest = prompt;
+        stopPrompt = null;
+      }
       saveState(sessionId, state, agentScope);
     }
     // THE OUT-OF-BAND HARVEST, which no client was running.
@@ -1587,11 +1618,11 @@ async function runHook(clientName, event, invocation) {
       // one from ending.
     }
 
-    if (prompt && client.stopStyle === 'followup') {
-      emit({ followup_message: prompt, ...(harvestNotice ? { systemMessage: harvestNotice } : {}) });
+    if (stopPrompt && client.stopStyle === 'followup') {
+      emit({ followup_message: stopPrompt, ...(harvestNotice ? { systemMessage: harvestNotice } : {}) });
     } else {
       emit({
-        ...(prompt ? { decision: client.stopDecision, reason: prompt } : {}),
+        ...(stopPrompt ? { decision: client.stopDecision, reason: stopPrompt } : {}),
         ...(harvestNotice ? { systemMessage: harvestNotice } : {}),
       });
     }
@@ -1889,10 +1920,69 @@ async function runHook(clientName, event, invocation) {
   } catch {
     // Delivery is an optimization. Fail open.
   }
+  // THE RESULT ITSELF, COMPACTED BEFORE THE MODEL READS IT (output-compact.mjs).
+  // Claude Code only: its PostToolUse `updatedToolOutput` replaces the result,
+  // and no other client's post-tool event can. The full output stays one Read
+  // away in the artifact store.
+  let updatedToolOutput = null;
+  if (
+    event === 'post-tool' &&
+    clientName === 'claude-code' &&
+    features.routing &&
+    outputCompactEnabled()
+  ) {
+    try {
+      const cwd = payload.cwd || process.cwd();
+      const dir = wikiDir(projectRootFor(join(cwd, '__tool__'), cwd));
+      const tool = String(payload.tool_name || '');
+      // A REPEAT FIRST (repeats.mjs): what the agent already has a few calls
+      // back is not sent again. Recorded on every call, rewritten or not.
+      if (repeatsEnabled())
+        updatedToolOutput = repeatResponse({
+          tool,
+          input: payload.tool_input,
+          response: raw.tool_response,
+          cwd,
+          call: Number(state.toolCalls) || 0,
+          state,
+          store: (text) => {
+            const ref = capture(dir, text, { tool, sessionId: payload.session_id, shape: 'repeat' });
+            return ref ? artifactPath(dir, ref) : null;
+          },
+        });
+      // THE SIBLING BLACKBOARD (blackboard.mjs): every read-only result, for
+      // the agents of this session that have not started yet.
+      if ((tool === 'Bash' || tool === 'PowerShell') && typeof raw.tool_response?.stdout === 'string') {
+        const output = raw.tool_response.stdout;
+        const ref = output.length > 1000 ? capture(dir, output, { tool, sessionId: payload.session_id, shape: 'board' }) : null;
+        recordOnBoard({
+          sessionId: payload.session_id,
+          agent: String(raw.agent_id ?? raw.agentId ?? ''),
+          command: payload.tool_input?.command,
+          cwd,
+          output,
+          artifact: ref ? artifactPath(dir, ref) : null,
+        });
+      }
+      if (!updatedToolOutput)
+        updatedToolOutput = compactToolResponse({
+          tool,
+          input: payload.tool_input,
+          response: raw.tool_response,
+          dir,
+          sessionId: payload.session_id,
+        });
+    } catch {
+      updatedToolOutput = null;
+    }
+  }
   // A verdict that reached this point is advice, not a refusal: the call runs (or
   // has already run) either way. Say it once per session per kind -- see
-  // adviseOnce -- rather than on every matching call.
-  const advisory = verdict && adviseOnce(state, verdict) ? verdict.reason : null;
+  // adviseOnce -- rather than on every matching call. Not when the output was
+  // just compacted: "that search was unbounded, use smart_grep" after the
+  // result is already bounded is advice about a cost nobody paid.
+  const advisory =
+    verdict && !updatedToolOutput && adviseOnce(state, verdict) ? verdict.reason : null;
   // THE RECORDING GUIDANCE, ONCE, AFTER REAL WORK (#357, M5). It used to ride in
   // every SessionStart, where it is the largest fixed cost a small session pays
   // and buys nothing until there is something to record. The first edit is the
@@ -1912,6 +2002,14 @@ async function runHook(clientName, event, invocation) {
     ((Number(state.edits) || 0) >= 1 ||
       (Number(state.toolCalls) || 0) >= GUIDANCE_AFTER_CALLS);
   if (guided) state.recordingGuided = true;
+  // The previous turn's harvest nudge, held back by the Stop hook so it never
+  // cost a turn of its own, rides on this result -- once.
+  const pendingHarvest =
+    event === 'post-tool' && typeof state.pendingHarvest === 'string'
+      ? state.pendingHarvest
+      : null;
+  // Cleared explicitly, so saveState knows this caller changed it.
+  if (pendingHarvest) state.pendingHarvest = null;
   saveState(payload.session_id, state, agentScope);
 
   const context = [
@@ -1919,10 +2017,19 @@ async function runHook(clientName, event, invocation) {
     graphContext,
     guided ? recordingGuidance() : null,
     recordingContext,
+    pendingHarvest,
   ]
     .filter(Boolean)
     .join('\n\n');
-  if (context) {
+  if (updatedToolOutput) {
+    const withContext = context ? contextOutput(client, eventName, context) : null;
+    emit({
+      hookSpecificOutput: {
+        ...(withContext?.hookSpecificOutput ?? { hookEventName: eventName }),
+        updatedToolOutput,
+      },
+    });
+  } else if (context) {
     const output = contextOutput(client, eventName, context);
     if (output) emit(output);
   }

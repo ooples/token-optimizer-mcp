@@ -33,6 +33,7 @@ import {
   type ServerResponse,
 } from 'node:http';
 import { request as httpsRequest } from 'node:https';
+import { appendFile } from 'node:fs/promises';
 import {
   existsSync,
   mkdirSync,
@@ -54,7 +55,25 @@ import {
   withAdvancedToolUse,
   DEFAULT_KEEP_RELEVANT,
   SMALL_TOOL_CHARS,
+  CORE_LOOP_TOOLS,
 } from '../compress/tools.js';
+import {
+  shareSiblingPrefix,
+  sharePrefixMode,
+} from '../compress/sibling-prefix.js';
+import { coldKey, coldGateEnabled, enterColdGate } from './cold-gate.js';
+import {
+  isSubagentRequest,
+  trimSubagentContext,
+  trimSubagentsEnabled,
+} from '../compress/subagent-context.js';
+import { routeReadOnlySubagent } from '../compress/model-route.js';
+import {
+  KeepWarm,
+  keepWarmEnabled,
+  maxPingsFromEnv,
+  ttlOf,
+} from './keep-warm.js';
 import {
   accountingPath,
   appendRecord,
@@ -72,7 +91,11 @@ import {
   createTransformationLog,
   type TransformationLog,
 } from './transformations.js';
-import { anchorStore, type AnchorStore } from '../compress/anchor.js';
+import {
+  anchorStore,
+  conversationKey as anchorConversationKey,
+  type AnchorStore,
+} from '../compress/anchor.js';
 import { serialiseKeepingPrefix } from './cached-prefix.js';
 import { batchGuidance } from '../compress/batch-guidance.js';
 import { injectKnowledge } from '../compress/knowledge.js';
@@ -94,6 +117,7 @@ import { compressChatCompletions } from './chat-completions.js';
 import {
   shapeOutput,
   shaperEnabled,
+  workerTerseEnabled,
   holdoutFraction,
   type WireFormat,
 } from './output-shaper.js';
@@ -101,7 +125,28 @@ import { assignArm, OUTPUT_ARM, type OutputArm } from './output-savings.js';
 import { createEchoScanner, echoEnabled, extractTextValues } from './echo.js';
 import { withResponsesKnowledge } from './responses-knowledge.js';
 import type { Finding } from '../compress/knowledge.js';
-import { loadFindingsFrom } from './findings.js';
+import { loadFindings, loadFindingsFrom } from './findings.js';
+import { Prefetcher, prefetchEnabled } from './prefetch.js';
+import {
+  addCompaction,
+  addToolClearing,
+  CLEAR_TOOL_USES,
+  clearingFromEnv,
+  COMPACT,
+  COMPACT_BETA,
+  compactionFromEnv,
+  CONTEXT_MANAGEMENT_BETA,
+  withBeta,
+} from '../compress/context-edit.js';
+import {
+  injectPack,
+  injectPackBeforeTask,
+  RepoPacks,
+  repoPackEnabled,
+  samePath,
+  trustedRoots,
+  type RepoPacksOptions,
+} from './repo-pack.js';
 import {
   presetFromEnv,
   resolveProxyTuning,
@@ -208,6 +253,12 @@ export interface ProxyOptions {
   readonly projectRoot?: string;
   /** Disable graph injection when a client chooses its working tree after launch. */
   readonly knowledge?: boolean;
+  /** First-turn prefetch of a subagent's assigned issue or PR (prefetch.ts); opt-in: options turn it on, `false` keeps it off. */
+  readonly prefetch?: false | ConstructorParameters<typeof Prefetcher>[0];
+  /** Server-side clearing of old tool results (context-edit.ts); opt-in: `true` turns it on, `false` keeps it off. */
+  readonly clearToolUses?: boolean;
+  /** The shared repository pack (repo-pack.ts); `false` turns it off. */
+  readonly repoPack?: false | RepoPacksOptions;
   /** Named starting point for the dials. Defaults to the environment's. */
   readonly preset?: PresetName | string;
   /**
@@ -504,6 +555,10 @@ function compressBodyOnce(
   wireFormat?: 'chat-completions',
   suppressKnowledge?: boolean
 ): CompressedBody {
+  // READ ONCE, FROM THE BUFFER THE HANDLER KEYED: shaping below may replace
+  // `body`, and a lookup after that missed (caught by the prefetch and pack
+  // tests when the worker output budget began shaping subagents).
+  const handedOff = taskBlocks.get(body);
   // THE MODEL, LEARNED AS SOON AS THE BODY PARSES AND CARRIED BY EVERY RETURN
   // BELOW IT. `unchanged` closes over this variable rather than taking it as an
   // argument, so a refusal reached after the parse still names the model it
@@ -681,11 +736,14 @@ function compressBodyOnce(
         : 'messages';
   const conversationKey = conversationKeyFor(asRecord);
   const holdout = holdoutFraction();
+  const workerBudget =
+    !shaperEnabled() && workerTerseEnabled() && isSubagentRequest(parsed);
   const shaped = shapeOutput(asRecord, {
     wireFormat: shapeFormat,
-    enabled: shaperEnabled(),
-    holdout,
+    enabled: shaperEnabled() || workerBudget,
+    holdout: workerBudget ? 0 : holdout,
     conversationKey,
+    verbosityOnly: workerBudget,
   });
   // THE ARM INTO THE LEDGER, WHICH IS WHERE THE MEASUREMENT IS MADE. The
   // anonymous telemetry below counts arms in aggregate and cannot answer the
@@ -788,6 +846,10 @@ function compressBodyOnce(
   // Set TOKEN_OPTIMIZER_PROXY_DEFER_TOOLS=0 to turn it off.
   let deferred = 0;
   let deferredChars = 0;
+  // Slimmed definitions must go out on EVERY turn: the tools array opens the
+  // cached prefix, so sending the client's bytes on a turn that declined to
+  // compress would flip it back and miss the whole prefix (review on #523).
+  let slimmedTools = false;
   if (deferToolsEnabled()) {
     // THE HOLDOUT, WHICH IS THE ONLY EVIDENCE THE BETA IS HONOURED. Everything
     // the prompt-level count claims rests on the provider actually declining to
@@ -824,14 +886,78 @@ function compressBodyOnce(
           query: taskIn(parsed),
           keepRelevant: keepToolsFromEnv(),
           smallToolChars: smallToolCharsFromEnv(),
+          coreTools: coreToolsFromEnv(),
         });
         parsed = out.request;
         deferred = out.deferredCount;
         deferredChars = out.deferredChars;
+        slimmedTools = (out.slimmedChars ?? 0) > 0;
       } catch {
         // Fails open like everything else here: a tools array we cannot rewrite
         // is forwarded as it arrived.
       }
+    }
+  }
+
+  // A SUBAGENT'S INJECTED CONTEXT, trimmed before anything else reads the
+  // request: the memory index, skill descriptions and unmentioned servers'
+  // tools (subagent-context.ts). The main session is never touched.
+  // READ-ONLY SUBAGENTS ONE MODEL TIER DOWN (model-route.ts), decided from the
+  // task text so a conversation never switches model.
+  let routedModel = false;
+  try {
+    const out = routeReadOnlySubagent(parsed);
+    parsed = out.request;
+    routedModel = out.to !== null;
+    // The ledger prices what is sent, not what the client asked for.
+    if (out.to) model = out.to;
+  } catch {
+    routedModel = false;
+  }
+
+  let trimmedChars = 0;
+  if (trimSubagentsEnabled()) {
+    try {
+      const out = trimSubagentContext(parsed);
+      parsed = out.request;
+      trimmedChars = out.removedChars;
+    } catch {
+      trimmedChars = 0;
+    }
+  }
+
+  // SIBLING AGENTS SHARE THEIR IDENTICAL LEADING CONTEXT through the prompt
+  // cache: one more cache marker before each agent's own task, so the next
+  // sibling reads what the first one wrote. See sibling-prefix.ts.
+  let sharedPrefix = 'none';
+  const shareMode = sharePrefixMode();
+  if (shareMode !== 'off') {
+    try {
+      const out = shareSiblingPrefix(parsed);
+      parsed = out.request;
+      sharedPrefix = out.applied;
+    } catch {
+      sharedPrefix = 'none';
+    }
+  }
+
+  // WHAT GOES JUST BEFORE A SUBAGENT'S TASK -- its task-path repository pack
+  // (repo-pack.ts) and the issue or PR it was assigned (prefetch.ts) -- after
+  // the sibling marker, so it follows everything siblings share, and on every
+  // turn the same bytes.
+  let taskPackChars = 0;
+  let prefetchChars = 0;
+  const beforeTask = handedOff;
+  if (beforeTask?.length) {
+    const out = injectPackBeforeTask(
+      parsed,
+      beforeTask.map((b) => b.text)
+    );
+    if (out) {
+      parsed = out;
+      for (const b of beforeTask)
+        if (b.kind === 'pack') taskPackChars += b.text.length;
+        else prefetchChars += b.text.length;
     }
   }
 
@@ -931,6 +1057,21 @@ function compressBodyOnce(
   // whether that costs the model something it needed is the one question no
   // offline instrument can answer.
   const substitute = featureEnabled(FeatureName.Substitution);
+  // THE COLD TURN (user decision 2026-10-21): when this conversation's provider
+  // cache has certainly expired, the whole prefix is re-written this turn
+  // whatever we send, so the strategy may compress all of it. Keyed the same
+  // way keep-warm tracks it, so whichever body goes out maps back here.
+  const convKey = anchorConversationKey(parsed);
+  bodyKeys.set(body, convKey);
+  // NOT WHEN THINKING BLOCKS ARE IN THE HISTORY. On models that bind thinking
+  // to the conversation (Opus 5.5, Sonnet 5.5, Haiku 5.5, Fable 5.1), a client-
+  // side rewrite of earlier turns invalidates every later thinking block -- a
+  // 400 on accounts the check is enforced for. Server-side context editing and
+  // compaction are exempt; our own rewrite is not, so it stands down here.
+  const cacheExpired =
+    keepWarmEnabled() &&
+    warmer().expired(convKey) &&
+    !hasThinkingHistory(parsed);
   let result: StrategyResult;
   try {
     result = (substitute ? v4Substitute : v1Frontier)(parsed, {
@@ -939,7 +1080,16 @@ function compressBodyOnce(
       findings,
       sharedGraph,
       tuning,
-      suppressKnowledge,
+      // NOT INTO A SUBAGENT'S SYSTEM PROMPT. Its conversation key is its
+      // siblings' too (system prompt + first text block, identical across a
+      // fan-out), so the anchor record that should replay the block collides:
+      // measured on a 10-worker campaign, the block rode on each worker's first
+      // request and on none of its next 92, and that one change in `system`
+      // re-wrote ~14k tokens per worker on call 2 -- ~17% of the run's cost for
+      // 771 characters of findings. A subagent gets its findings once, through
+      // the hook briefing on its first tool call (hooks-core/briefing.mjs).
+      suppressKnowledge: suppressKnowledge || isSubagentRequest(parsed),
+      cacheExpired,
     });
   } catch {
     return unchanged('compression threw');
@@ -961,11 +1111,22 @@ function compressBodyOnce(
     >
   );
   const next = Buffer.from(spliced ?? compact, 'utf8');
+  bodyKeys.set(next, convKey);
   // Never send more than we were given -- UNLESS a knowledge block was
   // deliberately added, which is the one case where growing the request is
   // the point. It is charged in the summary either way, and it only
   // happens on a turn the prefix was being rewritten anyway.
-  const added = result.injectedChars > 0 || deferred > 0;
+  // A shared-prefix marker is sent even when nothing was removed: it is the
+  // whole saving, and dropping it here would send the client's bytes instead.
+  const added =
+    result.injectedChars > 0 ||
+    deferred > 0 ||
+    slimmedTools ||
+    routedModel ||
+    trimmedChars > 0 ||
+    sharedPrefix !== 'none' ||
+    taskPackChars > 0 ||
+    prefetchChars > 0;
   // WORTH THE RISK, not merely smaller. See MIN_SAVING_SHARE: a rewrite that
   // shaves a couple of percent still plants elisions the agent may read back,
   // and one such turn costs more than the whole saving.
@@ -1044,7 +1205,13 @@ function compressBodyOnce(
       deferredToolChars: deferredChars,
       anchorReason: result.anchor?.reason,
       elisions: result.elisions.length,
-      ...(added ? { injectedChars: result.injectedChars } : {}),
+      ...(added
+        ? {
+            injectedChars: result.injectedChars + taskPackChars + prefetchChars,
+          }
+        : {}),
+      ...(taskPackChars > 0 ? { repoPackChars: taskPackChars } : {}),
+      ...(prefetchChars > 0 ? { prefetchChars } : {}),
       ...named(),
     },
   };
@@ -1268,6 +1435,25 @@ export function smallToolCharsFromEnv(
 }
 
 /**
+ * The tools never deferred: CORE_LOOP_TOOLS unless
+ * TOKEN_OPTIMIZER_PROXY_CORE_TOOLS names a comma-separated list, and `none`
+ * (or an empty list) restores deferring every eligible definition.
+ */
+export function coreToolsFromEnv(
+  env: NodeJS.ProcessEnv = process.env
+): ReadonlySet<string> {
+  const raw = env.TOKEN_OPTIMIZER_PROXY_CORE_TOOLS;
+  if (raw === undefined) return CORE_LOOP_TOOLS;
+  if (/^\s*none\s*$/i.test(raw)) return new Set();
+  return new Set(
+    raw
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean)
+  );
+}
+
+/**
  * Is it safe to send credentials to this upstream?
  *
  * CREDENTIALS DO NOT GO OVER CLEARTEXT. Every request through here carries
@@ -1422,6 +1608,86 @@ export function promptSideBody(
   }
 }
 
+/**
+ * A conversation's identity for keep-warm: the hash of the first 96 KB of what
+ * was sent, which is tools, system and the opening turn -- stable across the
+ * conversation's turns, and no JSON parse on the request path.
+ */
+function warmKey(body: Buffer): string {
+  return (
+    bodyKeys.get(body) ??
+    createHash('sha256')
+      .update(body.subarray(0, 96 * 1024))
+      .digest('hex')
+      .slice(0, 24)
+  );
+}
+
+/** Does any earlier turn carry a thinking block (which a history rewrite would invalidate)? */
+function hasThinkingHistory(request: { messages?: unknown[] }): boolean {
+  return (request.messages ?? []).some((m) => {
+    const content = (m as { content?: unknown })?.content;
+    return (
+      Array.isArray(content) &&
+      content.some((b) => {
+        const t = (b as { type?: string })?.type;
+        return t === 'thinking' || t === 'redacted_thinking';
+      })
+    );
+  });
+}
+
+/**
+ * The conversation each outgoing body belongs to (anchor.ts conversationKey),
+ * set where the request is transformed, so keep-warm and the cold-turn check
+ * agree on identity. A body this never saw falls back to a prefix hash.
+ */
+const bodyKeys = new WeakMap<Buffer, string>();
+/** What compressBodyOnce places just before a subagent's task, by request body. */
+const taskBlocks = new WeakMap<
+  Buffer,
+  { kind: 'pack' | 'prefetch'; text: string }[]
+>();
+
+let keepWarmInstance: KeepWarm | null = null;
+function warmer(): KeepWarm {
+  if (keepWarmInstance) return keepWarmInstance;
+  const ledger = process.env.TOKEN_OPTIMIZER_PROXY_ACCOUNTING;
+  const margin = Number(process.env.TOKEN_OPTIMIZER_PROXY_KEEPWARM_MARGIN_MS);
+  keepWarmInstance = new KeepWarm({
+    maxPings: maxPingsFromEnv(),
+    // For verification runs: fire sooner than just before expiry.
+    ...(Number.isFinite(margin) && margin >= 0 ? { marginMs: margin } : {}),
+    onPing: (o) => {
+      // On the same ledger as the turns, so a ping's cost is never invisible.
+      if (ledger) {
+        try {
+          void appendFile(
+            ledger,
+            JSON.stringify({
+              ts: new Date().toISOString(),
+              path: 'keepwarm',
+              status: o.status,
+              keepWarm: { ping: o.ping, ok: o.ok },
+              usage: {
+                input_tokens: o.input,
+                output_tokens: o.output,
+                cache_read_input_tokens: o.cacheRead,
+                cache_creation_input_tokens: o.cacheWrite,
+              },
+            }) + '\n'
+          ).catch(() => {
+            // The ledger is evidence, not control flow.
+          });
+        } catch {
+          // The ledger is evidence, not control flow.
+        }
+      }
+    },
+  });
+  return keepWarmInstance;
+}
+
 function forward(
   upstream: string,
   req: IncomingMessage,
@@ -1437,10 +1703,19 @@ function forward(
    * two, which is what makes the measurement cost no wall-clock time at all.
    * Awaiting it inside the usage tap is therefore free in the common case.
    */
-  tokens?: PendingCount
+  tokens?: PendingCount,
+  /** Called once when the upstream answers or fails: the cold gate's release. */
+  onAnswer?: () => void
 ): void {
+  let answered = false;
+  const answer = (): void => {
+    if (answered) return;
+    answered = true;
+    onAnswer?.();
+  };
   const path = requestPath(req.url);
   if (path === null) {
+    answer();
     res.writeHead(400, { 'content-type': 'text/plain' });
     res.end(
       'token-optimizer proxy: refusing a request target that names its own ' +
@@ -1488,6 +1763,17 @@ function forward(
     headers['anthropic-beta'] = withAdvancedToolUse(
       req.headers['anthropic-beta']
     );
+  // The clearing edit is only honoured under its beta (context-edit.ts).
+  if (body.includes(CLEAR_TOOL_USES))
+    headers['anthropic-beta'] = withBeta(
+      headers['anthropic-beta'],
+      CONTEXT_MANAGEMENT_BETA
+    );
+  if (body.includes(COMPACT))
+    headers['anthropic-beta'] = withBeta(
+      headers['anthropic-beta'],
+      COMPACT_BETA
+    );
 
   const upstreamStarted = performance.now();
   let upstreamHeadersMs: number | undefined;
@@ -1504,6 +1790,29 @@ function forward(
     (upstreamRes) => {
       receivedResponse = true;
       upstreamHeadersMs = performance.now() - upstreamStarted;
+      // The response has begun, so the cache entry it is writing is readable:
+      // siblings held by the cold gate may go now.
+      answer();
+      // A large conversation's cache is held warm across the next idle gap
+      // (keep-warm.ts), from the exact bytes just sent.
+      if (
+        upstreamRes.statusCode === 200 &&
+        req.method === 'POST' &&
+        target.pathname.endsWith('/messages') &&
+        keepWarmEnabled()
+      ) {
+        try {
+          warmer().seen(warmKey(body), {
+            upstream: `${target.protocol}//${target.host}`,
+            path: target.pathname + target.search,
+            headers,
+            body,
+            ttlMs: ttlOf(body),
+          });
+        } catch {
+          // Keep-warm is an optimisation; a request never pays for it failing.
+        }
+      }
       // HOP-BY-HOP HEADERS ARE STRIPPED IN BOTH DIRECTIONS, and doing it in
       // only one was a real defect rather than an untidiness.
       //
@@ -1611,8 +1920,12 @@ function forward(
     }
   );
 
-  res.once('close', () => upstreamReq.destroy());
+  res.once('close', () => {
+    answer();
+    upstreamReq.destroy();
+  });
   upstreamReq.on('error', (error) => {
+    answer();
     // A connection failure has no response stream for tapUsage to observe.
     // Keep the attempted request in the ledger with unknown usage, never zero.
     if (!receivedResponse && facts && observe) {
@@ -1932,6 +2245,45 @@ export async function startProxy(options: ProxyOptions = {}): Promise<{
   // `project` claims about trees other than this one, and only the loader knows
   // which graph it opened.
 
+  // THE SHARED REPOSITORY PACK, keyed by each request's own repository rather
+  // than this process's: one supervisor proxy serves every session. Findings go
+  // in only for a repository other than the one the knowledge block already
+  // covers, so the two never repeat each other.
+  const repoPacks =
+    options.repoPack !== false && repoPackEnabled(process.env)
+      ? new RepoPacks({
+          // Only a root given explicitly: a shared proxy's cwd says nothing
+          // about the sessions it serves (repo-pack.ts, trustedRoots).
+          roots: () =>
+            trustedRoots(
+              process.env,
+              options.projectRoot ? [options.projectRoot] : []
+            ),
+          findingsFor: (root) =>
+            knowledgeOn && !samePath(root, graphRoot)
+              ? loadFindings(root)
+              : Promise.resolve([]),
+          ...(options.repoPack ?? {}),
+        })
+      : null;
+
+  const clearing =
+    options.clearToolUses === false
+      ? null
+      : clearingFromEnv(
+          options.clearToolUses
+            ? { ...process.env, TOKEN_OPTIMIZER_PROXY_CLEAR_TOOL_USES: '1' }
+            : process.env
+        );
+  const compaction = compactionFromEnv(process.env);
+
+  // Opt-in (prefetch.ts): by the environment, or by passing its options.
+  const prefetcher =
+    options.prefetch === false ||
+    (!options.prefetch && !prefetchEnabled(process.env))
+      ? null
+      : new Prefetcher(options.prefetch || {});
+
   const guessing = upstreamIsDefault(options);
   const limit = bodyLimitFor(options);
 
@@ -2018,6 +2370,11 @@ export async function startProxy(options: ProxyOptions = {}): Promise<{
       const generates = /\/(messages|chat\/completions)\/?$/.test(
         (requestPath(req.url) ?? '').split('?')[0]
       );
+      // The Anthropic Messages route alone: a Chat Completions body has no
+      // top-level `system`, and a strict upstream rejects one.
+      const anthropicMessages = /\/messages\/?$/.test(
+        (requestPath(req.url) ?? '').split('?')[0]
+      );
       const guidance = generates ? batchGuidance() : null;
       let guidanceChars = 0;
       if (guidance !== null) {
@@ -2033,6 +2390,77 @@ export async function startProxy(options: ProxyOptions = {}): Promise<{
           // an optimisation and must never be the reason a request fails.
         }
       }
+
+      // OLD TOOL RESULTS CLEARED SERVER-SIDE once a conversation is long enough
+      // for that to pay (context-edit.ts). Configuration, not prompt: it adds
+      // nothing to the cached prefix, so it is set on every Messages request.
+      // BEFORE the pack, which keys its hand-off to this exact body buffer; a
+      // re-serialisation after it lost the task pack (caught by its test).
+      if ((clearing || compaction) && anthropicMessages) {
+        try {
+          const parsed = JSON.parse(body.toString('utf8')) as ProviderRequest;
+          let out = clearing
+            ? addToolClearing(parsed, clearing)
+            : { request: parsed, added: false };
+          if (compaction) {
+            const compacted = addCompaction(out.request, compaction);
+            out = {
+              request: compacted.request,
+              added: out.added || compacted.added,
+            };
+          }
+          if (out.added)
+            body = Buffer.from(JSON.stringify(out.request), 'utf8');
+        } catch {
+          // Never the reason a request fails.
+        }
+      }
+
+      // THE REPOSITORY PACK, likewise ahead of every early return: the first
+      // request of a conversation is the only one that may gain it, and it is
+      // also the one with nothing yet to compress. Pinned per conversation, so
+      // every later turn carries the same bytes (repo-pack.ts).
+      let packChars = 0;
+      const beforeTask: { kind: 'pack' | 'prefetch'; text: string }[] = [];
+      if (anthropicMessages && repoPacks) {
+        try {
+          const parsed = JSON.parse(body.toString('utf8')) as ProviderRequest;
+          const pack = await repoPacks.forRequest(
+            parsed,
+            anchorConversationKey(parsed)
+          );
+          if (pack.text && pack.placement === 'system') {
+            body = Buffer.from(
+              JSON.stringify(injectPack(parsed, pack.text)),
+              'utf8'
+            );
+            packChars = pack.text.length;
+          } else if (pack.text && pack.placement === 'task') {
+            // Placed by compressBodyOnce just before the task.
+            beforeTask.push({ kind: 'pack', text: pack.text });
+          }
+        } catch {
+          // Never the reason a request fails.
+        }
+      }
+
+      // THE ISSUE OR PR A SUBAGENT WAS ASSIGNED, fetched before its first
+      // call (prefetch.ts). Keyed like the pack, on this conversation's own
+      // request, so every turn carries the same bytes.
+      if (anthropicMessages && prefetcher) {
+        try {
+          const parsed = JSON.parse(body.toString('utf8')) as ProviderRequest;
+          const fetched = await prefetcher.forRequest(
+            parsed,
+            anchorConversationKey(parsed)
+          );
+          if (fetched.text)
+            beforeTask.push({ kind: 'prefetch', text: fetched.text });
+        } catch {
+          // Never the reason a request fails.
+        }
+      }
+      if (beforeTask.length) taskBlocks.set(body, beforeTask);
 
       const transformStarted = performance.now();
       const spilledBefore = spilledBlocks;
@@ -2076,7 +2504,7 @@ export async function startProxy(options: ProxyOptions = {}): Promise<{
         // out would let the block read as free in the ledger, and that is
         // exactly how an A/B of the knowledge block once read its own effect
         // as zero.
-        injectedChars: (summary.injectedChars ?? 0) + guidanceChars,
+        injectedChars: (summary.injectedChars ?? 0) + guidanceChars + packChars,
         elisions: summary.elisions,
         spilledBlocks: spilledBlocks - spilledBefore,
         // COUNTED ON THE WAY IN, BEFORE THIS REQUEST IS REWRITTEN. A unit the
@@ -2111,6 +2539,22 @@ export async function startProxy(options: ProxyOptions = {}): Promise<{
         beforePrompt === null || afterPrompt === null
           ? undefined
           : trackCount(tokenAccounting.countPair(beforePrompt, afterPrompt));
+      // SIBLINGS GO OUT ONE AFTER ANOTHER, not together: see cold-gate.ts.
+      const gate = coldGateEnabled()
+        ? await enterColdGate(coldKey(next))
+        : { release: () => {}, waitedMs: 0 };
+      // The client may have gone while this request waited at the gate; sending
+      // it now would bill a generation nobody reads (review on #523). The SOCKET
+      // says so, not `req.destroyed`: a fully read request auto-destroys, so that
+      // flag is true for every request here and dropped them all unanswered.
+      if (
+        req.socket?.destroyed !== false ||
+        res.destroyed ||
+        res.writableEnded
+      ) {
+        gate.release();
+        return;
+      }
       forward(
         upstream,
         req,
@@ -2118,10 +2562,16 @@ export async function startProxy(options: ProxyOptions = {}): Promise<{
         next,
         // The per-request delta, not the proxy's running total: a ledger row
         // describes one request.
-        { ...summary, withheldUnits: spilledBlocks - spilledBefore },
+        {
+          ...summary,
+          withheldUnits: spilledBlocks - spilledBefore,
+          coldGateWaitMs: gate.waitedMs,
+          ...(packChars > 0 ? { repoPackChars: packChars } : {}),
+        },
         performance.now() - transformStarted,
         observe,
-        counted
+        counted,
+        gate.release
       );
     })();
   });

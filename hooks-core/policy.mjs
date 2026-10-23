@@ -62,6 +62,7 @@ import { isFsSafePath } from './paths.mjs';
 // merge below cannot drift from the producer that applies it.
 import { SESSION_CAP as ADVISED_CAP } from './advise.mjs';
 import { noteHookOutput } from './observability.mjs';
+import { repoAskEnabled } from './quiet-env.mjs';
 
 /** Enforcement modes, least to most permissive. */
 export const MODE_ENFORCE = 'enforce';
@@ -414,6 +415,9 @@ function emptyState() {
     optimizerToolOkAt: {},
     optimizerTools: [],
     optimizerToolsObservedAt: 0,
+    // The harvest nudge the Stop hook held for the next turn (null when none).
+    pendingHarvest: null,
+    repeats: {},
   };
 }
 
@@ -428,9 +432,24 @@ function emptyState() {
  * exactly the kind of quiet failure that never gets reported.
  */
 /** Remembers a snapshot's starting count and returns it. */
+/**
+ * The harvest nudge each snapshot was loaded with, for the same reason as
+ * loadedCalls: saveState must tell "this caller set or cleared it" from "this
+ * caller merely loaded it", or a hook process that loaded before Stop wrote the
+ * nudge would erase it on its own save.
+ */
+const loadedHarvest = new WeakMap();
+
 function tracked(state) {
   loadedCalls.set(state, Number(state.toolCalls) || 0);
+  loadedHarvest.set(state, state.pendingHarvest ?? null);
   return state;
+}
+
+/** Did this caller change the nudge it loaded (or is the state hand-built)? */
+function changedHarvest(state) {
+  if (!loadedHarvest.has(state)) return Object.prototype.hasOwnProperty.call(state, 'pendingHarvest');
+  return (state.pendingHarvest ?? null) !== loadedHarvest.get(state);
 }
 
 export function loadState(sessionId, agent) {
@@ -509,6 +528,12 @@ export function loadState(sessionId, agent) {
         parsed.seenUrls && typeof parsed.seenUrls === 'object' && !Array.isArray(parsed.seenUrls)
           ? parsed.seenUrls
           : {},
+      // See loadedHarvest: saveState keeps a newer stored nudge unless this
+      // caller changed what it loaded.
+      pendingHarvest:
+        typeof parsed.pendingHarvest === 'string' ? parsed.pendingHarvest : null,
+      repeats:
+        parsed.repeats && typeof parsed.repeats === 'object' ? parsed.repeats : {},
       // Written through stampTool (capabilities.mjs) and merged by saveState,
       // but never read back, so #469's availability timestamps were lost on
       // every reload.
@@ -707,6 +732,20 @@ export function saveState(sessionId, state, agent) {
         Number(state.toolCalls) || 0
       ),
       seenUrls: { ...(current.seenUrls || {}), ...(state.seenUrls || {}) },
+      // The Stop hook's harvest nudge, held for the next turn (adapter.mjs
+      // harvestDeferred). The caller that SET or CLEARED it wins; a caller that
+      // never touched it keeps whatever is stored, so a concurrent post-tool
+      // that loaded before Stop wrote cannot erase it.
+      pendingHarvest: changedHarvest(state)
+        ? (state.pendingHarvest ?? null)
+        : (current.pendingHarvest ?? null),
+      // The latest output per repeated call (repeats.mjs): by key, the later call wins.
+      repeats: (() => {
+        const out = { ...(current.repeats || {}) };
+        for (const [id, entry] of Object.entries(state.repeats || {}))
+          if (!out[id] || Number(entry?.call) >= Number(out[id]?.call)) out[id] = entry;
+        return out;
+      })(),
       // An inventory is a point-in-time observation, not an append-only set.
       // Union would resurrect a tool after a newer host payload explicitly
       // reported an empty or reduced catalog. Latest evidence wins, including
@@ -977,19 +1016,26 @@ export function isSubagentPayload(raw) {
  * server, and telling a model to call tools that do not exist cost a measured
  * turn per task when SessionStart did it.
  */
-export function subagentBriefing(raw, state, { canRecord = false } = {}) {
+export function subagentBriefing(raw, state) {
   if (!isSubagentPayload(raw) || state.subagentBriefed) return null;
   state.subagentBriefed = true;
+  // NO TOOL LOADS. A subagent's optimizer tools are deferred, and loading one
+  // with ToolSearch changes the tools array -- the very front of the prompt --
+  // so the next call re-writes the agent's whole cached context. Captured on a
+  // 10-agent campaign run: 54 such loads, each followed by a full re-write
+  // (26k of 64k characters still matching), for 5k characters of smart_read
+  // output. This briefing used to ask for exactly that load, and for
+  // wiki_write, which is deferred too. Large Read, Grep and Bash output is
+  // compacted by the hooks without any tool choice, and what agents learn is
+  // recorded mechanically (the sibling blackboard), so neither load pays.
   return [
     'Token Optimizer (shown once to this agent). Everything you read stays in context and is paid for again on every later turn, so:',
-    '- If smart_read, smart_grep or smart_glob appear in your tools or deferred tools, load them once with ToolSearch("smart_read smart_grep smart_glob") and use them for large files and searches.',
-    '- Otherwise read with Read and an offset/limit for the region you need, and search with Grep/Glob, rather than cat, grep -r or Get-Content of whole files.',
+    '- Read with Read and an offset/limit for the region you need, and search with Grep/Glob, rather than cat, grep -r or Get-Content of whole files.',
+    '- Bound every search: narrow Grep with path or glob and set head_limit (about 30); use files_with_matches first when you only need where something is.',
+    '- Do not load optimizer tools (smart_read, smart_grep, smart_glob, wiki_*) with ToolSearch: each load re-writes your cached context and the built-in tools already cover them.',
     '- Each turn re-reads your whole context, so batch independent commands into one call rather than running them one per turn.',
-    // ONLY WHEN IT CAN BE DONE, for the reason the tool line above is conditional.
-    // Sibling agents and later sessions read what is recorded here: this is how
-    // one agent's dead end stops being every agent's dead end.
-    ...(canRecord
-      ? ['- Before your final report, record with wiki_write anything that cost real work and is not obvious from the code -- a dead end and why, a decision and what was rejected, a command that finally worked -- anchored to the file it is about.']
+    ...(repoAskEnabled()
+      ? ['- To find where a name is defined, what calls it, or what an issue or PR says, run `repo_ask "<question>"` in Bash: a few lines instead of reading files.']
       : []),
     '- Keep your final report short: it is the only part your caller reads.',
   ].join('\n');

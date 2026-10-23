@@ -136,6 +136,101 @@ export const SMALL_TOOL_CHARS = 0;
 /** How many non-core tools to keep loaded when a task hints at what it needs. */
 export const DEFAULT_KEEP_RELEVANT = 5;
 
+/**
+ * The agent's own loop: never deferred, never ranked.
+ *
+ * THE FLOOR-0 RULE ABOVE DEFERRED THEM, AND RANKING DID NOT SAVE THEM. Ranking
+ * keeps the five definitions whose TEXT best matches the task, and text match is
+ * not usage: on the multi-agent harness (bench/live/multi-agent.mjs, 2026-10-21)
+ * "four Python packages ... pytest" kept PowerShell, Agent and Skill loaded and
+ * deferred Edit, Write, Grep and Glob. Agents then edited through the shell --
+ * Edit calls fell from 1.7 to 0.7 per run against the uncompressed control --
+ * while the one tool nobody called, PowerShell at 8,947 characters, stayed in
+ * every request of every agent.
+ *
+ * Named, not inferred: these are the tools every coding session lives in, and
+ * each is small (Read 1,919, Edit 964, Write 639, Glob 731 characters). The
+ * earlier objection to an origin rule ("all 31 built-ins are core") does not
+ * apply to an explicit list of eight. TOKEN_OPTIMIZER_PROXY_CORE_TOOLS replaces
+ * the list; `none` restores deferring everything.
+ */
+export const CORE_LOOP_TOOLS: ReadonlySet<string> = new Set([
+  'Read',
+  'Edit',
+  'MultiEdit',
+  'Write',
+  'Bash',
+  'Grep',
+  'Glob',
+  'NotebookEdit',
+]);
+
+/**
+ * A tool that duplicates another one in the same request: deferred, and never
+ * ranked into the kept set, while its counterpart is present.
+ *
+ * Claude Code on Windows offers PowerShell beside Bash; it is the largest
+ * definition in a subagent's request (8,947 characters, about 2.2k tokens of
+ * every call) and the harness agents never called it. Deferring rather than
+ * removing keeps it reachable through tool search for the session that does
+ * want it, so nothing is lost.
+ */
+const REDUNDANT_WITH: Readonly<Record<string, string>> = { PowerShell: 'Bash' };
+
+/**
+ * Specialised client tools: deferred, and never ranked into the kept set.
+ *
+ * Ranking keeps the five definitions whose text best matches the task, and with
+ * the core loop kept by name the candidates left are mostly these -- so
+ * ranking kept nearly all of them. Across the 10-worker campaign run (176
+ * calls) not one of them was called: Artifact alone is 35,306 characters in
+ * every request, SendFeedback 5,537, ScheduleWakeup 4,631, Workflow 5,355,
+ * ReportFindings 2,206, ListAgents 1,180. A session that wants one finds it
+ * through tool search; nothing is removed.
+ */
+const SPECIALISED_TOOLS: ReadonlySet<string> = new Set([
+  'Artifact',
+  'ArtifactComments',
+  'ArtifactData',
+  'SendFeedback',
+  'ReportFindings',
+  'ListAgents',
+  'ScheduleWakeup',
+  'Workflow',
+  'DesignSync',
+  'CronCreate',
+  'CronDelete',
+  'CronList',
+  'RemoteTrigger',
+  'PushNotification',
+  'SendUserFile',
+  'EnterWorktree',
+  'ExitWorktree',
+  'EnterPlanMode',
+  'ExitPlanMode',
+]);
+
+/**
+ * A definition without the JSON-schema meta keys the provider does not need.
+ *
+ * `$schema` names the draft the schema was written against; it constrains
+ * nothing the model or the API reads, and Claude Code sends it on every
+ * built-in (57-72 characters each, in every request). Deterministic, so the
+ * cached prefix stays byte-stable across turns.
+ */
+function slimDefinition(raw: unknown): { tool: unknown; saved: number } {
+  if (typeof raw !== 'object' || raw === null) return { tool: raw, saved: 0 };
+  const schema = (raw as { input_schema?: unknown }).input_schema;
+  if (typeof schema !== 'object' || schema === null || !('$schema' in schema))
+    return { tool: raw, saved: 0 };
+  const { $schema: _schema, ...rest } = schema as Record<string, unknown>;
+  const tool = { ...(raw as object), input_schema: rest };
+  return {
+    tool,
+    saved: JSON.stringify(raw).length - JSON.stringify(tool).length,
+  };
+}
+
 export interface DeferOptions {
   /** The task text, used to decide which non-core tools are worth loading. */
   readonly query?: string;
@@ -145,6 +240,8 @@ export interface DeferOptions {
   readonly smallToolChars?: number;
   /** Vectors for a semantic ranking, when one has been warmed. */
   readonly embeddings?: EmbeddingCache;
+  /** Tools never deferred or ranked; defaults to CORE_LOOP_TOOLS. */
+  readonly coreTools?: ReadonlySet<string>;
 }
 
 export interface DeferralResult {
@@ -152,6 +249,8 @@ export interface DeferralResult {
   /** Characters of tool definition removed from context. */
   readonly deferredChars: number;
   readonly deferredCount: number;
+  /** Characters removed from definitions that stayed (schema meta keys). */
+  readonly slimmedChars?: number;
 }
 
 /**
@@ -190,12 +289,24 @@ export function deferTools(
   // deferring everything.
   const keep = options.keepRelevant ?? DEFAULT_KEEP_RELEVANT;
   const smallFloor = options.smallToolChars ?? SMALL_TOOL_CHARS;
+  const core = options.coreTools ?? CORE_LOOP_TOOLS;
+  const present = new Set(
+    tools
+      .map((t) => (t as ToolLike | null)?.name)
+      .filter((n): n is string => typeof n === 'string')
+  );
+  // Never kept by ranking or by the size floor: a duplicate of a tool that is
+  // present, or a specialised tool no measured session called.
+  const redundant = (name: string): boolean =>
+    SPECIALISED_TOOLS.has(name) ||
+    (REDUNDANT_WITH[name] !== undefined && present.has(REDUNDANT_WITH[name]));
   const candidates: { index: number; text: string }[] = [];
   tools.forEach((raw, index) => {
     if (typeof raw !== 'object' || raw === null) return;
     const t = raw as ToolLike & { description?: string };
     if (typeof t.name !== 'string') return;
     if (CLIENT_DISCOVERY_TOOLS.has(t.name)) return;
+    if (core.has(t.name) || redundant(t.name)) return;
     if (isCheapToKeep(JSON.stringify(raw).length, smallFloor)) return;
     candidates.push({ index, text: `${t.name} ${t.description ?? ''}` });
   });
@@ -213,6 +324,12 @@ export function deferTools(
     candidates.slice(0, keep).forEach((c) => keepLoaded.add(c.index));
   let deferredChars = 0;
   let deferredCount = 0;
+  let slimmedChars = 0;
+  const slim = (raw: unknown): unknown => {
+    const out = slimDefinition(raw);
+    slimmedChars += out.saved;
+    return out.tool;
+  };
 
   const rewritten = tools.map((raw, index) => {
     // A tools array is client input and can contain anything. Nothing below
@@ -225,25 +342,36 @@ export function deferTools(
     if (isServerTool(tool)) return raw;
     if (typeof tool.defer_loading === 'boolean') return raw;
     if (typeof tool.name !== 'string' || tool.name.length === 0) return raw;
-    if (forced !== null && tool.name === forced) return raw;
-    if (CLIENT_DISCOVERY_TOOLS.has(tool.name)) return raw;
-    // The agent's own loop, and the non-core tools this task looks like it
-    // needs, both stay in context so nothing has to be searched for.
-    // Small enough that deferring it would save less than the discovery it
-    // risks. This is what keeps the agent's core loop in context without
-    // naming it -- those definitions are small.
-    if (isCheapToKeep(JSON.stringify(raw).length, smallFloor)) return raw;
-    if (keepLoaded.has(index)) return raw;
+    if (forced !== null && tool.name === forced) return slim(raw);
+    if (CLIENT_DISCOVERY_TOOLS.has(tool.name)) return slim(raw);
+    // The agent's own loop stays loaded by name; see CORE_LOOP_TOOLS.
+    if (core.has(tool.name)) return slim(raw);
+    if (!redundant(tool.name)) {
+      // The non-core tools this task looks like it needs stay in context so
+      // nothing has to be searched for, and so does anything below the floor.
+      if (isCheapToKeep(JSON.stringify(raw).length, smallFloor))
+        return slim(raw);
+      if (keepLoaded.has(index)) return slim(raw);
+    }
 
-    deferredChars += JSON.stringify(raw).length;
+    const slimmed = slim(raw);
+    deferredChars += JSON.stringify(slimmed).length;
     deferredCount += 1;
-    return { ...(raw as object), defer_loading: true };
+    return { ...(slimmed as object), defer_loading: true };
   });
 
   // Nothing was deferrable, so adding a search tool would only make the request
-  // bigger -- the one outcome this must never produce.
+  // bigger -- the one outcome this must never produce. Slimmed definitions are
+  // still worth forwarding: they are smaller and byte-stable.
   if (deferredCount === 0)
-    return { request, deferredChars: 0, deferredCount: 0 };
+    return slimmedChars > 0
+      ? {
+          request: { ...request, tools: rewritten } as ProviderRequest,
+          deferredChars: 0,
+          deferredCount: 0,
+          slimmedChars,
+        }
+      : { request, deferredChars: 0, deferredCount: 0 };
 
   return {
     request: {
@@ -252,6 +380,7 @@ export function deferTools(
     } as ProviderRequest,
     deferredChars,
     deferredCount,
+    slimmedChars,
   };
 }
 

@@ -4,6 +4,7 @@ import {
   readRoutingManifest,
 } from './default-routing.js';
 import { proxyEnabled } from './server.js';
+import { applyCompactWindow } from './compact-window.js';
 import { readFileSync } from 'node:fs';
 import {
   ensureSupervisor,
@@ -47,6 +48,8 @@ export function startRoutingMaintenance({
       // Initial setup may install a route. Later checks only maintain a route we still own:
       // removing routing or opting out must not be undone by a background timer.
       if (!stopped && (initial || stillOwned())) await maintain(env);
+      // Once per server start: the compaction window the user chose (compact-window.ts).
+      if (!stopped && initial) applyCompactWindow(env);
     } catch {
       // A transient filesystem/startup error must not take down the MCP server.
     } finally {

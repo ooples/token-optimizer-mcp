@@ -89,6 +89,11 @@ function sweepArtifacts(path) {
   }
 }
 
+/** Where `capture` stored the body for `ref`, so a preview can name a file any agent can Read. */
+export function artifactPath(dir, ref) {
+  return join(dir, 'artifacts', `${ref}.txt`);
+}
+
 function artifactDir(dir) {
   const path = join(dir, 'artifacts');
   if (!existsSync(path)) {

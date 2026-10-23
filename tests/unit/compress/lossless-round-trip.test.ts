@@ -1,5 +1,5 @@
 import { describe, it, expect } from '@jest/globals';
-import { compressBlock } from '../../../src/compress/router.js';
+import { compressBlock, FOLD_MIN_CHARS } from '../../../src/compress/router.js';
 import { expandLog } from '../../../src/compress/expand-log.js';
 
 /**
@@ -50,8 +50,9 @@ const FIXTURES: Array<{ name: string; text: string }> = [
     // One message repeated under a moving clock: the run fold has to list the
     // stamps to stay lossless, and that listing is what gets reconstructed.
     name: 'adjacent duplicates under a moving clock',
+    // Above router FOLD_MIN_CHARS, so the fold this checks actually runs.
     text: Array.from(
-      { length: 80 },
+      { length: 140 },
       (_, i) => `${stamp(i)} INFO scheduler heartbeat acknowledged by peer`
     ).join('\n'),
   },
@@ -69,7 +70,7 @@ const FIXTURES: Array<{ name: string; text: string }> = [
     // The same warning scattered between other lines: consecutive-only folding
     // sees none of it, so this exercises foldScattered's line-number list.
     name: 'duplicates scattered between other lines',
-    text: Array.from({ length: 90 }, (_, i) =>
+    text: Array.from({ length: 140 }, (_, i) =>
       i % 3 === 0
         ? `${stamp(i)} WARN peer dependency resolution skipped`
         : `${stamp(i)} INFO worker ${i} handled request ${i + 5000}`
@@ -119,5 +120,19 @@ describe('lossless results reconstruct their input from the output alone', () =>
       }
       expect(rebuilt).not.toBe(text);
     }
+  });
+});
+
+describe('small structured output reaches the model as written (FOLD_MIN_CHARS)', () => {
+  it('leaves a 2-3k per-row table alone, folds the same shape once it is large', () => {
+    // The shape that came back as `#`-templates three times on 2026-10-21 and
+    // forced a re-run each time: per-call usage rows.
+    const row = (i: number) =>
+      `  call w=${9000 + i * 37} r=${8000 + i * 11} in=2 Bash:cd /work/pkg-${i % 4}`;
+    const small = Array.from({ length: 40 }, (_, i) => row(i)).join('\n');
+    expect(small.length).toBeLessThan(FOLD_MIN_CHARS);
+    expect(compressBlock(small).text).toBe(small);
+    const large = Array.from({ length: 200 }, (_, i) => row(i)).join('\n');
+    expect(compressBlock(large).text.length).toBeLessThan(large.length);
   });
 });

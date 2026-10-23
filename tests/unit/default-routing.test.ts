@@ -26,6 +26,8 @@ import {
   claudeSettingsFile,
   defaultRoutingAllowed,
   originalUpstream,
+  maintainDefaultRouting,
+  callerChoseEndpoint,
 } from '../../src/proxy/default-routing.js';
 
 let home;
@@ -490,5 +492,33 @@ describe('the route keeps Claude Code\u2019s own tool deferral on', () => {
     const launched = { ...env, ENABLE_TOOL_SEARCH: 'true' };
     await applyDefaultRouting(moved, launched);
     expect(read().env.ENABLE_TOOL_SEARCH).toBeUndefined();
+  });
+});
+
+describe('a process launched with its own endpoint (2026-10-21)', () => {
+  it('leaves the user settings and manifest untouched', async () => {
+    // The user's real state: our route recorded and written.
+    write({});
+    await applyDefaultRouting(route, env);
+    const before = readFileSync(settings, 'utf8');
+    const manifest = JSON.stringify(readRoutingManifest(env));
+    // A nested client a benchmark pointed at its own recorder.
+    const child = { ...env, ANTHROPIC_BASE_URL: 'http://127.0.0.1:18900' };
+    expect(callerChoseEndpoint(child)).toBe(true);
+    expect((await maintainDefaultRouting(child)).status).toBe('caller-endpoint');
+    expect(readFileSync(settings, 'utf8')).toBe(before);
+    expect(JSON.stringify(readRoutingManifest(env))).toBe(manifest);
+  });
+
+  it('still maintains routing for a client running on our own route', async () => {
+    write({});
+    await applyDefaultRouting(route, env);
+    expect(callerChoseEndpoint({ ...env, ANTHROPIC_BASE_URL: served })).toBe(false);
+    expect(callerChoseEndpoint(env)).toBe(false);
+  });
+
+  it("still fronts the user's own gateway configured in settings.json", () => {
+    write({ env: { ANTHROPIC_BASE_URL: 'https://gateway.example' } });
+    expect(callerChoseEndpoint({ ...env, ANTHROPIC_BASE_URL: 'https://gateway.example' })).toBe(false);
   });
 });

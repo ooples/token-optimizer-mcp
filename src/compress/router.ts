@@ -110,11 +110,34 @@ registerEngine({
   compress: compressSearchResults,
 });
 
+/**
+ * Below this, line-shape folding is left out: the text reaches the model as written.
+ *
+ * MEASURED FROM THE READER'S SIDE, 2026-10-21. Three diagnostic tables of 2-3k
+ * characters (per-call usage rows, a request layout, a tally) came back as
+ * `#`-templates with `gaps=[...]` and `~hash` references; the numbers the reader
+ * needed were inside the template, and each time the command was re-run to a
+ * file -- a full turn at ~600k context to save a few hundred tokens. Large logs
+ * still fold (the hooks' post-tool compaction uses the same 6,000 floor), and JSON
+ * fragments and TAP, which fold into plain text, are unaffected.
+ */
+export const FOLD_MIN_CHARS = 6000;
+
+/**
+ * Big enough to fold. The floor is about what the READER receives, which is the
+ * outermost block: a log nested in a large JSON envelope (stringDepth > 0) still
+ * folds, because the envelope it comes back in is what crosses the floor.
+ */
+const bigEnoughToFold = (text: string, ctx?: EngineContext): boolean =>
+  (ctx?.stringDepth ?? 0) > 0 || text.length >= FOLD_MIN_CHARS;
+
 registerEngine({
   name: 'log',
   priority: 40,
-  claims: (text) =>
-    looksLikeJsonFragments(text) || looksLikeTap(text) || looksLikeLog(text),
+  claims: (text, ctx) =>
+    looksLikeJsonFragments(text) ||
+    looksLikeTap(text) ||
+    (bigEnoughToFold(text, ctx) && looksLikeLog(text)),
   compress: (text, ctx) =>
     looksLikeJsonFragments(text)
       ? compressJsonFragments(text, ctx.stamp ?? null)
@@ -168,6 +191,7 @@ registerEngine({
   name: 'records',
   priority: 5,
   claims: (text, ctx) =>
+    bigEnoughToFold(text, ctx) &&
     looksTemplated(text) &&
     !JSON_MEMBER.test(text) &&
     !CODE_KEYWORD.test(text) &&

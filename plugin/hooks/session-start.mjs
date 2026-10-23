@@ -32,6 +32,7 @@ import {
   rememberOptimizerTools,
 } from './lib/capabilities.mjs';
 import { restorationPlan } from './lib/restore.mjs';
+import { applyQuietEnv } from './lib/quiet-env.mjs';
 import {
   relevantFindingIdsForContext,
   sessionContext,
@@ -166,6 +167,14 @@ try {
   }
 } catch (error) {
   writeHookEvent({ level: 'warn', event: 'install.strays-failed', error: errorFields(error) });
+}
+// Reduce at the source before the first tool runs: quiet defaults for the tools
+// the agent will call, through the env file Claude Code sources for every later
+// Bash call, subagents included. See quiet-env.mjs.
+try {
+  applyQuietEnv();
+} catch {
+  // Optional, like every optimization here.
 }
 const input = await readPayloadResult({ timeoutMs: 250 });
 const payload = input.payload || {};

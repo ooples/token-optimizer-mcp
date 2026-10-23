@@ -353,7 +353,15 @@ export type AnchorReason =
   | 'joined-mid-conversation'
   /** The same conversation, one or more turns longer. The common case. */
   | 'extended'
-  | 'left-alone';
+  | 'left-alone'
+  /**
+   * The provider's cache entry for this conversation has expired (the idle gap
+   * outlasted its TTL with no keep-warm read), so this turn re-writes the whole
+   * prefix whatever we send. The rewrite is free, exactly as when the client
+   * invalidates its own prefix -- user decision 2026-10-21, "compact the cold
+   * turn when the cache lapsed anyway".
+   */
+  | 'cache-expired';
 
 export interface AnchorDecision {
   /** Rewrite history on this turn? */
@@ -375,7 +383,8 @@ export interface AnchorDecision {
 export function anchorDecision(
   request: ProviderRequest,
   store: AnchorStore,
-  coldMessageLimit: number = COLD_MESSAGE_LIMIT
+  coldMessageLimit: number = COLD_MESSAGE_LIMIT,
+  { cacheExpired = false }: { cacheExpired?: boolean } = {}
 ): AnchorDecision {
   const key = conversationKey(request);
   const prefix = prefixOf(request);
@@ -385,6 +394,23 @@ export function anchorDecision(
   const sameConversation = previous
     ? isContinuation(previous.samples, samples)
     : false;
+
+  // THE MISS HAS ALREADY HAPPENED, so what replaces it may as well be smaller.
+  // Only the caller can know (it tracks when the cache was last warm); when it
+  // says so, every prior posture is moot -- the provider holds nothing for us.
+  if (cacheExpired) {
+    return {
+      reanchor: true,
+      reason: 'cache-expired',
+      key,
+      record: {
+        prefixDigest,
+        prefixLength: prefix.length,
+        samples,
+        anchored: true,
+      },
+    };
+  }
 
   if (previous && sameConversation && previous.prefixDigest === prefixDigest) {
     // Unchanged prefix: do exactly what we did last time, whatever that was.

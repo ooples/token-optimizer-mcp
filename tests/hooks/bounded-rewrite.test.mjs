@@ -513,6 +513,19 @@ describe('the shipped router bounds instead of refusing', () => {
     expect(r.decision).toBe('allow');
   });
 
+  it('never wraps a PowerShell tool command in the POSIX bound (2026-10-21)', () => {
+    // `{ cmd\n} | { head -c; tail -c; }` is a parse error in PowerShell: a valid
+    // `npx tsc --noEmit 2>&1 | Select-Object -First 8` failed because of us.
+    const command = 'cd F:/x; npx tsc --noEmit 2>&1 | Select-Object -First 8';
+    for (const mode of ['enforce', 'assist']) {
+      const r = router({ tool_name: 'PowerShell', tool_input: { command } }, { TOKEN_OPTIMIZER_MODE: mode });
+      expect(r.updatedInput?.command ?? command).toBe(command);
+    }
+    // The same command through the Bash tool is still bounded on a repeat.
+    const bash = router({ tool_name: 'Bash', tool_input: { command: 'npx tsc --noEmit' } }, { TOKEN_OPTIMIZER_MODE: 'assist' });
+    expectBounded(bash.updatedInput.command);
+  });
+
   it("keeps the verdict's own guidance when it bounds instead of refusing", () => {
     // Bounding instead of refusing must not cost the guidance the refusal would
     // have carried. The reason names the optimizer tool that makes the NEXT

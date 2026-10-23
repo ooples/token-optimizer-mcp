@@ -53,6 +53,12 @@ export type StrategyName =
 
 export interface StrategyOptions {
   /**
+   * The provider's cache for this conversation has expired (the caller tracks
+   * when it was last warm), so this turn may rewrite the whole history for free.
+   * See anchor.ts `cache-expired`.
+   */
+  readonly cacheExpired?: boolean;
+  /**
    * The key every marker this strategy writes will carry, when the caller picks it.
    *
    * LEAVE IT OUT IN PRODUCTION. Omitted, each block is stamped with a keyed MAC
@@ -1074,7 +1080,8 @@ export function v1Frontier(
   const decision = anchorDecision(
     request,
     options.anchors,
-    options.tuning?.coldMessageLimit
+    options.tuning?.coldMessageLimit,
+    { cacheExpired: options.cacheExpired === true }
   );
 
   // KNOWLEDGE RIDES ON THE ANCHOR DECISION, and that is the whole trick.
@@ -1091,7 +1098,8 @@ export function v1Frontier(
   // this is supposed to avoid.
   const fresh =
     decision.reason === 'first-turn' ||
-    decision.reason === 'client-invalidated';
+    decision.reason === 'client-invalidated' ||
+    decision.reason === 'cache-expired';
   const knowledge = options.suppressKnowledge
     ? null
     : fresh
@@ -1239,9 +1247,15 @@ export function v1Frontier(
     // the provider is holding the client's own bytes and reverting genuinely
     // costs nothing, so the rewrite has to win on a horizon short enough that
     // being wrong about the session length cannot hurt.
-    const share = speculative
-      ? breakEvenRewriteShare(JOINED_TURNS_ASSUMED)
-      : minRewriteShare(options.tuning);
+    // AN EXPIRED CACHE HAS NO BAR TO CLEAR: the whole prefix is written this
+    // turn whatever we send, so any byte removed is a byte not written and not
+    // re-read afterwards.
+    const share =
+      decision.reason === 'cache-expired'
+        ? 0
+        : speculative
+          ? breakEvenRewriteShare(JOINED_TURNS_ASSUMED)
+          : minRewriteShare(options.tuning);
     // NOTHING CACHED IS NOT A WON BET. With no frontier there is no prefix to
     // rewrite, so the two branches produce the same bytes and the arithmetic
     // above reads 0 removed of 0 -- which is not a share that cleared the bar.

@@ -16,6 +16,8 @@ import {
   isBinaryPath,
   isMachineOwned,
   largeFileBytes,
+  mode,
+  MODE_ENFORCE,
   refusalFloorBytes,
 } from './policy.mjs';
 import { statSync } from 'node:fs';
@@ -829,6 +831,12 @@ const TOOL_ALIASES = new Map(
     // invalidation.
     notebookedit: 'Edit',
     notebook_edit: 'Edit',
+
+    // A subagent's report reaching its caller (lean handoffs, output-compact.mjs).
+    // Unmapped, the post-tool hook saw no tool name and exited before the
+    // handoff could be made.
+    agent: 'Agent',
+    task: 'Task',
   })
 );
 
@@ -1126,6 +1134,21 @@ export function decide(payload, state, availableTools = undefined) {
     }
     return null;
   }
+
+  // NO ADVICE ON CLAUDE CODE'S OWN GREP OR GLOB. Their results are compacted
+  // after the call (output-compact.mjs) with no tool to load, and in a subagent
+  // the smart tools are deferred: following the advice is a ToolSearch load that
+  // re-writes the agent's cached context, against its own briefing. Measured on
+  // the exploration benchmark: about 5 such notices per run (~650 characters
+  // each, re-read on every later call) and a load in 1 of 5 runs. ENFORCE keeps
+  // its refusal: that is a routing the user asked for. Claude Code alone spells
+  // these with a capital; other clients' search tools keep the rule.
+  if (
+    mode() !== MODE_ENFORCE &&
+    (tool === 'Grep' || tool === 'Glob') &&
+    (payload.raw_tool_name === 'Grep' || payload.raw_tool_name === 'Glob')
+  )
+    return null;
 
   if (tool === 'Grep') {
     // Content searches are the expensive mode; a paths-only search is already

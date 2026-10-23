@@ -10,8 +10,9 @@ const json = JSON.stringify(rows, null, 2);
 const spill = () => '/complete.json';
 test('short or incomplete JSON does not steal a repeated log block', () => {
   for (const suffix of ['{', '[\n  1', '{\n  "a":1\n}']) {
+    // Above router FOLD_MIN_CHARS, so the fold this checks actually runs.
     const text =
-      Array(30).fill('INFO: request completed').join('\n') + '\n' + suffix;
+      Array(300).fill('INFO: request completed').join('\n') + '\n' + suffix;
     expect(looksLikeJsonSections(text)).toBe(false);
     expect(compressBlock(text).text.length).toBeLessThan(text.length);
   }

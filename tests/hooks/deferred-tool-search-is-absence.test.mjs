@@ -24,7 +24,12 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { toolSearchOutcomesFromTranscript } from '../../hooks-core/transcript.mjs';
+import { toolSearchOutcomesFromTranscript } from '../../hooks-core/transcript.mjs';
+
+// These tests are about WHETHER the harvest prompt is generated; how it is
+// delivered (held for the next turn by default, 2026-10-21) is covered by
+// harvest-gate.test.mjs. Pin the continuation so the prompt is observable here.
+process.env.TOKEN_OPTIMIZER_HARVEST_TURN = '1';
 
 const ROOT = process.cwd();
 const QUALIFIED = 'mcp__token-optimizer__wiki_write';
