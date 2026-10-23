@@ -899,6 +899,12 @@ describe('the default upstream is a guess, and guesses are fenced', () => {
     expect(defaultUpstreamServes('/v1/messages/batches')).toBe(true);
     expect(defaultUpstreamServes('/v1/complete')).toBe(true);
     expect(defaultUpstreamServes('/v1/models')).toBe(true);
+    // Claude Code's startup connectivity probe, which Anthropic answers 200.
+    expect(defaultUpstreamServes('/api/hello')).toBe(true);
+    expect(defaultUpstreamServes('/api/hello?x=1')).toBe(true);
+    // Exact path only: nothing else under /api/ is admitted with it.
+    expect(defaultUpstreamServes('/api/helloworld')).toBe(false);
+    expect(defaultUpstreamServes('/api/oauth/token')).toBe(false);
   });
 
   it('does not serve another provider s routes', () => {

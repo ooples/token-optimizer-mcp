@@ -187,6 +187,14 @@ const HOST = '127.0.0.1';
 const ANTHROPIC_PATHS = ['/v1/messages', '/v1/complete', '/v1/models'];
 
 /**
+ * Anthropic routes admitted by exact path only. `/api/hello` is the
+ * connectivity probe Claude Code sends to its base URL at startup; Anthropic
+ * answers it 200 (`{"message": "hello"}`), and refusing it told the client its
+ * provider was unreachable when it was not.
+ */
+const ANTHROPIC_EXACT_PATHS = ['/api/hello'];
+
+/**
  * May the default upstream serve this path?
  *
  * Exported so the rule can be tested for what it ADMITS as well as what it refuses --
@@ -194,7 +202,11 @@ const ANTHROPIC_PATHS = ['/v1/messages', '/v1/complete', '/v1/models'];
  * through would otherwise mean letting a test reach api.anthropic.com.
  */
 export function defaultUpstreamServes(path: string): boolean {
-  return ANTHROPIC_PATHS.some((prefix) => path.startsWith(prefix));
+  const bare = path.split('?')[0];
+  return (
+    ANTHROPIC_PATHS.some((prefix) => path.startsWith(prefix)) ||
+    ANTHROPIC_EXACT_PATHS.includes(bare)
+  );
 }
 
 /** True when the upstream was chosen for us rather than by the operator. */
