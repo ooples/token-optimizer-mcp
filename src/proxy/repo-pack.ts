@@ -118,20 +118,60 @@ export async function trustedRoots(
     delimiter
   ))
     if (r.trim()) roots.push(r.trim());
+  roots.push(...(await registeredRoots(projectRegistryFile(env))));
+  return [...new Set(roots)];
+}
+
+/**
+ * The registry's roots, re-parsed only when the file changed. It is append-only
+ * -- a line per session start -- and this sits on the first request of every
+ * new conversation: measured on a real machine, 5.3 MB / 23,712 lines (641
+ * distinct roots) took 33-96 ms per parse, paid again by each subagent of a
+ * fan-out at the same moment. A stat is microseconds.
+ */
+let registryCache: {
+  file: string;
+  mtimeMs: number;
+  size: number;
+  roots: string[];
+} | null = null;
+
+async function registeredRoots(file: string): Promise<string[]> {
+  let info: { mtimeMs: number; size: number };
   try {
-    const raw = await readFile(projectRegistryFile(env), 'utf8');
+    info = await stat(file);
+  } catch {
+    return []; // No registry: only the configured roots.
+  }
+  const hit = registryCache;
+  if (
+    hit &&
+    hit.file === file &&
+    hit.mtimeMs === info.mtimeMs &&
+    hit.size === info.size
+  )
+    return hit.roots;
+  const roots = new Set<string>();
+  try {
+    const raw = await readFile(file, 'utf8');
     for (const line of raw.split('\n')) {
       try {
         const root = (JSON.parse(line) as { root?: unknown }).root;
-        if (typeof root === 'string' && root) roots.push(root);
+        if (typeof root === 'string' && root) roots.add(root);
       } catch {
         // A torn line from a concurrent append.
       }
     }
   } catch {
-    // No registry: only the configured roots.
+    return [];
   }
-  return [...new Set(roots)];
+  registryCache = {
+    file,
+    mtimeMs: info.mtimeMs,
+    size: info.size,
+    roots: [...roots],
+  };
+  return registryCache.roots;
 }
 
 /** `dir` is one of `roots` or inside one, however either is spelled. */

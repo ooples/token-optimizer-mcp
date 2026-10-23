@@ -1,6 +1,12 @@
 import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'node:fs';
+import {
+  appendFileSync,
+  mkdtempSync,
+  rmSync,
+  writeFileSync,
+  mkdirSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -282,6 +288,21 @@ describe('where a pack may be built from', () => {
         '/work/project',
       ])
     );
+  });
+
+  it('re-reads the registry only when it changed, and picks up an appended root', async () => {
+    const registry = join(mkdtempSync(join(root, 'reg-')), 'projects.jsonl');
+    const line = (r: string) => `${JSON.stringify({ v: 1, root: r })}\n`;
+    writeFileSync(registry, line('/work/one'));
+    const env = { TOKEN_OPTIMIZER_PROJECT_REGISTRY: registry };
+    const first = await trustedRoots(env);
+    // Unchanged file: the same parsed array comes back, not a re-parse.
+    const again = await trustedRoots(env);
+    expect(again).toEqual(first);
+    expect(first).toContain('/work/one');
+    // An appended session start (size changes) is seen on the next call.
+    appendFileSync(registry, line('/work/two'));
+    expect(await trustedRoots(env)).toEqual(expect.arrayContaining(['/work/one', '/work/two']));
   });
 
   it('matches a root or what is inside it, never a sibling sharing its prefix', () => {
