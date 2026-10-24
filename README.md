@@ -1080,6 +1080,50 @@ all.
 | `TOKEN_OPTIMIZER_BLACKBOARD`           | on         | a subagent's briefing lists read-only commands its siblings already ran     |
 | `TOKEN_OPTIMIZER_LEAN_HANDOFF`         | off        | a subagent's report over 4,000 characters reaches the lead lean; also needs `Agent\|Task` in the PostToolUse matcher |
 | `TOKEN_OPTIMIZER_REPO_ASK`             | off        | a `repo_ask "<question>"` shell command for agents, named in their briefing |
+| `TOKEN_OPTIMIZER_PROXY_SHARE_PREFIX`   | on         | a cache marker before each subagent's task, so siblings share their prefix  |
+| `TOKEN_OPTIMIZER_PROXY_COLD_GATE`      | on         | a sibling's first request waits (up to 12 s) to read the first one's cache   |
+| `TOKEN_OPTIMIZER_PROXY_KEEPWARM`       | on         | a capped read-back ping keeps a large conversation's cache warm when idle   |
+| `TOKEN_OPTIMIZER_OUTPUT_COMPACT`       | on         | Bash and Grep results over 6 KB compacted, Grep grouped by file; full text kept |
+| `TOKEN_OPTIMIZER_QUIET_ENV`            | on         | quiet defaults (pagers, progress bars, telemetry banners) for agents' shells |
+| `TOKEN_OPTIMIZER_COMPACT_WINDOW`       | `400000`   | `autoCompactWindow` written to Claude Code settings when absent; `off` removes ours |
+| `TOKEN_OPTIMIZER_HARVEST_TURN`         | off        | `1` restores the Stop hook's separate harvest turn                          |
+| `TOKEN_OPTIMIZER_BATCH_GUIDANCE`       | off        | a batching instruction in every request's system prompt                     |
+
+### Upgrading from 7.6.0
+
+7.7.0 changes these defaults. Each can be switched back, and each was measured
+before it shipped (see #523, #525 and #526).
+
+**New and on by default**
+- **Subagents.**
+  - A cache marker before each subagent's task (`TOKEN_OPTIMIZER_PROXY_SHARE_PREFIX=0` turns it off).
+  - A short wait on a sibling's first request so it reads the first one's cache (`TOKEN_OPTIMIZER_PROXY_COLD_GATE=0`).
+  - The memory index, skill text and unused tool lists trimmed from subagents (`TOKEN_OPTIMIZER_PROXY_TRIM_SUBAGENTS=0`).
+  - Subagents asked for short reports (`TOKEN_OPTIMIZER_PROXY_WORKER_TERSE=0`).
+- **Repository pack.** A shared repository snapshot in the cached prefix, built only for directories under a trusted root (`TOKEN_OPTIMIZER_PROXY_REPO_PACK=0`).
+- **Tool output.** Bash and Grep results over 6 KB are compacted, with Grep results grouped by file. The full output is stored, and the notice names the file to Read (`TOKEN_OPTIMIZER_OUTPUT_COMPACT=0`). A re-run shell command returns only what changed (`TOKEN_OPTIMIZER_REPEATS=0`).
+- **Siblings and shells.**
+  - A subagent's briefing lists read-only commands its siblings already ran (`TOKEN_OPTIMIZER_BLACKBOARD=0`).
+  - Agents' shells get quiet tool defaults (`TOKEN_OPTIMIZER_QUIET_ENV=0`); a value the user sets always wins.
+- **Long sessions.**
+  - A capped keep-warm ping holds a large conversation's cache across idle gaps (`TOKEN_OPTIMIZER_PROXY_KEEPWARM=0`).
+  - The Stop hook's harvest no longer takes a turn of its own (`TOKEN_OPTIMIZER_HARVEST_TURN=1` restores it).
+
+**Written to Claude Code's settings**
+- `autoCompactWindow: 400000`, only when the key is absent. It is recorded, and removed again only while it still holds the value we wrote (`TOKEN_OPTIMIZER_COMPACT_WINDOW=off`, or mode `off`).
+- The record of this and of default routing now sits beside the settings file it describes (`token-optimizer-compact-window.json`, `token-optimizer-routing.json`), not in the optimizer home. A record a 7.6.0 install left in `~/.token-optimizer` is still read, and moved on the next write.
+
+**Changed for a Claude Code plugin install**
+- The MCP server no longer tells agents to load its tools with ToolSearch for ordinary reads and searches, because the hooks already compact that output. Other clients keep the routing policy.
+- The post-call hook no longer runs on Read, Agent or Task (it runs on Grep, Bash, PowerShell and edits).
+
+**Built but off by default**, because measuring showed they cost more or never fired:
+- read-only model routing (`TOKEN_OPTIMIZER_PROXY_READONLY_ROUTE=down`);
+- issue/PR prefetch (`TOKEN_OPTIMIZER_PROXY_PREFETCH=1`);
+- server-side clearing and compaction (`TOKEN_OPTIMIZER_PROXY_CLEAR_TOOL_USES=1`, `TOKEN_OPTIMIZER_PROXY_COMPACT=1`);
+- lean handoffs (`TOKEN_OPTIMIZER_LEAN_HANDOFF=1`, which also needs `Agent|Task` in the PostToolUse matcher);
+- `repo_ask` (`TOKEN_OPTIMIZER_REPO_ASK=1`);
+- the batching instruction (`TOKEN_OPTIMIZER_BATCH_GUIDANCE=1`).
 
 Both of the `on` rows said `off` here until 7.1.0, which was wrong about the
 shipped code rather than a change of default: an unset value has always meant

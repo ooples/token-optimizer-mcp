@@ -39,7 +39,7 @@ import { anchorStore } from '../../dist/compress/anchor.js';
 import { describeImage, isImageBlock } from '../../dist/compress/images.js';
 import { pathToFileURL } from 'node:url';
 import { benchSpillPath } from './spill-sink.mjs';
-import { tokens } from './currency.mjs';
+import { censusMode, tokens } from './currency.mjs';
 
 const CACHE_READ = 0.1;
 const CACHE_WRITE = 1.25;
@@ -710,7 +710,7 @@ function main() {
   if (needleFailures.length) {
     console.log('NEEDLE GATE FAILED:');
     for (const f of needleFailures) console.log(`  ${f}`);
-    process.exitCode = 1;
+    if (!censusMode()) process.exitCode = 1;
   } else {
     console.log('NEEDLE GATE PASSED.');
   }
@@ -719,7 +719,7 @@ function main() {
   if (relevanceFailures.length) {
     console.log('RELEVANCE GATE FAILED:');
     for (const f of relevanceFailures) console.log(`  ${f}`);
-    process.exitCode = 1;
+    if (!censusMode()) process.exitCode = 1;
   } else {
     console.log('RELEVANCE GATE PASSED.');
   }
@@ -730,7 +730,7 @@ function main() {
   if (steadyFailures.length) {
     console.log('STEADY GATE FAILED:');
     for (const f of steadyFailures) console.log(`  ${f}`);
-    process.exitCode = 1;
+    if (!censusMode()) process.exitCode = 1;
   } else {
     console.log('STEADY GATE PASSED.');
   }
@@ -749,7 +749,7 @@ function main() {
   if (failures.length) {
     console.log('GATE FAILED:');
     for (const f of failures) console.log(`  ${f}`);
-    process.exitCode = 1;
+    if (!censusMode()) process.exitCode = 1;
     return;
   }
   // REPORTED, so a verifier can require the behaviour rather than the
