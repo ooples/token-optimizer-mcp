@@ -393,6 +393,30 @@ const SERVER_INSTRUCTIONS =
   'schema; use a bounded native operation (a line range, a count, a filtered ' +
   'search) only when the required optimizer tool is neither listed nor deferred.';
 
+// A CLAUDE CODE PLUGIN INSTALL IS TOLD THE OPPOSITE ABOUT LOADING. There, this
+// package's hooks already compact built-in Read, Grep and Bash output with no
+// tool choice, so loading a deferred smart tool for an ordinary read or search
+// buys nothing and still re-writes the prompt cache. Measured on the 2026-10-23
+// multi-agent benchmarks: 0.25-0.6 ToolSearch loads per run under the wording
+// above, each followed by a cache re-write. The subagent briefing says the same
+// (hooks-core/policy.mjs). CLAUDE_PLUGIN_ROOT is set by Claude Code's plugin
+// runtime and by nothing else, and a plugin install always ships the hooks;
+// each stdio server process serves one client, so the choice is made once.
+export const PLUGIN_INSTRUCTIONS =
+  "This install's hooks already compact the output of the built-in Read, Grep " +
+  'and Bash tools, so use the built-in tools for ordinary reads and searches. ' +
+  'Do not load these tools with ToolSearch just to read or search: every ' +
+  'mid-session load re-writes the prompt cache. Load one only for what the ' +
+  'built-in tools cannot do -- smart_edit for a large multi-site edit, ' +
+  'optimize_session when context is tight, wiki_write for a durable non-obvious ' +
+  'conclusion -- and never call or redirect to an unlisted schema.';
+
+export function instructionsFor(env: NodeJS.ProcessEnv = process.env): string {
+  return String(env.CLAUDE_PLUGIN_ROOT ?? '').trim()
+    ? PLUGIN_INSTRUCTIONS
+    : SERVER_INSTRUCTIONS;
+}
+
 const server = new Server(
   {
     name: 'token-optimizer-mcp',
@@ -400,7 +424,7 @@ const server = new Server(
   },
   {
     instructions:
-      SERVER_INSTRUCTIONS +
+      instructionsFor() +
       ' Discover only the schema for the tool you need. In code-mode hosts with ' +
       'ALL_TOOLS, filter by the exact tool-name suffix (for example __smart_read) ' +
       'and print that entry only. To discover names, list names without descriptions ' +
