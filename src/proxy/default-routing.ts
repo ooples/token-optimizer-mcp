@@ -40,6 +40,7 @@ import {
   mkdirSync,
   readFileSync,
   renameSync,
+  rmSync,
   writeFileSync,
 } from 'node:fs';
 import { homedir } from 'node:os';
@@ -361,7 +362,9 @@ function record(env: NodeJS.ProcessEnv, entry: RoutingEntry | null): void {
   const manifest = readManifestAt(file);
   if (entry) manifest.entries[path] = entry;
   else delete manifest.entries[path];
-  writeJson(file, manifest);
+  // An empty record is removed, not left behind in the client's config folder.
+  if (Object.keys(manifest.entries).length) writeJson(file, manifest);
+  else rmSync(file, { force: true });
   // MIGRATION: this settings file's entry moves out of the old location, so
   // the two records can never disagree about it. Other files' entries stay.
   const legacyFile = legacyRoutingManifestFile(env);

@@ -243,14 +243,19 @@ describe('a generator run against a CRLF working tree', () => {
       join(process.cwd(), 'scripts', 'lib', 'text.mjs'),
       join(root, 'scripts', 'lib', 'text.mjs')
     );
-    copyFileSync(
-      join(process.cwd(), 'hooks-core', 'capabilities.mjs'),
-      join(root, 'hooks-core', 'capabilities.mjs')
-    );
+    // capabilities.mjs and the routing record it reads.
+    for (const dep of ['capabilities.mjs', 'routing-record.mjs'])
+      copyFileSync(
+        join(process.cwd(), 'hooks-core', dep),
+        join(root, 'hooks-core', dep)
+      );
     // Generated hook entries stamp the package version into lifecycle telemetry,
     // making package.json an explicit generator input alongside the script and
     // its EOL-safe text helper.
-    copyFileSync(join(process.cwd(), 'package.json'), join(root, 'package.json'));
+    copyFileSync(
+      join(process.cwd(), 'package.json'),
+      join(root, 'package.json')
+    );
     return root;
   }
 

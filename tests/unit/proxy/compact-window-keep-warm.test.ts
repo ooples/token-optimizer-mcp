@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
 import {
+  existsSync,
   mkdtempSync,
   rmSync,
   writeFileSync,
@@ -88,6 +89,8 @@ describe('the compaction window (user decision: ~400k)', () => {
       applyCompactWindow({ ...env, TOKEN_OPTIMIZER_COMPACT_WINDOW: 'off' })
     ).toBe('removed');
     expect(read().autoCompactWindow).toBeUndefined();
+    // Nothing left to record: no empty file stays in the client's folder.
+    expect(existsSync(compactWindowRecordFile(env))).toBe(false);
   });
 
   it('a record an earlier version left in the home is read, then moved on the next write', () => {

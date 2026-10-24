@@ -24,7 +24,13 @@
 /* eslint-disable n/no-sync -- SYNCHRONOUS FOR THE REASON default-routing.ts gives: a few hundred
  * bytes of settings and manifest, written once at server start, where an interleaved write between
  * two passes is the failure that matters and awaiting would buy no concurrency. */
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { dirname, join } from 'node:path';
 import {
   claudeSettingsFile,
@@ -82,8 +88,11 @@ function writeManifest(
   const current = readAt(file);
   if (path in manifest) current[path] = manifest[path];
   else delete current[path];
-  mkdirSync(dirname(file), { recursive: true });
-  writeFileSync(file, `${JSON.stringify(current, null, 2)}\n`);
+  // An empty record is removed, not left behind in the client's config folder.
+  if (Object.keys(current).length) {
+    mkdirSync(dirname(file), { recursive: true });
+    writeFileSync(file, `${JSON.stringify(current, null, 2)}\n`);
+  } else rmSync(file, { force: true });
   const legacyFile = legacyCompactWindowRecordFile(env);
   if (legacyFile !== file && existsSync(legacyFile)) {
     const legacy = readAt(legacyFile);

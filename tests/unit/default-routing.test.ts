@@ -560,6 +560,8 @@ describe('the record lives beside the settings file it describes (2026-10-23)', 
     expect(readRoutingManifest(usual).entries[settings]?.value).toBe(served);
     expect(removeDefaultRouting(usual).status).toBe('removed');
     expect(read()).toEqual({ env: { TOKEN_OPTIMIZER_MODE: 'assist' } });
+    // Nothing left to record: no empty file stays in the client's folder.
+    expect(existsSync(routingManifestFile(usual))).toBe(false);
   });
 
   it('a record an earlier version left in the home is read, then moved on the next write', async () => {
