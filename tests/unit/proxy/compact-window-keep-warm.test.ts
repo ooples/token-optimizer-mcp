@@ -11,6 +11,8 @@ import { join } from 'node:path';
 import {
   applyCompactWindow,
   compactWindowFromEnv,
+  compactWindowRecordFile,
+  legacyCompactWindowRecordFile,
   DEFAULT_COMPACT_WINDOW,
 } from '../../../src/proxy/compact-window.js';
 import {
@@ -69,6 +71,47 @@ describe('the compaction window (user decision: ~400k)', () => {
       applyCompactWindow({ ...env, TOKEN_OPTIMIZER_COMPACT_WINDOW: 'off' })
     ).toBe('disabled');
     expect(read().autoCompactWindow).toBe(500000);
+  });
+
+  it('a process with a private home leaves a record the usual install can find and take back', () => {
+    writeFileSync(settingsPath(), JSON.stringify({}));
+    const isolated = {
+      ...env,
+      TOKEN_OPTIMIZER_HOME: join(home, 'private-home'),
+    };
+    expect(applyCompactWindow(isolated)).toBe('written');
+    expect(compactWindowRecordFile(isolated)).toBe(
+      join(home, '.claude', 'token-optimizer-compact-window.json')
+    );
+    // The usual install, with its own home, owns it and can remove it.
+    expect(
+      applyCompactWindow({ ...env, TOKEN_OPTIMIZER_COMPACT_WINDOW: 'off' })
+    ).toBe('removed');
+    expect(read().autoCompactWindow).toBeUndefined();
+  });
+
+  it('a record an earlier version left in the home is read, then moved on the next write', () => {
+    writeFileSync(
+      settingsPath(),
+      JSON.stringify({ autoCompactWindow: DEFAULT_COMPACT_WINDOW })
+    );
+    mkdirSync(join(home, '.token-optimizer'), { recursive: true });
+    const other = join(home, 'elsewhere', 'settings.json');
+    writeFileSync(
+      legacyCompactWindowRecordFile(env),
+      JSON.stringify({
+        [settingsPath()]: { value: DEFAULT_COMPACT_WINDOW, writtenAt: 'x' },
+        [other]: { value: DEFAULT_COMPACT_WINDOW, writtenAt: 'x' },
+      })
+    );
+    expect(
+      applyCompactWindow({ ...env, TOKEN_OPTIMIZER_COMPACT_WINDOW: 'off' })
+    ).toBe('removed');
+    expect(
+      Object.keys(
+        JSON.parse(readFileSync(legacyCompactWindowRecordFile(env), 'utf8'))
+      )
+    ).toEqual([other]);
   });
 
   it('accepts a token count, rejects nonsense', () => {
