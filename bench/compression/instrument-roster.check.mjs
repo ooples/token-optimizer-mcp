@@ -43,7 +43,7 @@ const RUNS_ELSEWHERE = {
   'bench/compression/proof-metrics.check.mjs': 'bench-proof',
   'bench/compression/readme-table.check.mjs': 'bench-proof',
   'bench/compression/readme-prose.check.mjs': 'bench-proof',
-  'bench/compression/readme-headroom.check.mjs': 'bench-proof',
+  'bench/compression/readme-alt-a.check.mjs': 'bench-proof',
   // Moved out of the roster because they need a dependency the install-free job
   // does not have: `pretoken-proxy` tokenises with tiktoken AND imports dist/,
   // `bench/tools/reduction` tokenises with tiktoken. Both were green on a laptop

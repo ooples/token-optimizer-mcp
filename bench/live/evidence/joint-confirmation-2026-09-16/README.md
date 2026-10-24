@@ -3,8 +3,8 @@
 ## Result
 
 The fixed schedule completed all **120 pairs / 240 attempts** against installed
-**HeadRoom 0.37.0**, using local **Codex 0.154.0** and **gpt-6-astra**.
-Token Optimizer passed **119/120** attempts; HeadRoom passed **120/120**.
+**Alternative A**, using local **Codex 0.154.0** and **gpt-6-astra**.
+Token Optimizer passed **119/120** attempts; Alternative A passed **120/120**.
 One local allocation failure has unknown provider usage. The complete-study
 superiority gate failed. **Cheaper and faster on every task was not established.**
 
@@ -35,7 +35,7 @@ Across the **119 fully measured pairs only**, descriptive totals were:
 
 These complete-pair totals are descriptive, not a repaired full-study inference.
 Over all 120 attempts, our known subtotal is $22.257720 **plus unknown usage**;
-HeadRoom's total is $30.542456. No full-study percentage is calculated from those
+Alternative A's total is $30.542456. No full-study percentage is calculated from those
 unequally complete totals.
 
 ## Per-family results
@@ -102,7 +102,7 @@ commands, failed tool outputs, request counts, usage, and timing. The original
   but the cache-discount component outweighed their input/output savings. This is
   arithmetic attribution, not proof of why the provider granted a cache hit.
 - **Six tiny-input cost losses** had slightly higher input. All ten tiny cases
-  started with 83 more input tokens on our side. Installed HeadRoom compacts tool
+  started with 83 more input tokens on our side. Installed Alternative A compacts tool
   descriptions; this is consistent with the difference but was not isolated as
   its sole cause. The opaque tiny payload itself is preserved. Under the
   all-input-uncached sensitivity, tiny costs are **0.6% higher** overall.
@@ -113,9 +113,9 @@ commands, failed tool outputs, request counts, usage, and timing. The original
   compression caused the choice. Their successful recovery still costs tokens.
 - **All 21 passing speed losses** have higher recorded upstream time. Our summed
   transform time is at most **27.7 ms** in those cases. Upstream includes network,
-  provider queue/prefill/generation, and HeadRoom processing on its arm; the
-  capture cannot separate those causes. The HeadRoom recorder's transform timer
-  does not measure HeadRoom's internal processing and is not a local-proxy speed
+  provider queue/prefill/generation, and Alternative A processing on its arm; the
+  capture cannot separate those causes. The Alternative A recorder's transform timer
+  does not measure Alternative A's internal processing and is not a local-proxy speed
   comparison.
 - Replaying every cost-loss capture passed **1,124 historical-item stability
   checks** and preserved each client cache key. This does not prove provider
@@ -171,7 +171,7 @@ The original study classifications and analysis files remain unchanged.
   local latency/concurrency evidence, and allocation profile are all retained in
   [the development record](../joint-development-2026-09-16/README.md).
 - The final local proxy comparison covered **3,840 requests / 48 groups** against
-  the actual shipped HeadRoom proxy: lower mean latency in every group, **32
+  the actual shipped Alternative A proxy: lower mean latency in every group, **32
   byte-size wins and 16 ties**, with no cache-key or historical-output changes.
   These are local transport results, not live cost or quality conclusions.
 - An internal before/after V8 profile measured **5.35% fewer sampled allocated

@@ -6,7 +6,7 @@
 #
 # THE COMPETITOR TOOLCHAIN IS INSTALLED, and the reason it was skipped no longer
 # holds. The original note said the Rust/uv toolchain existed "for codegraph,
-# rtk, squeez, graphify, headroom and code-review-graph -- none of which we are
+# rtk, squeez, graphify, altA and code-review-graph -- none of which we are
 # measuring". That was the whole problem: not measuring them meant a week of
 # work produced a benchmark we controlled and no idea where we stood against
 # anyone. THOL registers 46 competitors, 12 of them verified with pinned
@@ -158,7 +158,7 @@ ENV THOL_HOME=/home/bench/thol
 #
 # The consequence is not cosmetic: the whole reason this toolchain exists is to
 # measure the cargo/uv competitors -- rtk, squeez, graphifyy, code-review-graph
-# and headroom-ai -- and not one of them could be executed by the runner.
+# and alternative-a -- and not one of them could be executed by the runner.
 #
 # CARGO_HOME/RUSTUP_HOME/UV_TOOL_BIN_DIR put everything under /usr/local, which
 # is already on every user's PATH and world-readable, so no symlink pass is
@@ -175,15 +175,15 @@ ENV CARGO_HOME=/usr/local/cargo \
     UV_TOOL_DIR=/usr/local/uv-tools \
     UV_INSTALL_DIR=/usr/local/bin
 USER root
-# python3-dev IS REQUIRED, and pipefail is what revealed it. `headroom-ai[all]`
+# python3-dev IS REQUIRED, and pipefail is what revealed it. `alternative-a[all]`
 # depends on hnswlib, which builds a C++ extension and needs Python.h:
 #
 #   fatal error: Python.h: No such file or directory
-#   hint: `hnswlib` (v0.8.0) was included because `headroom-ai[all]` (v0.27.0)
+#   hint: `hnswlib` (v0.8.0) was included because `alternative-a[all]` (v0.27.0)
 #
 # That failure has been happening on every build and was invisible, because the
 # installer's output went through `tail` and the RUN reported tail's status. So
-# headroom -- a registered THOL competitor, and one we specifically want to
+# altA -- a registered THOL competitor, and one we specifically want to
 # measure against -- was silently absent from the board.
 # PINNED, for the same reason THOL_REV is pinned: a benchmark whose ruler moves
 # cannot compare two campaigns. `stable` and an unversioned installer script are
@@ -264,7 +264,7 @@ RUN chmod -R a+rX /usr/local/cargo /usr/local/rustup /usr/local/uv-tools 2>/dev/
 # LINKED INTO /usr/local/bin SO A LOGIN SHELL CANNOT LOSE THEM. The image's
 # ENV PATH carries /usr/local/cargo/bin, but `bash -l` sources /etc/profile and
 # replaces PATH with /usr/local/bin:/usr/bin:/bin:/usr/local/games:/usr/games --
-# measured, not assumed. Under that PATH uv, edgee and headroom survive because
+# measured, not assumed. Under that PATH uv, edgee and altA survive because
 # they live in /usr/local/bin, while cargo, rustc, rtk and squeez disappear.
 # Whether THOL's runner ever uses a login shell is not something this image
 # should depend on, so the cargo-built competitors are reachable either way.
@@ -283,7 +283,7 @@ USER bench
 # `bash -lc` then found cargo, rustc, rtk and squeez missing -- the assertion had
 # been testing the easy path.
 RUN bash -lc 'set -eu; \
-    for t in cargo rustc uv uvx rtk squeez edgee headroom; do \
+    for t in cargo rustc uv uvx rtk squeez edgee altA; do \
       command -v "$t" >/dev/null 2>&1 || { echo "FATAL: $t not on PATH for $(id -un) under a login shell"; exit 1; }; \
     done; \
     echo "competitor toolchain reachable as $(id -un), login shell included"'

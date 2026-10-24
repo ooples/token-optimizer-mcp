@@ -40,7 +40,7 @@
  *   node bench/compression/must-win.check.mjs --promote        # record new passes
  *
  * NOTHING HERE RE-RUNS THE COMPRESSION. It reads
- * `headroom/results/head-to-head.json`, which `head-to-head.mjs --record`
+ * `alt-a/results/head-to-head.json`, which `head-to-head.mjs --record`
  * writes, so the gate and the published numbers can never disagree.
  */
 
@@ -79,13 +79,13 @@ const here = dirname(fileURLToPath(import.meta.url));
 const resultsFlag = process.argv.indexOf('--results');
 const RESULTS =
   resultsFlag === -1
-    ? join(here, 'headroom', 'results', 'head-to-head.json')
+    ? join(here, 'alt-a', 'results', 'head-to-head.json')
     : process.argv[resultsFlag + 1];
-const RATCHET = join(here, 'headroom', 'results', 'must-win.ratchet.json');
+const RATCHET = join(here, 'alt-a', 'results', 'must-win.ratchet.json');
 // THE SECOND RECORDING. Produced by running head-to-head.mjs again against the
 // same capture dir, at the same commit, in a fresh process:
 //
-//   node bench/compression/head-to-head.mjs hr27 --record //     bench/compression/headroom/results/head-to-head.replicate.json
+//   node bench/compression/head-to-head.mjs hr27 --record //     bench/compression/alt-a/results/head-to-head.replicate.json
 //
 // It exists so a speed verdict has to survive being measured twice. Absent, the
 // speed criteria read NOT ENFORCEABLE rather than passing on one reading.
@@ -100,7 +100,7 @@ const RATCHET = join(here, 'headroom', 'results', 'must-win.ratchet.json');
 const replicateFlag = process.argv.indexOf('--replicate');
 const REPLICATE =
   replicateFlag === -1
-    ? join(here, 'headroom', 'results', 'head-to-head.replicate.json')
+    ? join(here, 'alt-a', 'results', 'head-to-head.replicate.json')
     : process.argv[replicateFlag + 1];
 const promote = process.argv.includes('--promote');
 if (promote && (resultsFlag !== -1 || replicateFlag !== -1)) {

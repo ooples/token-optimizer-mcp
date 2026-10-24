@@ -19,14 +19,14 @@ The original confirmation remains unchanged and does not validate this new build
 ## Live results
 
 Four fresh paired JSON cases, seeds 1900000001 through 1900000004, using local
-Codex gpt-6-astra and actual HeadRoom 0.37.0. Each arm was first twice. All eight
-attempts are retained. Proxy passed 3/4; HeadRoom passed 4/4. Proxy rep 1 received
+Codex gpt-6-astra and actual Alternative A. Each arm was first twice. All eight
+attempts are retained. Proxy passed 3/4; Alternative A passed 4/4. Proxy rep 1 received
 an upstream 503 after its complete initial read. Its partial ledger is retained,
 but its total cost is unknown. This is not a full-campaign cost win.
 
 All three fully measured pairs passed exposure, answer, and usage audits:
 
-| Measure | Proxy | HeadRoom | Reduction |
+| Measure | Proxy | Alternative A | Reduction |
 | --- | ---: | ---: | ---: |
 | Total input tokens | 119,775 | 145,476 | 17.7% |
 | Estimated cost, fixed standard-rate scenario | $0.596358 | $0.688282 | 13.4% |

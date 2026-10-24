@@ -32,7 +32,7 @@ const GOOD = {
   encoding: 'cl100k_base',
   payloadsDigest: '0123456789abcdef',
   theirsDigest: 'fedcba9876543210',
-  headroomVersion: '0.37.0',
+  altAVersion: 'sha256:5453d116514b14cd',
   stubArms: null,
   python: '3.13.2',
   instrument: 'v1:detect=rust kompress=ready degraded=none witness=yes chunks=6 store=warm',
@@ -69,12 +69,12 @@ check(
   Object.keys(FIELDS).join(', ')
 );
 // AND THE TWO FIELDS THE TABLE DOES NOT HOLD, named here so dropping their
-// handling in the module cannot pass. `headroomVersion` is required or forbidden
+// handling in the module cannot pass. `altAVersion` is required or forbidden
 // depending on `stubArms`, which a flat table cannot express; a conditional rule
 // moved out of the table is exactly the rule that goes unchecked.
 check(
-  !Object.hasOwn(FIELDS, 'headroomVersion') && !Object.hasOwn(FIELDS, 'stubArms'),
-  'headroomVersion and stubArms are judged conditionally, not from the table'
+  !Object.hasOwn(FIELDS, 'altAVersion') && !Object.hasOwn(FIELDS, 'stubArms'),
+  'altAVersion and stubArms are judged conditionally, not from the table'
 );
 
 // 1. The record that needs nothing said about it.
@@ -124,19 +124,19 @@ for (const field of Object.keys(FIELDS)) {
   // already say.
   const older = reproducibilityRefusal(without('stubArms'));
   check(older === null, 'a record with a version but no stubArms is accepted', String(older));
-  const neither = reproducibilityRefusal({ ...without('stubArms'), headroomVersion: null });
+  const neither = reproducibilityRefusal({ ...without('stubArms'), altAVersion: null });
   check(
     typeof neither === 'string' &&
-      /headroomVersion is missing/.test(neither) &&
+      /altAVersion is missing/.test(neither) &&
       /stubArms does not say a stub produced their column/.test(neither) &&
       neither.startsWith('1 thing(s)'),
     'but with neither, the refusal names both ways out',
     String(neither)
   );
-  const mine = reproducibilityRefusal(without('headroomVersion'));
+  const mine = reproducibilityRefusal(without('altAVersion'));
   check(
     typeof mine === 'string' &&
-      mine.includes('headroomVersion is missing') &&
+      mine.includes('altAVersion is missing') &&
       mine.startsWith('1 thing(s)'),
     'a real capture with no competitor version is refused, as before',
     String(mine)
@@ -145,13 +145,13 @@ for (const field of Object.keys(FIELDS)) {
   const named = reproducibilityRefusal(stub);
   check(
     typeof named === 'string' &&
-      /headroomVersion is "0[.]37[.]0" on a capture taken with stub arms/.test(named) &&
+      /altAVersion is "sha256:[0-9a-f]{16}" on a capture taken with stub arms/.test(named) &&
       /produced none of this column/.test(named) &&
       named.startsWith('1 thing(s)'),
     'a stubbed capture carrying their version is refused, because no engine of theirs ran',
     String(named)
   );
-  const honest = reproducibilityRefusal({ ...stub, headroomVersion: null });
+  const honest = reproducibilityRefusal({ ...stub, altAVersion: null });
   check(
     honest === null,
     'and the same stubbed capture with no version is accepted',
@@ -159,9 +159,9 @@ for (const field of Object.keys(FIELDS)) {
   );
   // The empty string is not a stub name, so it cannot be a way to claim the
   // lenient arm while saying nothing.
-  const blank = reproducibilityRefusal({ ...GOOD, stubArms: '', headroomVersion: null });
+  const blank = reproducibilityRefusal({ ...GOOD, stubArms: '', altAVersion: null });
   check(
-    typeof blank === 'string' && blank.includes('headroomVersion is missing'),
+    typeof blank === 'string' && blank.includes('altAVersion is missing'),
     'an empty stubArms does not buy the stub rule',
     String(blank)
   );
@@ -179,7 +179,7 @@ const unusable = [
   ['node', 'v22'],
   ['tiktoken', 'latest'],
   ['encoding', 'cl100k base'],
-  ['headroomVersion', '0.37'],
+  ['altAVersion', '0.37'],
   ['python', null],
   // A STORE STATE THE CAPTURE DID NOT LOOK UP is the case this field exists
   // for, and it is not absence: the string is well formed, the sweep ran, and

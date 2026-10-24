@@ -29,7 +29,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const RECORD = join(HERE, 'headroom', 'results', 'head-to-head.json');
+const RECORD = join(HERE, 'alt-a', 'results', 'head-to-head.json');
 
 let failures = 0;
 const ok = (name, detail) => console.log(`ok   ${name} -- ${detail}`);
@@ -431,7 +431,7 @@ ok(
 //
 // Neither engine splices. Ours returns expanded content from the `expand` tool,
 // so it arrives as a new tool result at the END of the transcript. Theirs
-// exposes `retrieve()` (headroom/cache/compression_store.py:435), which its
+// exposes `retrieve()` (alternative_a/cache/compression_store.py:435), which its
 // caller invokes the same way. Appending invalidates nothing, so one extra
 // request re-reading the prefix is exactly what happens and `(R/b) * (B +
 // handed)` is exactly what it costs.

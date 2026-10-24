@@ -28,7 +28,7 @@
  */
 
 /**
- * The store markers HeadRoom leaves behind. IT WRITES TWO FORMS, AND ONLY ONE
+ * The store markers Alternative A leaves behind. IT WRITES TWO FORMS, AND ONLY ONE
  * OF THEM DECLARES A SIZE:
  *
  *   `<<ccr:44e5f6344bfd,string,57.4KB>>`   an id, a type, and a declared size

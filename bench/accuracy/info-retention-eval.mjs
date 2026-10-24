@@ -1,9 +1,9 @@
 /**
- * Info Retention -- the second of HeadRoom's two zero-cost accuracy datasets.
+ * Info Retention -- the second of Alternative A's two zero-cost accuracy datasets.
  *
  * THEIR HARNESS, THEIR FIXTURES, DELIBERATELY. The case generator below is a
  * port of `generate_info_retention_cases` from their
- * `headroom/evals/runners/compression_only.py`: twenty-four server records as
+ * `alternative_a/evals/runners/compression_only.py`: twenty-four server records as
  * indented JSON, with one critical row carrying an error code and an anomalous
  * CPU figure, and four probe facts that must survive compression. Using their
  * corpus rather than ours is the whole point -- our own fixtures have already
@@ -210,7 +210,7 @@ function main() {
   if (JSON_OUT) {
     const payload = {
       dataset: 'info-retention',
-      source: 'headroom/evals/runners/compression_only.py',
+      source: 'alternative_a/evals/runners/compression_only.py',
       measuredAt: new Date().toISOString(),
       harnessSha: execFileSync('git', ['rev-parse', 'HEAD'], { cwd: here })
         .toString()

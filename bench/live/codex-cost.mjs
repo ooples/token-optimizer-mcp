@@ -127,8 +127,8 @@ export function costReport(
           (a) => a.task === task && a.arm === candidate
         );
         for (const against of candidate === 'full-files'
-          ? ['control', 'headroom', 'full']
-          : ['control', 'headroom']) {
+          ? ['control', 'altA', 'full']
+          : ['control', 'altA']) {
           const baseline = aggregates.find(
             (a) => a.task === task && a.arm === against
           );

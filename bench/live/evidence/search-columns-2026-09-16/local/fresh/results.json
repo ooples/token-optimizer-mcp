@@ -1,7 +1,7 @@
 {
   "complete": true,
   "localUpstreamOnly": true,
-  "headroomOverrides": [
+  "altAOverrides": [
     "--no-rate-limit"
   ],
   "tokenizer": "o200k_base estimate, not observed model usage",
@@ -44,7 +44,7 @@
     },
     {
       "round": 0,
-      "arm": "headroom",
+      "arm": "altA",
       "seed": 1900000201,
       "milliseconds": 1424.348399999999,
       "rawBytes": 17551,
@@ -53,7 +53,7 @@
     },
     {
       "round": 0,
-      "arm": "headroom",
+      "arm": "altA",
       "seed": 1900000202,
       "milliseconds": 30.928200000000288,
       "rawBytes": 18700,
@@ -62,7 +62,7 @@
     },
     {
       "round": 0,
-      "arm": "headroom",
+      "arm": "altA",
       "seed": 1900000203,
       "milliseconds": 31.004500000000917,
       "rawBytes": 17307,
@@ -71,7 +71,7 @@
     },
     {
       "round": 0,
-      "arm": "headroom",
+      "arm": "altA",
       "seed": 1900000204,
       "milliseconds": 30.559800000000905,
       "rawBytes": 22269,
@@ -80,7 +80,7 @@
     },
     {
       "round": 1,
-      "arm": "headroom",
+      "arm": "altA",
       "seed": 1900000205,
       "milliseconds": 1396.775999999998,
       "rawBytes": 18095,
@@ -89,7 +89,7 @@
     },
     {
       "round": 1,
-      "arm": "headroom",
+      "arm": "altA",
       "seed": 1900000206,
       "milliseconds": 30.494599999998172,
       "rawBytes": 18820,
@@ -98,7 +98,7 @@
     },
     {
       "round": 1,
-      "arm": "headroom",
+      "arm": "altA",
       "seed": 1900000207,
       "milliseconds": 26.05840000000171,
       "rawBytes": 17611,
@@ -107,7 +107,7 @@
     },
     {
       "round": 1,
-      "arm": "headroom",
+      "arm": "altA",
       "seed": 1900000208,
       "milliseconds": 26.894599999999627,
       "rawBytes": 18095,

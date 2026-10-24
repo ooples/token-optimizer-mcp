@@ -2,7 +2,7 @@
  * Phase 0: does the API accept history with old thinking blocks REMOVED?
  *
  * The whole substitution design rests on this. `frontier.ts` refuses to touch a
- * signed block, citing HeadRoom's issue #3456 -- but that is THEIR bug report,
+ * signed block, citing Alternative A's issue #3456 -- but that is THEIR bug report,
  * we have never tested it, and removal is not the same operation as rewriting.
  * A signature covers block CONTENT: delete the block and there is nothing left
  * to mismatch; rewrite it and a mismatch is guaranteed.

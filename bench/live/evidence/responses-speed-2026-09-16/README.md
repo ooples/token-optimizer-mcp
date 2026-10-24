@@ -30,18 +30,18 @@ Build, changed-file ESLint, and 23 focused Responses regressions passed. The new
 
 ## Scope
 
-These are local implementation improvements, not proof of beating HeadRoom on model latency. The earlier largest speed loss contained a 50.7-second upstream response; its cause is not identifiable from aggregate timing. A twelve-request local transport probe reused one upstream connection, ruling out the proposed per-request handshake explanation for that probe.
+These are local implementation improvements, not proof of beating Alternative A on model latency. The earlier largest speed loss contained a 50.7-second upstream response; its cause is not identifiable from aggregate timing. A twelve-request local transport probe reused one upstream connection, ruling out the proposed per-request handshake explanation for that probe.
 
 The fixed live schedule is in [PROTOCOL.md](PROTOCOL.md). All eight scheduled attempts passed; three of four speed wins and three of four estimated-cost wins. Totals were 135.2 versus 166.5 agent seconds (18.8% lower) and $0.703922 versus $1.310704 (46.3% lower). See [all outcomes and timing](summary.json).
 
-| Pair | Ours / HeadRoom seconds | Ours / HeadRoom estimated USD | Result |
+| Pair | Ours / Alternative A seconds | Ours / Alternative A estimated USD | Result |
 | --- | ---: | ---: | --- |
 | repeat 1 | 25.2 / 27.1 | 0.129386 / 0.336684 | joint-win |
 | repeat 2 | 27.1 / 26.5 | 0.129666 / 0.392092 | speed-loss |
 | refresh 1 | 45.6 / 50.7 | 0.239170 / 0.235676 | cost-loss |
 | refresh 2 | 37.3 / 62.2 | 0.205700 / 0.346252 | joint-win |
 
-The first refresh attempt recovered from a PowerShell quoting failure in an agent-generated node -e command. Both arms used seven requests there. The second refresh used six requests for ours versus eleven for HeadRoom. These model trajectories and cache states prevent attributing the live aggregate difference to a roughly 20 ms local cold-pass improvement. Costs use the archived $10/$1/$50 per-million uncached/cached/output scenario, not actual invoices. No mock or local CPU load ran concurrently with this schedule.
+The first refresh attempt recovered from a PowerShell quoting failure in an agent-generated node -e command. Both arms used seven requests there. The second refresh used six requests for ours versus eleven for Alternative A. These model trajectories and cache states prevent attributing the live aggregate difference to a roughly 20 ms local cold-pass improvement. Costs use the archived $10/$1/$50 per-million uncached/cached/output scenario, not actual invoices. No mock or local CPU load ran concurrently with this schedule.
 
 The local transport probe completed successfully after correcting its cleanup helper; all twelve requests reused one upstream connection.
 

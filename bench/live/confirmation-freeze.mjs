@@ -37,17 +37,17 @@ if (
 ) {
   const study = resolve(process.argv[2]);
   const root = resolve('.');
-  const headroom = dirname(
+  const altA = dirname(
     execFileSync(
       process.env.PYTHON || 'python',
-      ['-c', 'import headroom; print(headroom.__file__)'],
+      ['-c', 'import importlib, os; print(importlib.import_module(os.environ["ALT_A_MODULE"]).__file__)'],
       { encoding: 'utf8', windowsHide: true }
     ).trim()
   );
   const codex = join(process.env.APPDATA, 'npm/node_modules/@openai/codex');
   const files = [
     ...(await treeFiles(join(root, 'dist'), (p) => /\.(js|json)$/.test(p))),
-    ...(await treeFiles(headroom, (p) => /\.(py|pyd)$/.test(p))),
+    ...(await treeFiles(altA, (p) => /\.(py|pyd)$/.test(p))),
     ...(await treeFiles(codex, (p) => /\.(js|json|exe)$/.test(p))),
     ...(await treeFiles(
       join(root, 'bench/live'),
@@ -79,7 +79,7 @@ if (
   const freeze = {
     created: new Date().toISOString(),
     root,
-    headroom,
+    altA,
     codex,
     node: process.version,
     pythonDependencies: dependencies,

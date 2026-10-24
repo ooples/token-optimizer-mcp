@@ -1,10 +1,10 @@
 # Responses speed follow-up — 2026-09-16
 
 Fixed development schedule before provider calls:
-- Actual installed HeadRoom 0.37.0 versus our proxy, Codex local, default model and reasoning.
+- Actual installed Alternative A versus our proxy, Codex local, default model and reasoning.
 - heldout-v1 json with REPEAT_READS=3, seeds 3141592301 and 3141592302.
 - heldout-v1 refresh with REPEAT_READS=1, seeds 1618034101 and 1618034102.
-- Two repetitions per group; proxy/headroom order rotates through the existing harness.
+- Two repetitions per group; proxy/altA order rotates through the existing harness.
 - Natural reads, tool-code experiment disabled. No retries or excluded failures.
 - Report validator outcomes, estimated cost, agent elapsed time and per-request timing.
 - Four pairs are diagnostic development evidence, not proof of universal speed superiority.

@@ -120,7 +120,7 @@
   },
   {
     "task": "refresh",
-    "arm": "headroom",
+    "arm": "altA",
     "rep": 1,
     "position": 2,
     "kind": "workflow",
@@ -239,7 +239,7 @@
   },
   {
     "task": "refresh",
-    "arm": "headroom",
+    "arm": "altA",
     "rep": 2,
     "position": 1,
     "kind": "workflow",

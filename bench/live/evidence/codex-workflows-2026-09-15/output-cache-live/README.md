@@ -1,11 +1,11 @@
 # Cached-output live follow-up: correctness passes, cost loss retained
 
-Two balanced repetitions, refresh seeds 32–33, our proxy and installed HeadRoom.
+Two balanced repetitions, refresh seeds 32–33, our proxy and installed Alternative A.
 All four attempts passed independent artifacts and usage reconciliation.
 No control or uncached-old-build arm was included, so this is not a causal
 latency test of the output cache.
 
-| Mean per attempt | Our proxy | HeadRoom |
+| Mean per attempt | Our proxy | Alternative A |
 | --- | ---: | ---: |
 | Total input tokens | 90,630.5 | 91,444 |
 | Uncached input tokens | 25,158.5 | 12,468 |
@@ -16,7 +16,7 @@ latency test of the output cache.
 
 Input was 0.9% lower, agent time tied, and the standard-rate cost scenario was
 47.8% higher. Startup-inclusive time was 21.8% lower. Both arms had one shell
-failure in the first repetition; HeadRoom completed the second in fewer calls.
+failure in the first repetition; Alternative A completed the second in fewer calls.
 Do not present this sample as a win on every metric or discard the cache misses.
 
 Replaying both proxy request histories with the cached compressor preserved

@@ -109,7 +109,7 @@
   },
   {
     "task": "json",
-    "arm": "headroom",
+    "arm": "altA",
     "rep": 1,
     "position": 3,
     "verdict": "PASS",
@@ -217,7 +217,7 @@
   },
   {
     "task": "json",
-    "arm": "headroom",
+    "arm": "altA",
     "rep": 2,
     "position": 2,
     "verdict": "PASS",
@@ -325,7 +325,7 @@
   },
   {
     "task": "json",
-    "arm": "headroom",
+    "arm": "altA",
     "rep": 3,
     "position": 1,
     "verdict": "PASS",
@@ -597,7 +597,7 @@
   },
   {
     "task": "code",
-    "arm": "headroom",
+    "arm": "altA",
     "rep": 1,
     "position": 3,
     "verdict": "INVALID_READ",
@@ -723,7 +723,7 @@
   },
   {
     "task": "code",
-    "arm": "headroom",
+    "arm": "altA",
     "rep": 2,
     "position": 2,
     "verdict": "INVALID_READ",
@@ -849,7 +849,7 @@
   },
   {
     "task": "code",
-    "arm": "headroom",
+    "arm": "altA",
     "rep": 3,
     "position": 1,
     "verdict": "INVALID_READ",
@@ -1138,7 +1138,7 @@
   },
   {
     "task": "logs",
-    "arm": "headroom",
+    "arm": "altA",
     "rep": 1,
     "position": 3,
     "verdict": "INVALID_READ",
@@ -1262,7 +1262,7 @@
   },
   {
     "task": "logs",
-    "arm": "headroom",
+    "arm": "altA",
     "rep": 2,
     "position": 2,
     "verdict": "INVALID_READ",
@@ -1386,7 +1386,7 @@
   },
   {
     "task": "logs",
-    "arm": "headroom",
+    "arm": "altA",
     "rep": 3,
     "position": 1,
     "verdict": "INVALID_READ",

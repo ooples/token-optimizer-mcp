@@ -20,7 +20,7 @@
   "measured": [
     {
       "task": "nullable",
-      "arm": "headroom",
+      "arm": "altA",
       "rep": 1,
       "recordedVerdict": "PASS",
       "verdict": "PASS",
@@ -38,7 +38,7 @@
   "aggregates": [
     {
       "task": "nullable",
-      "arm": "headroom",
+      "arm": "altA",
       "meanEstimatedUsd": 0.110802
     },
     {
@@ -51,7 +51,7 @@
     {
       "task": "nullable",
       "candidate": "proxy",
-      "against": "headroom",
+      "against": "altA",
       "estimatedUsdDelta": -0.022746000000000002,
       "reductionPercent": 20.528510315698277
     }

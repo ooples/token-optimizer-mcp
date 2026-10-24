@@ -96,7 +96,7 @@
           "timing": null,
           "timingNote": "Older capture has no request timing; no causal speed attribution available."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.24474,
           "agentSeconds": 51.9,
@@ -139,7 +139,7 @@
           "timing": null,
           "timingNote": "Older capture has no request timing; no causal speed attribution available."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.251714,
           "agentSeconds": 52.1,
@@ -182,7 +182,7 @@
           "timing": null,
           "timingNote": "Older capture has no request timing; no causal speed attribution available."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.398442,
           "agentSeconds": 61.3,
@@ -225,7 +225,7 @@
           "timing": null,
           "timingNote": "Older capture has no request timing; no causal speed attribution available."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.407754,
           "agentSeconds": 70.6,
@@ -268,7 +268,7 @@
           "timing": null,
           "timingNote": "Older capture has no request timing; no causal speed attribution available."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.13372,
           "agentSeconds": 28.5,
@@ -311,7 +311,7 @@
           "timing": null,
           "timingNote": "Older capture has no request timing; no causal speed attribution available."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.40457,
           "agentSeconds": 67.1,
@@ -354,7 +354,7 @@
           "timing": null,
           "timingNote": "Older capture has no request timing; no causal speed attribution available."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.418908,
           "agentSeconds": 74.7,
@@ -397,7 +397,7 @@
           "timing": null,
           "timingNote": "Older capture has no request timing; no causal speed attribution available."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.473786,
           "agentSeconds": 58.3,
@@ -440,7 +440,7 @@
           "timing": null,
           "timingNote": "Older capture has no request timing; no causal speed attribution available."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.369946,
           "agentSeconds": 23.4,
@@ -483,7 +483,7 @@
           "timing": null,
           "timingNote": "Older capture has no request timing; no causal speed attribution available."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.16905,
           "agentSeconds": 26.6,
@@ -526,7 +526,7 @@
           "timing": null,
           "timingNote": "Older capture has no request timing; no causal speed attribution available."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.381994,
           "agentSeconds": 30.7,
@@ -569,7 +569,7 @@
           "timing": null,
           "timingNote": "Older capture has no request timing; no causal speed attribution available."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.433776,
           "agentSeconds": 68.6,
@@ -612,7 +612,7 @@
           "timing": null,
           "timingNote": "Older capture has no request timing; no causal speed attribution available."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.207024,
           "agentSeconds": 27.9,
@@ -655,7 +655,7 @@
           "timing": null,
           "timingNote": "Older capture has no request timing; no causal speed attribution available."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.229056,
           "agentSeconds": 18.3,
@@ -698,7 +698,7 @@
           "timing": null,
           "timingNote": "Older capture has no request timing; no causal speed attribution available."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.713548,
           "agentSeconds": 89.1,
@@ -741,7 +741,7 @@
           "timing": null,
           "timingNote": "Older capture has no request timing; no causal speed attribution available."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.250324,
           "agentSeconds": 55.2,
@@ -784,7 +784,7 @@
           "timing": null,
           "timingNote": "Older capture has no request timing; no causal speed attribution available."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.182892,
           "agentSeconds": 31.7,
@@ -827,7 +827,7 @@
           "timing": null,
           "timingNote": "Older capture has no request timing; no causal speed attribution available."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.33288,
           "agentSeconds": 62.8,
@@ -870,7 +870,7 @@
           "timing": null,
           "timingNote": "Older capture has no request timing; no causal speed attribution available."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.14168,
           "agentSeconds": 17.6,
@@ -913,7 +913,7 @@
           "timing": null,
           "timingNote": "Older capture has no request timing; no causal speed attribution available."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.301,
           "agentSeconds": 25.2,
@@ -956,7 +956,7 @@
           "timing": null,
           "timingNote": "Older capture has no request timing; no causal speed attribution available."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.363516,
           "agentSeconds": 73.9,
@@ -999,7 +999,7 @@
           "timing": null,
           "timingNote": "Older capture has no request timing; no causal speed attribution available."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.146672,
           "agentSeconds": 15.8,
@@ -1042,7 +1042,7 @@
           "timing": null,
           "timingNote": "Older capture has no request timing; no causal speed attribution available."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.35968,
           "agentSeconds": 50.7,
@@ -1085,7 +1085,7 @@
           "timing": null,
           "timingNote": "Older capture has no request timing; no causal speed attribution available."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.136066,
           "agentSeconds": 14,
@@ -1128,7 +1128,7 @@
           "timing": null,
           "timingNote": "Older capture has no request timing; no causal speed attribution available."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.388138,
           "agentSeconds": 86.1,
@@ -1171,7 +1171,7 @@
           "timing": null,
           "timingNote": "Older capture has no request timing; no causal speed attribution available."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.25517,
           "agentSeconds": 29.8,
@@ -1214,7 +1214,7 @@
           "timing": null,
           "timingNote": "Older capture has no request timing; no causal speed attribution available."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.223774,
           "agentSeconds": 14.1,
@@ -1257,7 +1257,7 @@
           "timing": null,
           "timingNote": "Older capture has no request timing; no causal speed attribution available."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.274288,
           "agentSeconds": 55.8,
@@ -1300,7 +1300,7 @@
           "timing": null,
           "timingNote": "Older capture has no request timing; no causal speed attribution available."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.47235,
           "agentSeconds": 80.8,
@@ -1343,7 +1343,7 @@
           "timing": null,
           "timingNote": "Older capture has no request timing; no causal speed attribution available."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.463548,
           "agentSeconds": 48.2,
@@ -1386,7 +1386,7 @@
           "timing": null,
           "timingNote": "Older capture has no request timing; no causal speed attribution available."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.277584,
           "agentSeconds": 20.9,
@@ -1429,7 +1429,7 @@
           "timing": null,
           "timingNote": "Older capture has no request timing; no causal speed attribution available."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.529422,
           "agentSeconds": 71.5,
@@ -1472,7 +1472,7 @@
           "timing": null,
           "timingNote": "Older capture has no request timing; no causal speed attribution available."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.430506,
           "agentSeconds": 44.9,
@@ -1515,7 +1515,7 @@
           "timing": null,
           "timingNote": "Older capture has no request timing; no causal speed attribution available."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.31429,
           "agentSeconds": 62.3,
@@ -1558,7 +1558,7 @@
           "timing": null,
           "timingNote": "Older capture has no request timing; no causal speed attribution available."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.133688,
           "agentSeconds": 16.6,
@@ -1601,7 +1601,7 @@
           "timing": null,
           "timingNote": "Older capture has no request timing; no causal speed attribution available."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.136064,
           "agentSeconds": 43.9,
@@ -1644,7 +1644,7 @@
           "timing": null,
           "timingNote": "Older capture has no request timing; no causal speed attribution available."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.285324,
           "agentSeconds": 25.4,
@@ -1687,7 +1687,7 @@
           "timing": null,
           "timingNote": "Older capture has no request timing; no causal speed attribution available."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.305136,
           "agentSeconds": 42.6,
@@ -1730,7 +1730,7 @@
           "timing": null,
           "timingNote": "Older capture has no request timing; no causal speed attribution available."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.539786,
           "agentSeconds": 99.8,
@@ -1773,7 +1773,7 @@
           "timing": null,
           "timingNote": "Older capture has no request timing; no causal speed attribution available."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.316732,
           "agentSeconds": 61.9,
@@ -1816,7 +1816,7 @@
           "timing": null,
           "timingNote": "Older capture has no request timing; no causal speed attribution available."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.497056,
           "agentSeconds": 65.4,
@@ -1859,7 +1859,7 @@
           "timing": null,
           "timingNote": "Older capture has no request timing; no causal speed attribution available."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.334338,
           "agentSeconds": 59.2,
@@ -1902,7 +1902,7 @@
           "timing": null,
           "timingNote": "Older capture has no request timing; no causal speed attribution available."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.285246,
           "agentSeconds": 61.3,
@@ -1945,7 +1945,7 @@
           "timing": null,
           "timingNote": "Older capture has no request timing; no causal speed attribution available."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.508226,
           "agentSeconds": 77.1,
@@ -1988,7 +1988,7 @@
           "timing": null,
           "timingNote": "Older capture has no request timing; no causal speed attribution available."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.333332,
           "agentSeconds": 67,
@@ -2031,7 +2031,7 @@
           "timing": null,
           "timingNote": "Older capture has no request timing; no causal speed attribution available."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.328504,
           "agentSeconds": 74.3,
@@ -2074,7 +2074,7 @@
           "timing": null,
           "timingNote": "Older capture has no request timing; no causal speed attribution available."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.293734,
           "agentSeconds": 24.4,
@@ -2117,7 +2117,7 @@
           "timing": null,
           "timingNote": "Older capture has no request timing; no causal speed attribution available."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.260074,
           "agentSeconds": 51.4,
@@ -2160,7 +2160,7 @@
           "timing": null,
           "timingNote": "Older capture has no request timing; no causal speed attribution available."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.38714,
           "agentSeconds": 67,
@@ -2203,7 +2203,7 @@
           "timing": null,
           "timingNote": "Older capture has no request timing; no causal speed attribution available."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.296546,
           "agentSeconds": 14.9,
@@ -2246,7 +2246,7 @@
           "timing": null,
           "timingNote": "Older capture has no request timing; no causal speed attribution available."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.130378,
           "agentSeconds": 27.3,
@@ -2289,7 +2289,7 @@
           "timing": null,
           "timingNote": "Older capture has no request timing; no causal speed attribution available."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.49683,
           "agentSeconds": 52.1,
@@ -2332,7 +2332,7 @@
           "timing": null,
           "timingNote": "Older capture has no request timing; no causal speed attribution available."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.277494,
           "agentSeconds": 24.2,
@@ -2375,7 +2375,7 @@
           "timing": null,
           "timingNote": "Older capture has no request timing; no causal speed attribution available."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.20537,
           "agentSeconds": 27.7,
@@ -2418,7 +2418,7 @@
           "timing": null,
           "timingNote": "Older capture has no request timing; no causal speed attribution available."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.134878,
           "agentSeconds": 14.8,
@@ -2461,7 +2461,7 @@
           "timing": null,
           "timingNote": "Older capture has no request timing; no causal speed attribution available."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.238502,
           "agentSeconds": 59,
@@ -2504,7 +2504,7 @@
           "timing": null,
           "timingNote": "Older capture has no request timing; no causal speed attribution available."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.454548,
           "agentSeconds": 65.3,
@@ -2547,7 +2547,7 @@
           "timing": null,
           "timingNote": "Older capture has no request timing; no causal speed attribution available."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.27318,
           "agentSeconds": 25.1,
@@ -2590,7 +2590,7 @@
           "timing": null,
           "timingNote": "Older capture has no request timing; no causal speed attribution available."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.40644,
           "agentSeconds": 73.3,
@@ -2633,7 +2633,7 @@
           "timing": null,
           "timingNote": "Older capture has no request timing; no causal speed attribution available."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.426908,
           "agentSeconds": 25.8,
@@ -2676,7 +2676,7 @@
           "timing": null,
           "timingNote": "Older capture has no request timing; no causal speed attribution available."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.325176,
           "agentSeconds": 133.4,
@@ -2719,7 +2719,7 @@
           "timing": null,
           "timingNote": "Older capture has no request timing; no causal speed attribution available."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.267418,
           "agentSeconds": 50.5,
@@ -2762,7 +2762,7 @@
           "timing": null,
           "timingNote": "Older capture has no request timing; no causal speed attribution available."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.142766,
           "agentSeconds": 19.2,
@@ -2805,7 +2805,7 @@
           "timing": null,
           "timingNote": "Older capture has no request timing; no causal speed attribution available."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.281496,
           "agentSeconds": 43.6,
@@ -2848,7 +2848,7 @@
           "timing": null,
           "timingNote": "Older capture has no request timing; no causal speed attribution available."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.203,
           "agentSeconds": 25.5,
@@ -2891,7 +2891,7 @@
           "timing": null,
           "timingNote": "Older capture has no request timing; no causal speed attribution available."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.416718,
           "agentSeconds": 76.2,
@@ -2934,7 +2934,7 @@
           "timing": null,
           "timingNote": "Older capture has no request timing; no causal speed attribution available."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.184996,
           "agentSeconds": 30.9,
@@ -2973,7 +2973,7 @@
           "timing": null,
           "timingNote": "Older capture has no request timing; no causal speed attribution available."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.373884,
           "agentSeconds": 61.8,
@@ -3012,7 +3012,7 @@
           "timing": null,
           "timingNote": "Older capture has no request timing; no causal speed attribution available."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.139448,
           "agentSeconds": 13.4,
@@ -3055,7 +3055,7 @@
           "timing": null,
           "timingNote": "Older capture has no request timing; no causal speed attribution available."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.266822,
           "agentSeconds": 24.9,

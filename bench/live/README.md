@@ -23,8 +23,8 @@ The default Codex campaign runs three repetitions of three synthetic tasks
 
 - `control`: Token Optimizer's null proxy, recording unmodified requests.
 - `proxy`: Token Optimizer's compression proxy.
-- `headroom`: the installed `python -m headroom.cli proxy`, behind the same null
-  recorder. Provider usage reflects HeadRoom's actual transformed requests.
+- `altA`: the installed `python -m alternative_a.cli proxy`, behind the same null
+  recorder. Provider usage reflects Alternative A's actual transformed requests.
 
 Every arm occupies each position once. Set `ARMS`, `REPS`, and `TASKS` to narrow
 a diagnostic run; repetitions must be a multiple of the arm count for a balanced
@@ -182,8 +182,8 @@ publish the result and summary files rather than the raw captures.
 Codex input includes cached input. Cached tokens are a subset, not an additional
 charge. Report them separately; do not apply the Anthropic formula from `ab.sh`.
 The summary reports token counts rather than dollar costs. Elapsed time includes
-proxy startup, and HeadRoom's null-recorder byte counts describe the traffic
-entering HeadRoom, not its compressed output.
+proxy startup, and Alternative A's null-recorder byte counts describe the traffic
+entering Alternative A, not its compressed output.
 
 Rotation balances position but does not isolate shared provider caches. These
 small tasks establish behavior on these fixtures, not superiority across all

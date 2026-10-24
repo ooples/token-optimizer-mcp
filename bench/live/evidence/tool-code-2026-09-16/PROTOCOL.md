@@ -5,11 +5,11 @@ tool-description overhead; it does not assume that cache misses are fixed.
 
 - Candidate: current proxy with `TOOL_CODE=1` in the runner, enabling
   `TOKEN_OPTIMIZER_PROXY_TOOL_CODE=1`. The feature is off by default.
-- Competitor: installed HeadRoom, default compression settings, through the
+- Competitor: installed Alternative A, default compression settings, through the
   same local Codex runner and independent quality/cost auditors.
 - Nullable, adversarial-v1: seeds 2494523015 and 2494523016.
 - JSON, heldout-v1: seeds 3141592001 and 3141592002.
-- Two repetitions per family, arms `proxy,headroom`, with order rotated on the
+- Two repetitions per family, arms `proxy,altA`, with order rotated on the
   second repetition: four pairs / eight attempts total. The first seed in each
   family deliberately repeats the observed cost loss; these are development
   cases and cannot establish held-out superiority.

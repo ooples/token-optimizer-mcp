@@ -3,10 +3,10 @@
 Registered before live execution. Candidate: current default proxy with stable
 request-local deduplication, expanded output support, bounded cached token
 estimates, and small exact JSON tables. Tool-description experiment remains off.
-Competitor: installed HeadRoom 0.37.0, actual proxy, same local Codex/model.
+Competitor: installed Alternative A, actual proxy, same local Codex/model.
 
 Fixed schedule: eight pairs / sixteen attempts; two repetitions per group,
-arms proxy,headroom with the second repetition reversing order:
+arms proxy,altA with the second repetition reversing order:
 
 | Group | Suite / task | Seeds | Repeat reads |
 | --- | --- | --- | --- |

@@ -32,7 +32,7 @@ function expand(text) {
 }
 const report = [];
 for (const pair of analysis.pairs) {
-  const { proxy: p, headroom: h } = pair.arms;
+  const { proxy: p, altA: h } = pair.arms;
   if (p.estimatedUsd <= h.estimatedUsd) continue;
   const raw = execution.pairs.find((row) => row.id === pair.id).raw;
   const results = await read(join(study, 'cases', pair.id, 'results.json'));

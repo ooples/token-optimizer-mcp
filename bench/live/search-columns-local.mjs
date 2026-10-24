@@ -62,8 +62,8 @@ try {
     for (const arm of replayPrior
       ? ['proxy']
       : round === 0
-        ? ['proxy', 'headroom']
-        : ['headroom', 'proxy']) {
+        ? ['proxy', 'altA']
+        : ['altA', 'proxy']) {
       const port = await freePort();
       const env = { ...process.env };
       for (const key of Object.keys(env))
@@ -78,7 +78,7 @@ try {
           ? ['dist/proxy/cli.js', '--port', String(port), '--upstream', base]
           : [
               '-m',
-              'headroom.cli',
+              'alternative_a.cli',
               'proxy',
               '--port',
               String(port),
@@ -179,7 +179,7 @@ try {
         complete,
         replayPrior,
         localUpstreamOnly: true,
-        headroomOverrides: ['--no-rate-limit'],
+        altAOverrides: ['--no-rate-limit'],
         tokenizer: 'o200k_base estimate, not observed model usage',
         rows,
       },

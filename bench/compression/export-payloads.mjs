@@ -20,7 +20,7 @@
  *
  * Usage:
  *   node bench/compression/export-payloads.mjs <out.json>
- *   python bench/compression/headroom/run-theirs.py - <dir> --extra <out.json>
+ *   python bench/compression/alt-a/run-theirs.py - <dir> --extra <out.json>
  */
 
 import { writeFileSync } from 'node:fs';

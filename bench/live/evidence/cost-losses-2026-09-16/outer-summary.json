@@ -12,7 +12,7 @@
       "agentSeconds": 95.8,
       "estimatedUsd": 0.551652
     },
-    "headroom": {
+    "altA": {
       "passes": 2,
       "outerTruncated": true,
       "input": 243251,
@@ -26,12 +26,12 @@
     {
       "seed": 139520376,
       "proxyEstimatedUsd": 0.341764,
-      "headroomEstimatedUsd": 0.347856
+      "altAEstimatedUsd": 0.347856
     },
     {
       "seed": 139520377,
       "proxyEstimatedUsd": 0.209888,
-      "headroomEstimatedUsd": 0.491796
+      "altAEstimatedUsd": 0.491796
     }
   ],
   "compressedOuterFragments": [

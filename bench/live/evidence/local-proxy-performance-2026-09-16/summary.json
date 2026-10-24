@@ -1,7 +1,7 @@
 {
   "complete": true,
   "requests": 2160,
-  "headroomOverrides": [
+  "altAOverrides": [
     "--no-rate-limit",
     "local --openai-api-url"
   ],
@@ -25,7 +25,7 @@
             3.329972500007716
           ]
         },
-        "headroom": {
+        "altA": {
           "requests": 120,
           "meanMs": 22.82509250000306,
           "medianMs": 15.359699999997247,
@@ -78,7 +78,7 @@
             3.9270225000043864
           ]
         },
-        "headroom": {
+        "altA": {
           "requests": 120,
           "meanMs": 20.570856666666167,
           "medianMs": 20.241000000038184,
@@ -131,7 +131,7 @@
             3.894865000009304
           ]
         },
-        "headroom": {
+        "altA": {
           "requests": 120,
           "meanMs": 17.9536191666674,
           "medianMs": 16.563500000047497,
@@ -184,7 +184,7 @@
             5.887747499989928
           ]
         },
-        "headroom": {
+        "altA": {
           "requests": 120,
           "meanMs": 54.59690833334128,
           "medianMs": 53.13410000002477,
@@ -237,7 +237,7 @@
             2.419564999989234
           ]
         },
-        "headroom": {
+        "altA": {
           "requests": 120,
           "meanMs": 14.934453333332689,
           "medianMs": 11.703099999998813,
@@ -290,7 +290,7 @@
             2.8088824999926145
           ]
         },
-        "headroom": {
+        "altA": {
           "requests": 120,
           "meanMs": 4578.325289166665,
           "medianMs": 4293.814300000027,
@@ -327,7 +327,7 @@
   ],
   "memoryFootprint": {
     "proxy": 83898368,
-    "headroom": 2002698240,
+    "altA": 2002698240,
     "control": 69337088
   },
   "limitations": [

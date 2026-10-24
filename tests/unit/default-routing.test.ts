@@ -28,6 +28,8 @@ import {
   originalUpstream,
   maintainDefaultRouting,
   callerChoseEndpoint,
+  routingManifestFile,
+  legacyRoutingManifestFile,
 } from '../../src/proxy/default-routing.js';
 
 let home;
@@ -505,7 +507,9 @@ describe('a process launched with its own endpoint (2026-10-21)', () => {
     // A nested client a benchmark pointed at its own recorder.
     const child = { ...env, ANTHROPIC_BASE_URL: 'http://127.0.0.1:18900' };
     expect(callerChoseEndpoint(child)).toBe(true);
-    expect((await maintainDefaultRouting(child)).status).toBe('caller-endpoint');
+    expect((await maintainDefaultRouting(child)).status).toBe(
+      'caller-endpoint'
+    );
     expect(readFileSync(settings, 'utf8')).toBe(before);
     expect(JSON.stringify(readRoutingManifest(env))).toBe(manifest);
   });
@@ -513,12 +517,82 @@ describe('a process launched with its own endpoint (2026-10-21)', () => {
   it('still maintains routing for a client running on our own route', async () => {
     write({});
     await applyDefaultRouting(route, env);
-    expect(callerChoseEndpoint({ ...env, ANTHROPIC_BASE_URL: served })).toBe(false);
+    expect(callerChoseEndpoint({ ...env, ANTHROPIC_BASE_URL: served })).toBe(
+      false
+    );
     expect(callerChoseEndpoint(env)).toBe(false);
   });
 
   it("still fronts the user's own gateway configured in settings.json", () => {
     write({ env: { ANTHROPIC_BASE_URL: 'https://gateway.example' } });
-    expect(callerChoseEndpoint({ ...env, ANTHROPIC_BASE_URL: 'https://gateway.example' })).toBe(false);
+    expect(
+      callerChoseEndpoint({
+        ...env,
+        ANTHROPIC_BASE_URL: 'https://gateway.example',
+      })
+    ).toBe(false);
+  });
+});
+
+describe('the record lives beside the settings file it describes (2026-10-23)', () => {
+  it('a process with a private home leaves a record any other home can find and undo', async () => {
+    write({ env: { TOKEN_OPTIMIZER_MODE: 'assist' } });
+    const isolated = {
+      ...env,
+      TOKEN_OPTIMIZER_HOME: join(home, 'private-home'),
+    };
+    expect((await applyDefaultRouting(route, isolated)).status).not.toBe(
+      'disabled'
+    );
+    expect(read().env.ANTHROPIC_BASE_URL).toBe(served);
+    // The record sits next to settings.json, not in the private home.
+    expect(routingManifestFile(isolated)).toBe(
+      join(home, '.claude', 'token-optimizer-routing.json')
+    );
+    expect(existsSync(join(home, 'private-home', 'default-routing.json'))).toBe(
+      false
+    );
+    // The user's own install, with its default home, sees it and takes it back out.
+    const usual = {
+      ...env,
+      TOKEN_OPTIMIZER_HOME: join(home, '.token-optimizer'),
+    };
+    expect(readRoutingManifest(usual).entries[settings]?.value).toBe(served);
+    expect(removeDefaultRouting(usual).status).toBe('removed');
+    expect(read()).toEqual({ env: { TOKEN_OPTIMIZER_MODE: 'assist' } });
+    // Nothing left to record: no empty file stays in the client's folder.
+    expect(existsSync(routingManifestFile(usual))).toBe(false);
+  });
+
+  it('a record an earlier version left in the home is read, then moved on the next write', async () => {
+    write({ env: { ANTHROPIC_BASE_URL: served } });
+    mkdirSync(env.TOKEN_OPTIMIZER_HOME, { recursive: true });
+    const other = join(home, 'elsewhere', 'settings.json');
+    writeFileSync(
+      legacyRoutingManifestFile(env),
+      JSON.stringify({
+        schema: 1,
+        entries: {
+          [settings]: {
+            variable: 'ANTHROPIC_BASE_URL',
+            value: served,
+            createdEnv: true,
+          },
+          [other]: {
+            variable: 'ANTHROPIC_BASE_URL',
+            value: served,
+            createdEnv: true,
+          },
+        },
+      })
+    );
+    expect(readRoutingManifest(env).entries[settings]?.value).toBe(served);
+    expect(removeDefaultRouting(env).status).toBe('removed');
+    expect(existsSync(settings) ? read() : {}).toEqual({});
+    // This file's entry left the old record; another file's entry stayed.
+    const legacy = JSON.parse(
+      readFileSync(legacyRoutingManifestFile(env), 'utf8')
+    );
+    expect(Object.keys(legacy.entries)).toEqual([other]);
   });
 });

@@ -55,7 +55,7 @@ import { fileURLToPath } from 'node:url';
 import { DEFAULTS, commonSessionCost, usageMultiplier } from './cost-model.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const RECORD = join(HERE, 'headroom', 'results', 'head-to-head.json');
+const RECORD = join(HERE, 'alt-a', 'results', 'head-to-head.json');
 
 const record = JSON.parse(readFileSync(RECORD, 'utf8'));
 const session = record.totals.cost.session;

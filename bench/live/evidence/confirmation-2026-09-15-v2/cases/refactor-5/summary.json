@@ -3,12 +3,12 @@
   "balanced": false,
   "valid": false,
   "failures": [
-    "refactor/headroom: incomplete or failed"
+    "refactor/altA: incomplete or failed"
   ],
   "aggregates": [
     {
       "task": "refactor",
-      "arm": "headroom",
+      "arm": "altA",
       "passed": 0,
       "expected": 1,
       "measured": 0,
@@ -34,5 +34,5 @@
     }
   ],
   "comparison": [],
-  "interpretation": "Input includes cached tokens. Cached is a subset, not an additional charge. These are token counts, not dollar costs. Three synthetic workloads do not establish a universal win. Startup is included in seconds. HeadRoom compression is measured through provider usage, not the null recorder byte counts."
+  "interpretation": "Input includes cached tokens. Cached is a subset, not an additional charge. These are token counts, not dollar costs. Three synthetic workloads do not establish a universal win. Startup is included in seconds. Alternative A compression is measured through provider usage, not the null recorder byte counts."
 }

@@ -104,7 +104,7 @@ export async function monitorHostMemory(
     async assertReady(attempt) {
       // A cached sample can describe the previous arm before its processes
       // exited. Require a new sample after cleanup for every arm, including a
-      // previously healthy sample: old headroom must not authorize a new run.
+      // previously healthy sample: an old Alternative A sample must not authorize a new run.
       const requestedAt = Date.now();
       const previous = sample;
       const freshDeadline = requestedAt + memoryPolicy.maximumSampleAgeMs;

@@ -20,7 +20,7 @@
   "measured": [
     {
       "task": "bugfix",
-      "arm": "headroom",
+      "arm": "altA",
       "rep": 1,
       "recordedVerdict": "PASS",
       "verdict": "PASS",
@@ -38,7 +38,7 @@
   "aggregates": [
     {
       "task": "bugfix",
-      "arm": "headroom",
+      "arm": "altA",
       "meanEstimatedUsd": 0.433776
     },
     {
@@ -51,7 +51,7 @@
     {
       "task": "bugfix",
       "candidate": "proxy",
-      "against": "headroom",
+      "against": "altA",
       "estimatedUsdDelta": -0.12436799999999998,
       "reductionPercent": 28.67101914352107
     }

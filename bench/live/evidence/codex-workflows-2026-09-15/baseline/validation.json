@@ -21,7 +21,7 @@
   },
   {
     "task": "bugfix",
-    "arm": "headroom",
+    "arm": "altA",
     "rep": 1,
     "recordedVerdict": "PASS",
     "verdict": "PASS",
@@ -41,7 +41,7 @@
   },
   {
     "task": "bugfix",
-    "arm": "headroom",
+    "arm": "altA",
     "rep": 2,
     "recordedVerdict": "PASS",
     "verdict": "PASS",
@@ -61,7 +61,7 @@
   },
   {
     "task": "bugfix",
-    "arm": "headroom",
+    "arm": "altA",
     "rep": 3,
     "recordedVerdict": "PASS",
     "verdict": "PASS",
@@ -111,7 +111,7 @@
   },
   {
     "task": "refactor",
-    "arm": "headroom",
+    "arm": "altA",
     "rep": 1,
     "recordedVerdict": "PASS",
     "verdict": "PASS",
@@ -131,7 +131,7 @@
   },
   {
     "task": "refactor",
-    "arm": "headroom",
+    "arm": "altA",
     "rep": 2,
     "recordedVerdict": "PASS",
     "verdict": "PASS",
@@ -151,7 +151,7 @@
   },
   {
     "task": "refactor",
-    "arm": "headroom",
+    "arm": "altA",
     "rep": 3,
     "recordedVerdict": "PASS",
     "verdict": "PASS",
@@ -201,7 +201,7 @@
   },
   {
     "task": "refresh",
-    "arm": "headroom",
+    "arm": "altA",
     "rep": 1,
     "recordedVerdict": "PASS",
     "verdict": "PASS",
@@ -221,7 +221,7 @@
   },
   {
     "task": "refresh",
-    "arm": "headroom",
+    "arm": "altA",
     "rep": 2,
     "recordedVerdict": "PASS",
     "verdict": "PASS",
@@ -241,7 +241,7 @@
   },
   {
     "task": "refresh",
-    "arm": "headroom",
+    "arm": "altA",
     "rep": 3,
     "recordedVerdict": "PASS",
     "verdict": "PASS",

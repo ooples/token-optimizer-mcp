@@ -48,7 +48,7 @@ describe('dedupBlocks', () => {
 
   it('reports the reference as lossless with nothing to look up', () => {
     // The referent is in the same request: there is no cache entry to miss,
-    // which is exactly what HeadRoom's #2509 is about.
+    // which is exactly what Alternative A's #2509 is about.
     const payload = big('a repeated grep result');
     const out = dedupBlocks([block(payload), block(payload)]);
 
@@ -205,7 +205,7 @@ describe('dedup through the strategies', () => {
 
 describe('a referent pointed at twice is spelled out once', () => {
   // THE MARGIN THIS EXISTS TO CLOSE. The legible reference runs about a hundred
-  // characters where HeadRoom's `<<ccr:hash,blob,32107>>` runs twenty-four, and
+  // characters where Alternative A's `<<ccr:hash,blob,32107>>` runs twenty-four, and
   // on repeat-heavy workloads that difference was the entire margin by which
   // their arm led ours. Paying it once per distinct referent instead of once per
   // repeat keeps the legibility exactly where a reader needs it -- the first

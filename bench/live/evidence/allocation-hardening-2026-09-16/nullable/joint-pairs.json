@@ -12,7 +12,7 @@
           "agentSeconds": 13.2,
           "requests": 3
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.192392,
           "agentSeconds": 21.4,
@@ -31,7 +31,7 @@
           "agentSeconds": 16.4,
           "requests": 3
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.201922,
           "agentSeconds": 16.5,

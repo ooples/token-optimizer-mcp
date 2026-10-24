@@ -40,14 +40,14 @@ for (const expected of plan.cases) {
     artifactsValid =
       rows.length === 2 &&
       rows.every((r) => r.seed === expected.seedOffset + 1) &&
-      ['proxy', 'headroom'].every(
+      ['proxy', 'altA'].every(
         (arm) => rows.filter((r) => r.arm === arm).length === 1
       );
   } catch {
     /* Incomplete attempts remain in the report with unknown costs. */
   }
   const arms = {};
-  for (const arm of ['proxy', 'headroom']) {
+  for (const arm of ['proxy', 'altA']) {
     const row =
       (Array.isArray(rows) ? rows : []).find((r) => r.arm === arm) ?? {};
     const valid =
@@ -86,16 +86,16 @@ for (const expected of plan.cases) {
       ? null
       : 'Missing, invalid, or failed attempt artifacts',
     costDifferenceUsd: complete
-      ? arms.proxy.estimatedUsd - arms.headroom.estimatedUsd
+      ? arms.proxy.estimatedUsd - arms.altA.estimatedUsd
       : null,
     proxyCostWin: complete
-      ? arms.proxy.estimatedUsd < arms.headroom.estimatedUsd
+      ? arms.proxy.estimatedUsd < arms.altA.estimatedUsd
       : null,
   });
 }
 const complete = cases.filter((x) => x.complete);
 const totals = Object.fromEntries(
-  ['proxy', 'headroom'].map((arm) => [
+  ['proxy', 'altA'].map((arm) => [
     arm,
     {
       pass: cases.filter((x) => x.arms[arm].auditedPass).length,
@@ -121,7 +121,7 @@ const report = {
   totals,
   costReductionCompletePairs: reduction(
     totals.proxy.estimatedUsdCompletePairs,
-    totals.headroom.estimatedUsdCompletePairs
+    totals.altA.estimatedUsdCompletePairs
   ),
   cases,
 };

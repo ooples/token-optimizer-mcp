@@ -19,6 +19,7 @@
  */
 
 import { entrypointOf, isOurs } from './wire.mjs';
+import { routingEntries } from './routing-record.mjs';
 import { describeStrays, strayEntries } from './install-health.mjs';
 import { execFile, spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
@@ -785,13 +786,8 @@ function managedClientFor(reported) {
  */
 function routingPending(env = process.env) {
   try {
-    const home =
-      env.TOKEN_OPTIMIZER_HOME || join(homedir(), '.token-optimizer');
-    const manifest = JSON.parse(
-      readFileSync(join(home, 'default-routing.json'), 'utf8')
-    );
-    if (manifest?.schema !== 1) return false;
-    return Object.values(manifest.entries || {}).some((entry) =>
+    // Both record locations (routing-record.mjs).
+    return Object.values(routingEntries(env)).some((entry) =>
       pointsAtLoopback(entry?.value)
     );
   } catch {

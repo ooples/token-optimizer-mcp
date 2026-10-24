@@ -26,7 +26,7 @@
  * BOTH WERE DESTROYED. The number looked like the best in the module and the
  * output had thrown away the only two rows anybody would have searched for.
  *
- * HeadRoom's SmartCrusher lists "statistical anomaly preservation" among its
+ * Alternative A's SmartCrusher lists "statistical anomaly preservation" among its
  * transforms, and their benchmark generator plants exactly these: UUID needles
  * and error rows, inserted for relevance testing. A homogeneous tail is
  * genuinely redundant; a row that breaks the shape is the signal. So the shape
@@ -555,7 +555,7 @@ function compressJsonDocument(
 
   // CONTENT THAT ARRIVED AS A STRING. A tool result serialised into a
   // `content` field is invisible to everything below, which stops at the
-  // container -- and on HeadRoom's own conversation fixtures that is where
+  // container -- and on Alternative A's own conversation fixtures that is where
   // almost all of the bulk lives. Descending first means the structural work
   // below operates on already-compressed values, and the caller's `nested`
   // handler decides which engine each string deserves.
@@ -649,7 +649,7 @@ function compressJsonDocument(
     stripped.length >= tuning.minRowsToElide
   ) {
     // WHAT MUST SURVIVE, from three rules that cover each other's blind
-    // spots. Measured on HeadRoom's own fixtures, each rule alone fails at
+    // spots. Measured on Alternative A's own fixtures, each rule alone fails at
     // one extreme: the anomaly rule keeps everything when an array has no
     // single common shape (their database-rows, 300 of 300 flagged, nothing
     // elided, 25.7% against their 60.0%) and keeps nothing when every row is

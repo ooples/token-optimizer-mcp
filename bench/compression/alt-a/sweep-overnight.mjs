@@ -26,7 +26,7 @@
  * The snapshot is their fixture content, so it stays out of git.
  *
  * Usage:
- *   node bench/compression/headroom/sweep-overnight.mjs [--out hr32] [--chunks 6]
+ *   node bench/compression/alt-a/sweep-overnight.mjs [--out hr32] [--chunks 6]
  *     [--corpus hr-corpus/natives-18.json] [--from hr31/warm] [--max-busy 0.1]
  *     [--deadline-hours 12] [--quiet-readings 3] [--poll-seconds 60]
  */

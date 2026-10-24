@@ -19,7 +19,7 @@
   "failures": [
     "Campaign audit is invalid",
     "Unverified run json:proxy:1",
-    "Unverified run json:headroom:1"
+    "Unverified run json:altA:1"
   ],
   "measured": [
     {
@@ -32,7 +32,7 @@
     },
     {
       "task": "json",
-      "arm": "headroom",
+      "arm": "altA",
       "rep": 1,
       "recordedVerdict": "INVALID_READ",
       "verdict": "INVALID_READ",

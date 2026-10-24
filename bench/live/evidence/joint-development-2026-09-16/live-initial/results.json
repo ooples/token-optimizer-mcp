@@ -70,7 +70,7 @@
   },
   {
     "task": "tiny",
-    "arm": "headroom",
+    "arm": "altA",
     "rep": 1,
     "position": 2,
     "kind": "controlled-read",
@@ -139,7 +139,7 @@
   },
   {
     "task": "tiny",
-    "arm": "headroom",
+    "arm": "altA",
     "rep": 2,
     "position": 1,
     "kind": "controlled-read",
@@ -345,7 +345,7 @@
   },
   {
     "task": "entropy",
-    "arm": "headroom",
+    "arm": "altA",
     "rep": 1,
     "position": 2,
     "kind": "controlled-read",
@@ -433,7 +433,7 @@
   },
   {
     "task": "entropy",
-    "arm": "headroom",
+    "arm": "altA",
     "rep": 2,
     "position": 1,
     "kind": "controlled-read",
@@ -671,7 +671,7 @@
   },
   {
     "task": "numeric",
-    "arm": "headroom",
+    "arm": "altA",
     "rep": 1,
     "position": 2,
     "kind": "controlled-read",
@@ -741,7 +741,7 @@
   },
   {
     "task": "numeric",
-    "arm": "headroom",
+    "arm": "altA",
     "rep": 2,
     "position": 1,
     "kind": "controlled-read",
@@ -962,7 +962,7 @@
   },
   {
     "task": "nullable",
-    "arm": "headroom",
+    "arm": "altA",
     "rep": 1,
     "position": 2,
     "kind": "controlled-read",
@@ -1031,7 +1031,7 @@
   },
   {
     "task": "nullable",
-    "arm": "headroom",
+    "arm": "altA",
     "rep": 2,
     "position": 1,
     "kind": "controlled-read",

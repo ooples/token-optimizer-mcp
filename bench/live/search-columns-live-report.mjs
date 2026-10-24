@@ -23,7 +23,7 @@ const estimated = (usage) =>
     usage.output * rates.output) /
   1e6;
 const arms = {};
-for (const arm of ['proxy', 'headroom']) {
+for (const arm of ['proxy', 'altA']) {
   const selected = runs.filter((row) => row.arm === arm);
   assert.equal(selected.length, 4);
   assert.deepEqual(
@@ -70,7 +70,7 @@ const metrics = [
   'allInputUncachedSensitivityUsd',
 ];
 const reductions = Object.fromEntries(
-  metrics.map((key) => [key, reduction(arms.proxy[key], arms.headroom[key])])
+  metrics.map((key) => [key, reduction(arms.proxy[key], arms.altA[key])])
 );
 assert.ok(
   reductions.estimatedUsd === null
@@ -103,7 +103,7 @@ const result = {
       estimated(row.usage) <
         estimated(
           runs.find(
-            (other) => other.arm === 'headroom' && other.seed === row.seed
+            (other) => other.arm === 'altA' && other.seed === row.seed
           ).usage
         )
   ).length,

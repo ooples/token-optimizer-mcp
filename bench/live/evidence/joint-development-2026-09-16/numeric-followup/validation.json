@@ -1,7 +1,7 @@
 [
   {
     "task": "numeric",
-    "arm": "headroom",
+    "arm": "altA",
     "rep": 1,
     "recordedVerdict": "PASS",
     "verdict": "PASS",
@@ -40,7 +40,7 @@
   },
   {
     "task": "numeric",
-    "arm": "headroom",
+    "arm": "altA",
     "rep": 2,
     "recordedVerdict": "PASS",
     "verdict": "PASS",
@@ -53,7 +53,7 @@
   },
   {
     "task": "numeric",
-    "arm": "headroom",
+    "arm": "altA",
     "rep": 3,
     "recordedVerdict": "PASS",
     "verdict": "PASS",
@@ -92,7 +92,7 @@
   },
   {
     "task": "numeric",
-    "arm": "headroom",
+    "arm": "altA",
     "rep": 4,
     "recordedVerdict": "PASS",
     "verdict": "PASS",

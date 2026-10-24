@@ -17,6 +17,9 @@
  *                                                hunk with its line numbers
  *   Read, same file and range, unchanged         one line naming the earlier Read
  *
+ * The Read row applies only where a client's post-call hook sees Read. Claude
+ * Code's does not (hooks-core/wire.mjs): it answers an unchanged re-read itself.
+ *
  * A changed Read is always passed through whole: an edit is built from it. The
  * full output of every rewritten result stays one Read away in the artifact
  * store. TOKEN_OPTIMIZER_REPEATS=0 turns it off.

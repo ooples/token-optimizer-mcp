@@ -3928,7 +3928,7 @@
     },
     {
       "round": 0,
-      "arm": "headroom",
+      "arm": "altA",
       "task": "tiny",
       "mode": "repeated",
       "concurrency": 1,
@@ -4037,7 +4037,7 @@
     },
     {
       "round": 0,
-      "arm": "headroom",
+      "arm": "altA",
       "task": "tiny",
       "mode": "repeated",
       "concurrency": 8,
@@ -4146,7 +4146,7 @@
     },
     {
       "round": 0,
-      "arm": "headroom",
+      "arm": "altA",
       "task": "tiny",
       "mode": "unique",
       "concurrency": 1,
@@ -4255,7 +4255,7 @@
     },
     {
       "round": 0,
-      "arm": "headroom",
+      "arm": "altA",
       "task": "tiny",
       "mode": "unique",
       "concurrency": 8,
@@ -4364,7 +4364,7 @@
     },
     {
       "round": 0,
-      "arm": "headroom",
+      "arm": "altA",
       "task": "tiny",
       "mode": "append",
       "concurrency": 1,
@@ -4473,7 +4473,7 @@
     },
     {
       "round": 0,
-      "arm": "headroom",
+      "arm": "altA",
       "task": "tiny",
       "mode": "append",
       "concurrency": 8,
@@ -4582,7 +4582,7 @@
     },
     {
       "round": 0,
-      "arm": "headroom",
+      "arm": "altA",
       "task": "entropy",
       "mode": "repeated",
       "concurrency": 1,
@@ -4691,7 +4691,7 @@
     },
     {
       "round": 0,
-      "arm": "headroom",
+      "arm": "altA",
       "task": "entropy",
       "mode": "repeated",
       "concurrency": 8,
@@ -4800,7 +4800,7 @@
     },
     {
       "round": 0,
-      "arm": "headroom",
+      "arm": "altA",
       "task": "entropy",
       "mode": "unique",
       "concurrency": 1,
@@ -4909,7 +4909,7 @@
     },
     {
       "round": 0,
-      "arm": "headroom",
+      "arm": "altA",
       "task": "entropy",
       "mode": "unique",
       "concurrency": 8,
@@ -5018,7 +5018,7 @@
     },
     {
       "round": 0,
-      "arm": "headroom",
+      "arm": "altA",
       "task": "entropy",
       "mode": "append",
       "concurrency": 1,
@@ -5127,7 +5127,7 @@
     },
     {
       "round": 0,
-      "arm": "headroom",
+      "arm": "altA",
       "task": "entropy",
       "mode": "append",
       "concurrency": 8,
@@ -5236,7 +5236,7 @@
     },
     {
       "round": 0,
-      "arm": "headroom",
+      "arm": "altA",
       "task": "numeric",
       "mode": "repeated",
       "concurrency": 1,
@@ -5345,7 +5345,7 @@
     },
     {
       "round": 0,
-      "arm": "headroom",
+      "arm": "altA",
       "task": "numeric",
       "mode": "repeated",
       "concurrency": 8,
@@ -5454,7 +5454,7 @@
     },
     {
       "round": 0,
-      "arm": "headroom",
+      "arm": "altA",
       "task": "numeric",
       "mode": "unique",
       "concurrency": 1,
@@ -5563,7 +5563,7 @@
     },
     {
       "round": 0,
-      "arm": "headroom",
+      "arm": "altA",
       "task": "numeric",
       "mode": "unique",
       "concurrency": 8,
@@ -5672,7 +5672,7 @@
     },
     {
       "round": 0,
-      "arm": "headroom",
+      "arm": "altA",
       "task": "numeric",
       "mode": "append",
       "concurrency": 1,
@@ -5781,7 +5781,7 @@
     },
     {
       "round": 0,
-      "arm": "headroom",
+      "arm": "altA",
       "task": "numeric",
       "mode": "append",
       "concurrency": 8,
@@ -5890,7 +5890,7 @@
     },
     {
       "round": 0,
-      "arm": "headroom",
+      "arm": "altA",
       "task": "nullable",
       "mode": "repeated",
       "concurrency": 1,
@@ -5999,7 +5999,7 @@
     },
     {
       "round": 0,
-      "arm": "headroom",
+      "arm": "altA",
       "task": "nullable",
       "mode": "repeated",
       "concurrency": 8,
@@ -6108,7 +6108,7 @@
     },
     {
       "round": 0,
-      "arm": "headroom",
+      "arm": "altA",
       "task": "nullable",
       "mode": "unique",
       "concurrency": 1,
@@ -6217,7 +6217,7 @@
     },
     {
       "round": 0,
-      "arm": "headroom",
+      "arm": "altA",
       "task": "nullable",
       "mode": "unique",
       "concurrency": 8,
@@ -6326,7 +6326,7 @@
     },
     {
       "round": 0,
-      "arm": "headroom",
+      "arm": "altA",
       "task": "nullable",
       "mode": "append",
       "concurrency": 1,
@@ -6435,7 +6435,7 @@
     },
     {
       "round": 0,
-      "arm": "headroom",
+      "arm": "altA",
       "task": "nullable",
       "mode": "append",
       "concurrency": 8,
@@ -6544,7 +6544,7 @@
     },
     {
       "round": 0,
-      "arm": "headroom",
+      "arm": "altA",
       "task": "json",
       "mode": "repeated",
       "concurrency": 1,
@@ -6653,7 +6653,7 @@
     },
     {
       "round": 0,
-      "arm": "headroom",
+      "arm": "altA",
       "task": "json",
       "mode": "repeated",
       "concurrency": 8,
@@ -6762,7 +6762,7 @@
     },
     {
       "round": 0,
-      "arm": "headroom",
+      "arm": "altA",
       "task": "json",
       "mode": "unique",
       "concurrency": 1,
@@ -6871,7 +6871,7 @@
     },
     {
       "round": 0,
-      "arm": "headroom",
+      "arm": "altA",
       "task": "json",
       "mode": "unique",
       "concurrency": 8,
@@ -6980,7 +6980,7 @@
     },
     {
       "round": 0,
-      "arm": "headroom",
+      "arm": "altA",
       "task": "json",
       "mode": "append",
       "concurrency": 1,
@@ -7089,7 +7089,7 @@
     },
     {
       "round": 0,
-      "arm": "headroom",
+      "arm": "altA",
       "task": "json",
       "mode": "append",
       "concurrency": 8,
@@ -7198,7 +7198,7 @@
     },
     {
       "round": 0,
-      "arm": "headroom",
+      "arm": "altA",
       "task": "code",
       "mode": "repeated",
       "concurrency": 1,
@@ -7307,7 +7307,7 @@
     },
     {
       "round": 0,
-      "arm": "headroom",
+      "arm": "altA",
       "task": "code",
       "mode": "repeated",
       "concurrency": 8,
@@ -7416,7 +7416,7 @@
     },
     {
       "round": 0,
-      "arm": "headroom",
+      "arm": "altA",
       "task": "code",
       "mode": "unique",
       "concurrency": 1,
@@ -7525,7 +7525,7 @@
     },
     {
       "round": 0,
-      "arm": "headroom",
+      "arm": "altA",
       "task": "code",
       "mode": "unique",
       "concurrency": 8,
@@ -7634,7 +7634,7 @@
     },
     {
       "round": 0,
-      "arm": "headroom",
+      "arm": "altA",
       "task": "code",
       "mode": "append",
       "concurrency": 1,
@@ -7743,7 +7743,7 @@
     },
     {
       "round": 0,
-      "arm": "headroom",
+      "arm": "altA",
       "task": "code",
       "mode": "append",
       "concurrency": 8,
@@ -7852,7 +7852,7 @@
     },
     {
       "round": 1,
-      "arm": "headroom",
+      "arm": "altA",
       "task": "tiny",
       "mode": "repeated",
       "concurrency": 1,
@@ -7961,7 +7961,7 @@
     },
     {
       "round": 1,
-      "arm": "headroom",
+      "arm": "altA",
       "task": "tiny",
       "mode": "repeated",
       "concurrency": 8,
@@ -8070,7 +8070,7 @@
     },
     {
       "round": 1,
-      "arm": "headroom",
+      "arm": "altA",
       "task": "tiny",
       "mode": "unique",
       "concurrency": 1,
@@ -8179,7 +8179,7 @@
     },
     {
       "round": 1,
-      "arm": "headroom",
+      "arm": "altA",
       "task": "tiny",
       "mode": "unique",
       "concurrency": 8,
@@ -8288,7 +8288,7 @@
     },
     {
       "round": 1,
-      "arm": "headroom",
+      "arm": "altA",
       "task": "tiny",
       "mode": "append",
       "concurrency": 1,
@@ -8397,7 +8397,7 @@
     },
     {
       "round": 1,
-      "arm": "headroom",
+      "arm": "altA",
       "task": "tiny",
       "mode": "append",
       "concurrency": 8,
@@ -8506,7 +8506,7 @@
     },
     {
       "round": 1,
-      "arm": "headroom",
+      "arm": "altA",
       "task": "entropy",
       "mode": "repeated",
       "concurrency": 1,
@@ -8615,7 +8615,7 @@
     },
     {
       "round": 1,
-      "arm": "headroom",
+      "arm": "altA",
       "task": "entropy",
       "mode": "repeated",
       "concurrency": 8,
@@ -8724,7 +8724,7 @@
     },
     {
       "round": 1,
-      "arm": "headroom",
+      "arm": "altA",
       "task": "entropy",
       "mode": "unique",
       "concurrency": 1,
@@ -8833,7 +8833,7 @@
     },
     {
       "round": 1,
-      "arm": "headroom",
+      "arm": "altA",
       "task": "entropy",
       "mode": "unique",
       "concurrency": 8,
@@ -8942,7 +8942,7 @@
     },
     {
       "round": 1,
-      "arm": "headroom",
+      "arm": "altA",
       "task": "entropy",
       "mode": "append",
       "concurrency": 1,
@@ -9051,7 +9051,7 @@
     },
     {
       "round": 1,
-      "arm": "headroom",
+      "arm": "altA",
       "task": "entropy",
       "mode": "append",
       "concurrency": 8,
@@ -9160,7 +9160,7 @@
     },
     {
       "round": 1,
-      "arm": "headroom",
+      "arm": "altA",
       "task": "numeric",
       "mode": "repeated",
       "concurrency": 1,
@@ -9269,7 +9269,7 @@
     },
     {
       "round": 1,
-      "arm": "headroom",
+      "arm": "altA",
       "task": "numeric",
       "mode": "repeated",
       "concurrency": 8,
@@ -9378,7 +9378,7 @@
     },
     {
       "round": 1,
-      "arm": "headroom",
+      "arm": "altA",
       "task": "numeric",
       "mode": "unique",
       "concurrency": 1,
@@ -9487,7 +9487,7 @@
     },
     {
       "round": 1,
-      "arm": "headroom",
+      "arm": "altA",
       "task": "numeric",
       "mode": "unique",
       "concurrency": 8,
@@ -9596,7 +9596,7 @@
     },
     {
       "round": 1,
-      "arm": "headroom",
+      "arm": "altA",
       "task": "numeric",
       "mode": "append",
       "concurrency": 1,
@@ -9705,7 +9705,7 @@
     },
     {
       "round": 1,
-      "arm": "headroom",
+      "arm": "altA",
       "task": "numeric",
       "mode": "append",
       "concurrency": 8,
@@ -9814,7 +9814,7 @@
     },
     {
       "round": 1,
-      "arm": "headroom",
+      "arm": "altA",
       "task": "nullable",
       "mode": "repeated",
       "concurrency": 1,
@@ -9923,7 +9923,7 @@
     },
     {
       "round": 1,
-      "arm": "headroom",
+      "arm": "altA",
       "task": "nullable",
       "mode": "repeated",
       "concurrency": 8,
@@ -10032,7 +10032,7 @@
     },
     {
       "round": 1,
-      "arm": "headroom",
+      "arm": "altA",
       "task": "nullable",
       "mode": "unique",
       "concurrency": 1,
@@ -10141,7 +10141,7 @@
     },
     {
       "round": 1,
-      "arm": "headroom",
+      "arm": "altA",
       "task": "nullable",
       "mode": "unique",
       "concurrency": 8,
@@ -10250,7 +10250,7 @@
     },
     {
       "round": 1,
-      "arm": "headroom",
+      "arm": "altA",
       "task": "nullable",
       "mode": "append",
       "concurrency": 1,
@@ -10359,7 +10359,7 @@
     },
     {
       "round": 1,
-      "arm": "headroom",
+      "arm": "altA",
       "task": "nullable",
       "mode": "append",
       "concurrency": 8,
@@ -10468,7 +10468,7 @@
     },
     {
       "round": 1,
-      "arm": "headroom",
+      "arm": "altA",
       "task": "json",
       "mode": "repeated",
       "concurrency": 1,
@@ -10577,7 +10577,7 @@
     },
     {
       "round": 1,
-      "arm": "headroom",
+      "arm": "altA",
       "task": "json",
       "mode": "repeated",
       "concurrency": 8,
@@ -10686,7 +10686,7 @@
     },
     {
       "round": 1,
-      "arm": "headroom",
+      "arm": "altA",
       "task": "json",
       "mode": "unique",
       "concurrency": 1,
@@ -10795,7 +10795,7 @@
     },
     {
       "round": 1,
-      "arm": "headroom",
+      "arm": "altA",
       "task": "json",
       "mode": "unique",
       "concurrency": 8,
@@ -10904,7 +10904,7 @@
     },
     {
       "round": 1,
-      "arm": "headroom",
+      "arm": "altA",
       "task": "json",
       "mode": "append",
       "concurrency": 1,
@@ -11013,7 +11013,7 @@
     },
     {
       "round": 1,
-      "arm": "headroom",
+      "arm": "altA",
       "task": "json",
       "mode": "append",
       "concurrency": 8,
@@ -11122,7 +11122,7 @@
     },
     {
       "round": 1,
-      "arm": "headroom",
+      "arm": "altA",
       "task": "code",
       "mode": "repeated",
       "concurrency": 1,
@@ -11231,7 +11231,7 @@
     },
     {
       "round": 1,
-      "arm": "headroom",
+      "arm": "altA",
       "task": "code",
       "mode": "repeated",
       "concurrency": 8,
@@ -11340,7 +11340,7 @@
     },
     {
       "round": 1,
-      "arm": "headroom",
+      "arm": "altA",
       "task": "code",
       "mode": "unique",
       "concurrency": 1,
@@ -11449,7 +11449,7 @@
     },
     {
       "round": 1,
-      "arm": "headroom",
+      "arm": "altA",
       "task": "code",
       "mode": "unique",
       "concurrency": 8,
@@ -11558,7 +11558,7 @@
     },
     {
       "round": 1,
-      "arm": "headroom",
+      "arm": "altA",
       "task": "code",
       "mode": "append",
       "concurrency": 1,
@@ -11667,7 +11667,7 @@
     },
     {
       "round": 1,
-      "arm": "headroom",
+      "arm": "altA",
       "task": "code",
       "mode": "append",
       "concurrency": 8,
@@ -15699,5 +15699,5 @@
       ]
     }
   ],
-  "scope": "Local static upstream. Latency and wire bytes; no provider cost or model-quality inference. HeadRoom rate limiter disabled equally for all workloads."
+  "scope": "Local static upstream. Latency and wire bytes; no provider cost or model-quality inference. Alternative A rate limiter disabled equally for all workloads."
 }

@@ -110,7 +110,7 @@ export interface CompressionOptions {
    * out of the request and replaced by `[... n bytes -> path]`, and the bytes
    * are on disk. The ratio that produces is a measurement of a move.
    *
-   * WHY HAVE IT AT ALL. It is what HeadRoom's content-cache references do for
+   * WHY HAVE IT AT ALL. It is what Alternative A's content-cache references do for
    * every block they touch, which is where their ~99.7% on `grep-output`,
    * `raw-build-log` and `codebase-exploration` comes from -- their
    * `<<ccr:hash,blob,32107>>` is 24 characters and the content is in a store.

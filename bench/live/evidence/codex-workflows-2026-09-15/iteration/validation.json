@@ -23,7 +23,7 @@
   },
   {
     "task": "bugfix",
-    "arm": "headroom",
+    "arm": "altA",
     "rep": 1,
     "recordedVerdict": "PASS",
     "verdict": "PASS",
@@ -56,7 +56,7 @@
   },
   {
     "task": "refresh",
-    "arm": "headroom",
+    "arm": "altA",
     "rep": 1,
     "recordedVerdict": "PASS",
     "verdict": "PASS",

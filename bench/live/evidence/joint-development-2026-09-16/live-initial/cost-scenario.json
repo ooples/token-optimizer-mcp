@@ -28,7 +28,7 @@
     },
     {
       "task": "tiny",
-      "arm": "headroom",
+      "arm": "altA",
       "rep": 1,
       "recordedVerdict": "PASS",
       "verdict": "PASS",
@@ -36,7 +36,7 @@
     },
     {
       "task": "tiny",
-      "arm": "headroom",
+      "arm": "altA",
       "rep": 2,
       "recordedVerdict": "PASS",
       "verdict": "PASS",
@@ -60,7 +60,7 @@
     },
     {
       "task": "entropy",
-      "arm": "headroom",
+      "arm": "altA",
       "rep": 1,
       "recordedVerdict": "PASS",
       "verdict": "PASS",
@@ -68,7 +68,7 @@
     },
     {
       "task": "entropy",
-      "arm": "headroom",
+      "arm": "altA",
       "rep": 2,
       "recordedVerdict": "PASS",
       "verdict": "PASS",
@@ -92,7 +92,7 @@
     },
     {
       "task": "numeric",
-      "arm": "headroom",
+      "arm": "altA",
       "rep": 1,
       "recordedVerdict": "PASS",
       "verdict": "PASS",
@@ -100,7 +100,7 @@
     },
     {
       "task": "numeric",
-      "arm": "headroom",
+      "arm": "altA",
       "rep": 2,
       "recordedVerdict": "PASS",
       "verdict": "PASS",
@@ -124,7 +124,7 @@
     },
     {
       "task": "nullable",
-      "arm": "headroom",
+      "arm": "altA",
       "rep": 1,
       "recordedVerdict": "PASS",
       "verdict": "PASS",
@@ -132,7 +132,7 @@
     },
     {
       "task": "nullable",
-      "arm": "headroom",
+      "arm": "altA",
       "rep": 2,
       "recordedVerdict": "PASS",
       "verdict": "PASS",
@@ -155,7 +155,7 @@
     },
     {
       "task": "tiny",
-      "arm": "headroom",
+      "arm": "altA",
       "meanEstimatedUsd": 0.126741
     },
     {
@@ -165,7 +165,7 @@
     },
     {
       "task": "entropy",
-      "arm": "headroom",
+      "arm": "altA",
       "meanEstimatedUsd": 0.25677099999999997
     },
     {
@@ -175,7 +175,7 @@
     },
     {
       "task": "numeric",
-      "arm": "headroom",
+      "arm": "altA",
       "meanEstimatedUsd": 0.236881
     },
     {
@@ -185,7 +185,7 @@
     },
     {
       "task": "nullable",
-      "arm": "headroom",
+      "arm": "altA",
       "meanEstimatedUsd": 0.155052
     }
   ],
@@ -193,28 +193,28 @@
     {
       "task": "tiny",
       "candidate": "proxy",
-      "against": "headroom",
+      "against": "altA",
       "estimatedUsdDelta": 0.0020140000000000158,
       "reductionPercent": -1.5890674683015193
     },
     {
       "task": "entropy",
       "candidate": "proxy",
-      "against": "headroom",
+      "against": "altA",
       "estimatedUsdDelta": -0.08816499999999997,
       "reductionPercent": 34.33604262163561
     },
     {
       "task": "numeric",
       "candidate": "proxy",
-      "against": "headroom",
+      "against": "altA",
       "estimatedUsdDelta": 0.021809999999999996,
       "reductionPercent": -9.207154647270155
     },
     {
       "task": "nullable",
       "candidate": "proxy",
-      "against": "headroom",
+      "against": "altA",
       "estimatedUsdDelta": -0.023050999999999988,
       "reductionPercent": 14.866625390191668
     }

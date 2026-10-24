@@ -118,7 +118,7 @@ function isCheapToKeep(chars: number, floor: number): boolean {
  *   control (recorded, uncompressed)   134,706   4/4 pass
  *   floor 1500 (the old default)       100,818   4/4 pass   -25%
  *   floor 0    (this default)           49,053   4/4 pass   -64%
- *   HeadRoom's shipped proxy            48,626   4/4 pass   -64%
+ *   Alternative A's shipped proxy            48,626   4/4 pass   -64%
  *
  * The discovery round trips the floor existed to prevent did not appear. The
  * floor-0 arm was the FASTEST of the four (32s mean against 36-38s) and emitted

@@ -8,7 +8,7 @@
         "estimatedO200kTokens": 1977.875,
         "milliseconds": 6.958837499999916
       },
-      "headroom": {
+      "altA": {
         "forwardedBytes": 11877.25,
         "estimatedO200kTokens": 3456,
         "milliseconds": 374.6330624999998
@@ -24,9 +24,9 @@
   "originalLosingInputs": {
     "cases": 40,
     "oldProxyMeanBytes": 11208,
-    "archivedHeadroomMeanBytes": 10600.3,
+    "archivedAltAMeanBytes": 10600.3,
     "newProxyMeanBytes": 6620,
-    "reductionVersusArchivedHeadroom": 0.37548937294227513,
+    "reductionVersusArchivedAltA": 0.37548937294227513,
     "reductionVersusOldProxy": 0.4093504639543183
   },
   "limitations": [

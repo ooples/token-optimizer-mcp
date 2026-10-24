@@ -12,7 +12,7 @@ await mkdir(source);
 await mkdir(join(study, 'cases', 'one'), { recursive: true });
 const plan = {
   pairs: 2,
-  schedule: [{ id: 'one', arms: ['proxy', 'headroom'] }, { id: 'two' }],
+  schedule: [{ id: 'one', arms: ['proxy', 'altA'] }, { id: 'two' }],
 };
 const save = (file, value) => writeFile(file, JSON.stringify(value));
 await save(join(source, 'plan.json'), plan);
@@ -28,7 +28,7 @@ await save(join(source, 'execution.json'), journal);
 // A failed task is retained; eligibility must never select only successful pairs.
 await save(join(study, 'cases/one/validation.json'), [
   { arm: 'proxy', verdict: 'FAIL' },
-  { arm: 'headroom', verdict: 'PASS' },
+  { arm: 'altA', verdict: 'PASS' },
 ]);
 const product = join(root, 'product.js');
 await writeFile(product, 'original');
@@ -71,7 +71,7 @@ await assert.rejects(
 await save(join(study, 'plan.json'), plan);
 await save(join(study, 'cases/one/validation.json'), [
   { arm: 'proxy', verdict: 'INVALID_READ' },
-  { arm: 'headroom', verdict: 'INVALID_READ' },
+  { arm: 'altA', verdict: 'INVALID_READ' },
 ]);
 await assert.rejects(
   continuationPrefix(study, plan, freeze),

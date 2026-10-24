@@ -95,7 +95,7 @@ check(
 // sweep driver is read from disk and checked for the call, not trusted to keep
 // it.
 const sweep = readFileSync(
-  new URL('./headroom/sweep-chunks.mjs', import.meta.url),
+  new URL('./alt-a/sweep-chunks.mjs', import.meta.url),
   'utf8'
 );
 check(sweep.includes("from '../machine-load.mjs'"), 'the sweep driver imports this module', undefined);

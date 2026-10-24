@@ -19,7 +19,7 @@
     },
     {
       "task": "entropy",
-      "arm": "headroom",
+      "arm": "altA",
       "passed": 1,
       "expected": 1,
       "measured": 1,
@@ -36,9 +36,9 @@
       "task": "entropy",
       "candidate": "proxy",
       "inputReductionVsFull": null,
-      "inputReductionVsHeadroom": 0.5328796820426351,
+      "inputReductionVsAltA": 0.5328796820426351,
       "inputReductionVsControl": null
     }
   ],
-  "interpretation": "Input includes cached tokens. Cached is a subset, not an additional charge. These are token counts, not dollar costs. Three synthetic workloads do not establish a universal win. Startup is included in seconds. HeadRoom compression is measured through provider usage, not the null recorder byte counts."
+  "interpretation": "Input includes cached tokens. Cached is a subset, not an additional charge. These are token counts, not dollar costs. Three synthetic workloads do not establish a universal win. Startup is included in seconds. Alternative A compression is measured through provider usage, not the null recorder byte counts."
 }

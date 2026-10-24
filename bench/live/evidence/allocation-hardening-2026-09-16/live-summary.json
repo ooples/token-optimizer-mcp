@@ -2,7 +2,7 @@
   "scope": "Post-fix development verification, 4 balanced pairs / 8 attempts. One seed deliberately repeats the original crash case. No replacements in the frozen 120-pair study and no new confidence-backed superiority claim.",
   "qualityPasses": {
     "proxy": 4,
-    "headroom": 4
+    "altA": 4
   },
   "jointWins": 2,
   "costLosses": 2,
@@ -12,7 +12,7 @@
       "estimatedUsd": 0.646138,
       "agentSeconds": 60.3
     },
-    "headroom": {
+    "altA": {
       "estimatedUsd": 0.751738,
       "agentSeconds": 73.69999999999999
     }
@@ -42,7 +42,7 @@
           "agentSeconds": 13.2,
           "requests": 3
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.192392,
           "agentSeconds": 21.4,
@@ -61,7 +61,7 @@
           "agentSeconds": 16.4,
           "requests": 3
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.201922,
           "agentSeconds": 16.5,
@@ -80,7 +80,7 @@
           "agentSeconds": 16.7,
           "requests": 3
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.135378,
           "agentSeconds": 18.4,
@@ -99,7 +99,7 @@
           "agentSeconds": 14,
           "requests": 3
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.222046,
           "agentSeconds": 17.4,

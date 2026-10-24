@@ -1367,7 +1367,7 @@
     {
       "round": 0,
       "position": 1,
-      "arm": "headroom",
+      "arm": "altA",
       "task": "logs",
       "mode": "repeated",
       "startupMs": 40138.1648,

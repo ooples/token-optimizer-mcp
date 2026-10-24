@@ -1,6 +1,6 @@
 # Codex natural-workflow development screen
 
-Local Codex 0.154.0, gpt-6-astra, Node 22.15.0, installed HeadRoom 0.37.0.
+Local Codex 0.154.0, gpt-6-astra, Node 22.15.0, installed Alternative A.
 Authenticated HTTP Responses traffic; all arms retain the proxy recorder.
 
 ## Baseline: 27 runs, three repetitions per task and arm
@@ -8,14 +8,14 @@ Authenticated HTTP Responses traffic; all arms retain the proxy recorder.
 All 27 passed independent artifact checks. Provider ledger totals matched
 Codex's input, cached-input and output usage. Each arm occupied every position.
 
-| Workflow | Control input | Our proxy input | HeadRoom input | Our input reduction vs HeadRoom |
+| Workflow | Control input | Our proxy input | Alternative A input | Our input reduction vs Alternative A |
 | --- | ---: | ---: | ---: | ---: |
 | Retry-policy bug fix | 83,394.7 | 88,082.7 | 136,501.7 | 35.5% |
 | Multi-file money refactor | 63,950.0 | 59,157.7 | 104,619.3 | 43.5% |
 | External configuration refresh | 138,662.7 | 98,986.3 | 118,701.3 | 16.6% |
 
 These are means of total input, including cached input, not dollar costs.
-Uncached input was higher for our proxy than HeadRoom on bugfix/refactor, and
+Uncached input was higher for our proxy than Alternative A on bugfix/refactor, and
 lower on refresh. Our bugfix total input exceeded control by 5.6%; refactor and
 refresh were lower than control by 7.5% and 28.6%. Execution latency and output
 tokens are separate fields in [the summary](baseline/summary.json).
@@ -60,7 +60,7 @@ arm hit a provider capacity error before any tool call. The audited verdict is
 headline comparisons. This attempt is retained, not replaced by a retry.
 
 The refresh pair exposed a loss worth investigating: our proxy used 80,093
-input tokens versus HeadRoom's 75,369. Our agent reread the elided complete array
+input tokens versus Alternative A's 75,369. Our agent reread the elided complete array
 to count disabled routes. That observation prompted exact whole-array boolean
 facts. These fixtures then became development data for that change. The
 refactor proxy and control were effectively tied (54,729 and 54,676 input).
@@ -71,14 +71,14 @@ refactor proxy and control were effectively tied (54,729 and 54,676 input).
 Provider totals matched Codex again. TAP compression activated on three bugfix
 requests; fragment compression activated on six refresh requests.
 
-| Workflow | Control input | Our proxy input | HeadRoom input |
+| Workflow | Control input | Our proxy input | Alternative A input |
 | --- | ---: | ---: | ---: |
 | Varied retry cases | 96,443 | 96,661 | 146,323 |
 | Configuration refresh | 151,887 | 105,305 | 59,559 |
 
 This is one repetition, not a confirmation. Bugfix input was 33.9% below
-HeadRoom and effectively tied with control. Refresh input was 30.7% below
-control but 76.8% above HeadRoom: seven provider requests versus four. Our
+Alternative A and effectively tied with control. Refresh input was 30.7% below
+control but 76.8% above Alternative A: seven provider requests versus four. Our
 refresh uncached input was lower (7,897 versus 16,423); these distinct metrics
 must not be collapsed into a dollar-cost claim. The initial refresh view was
 already truncated, so this run did not establish that whole-array boolean facts
@@ -96,14 +96,14 @@ was absent from all four initial outputs. Provider totals matched Codex.
 | --- | ---: | ---: | ---: |
 | Control | 118,073 | 108,160 | 7 |
 | Our proxy | 103,160 | 80,768 | 7 |
-| HeadRoom | 154,297 | 105,472 | 8 |
+| Alternative A | 154,297 | 105,472 | 8 |
 | Our proxy plus MCP | 153,430 | 133,248 | 9 |
 
-Our proxy used 33.1% less total input than HeadRoom and 12.6% less than control.
+Our proxy used 33.1% less total input than Alternative A and 12.6% less than control.
 The combined configuration retained proxy compression and completed two real
 MCP `smart_read` calls, including a cached diff after the file replacement.
 It passed, but used 48.7% more total input than proxy-only. Its 0.6% reduction
-versus HeadRoom is effectively a tie in this single, unbalanced repetition.
+versus Alternative A is effectively a tie in this single, unbalanced repetition.
 MCP-reported savings are not substituted for provider usage.
 
 This diagnostic does not resolve the natural-refresh loss above. Results from
@@ -123,9 +123,9 @@ fixed across all nine attempts; provider totals matched Codex's usage.
 | --- | ---: | ---: | ---: | ---: |
 | Control | 112,563.7 | 22,409.0 | 5.33 | 31.5 |
 | Our proxy | 90,866.7 | 10,141.3 | 6.33 | 42.5 |
-| HeadRoom | 116,422.3 | 9,457.0 | 8.67 | 68.3 |
+| Alternative A | 116,422.3 | 9,457.0 | 8.67 | 68.3 |
 
-Our proxy's mean input is 22.0% below HeadRoom and 19.3% below control. It still
+Our proxy's mean input is 22.0% below Alternative A and 19.3% below control. It still
 uses more requests and takes longer than control. Two proxy runs incurred a
 PowerShell quoting error in generated `node -e` commands, then recovered. The
 earlier seed-4 loss also included a quoting error; attributing its entire extra
@@ -145,7 +145,7 @@ adjustments, and no contract discount; they do not establish actual account
 charges or include proxy compute. Cached input is subtracted from total input
 before applying the uncached rate.
 
-| Campaign / workflow | Estimated proxy reduction vs HeadRoom |
+| Campaign / workflow | Estimated proxy reduction vs Alternative A |
 | --- | ---: |
 | Baseline bugfix | 17.0% |
 | Baseline refactor | 15.3% |
@@ -195,7 +195,7 @@ see [the diagnostic](bounded-discovery/README.md) for its limitations.
 
 [The nine-run refresh screen](rare-boolean/README.md) passed all attempts.
 Our proxy averaged 25.9% less input, a 32.3% lower standard-rate cost scenario,
-21.7% fewer requests, and 16.2% lower agent time than installed HeadRoom. It
+21.7% fewer requests, and 16.2% lower agent time than installed Alternative A. It
 still lost on speed in one round and was 2.8% slower than control on mean agent
 time. This does not establish superiority on every task.
 
@@ -207,7 +207,7 @@ separate check. These are local processing results, not a competitor CPU or
 allocation comparison and not proof of end-to-end latency gains.
 
 [The cached-build live follow-up](output-cache-live/README.md) passed 4/4.
-Mean agent time tied HeadRoom and input was 0.9% lower, but the cost scenario
+Mean agent time tied Alternative A and input was 0.9% lower, but the cost scenario
 was 47.8% higher and requests increased. Replayed prior input items stayed
 stable across all append transitions; the provider cache-miss cause remains
 unproven. This loss remains part of the evidence.
@@ -216,7 +216,7 @@ unproven. This loss remains part of the evidence.
 
 [The mixed JSON screen](mixed-json/README.md) uses the same required first read
 in both arms. All four attempts passed, including the first-read exposure audit.
-The proxy's standard-rate cost scenario was 34.6% lower than HeadRoom, with
+The proxy's standard-rate cost scenario was 34.6% lower than Alternative A, with
 43.4% less input and 38.9% fewer requests. This targeted workload result does
 not supersede the earlier natural-read cost loss.
 

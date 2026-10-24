@@ -20,7 +20,7 @@
   "measured": [
     {
       "task": "numeric",
-      "arm": "headroom",
+      "arm": "altA",
       "rep": 1,
       "recordedVerdict": "PASS",
       "verdict": "PASS",
@@ -44,7 +44,7 @@
     },
     {
       "task": "numeric",
-      "arm": "headroom",
+      "arm": "altA",
       "rep": 2,
       "recordedVerdict": "PASS",
       "verdict": "PASS",
@@ -52,7 +52,7 @@
     },
     {
       "task": "numeric",
-      "arm": "headroom",
+      "arm": "altA",
       "rep": 3,
       "recordedVerdict": "PASS",
       "verdict": "PASS",
@@ -76,7 +76,7 @@
     },
     {
       "task": "numeric",
-      "arm": "headroom",
+      "arm": "altA",
       "rep": 4,
       "recordedVerdict": "PASS",
       "verdict": "PASS",
@@ -86,7 +86,7 @@
   "aggregates": [
     {
       "task": "numeric",
-      "arm": "headroom",
+      "arm": "altA",
       "meanEstimatedUsd": 0.20031700000000002
     },
     {
@@ -99,7 +99,7 @@
     {
       "task": "numeric",
       "candidate": "proxy",
-      "against": "headroom",
+      "against": "altA",
       "estimatedUsdDelta": -0.06916000000000003,
       "reductionPercent": 34.52527743526511
     }

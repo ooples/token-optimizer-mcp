@@ -4,7 +4,7 @@
     "Execution is incomplete",
     "Unexpected execution count",
     "json-4/proxy: INVALID_READ",
-    "json-4/headroom: INVALID_READ",
+    "json-4/altA: INVALID_READ",
     "code-9: [Errno 2] No such file or directory: 'C:\\\\Users\\\\yolan\\\\source\\\\repos\\\\token-optimizer-mcp\\\\bench\\\\live\\\\evidence\\\\confirmation-2026-09-15\\\\cases\\\\code-9\\\\results.json'",
     "logs-6: [Errno 2] No such file or directory: 'C:\\\\Users\\\\yolan\\\\source\\\\repos\\\\token-optimizer-mcp\\\\bench\\\\live\\\\evidence\\\\confirmation-2026-09-15\\\\cases\\\\logs-6\\\\results.json'",
     "bugfix-7: [Errno 2] No such file or directory: 'C:\\\\Users\\\\yolan\\\\source\\\\repos\\\\token-optimizer-mcp\\\\bench\\\\live\\\\evidence\\\\confirmation-2026-09-15\\\\cases\\\\bugfix-7\\\\results.json'",
@@ -70,14 +70,14 @@
   "pairsMeasured": 9,
   "pairsPlanned": 70,
   "proxyPasses": 8,
-  "headroomPasses": 8,
+  "altAPasses": 8,
   "zeroFailureOneSided95SuccessLowerBound": null,
   "pairs": [
     {
       "id": "logs-8",
       "family": "logs",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.359962,
           "firstRequestColdSensitivityUsd": 0.359962,
@@ -128,7 +128,7 @@
           "agentSeconds": 39.5,
           "seconds": 40.5
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.324546,
           "firstRequestColdSensitivityUsd": 0.324546,
@@ -164,7 +164,7 @@
           "agentSeconds": 14.3,
           "seconds": 15.3
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.171438,
           "firstRequestColdSensitivityUsd": 0.254382,
@@ -185,7 +185,7 @@
       "id": "bugfix-9",
       "family": "bugfix",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.340186,
           "firstRequestColdSensitivityUsd": 0.340186,
@@ -236,7 +236,7 @@
           "agentSeconds": 41.6,
           "seconds": 42.8
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.361438,
           "firstRequestColdSensitivityUsd": 0.361438,
@@ -257,7 +257,7 @@
       "id": "mixed-8",
       "family": "mixed",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.702456,
           "firstRequestColdSensitivityUsd": 0.702456,
@@ -308,7 +308,7 @@
           "agentSeconds": 13.4,
           "seconds": 14.3
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.213924,
           "firstRequestColdSensitivityUsd": 0.296868,
@@ -344,7 +344,7 @@
           "agentSeconds": 22.7,
           "seconds": 23.7
         },
-        "headroom": {
+        "altA": {
           "verdict": "INVALID_READ",
           "estimatedUsd": 0.370016,
           "firstRequestColdSensitivityUsd": 0.370016,
@@ -380,7 +380,7 @@
           "agentSeconds": 43.9,
           "seconds": 45.1
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.48514,
           "firstRequestColdSensitivityUsd": 0.48514,

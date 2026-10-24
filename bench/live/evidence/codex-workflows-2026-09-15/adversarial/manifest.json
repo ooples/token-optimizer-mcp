@@ -3,7 +3,7 @@
   "arms": [
     "control",
     "proxy",
-    "headroom",
+    "altA",
     "full"
   ],
   "reps": 1,

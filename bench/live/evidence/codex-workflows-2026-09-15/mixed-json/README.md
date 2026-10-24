@@ -1,12 +1,12 @@
 # Mixed JSON shell output: cost-focused comparison
 
-Fixed build 09b3fcf5; Codex 0.154.0, gpt-6-astra, installed HeadRoom 0.37.0.
+Fixed build 09b3fcf5; Codex 0.154.0, gpt-6-astra, installed Alternative A.
 Refresh seeds 34–35, two repetitions, reversed arm order. Both arms were asked
 to print AGENTS.md and the complete routes.json in one initial shell command.
 All four passed the independent task grader, exact mixed-read exposure check,
 and provider/client usage reconciliation. No attempts were discarded.
 
-| Mean per attempt | Our proxy | HeadRoom |
+| Mean per attempt | Our proxy | Alternative A |
 | --- | ---: | ---: |
 | Input tokens | 74,580.5 | 131,734.5 |
 | Uncached input | 12,244.5 | 17,558.5 |
@@ -19,7 +19,7 @@ The proxy cost scenario was 34.6% lower and was lower in both matched pairs.
 Input was 43.4% lower, requests 38.9% lower, and mean agent time 26.4% lower.
 Cost uses the previously verified Codex Enterprise standard rates and is not
 an account invoice. Small samples, differing agent choices, and provider cache
-variability limit the conclusion. HeadRoom had one shell failure in round one.
+variability limit the conclusion. Alternative A had one shell failure in round one.
 
 The codec handles complete, column-zero JSON documents inside mixed text,
 preserving surrounding text. It refuses malformed/partial documents and keeps

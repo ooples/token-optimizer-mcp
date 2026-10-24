@@ -1,9 +1,9 @@
-import { afterAll, describe, expect, test } from '@jest/globals';
+import { afterAll, beforeAll, describe, expect, test } from '@jest/globals';
 import { spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { HANDOFF_BUDGET, leanHandoff } from '../../hooks-core/output-compact.mjs';
+import { HANDOFF_BUDGET, leanHandoff, leanHandoffEnabled } from '../../hooks-core/output-compact.mjs';
 
 const root = mkdtempSync(join(tmpdir(), 'handoff-'));
 afterAll(() => rmSync(root, { recursive: true, force: true }));
@@ -21,6 +21,21 @@ const report = () =>
 const agent = (text) => ({ status: 'completed', agentId: 'a1', content: [{ type: 'text', text }], totalTokens: 9000 });
 
 describe('lean handoffs', () => {
+  // Opt-in: these tests turn it on, and the off case is checked on its own below.
+  const before = process.env.TOKEN_OPTIMIZER_LEAN_HANDOFF;
+  beforeAll(() => {
+    process.env.TOKEN_OPTIMIZER_LEAN_HANDOFF = '1';
+  });
+  afterAll(() => {
+    if (before === undefined) delete process.env.TOKEN_OPTIMIZER_LEAN_HANDOFF;
+    else process.env.TOKEN_OPTIMIZER_LEAN_HANDOFF = before;
+  });
+
+  test('off unless turned on', () => {
+    expect(leanHandoffEnabled({})).toBe(false);
+    expect(leanHandoffEnabled({ TOKEN_OPTIMIZER_LEAN_HANDOFF: '1' })).toBe(true);
+  });
+
   test('a long report keeps its conclusion, citations, figures and verdict; the rest is one Read away', () => {
     const dir = join(root, 'wiki');
     const full = report();
@@ -45,7 +60,7 @@ describe('lean handoffs', () => {
     try {
       expect(leanHandoff(agent(report()), { dir })).toBeNull();
     } finally {
-      delete process.env.TOKEN_OPTIMIZER_LEAN_HANDOFF;
+      process.env.TOKEN_OPTIMIZER_LEAN_HANDOFF = '1';
     }
   });
 });
@@ -65,6 +80,7 @@ describe('through the Claude Code PostToolUse hook', () => {
         TOKEN_OPTIMIZER_WIKI_DIR: join(workspace, '.wiki'),
         TOKEN_OPTIMIZER_SHARED_DIR: join(workspace, '.wiki'),
         TOKEN_OPTIMIZER_UCR_DIR: join(workspace, '.ucr'),
+        TOKEN_OPTIMIZER_LEAN_HANDOFF: '1',
       },
       input: JSON.stringify({
         hook_event_name: 'PostToolUse',

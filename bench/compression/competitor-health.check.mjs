@@ -23,7 +23,7 @@ function check(ok, what, detail) {
   }
 }
 
-const entry = (message, logger = 'headroom.transforms.content_router', count = 1) => ({
+const entry = (message, logger = 'alternative_a.transforms.content_router', count = 1) => ({
   message,
   logger,
   count,
@@ -36,7 +36,7 @@ const clean = { competitorWarnings: { degraded: [], advisory: [] } };
 
   const said = {
     competitorWarnings: {
-      degraded: [entry('Kompress model not ready; requests will not be compressed', 'headroom.transforms.content_router', 6)],
+      degraded: [entry('Kompress model not ready; requests will not be compressed', 'alternative_a.transforms.content_router', 6)],
       advisory: [],
     },
   };
@@ -47,7 +47,7 @@ const clean = { competitorWarnings: { degraded: [], advisory: [] } };
     r
   );
 
-  const silent = { headroomVersion: '0.37.0' };
+  const silent = { altAVersion: 'sha256:5453d116514b14cd' };
   const s = degradationRefusal(silent);
   check(
     typeof s === 'string' && /predates degradation recording/.test(s),
@@ -91,12 +91,12 @@ for (const shape of [
 {
   for (const broken of [
     {},
-    { message: '', logger: 'headroom', count: 1 },
+    { message: '', logger: 'altA', count: 1 },
     { message: 'x', logger: '', count: 1 },
-    { message: 'x', logger: 'headroom' },
-    { message: 'x', logger: 'headroom', count: 0 },
-    { message: 'x', logger: 'headroom', count: 1.5 },
-    { message: 'x', logger: 'headroom', count: '3' },
+    { message: 'x', logger: 'altA' },
+    { message: 'x', logger: 'altA', count: 0 },
+    { message: 'x', logger: 'altA', count: 1.5 },
+    { message: 'x', logger: 'altA', count: '3' },
     'Kompress model not ready',
   ]) {
     const r = degradationRefusal({ competitorWarnings: { degraded: [broken], advisory: [] } });
@@ -123,7 +123,7 @@ for (const shape of [
       advisory: [
         entry(
           'CacheAligner: detected volatile content in system prompt (iso8601=1); cache prefix unstable.',
-          'headroom.transforms.cache_aligner',
+          'alternative_a.transforms.cache_aligner',
           12
         ),
       ],
@@ -156,7 +156,7 @@ for (const shape of [
       advisory: [
         entry(
           'CacheAligner: cache prefix unstable.',
-          'headroom.transforms.cache_aligner',
+          'alternative_a.transforms.cache_aligner',
           0
         ),
       ],
@@ -173,7 +173,7 @@ for (const shape of [
 // signatures is defeated if the mirror drifts, so it is compared to the
 // capture's own source rather than trusted.
 {
-  const source = readFileSync(join(HERE, 'headroom', 'run-theirs.py'), 'utf8');
+  const source = readFileSync(join(HERE, 'alt-a', 'run-theirs.py'), 'utf8');
   const block = /ADVISORY_SIGNATURES = \(([^)]*)\)/.exec(source);
   const theirs = block === null ? [] : [...block[1].matchAll(/"([^"]+)"/g)].map((m) => m[1]);
   check(theirs.length > 0, 'the capture declares an advisory allow-list this check can read', String(theirs.length));
@@ -190,7 +190,7 @@ for (const shape of [
 {
   const r = degradationRefusal({
     competitorWarnings: {
-      degraded: [entry('Kompress model not ready', 'headroom.transforms.content_router', 6), entry('native detector off')],
+      degraded: [entry('Kompress model not ready', 'alternative_a.transforms.content_router', 6), entry('native detector off')],
       advisory: [entry('something new they added')],
     },
   });

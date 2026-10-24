@@ -10,7 +10,7 @@ const read = async (path) => JSON.parse(await readFile(path, 'utf8'));
 const original = await read(join(study, 'analysis.json'));
 const cases = [];
 for (const pair of original.pairs) {
-  if (pair.arms.proxy.estimatedUsd <= pair.arms.headroom.estimatedUsd) continue;
+  if (pair.arms.proxy.estimatedUsd <= pair.arms.altA.estimatedUsd) continue;
   const manifest = await read(join(study, 'cases', pair.id, 'manifest.json'));
   cases.push({
     id: pair.id,

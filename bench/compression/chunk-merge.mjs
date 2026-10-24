@@ -60,7 +60,7 @@ const liveEntries = (stamp) =>
 // for the reason ratchet.mjs records: captures hr6 and hr7 timed their Python
 // fallback detector and the result was published as their speed.
 const MUST_AGREE = [
-  'headroomVersion',
+  'altAVersion',
   'python',
   'theirFixtures',
   'detectBackend',

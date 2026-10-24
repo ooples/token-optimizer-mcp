@@ -1,7 +1,6 @@
 # Local Codex comparison, 2026-09-15
 
-Codex CLI 0.154.0, model `gpt-6-astra`, Node 22.15.0, and installed HeadRoom
-0.37.0 ran on Windows using existing ChatGPT authentication. The proxy used
+Codex CLI 0.154.0, model `gpt-6-astra`, Node 22.15.0, and installed Alternative A ran on Windows using existing ChatGPT authentication. The proxy used
 the HTTP Responses API and kept tool definitions and reasoning items intact.
 
 Three tasks × three arms × three repetitions produced **27/27 correct answers**.
@@ -13,18 +12,18 @@ and Codex's final usage event. Token Optimizer compressed output in every task.
 
 Mean input tokens, including cached input and subsequent retrieval turns:
 
-| Task | Control | Token Optimizer | HeadRoom | Less input vs HeadRoom |
+| Task | Control | Token Optimizer | Alternative A | Less input vs Alternative A |
 | --- | ---: | ---: | ---: | ---: |
 | JSON outlier lookup | 60,955 | 39,318 | 44,043 | 10.7% |
 | Code search | 49,186 | 44,427 | 82,697 | 46.3% |
 | Log diagnosis | 51,295 | 39,203 | 84,308 | 53.5% |
 
 All arms passed 3/3 repetitions of each task. Token Optimizer and control used
-three requests per task. HeadRoom used three on JSON and five on code and logs,
+three requests per task. Alternative A used three on JSON and five on code and logs,
 including recovery reads. Lower input here therefore measures the whole task,
 not just how much text a compression algorithm removes.
 
-Mean uncached input was also lower for Token Optimizer than HeadRoom on all three
+Mean uncached input was also lower for Token Optimizer than Alternative A on all three
 tasks. Mean output was slightly higher on JSON (156 vs 148 tokens), and lower on
 code and logs. There is **no claim of winning every metric**. Full cached/uncached,
 output, and elapsed-time figures are in [summary.json](summary.json).
@@ -41,7 +40,7 @@ output, and elapsed-time figures are in [summary.json](summary.json).
   with `No changes`, shrinking its response from 4,619 to 509 characters. The
   final forced read and on-disk check both confirmed the edit.
 
-The original runner flagged six HeadRoom runs because a later recovery read was
+The original runner flagged six Alternative A runs because a later recovery read was
 truncated. Their controlled **initial** reads were complete. The corrected
 validator checks that initial input, retains subsequent recovery behavior as part
 of the task outcome, and independently checks answers and unchanged source files.
@@ -63,7 +62,7 @@ pilot fixtures exposed client-side truncation and are excluded from this campaig
 
 Input includes cached tokens, so these are not dollar-cost figures. Elapsed time
 includes process startup and does not establish steady-state proxy latency.
-HeadRoom's recorder byte counts are taken before HeadRoom transforms a request
+Alternative A's recorder byte counts are taken before Alternative A transforms a request
 and cannot be used as its compressed byte count. The results concern the specific
 versions, model, transport, and tasks above.
 

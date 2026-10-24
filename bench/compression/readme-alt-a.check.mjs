@@ -4,7 +4,7 @@
  * WHY THIS IS NOT `readme-table.check.mjs`. That check runs its harness and
  * compares the README against live stdout, which is the stronger arrangement and
  * the one to prefer wherever it is possible. It is not possible here:
- * `head-to-head.mjs` scores against HeadRoom's own output, produced by their
+ * `head-to-head.mjs` scores against Alternative A's own output, produced by their
  * Python harness from their clone, so CI has nothing to run. The alternative
  * that was actually on the table was to publish twelve rows with nothing behind
  * them at all, which is the failure mode this repository has already had three
@@ -20,30 +20,30 @@
  * the record twenty times over, so a whole-file substring test would pass a
  * stale figure on the strength of a coincidence in another row.
  *
- *   node bench/compression/readme-headroom.check.mjs
+ *   node bench/compression/readme-alt-a.check.mjs
  *
  * Exits non-zero, naming each figure it could not find, when they disagree.
  */
 
 import { readFileSync } from 'node:fs';
-import { COLUMNS } from './readme-headroom.columns.mjs';
+import { COLUMNS } from './readme-alt-a.columns.mjs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repo = join(here, '..', '..');
 const README = join(repo, 'README.md');
-const RECORD = join(here, 'headroom', 'results', 'head-to-head.json');
+const RECORD = join(here, 'alt-a', 'results', 'head-to-head.json');
 
-const START = '<!-- HEADROOM-TABLE:START';
-const END = '<!-- HEADROOM-TABLE:END -->';
+const START = '<!-- ALT-A-TABLE:START';
+const END = '<!-- ALT-A-TABLE:END -->';
 
 const readme = readFileSync(README, 'utf8');
 const from = readme.indexOf(START);
 const to = readme.indexOf(END);
 if (from === -1 || to === -1 || to < from) {
   console.error(
-    'readme-headroom.check: the HEADROOM-TABLE markers are missing from\n' +
+    'readme-alt-a.check: the ALT-A-TABLE markers are missing from\n' +
       'README.md. They are what makes this check possible -- restore them\n' +
       'around the twelve-row table rather than removing the check.'
   );
@@ -71,7 +71,7 @@ const rows = block
 
 if (rows.length < 3) {
   console.error(
-    `readme-headroom.check: found ${rows.length} table rows between the ` +
+    `readme-alt-a.check: found ${rows.length} table rows between the ` +
       'markers, which is too few to be the table. Refusing to pass vacuously.'
   );
   process.exit(1);
@@ -84,7 +84,7 @@ for (const row of dataRows) {
   const workload = cells.find((c) => byName.has(c));
   if (workload === undefined) {
     console.error(
-      `readme-headroom.check: no recorded workload named in row: ${row.trim()}`
+      `readme-alt-a.check: no recorded workload named in row: ${row.trim()}`
     );
     process.exit(1);
   }
@@ -94,7 +94,7 @@ for (const row of dataRows) {
 
 if (!figures.length) {
   console.error(
-    'readme-headroom.check: no figures in the table. Refusing to pass vacuously.'
+    'readme-alt-a.check: no figures in the table. Refusing to pass vacuously.'
   );
   process.exit(1);
 }
@@ -113,7 +113,7 @@ const flatten = (node, into) => {
 // MEMBERSHIP, AND NOW PLACEMENT TOO. Membership alone accepted a figure found
 // anywhere in its row of the record, so a cell under the wrong column passed:
 // agent-loop published its preset figures under `ours` for weeks. Closing it
-// needed a column-header-to-field map, and readme-headroom.columns.mjs is that
+// needed a column-header-to-field map, and readme-alt-a.columns.mjs is that
 // map: the renderer writes each cell from it and the placement check below
 // requires each cell to equal it. Membership is kept as the coarser first
 // answer, because it names the figure a reader would look for.
@@ -125,12 +125,12 @@ const missing = figures.filter(({ workload, figure }) => {
 });
 
 console.log(
-  `readme-headroom.check: ${figures.length} figures across ${dataRows.length} ` +
+  `readme-alt-a.check: ${figures.length} figures across ${dataRows.length} ` +
     `rows, against a record from ${record.recordedAt} (${record.commit.slice(0, 8)}).`
 );
 
 // PLACEMENT: every cell is exactly what its column publishes for that row, and
-// every recorded workload has a row. See readme-headroom.columns.mjs.
+// every recorded workload has a row. See readme-alt-a.columns.mjs.
 const cellsOf = (row) =>
   row
     .split('|')
@@ -173,17 +173,17 @@ let failed = false;
 
 if (misplaced.length) {
   console.error(
-    '\nreadme-headroom.check FAILED. Cells that are not what their column publishes:'
+    '\nreadme-alt-a.check FAILED. Cells that are not what their column publishes:'
   );
   for (const why of misplaced) console.error(`  ${why}`);
   console.error(
-    '\nRegenerate the table with: node bench/compression/readme-headroom.render.mjs'
+    '\nRegenerate the table with: node bench/compression/readme-alt-a.render.mjs'
   );
   failed = true;
 }
 
 if (missing.length) {
-  console.error('\nreadme-headroom.check FAILED. Not found in the record:');
+  console.error('\nreadme-alt-a.check FAILED. Not found in the record:');
   for (const { workload, figure } of missing)
     console.error(`  ${workload}: ${figure}`);
   console.error(
@@ -210,7 +210,7 @@ const provenance = [record.recordedAt, record.commit.slice(0, 8)].filter(
 
 if (provenance.length) {
   console.error(
-    '\nreadme-headroom.check FAILED. The HEADROOM-TABLE block does not state\n' +
+    '\nreadme-alt-a.check FAILED. The ALT-A-TABLE block does not state\n' +
       `the record it is checked against: ${provenance.join(' and ')} missing.\n` +
       'Say where the figures came from, beside the figures.'
   );
@@ -241,8 +241,8 @@ if (provenance.length) {
 // and the prose it would be mapped against is being rewritten. Measured today
 // it changes no verdict: 25 of 25 corpus figures are absent from `totals`, so
 // nothing here is standing on a coincidental match.
-const C_START = 'HEADROOM-CORPUS:START';
-const C_END = '<!-- HEADROOM-CORPUS:END -->';
+const C_START = 'ALT-A-CORPUS:START';
+const C_END = '<!-- ALT-A-CORPUS:END -->';
 
 const corpusBlocks = [];
 for (
@@ -254,7 +254,7 @@ for (
   const close = readme.indexOf(C_END, open);
   if (open === -1 || close === -1) {
     console.error(
-      'readme-headroom.check: a HEADROOM-CORPUS:START at offset ' +
+      'readme-alt-a.check: a ALT-A-CORPUS:START at offset ' +
         at +
         ' has no matching CORPUS:END. Markers are what makes this checkable.'
     );
@@ -266,7 +266,7 @@ for (
   // that contains another START is a broken pair, not a bigger block.
   if (readme.slice(open + 3, close).includes(C_START)) {
     console.error(
-      'readme-headroom.check: a HEADROOM-CORPUS block contains another ' +
+      'readme-alt-a.check: a ALT-A-CORPUS block contains another ' +
         'CORPUS:START, so a CORPUS:END is missing between them.'
     );
     process.exit(1);
@@ -279,7 +279,7 @@ for (
 // that is edited by hand, so their absence has to be the loud case.
 if (!corpusBlocks.length) {
   console.error(
-    'readme-headroom.check: no HEADROOM-CORPUS markers in README.md. The corpus\n' +
+    'readme-alt-a.check: no ALT-A-CORPUS markers in README.md. The corpus\n' +
       'headlines were unchecked for a long time and that is what these markers\n' +
       'fixed -- restore them around the corpus sentences, do not drop the rule.'
   );
@@ -293,7 +293,7 @@ for (const [from_, to_] of corpusBlocks)
 
 if (!corpusFigures.length) {
   console.error(
-    'readme-headroom.check: the HEADROOM-CORPUS blocks hold no figures. ' +
+    'readme-alt-a.check: the ALT-A-CORPUS blocks hold no figures. ' +
       'Refusing to pass vacuously.'
   );
   process.exit(1);
@@ -329,13 +329,13 @@ const unmarked = readme
   .filter(({ text }) => CORPUS_SCOPE.test(text) && FIGURE.test(text));
 
 console.log(
-  `readme-headroom.check: ${corpusFigures.length} corpus figures across ` +
+  `readme-alt-a.check: ${corpusFigures.length} corpus figures across ` +
     `${corpusBlocks.length} marked block(s), against the record's totals.`
 );
 
 if (corpusMissing.length) {
   console.error(
-    '\nreadme-headroom.check FAILED. Not found in the record totals:'
+    '\nreadme-alt-a.check FAILED. Not found in the record totals:'
   );
   for (const figure of corpusMissing) console.error(`  corpus: ${figure}`);
   failed = true;
@@ -343,8 +343,8 @@ if (corpusMissing.length) {
 
 if (unmarked.length) {
   console.error(
-    '\nreadme-headroom.check FAILED. Corpus-scoped lines with figures that sit\n' +
-      'outside every HEADROOM-CORPUS block, so nothing compares them to anything:'
+    '\nreadme-alt-a.check FAILED. Corpus-scoped lines with figures that sit\n' +
+      'outside every ALT-A-CORPUS block, so nothing compares them to anything:'
   );
   for (const { line, text } of unmarked)
     console.error(`  README.md:${line}: ${text.trim().slice(0, 96)}`);
@@ -353,4 +353,4 @@ if (unmarked.length) {
 
 if (failed) process.exit(1);
 
-console.log('README HEADROOM TABLE AGREES with the recorded run.');
+console.log('README ALTERNATIVE A TABLE AGREES with the recorded run.');

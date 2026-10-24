@@ -1,4 +1,4 @@
-"""Generate HeadRoom's own fixtures and run THEIR compressor over them.
+"""Generate Alternative A's own fixtures and run THEIR compressor over them.
 
 WHY THIS FILE EXISTS AT ALL. The head-to-head numbers this project quotes were
 produced by throwaway scripts that no longer exist, which means the headline was
@@ -37,8 +37,8 @@ so both arms are scored on the same denominator rather than on two estimators
 that happen to disagree.
 
 Usage:
-    python bench/compression/headroom/run-theirs.py <headroom-clone> <out-dir>
-    python bench/compression/headroom/run-theirs.py - <out-dir> --extra <payloads.json>
+    python bench/compression/alt-a/run-theirs.py <alt-a-clone> <out-dir>
+    python bench/compression/alt-a/run-theirs.py - <out-dir> --extra <payloads.json>
 
 `--extra` carries payloads this script did not generate -- our own twelve
 fixtures, exported by `node bench/compression/export-payloads.mjs`. Carried and
@@ -52,9 +52,32 @@ Writes <out-dir>/payloads.json (the exact bytes our side must compress) and
 import json
 import os
 import sys
+# The compared package, under a neutral name (bench/alt_a_alias.py).
+import os as _os  # noqa: E402
+sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))))
+import alt_a_alias  # noqa: E402
+
+alt_a_alias.install()
+
+
+def _their_env(name):
+    """Their own configuration variable: their prefix (ALT_A_ENV_PREFIX) + name.
+
+    Required whenever the package itself is in play (ALT_A_MODULE set):
+    without it every setting below would go to a variable they never read,
+    and they would run on defaults the capture is meant to rule out.
+    """
+    prefix = _os.environ.get("ALT_A_ENV_PREFIX", "")
+    if not prefix and _os.environ.get("ALT_A_MODULE"):
+        raise SystemExit(
+            "set ALT_A_ENV_PREFIX to the compared package's environment prefix"
+        )
+    return prefix + name
+
+
 import time
 
-# APPENDED, NOT PREPENDED. The clone ships a `headroom` package without the
+# APPENDED, NOT PREPENDED. The clone ships an `alternative_a` package without the
 # compiled _core extension; the installed wheel has it. Prepending the clone
 # shadows the wheel and the router fails to import, so the clone goes LAST and
 # supplies only `benchmarks`, which the wheel does not ship.
@@ -126,7 +149,7 @@ import random  # noqa: E402
 # with a capability missing, the number recorded for them was smaller for that
 # reason, and nothing in the file said which reason it was.
 #
-# `bench/competitive/probe-headroom.py` has refused to write a claims file
+# `bench/competitive/probe-alt-a.py` has refused to write a claims file
 # under exactly this condition since it was written. The head-to-head capture,
 # which is where the published table comes from, did not.
 #
@@ -139,7 +162,7 @@ import logging  # noqa: E402
 # THEIR BEST CONFIGURATION WINS, AND THAT INCLUDES THEIR OWN OVERRIDES. Their
 # content detector falls back to a pure-Python backend on Windows and says so:
 # "native Magika/ONNX detector is unsafe by default on Windows; override with
-# HEADROOM_DETECT_BACKEND=rust". A fallback detector routes worse, which makes
+# ALT_A_DETECT_BACKEND=rust". A fallback detector routes worse, which makes
 # their output bigger and our reduction look better, so the capture asks for
 # the native one rather than accepting the weaker default.
 #
@@ -151,8 +174,8 @@ import logging  # noqa: E402
 # note can say "we set their detector to rust" rather than leaving a reader to
 # assume it was their default. It is not their default on Windows; it is their
 # fastest and strongest backend, which is why we ask for it.
-_DETECT_BACKEND_PRESET = os.environ.get("HEADROOM_DETECT_BACKEND")
-os.environ.setdefault("HEADROOM_DETECT_BACKEND", "rust")
+_DETECT_BACKEND_PRESET = os.environ.get(_their_env("DETECT_BACKEND"))
+os.environ.setdefault(_their_env("DETECT_BACKEND"), "rust")
 
 # AND THEIR ML COMPRESSOR GETS THE TIME IT NEEDS. Kompress runs ONNX inference on
 # the CPU under a 20s per-request budget, and when the budget runs out it keeps
@@ -162,14 +185,14 @@ os.environ.setdefault("HEADROOM_DETECT_BACKEND", "rust")
 # before the sweep), so the default cannot produce a healthy capture here at
 # all. A larger budget only ever lets them compress MORE, which is the direction
 # that makes our side's comparison harder; the value used is recorded below.
-_KOMPRESS_BUDGET_PRESET = os.environ.get("HEADROOM_KOMPRESS_TIME_BUDGET_SECONDS")
-_KOMPRESS_ACQUIRE_PRESET = os.environ.get("HEADROOM_KOMPRESS_ACQUIRE_TIMEOUT_SECONDS")
-os.environ.setdefault("HEADROOM_KOMPRESS_TIME_BUDGET_SECONDS", "600")
-os.environ.setdefault("HEADROOM_KOMPRESS_ACQUIRE_TIMEOUT_SECONDS", "600")
-# The per-request deadline is a third, separate limit (HEADROOM_COMPRESSION_DEADLINE_MS,
+_KOMPRESS_BUDGET_PRESET = os.environ.get(_their_env("KOMPRESS_TIME_BUDGET_SECONDS"))
+_KOMPRESS_ACQUIRE_PRESET = os.environ.get(_their_env("KOMPRESS_ACQUIRE_TIMEOUT_SECONDS"))
+os.environ.setdefault(_their_env("KOMPRESS_TIME_BUDGET_SECONDS"), "600")
+os.environ.setdefault(_their_env("KOMPRESS_ACQUIRE_TIMEOUT_SECONDS"), "600")
+# The per-request deadline is a third, separate limit (ALT_A_COMPRESSION_DEADLINE_MS,
 # 20000 by default) and the one the 16,294-word payload actually hit.
-_COMPRESSION_DEADLINE_PRESET = os.environ.get("HEADROOM_COMPRESSION_DEADLINE_MS")
-os.environ.setdefault("HEADROOM_COMPRESSION_DEADLINE_MS", "600000")
+_COMPRESSION_DEADLINE_PRESET = os.environ.get(_their_env("COMPRESSION_DEADLINE_MS"))
+os.environ.setdefault(_their_env("COMPRESSION_DEADLINE_MS"), "600000")
 
 ADVISORY_SIGNATURES = (
     # Their cache aligner reporting that OUR fixture puts a timestamp in the
@@ -195,7 +218,8 @@ class _WarningCapture(logging.Handler):
 # INSTALLED BEFORE ANY ARM RUNS, and on the hierarchy root rather than on the
 # module that emits today, so a warning from a module they add later is caught
 # by the same handler.
-_competitor_log = logging.getLogger("headroom")
+# Their own logger is named for their package (ALT_A_MODULE).
+_competitor_log = logging.getLogger(_os.environ.get("ALT_A_MODULE") or "alternative_a")
 _competitor_log.addHandler(_WarningCapture(level=logging.WARNING))
 _competitor_log.setLevel(min(_competitor_log.level or logging.WARNING, logging.WARNING))
 
@@ -227,7 +251,7 @@ def warm_their_model():
         return {"ready": None, "waitedSeconds": 0.0, "why": "known-answer run"}
 
     try:
-        from headroom.transforms.kompress_compressor import KompressCompressor
+        from alternative_a.transforms.kompress_compressor import KompressCompressor
 
         compressor = KompressCompressor()
         compressor.ensure_background_load()
@@ -405,7 +429,7 @@ if EXTRA:
 
 if not WORKLOADS:
     raise SystemExit(
-        "no workloads. Pass a headroom clone for their fixtures, "
+        "no workloads. Pass an Alternative A clone for their fixtures, "
         "--extra <payloads.json> for carried ones, or both."
     )
 
@@ -553,7 +577,7 @@ def question_of(native):
 
 
 def arm_router(text, question=None):
-    from headroom.transforms.content_router import ContentRouter, ContentRouterConfig
+    from alternative_a.transforms.content_router import ContentRouter, ContentRouterConfig
 
     cfg = ContentRouterConfig()
     cfg.enable_code_aware = True
@@ -569,7 +593,7 @@ def arm_router(text, question=None):
 
 def arm_crusher(text):
     """Their default: lossless-first. Flattens JSON to CSV, keeps every row."""
-    from headroom.transforms.smart_crusher import smart_crush_tool_output
+    from alternative_a.transforms.smart_crusher import smart_crush_tool_output
 
     crushed, _modified, _info = smart_crush_tool_output(text, with_compaction=True)
     return crushed
@@ -580,7 +604,7 @@ def arm_crusher_lossy(text):
 
     THIS ARM EXISTS BECAUSE THE COMPARISON WAS OTHERWISE MISMATCHED. Their
     default path is lossless -- it reshapes 300 JSON rows into CSV and keeps all
-    300, earning 63% and a `<headroom:tool_digest>` marker. Ours drops rows to a
+    300, earning 63% and a a tool-digest marker. Ours drops rows to a
     spill and earns 98%. Those are different guarantees, and scoring our lossy
     path against their lossless one would be a win by category error.
 
@@ -590,8 +614,8 @@ def arm_crusher_lossy(text):
     analogue of our spill -- a marker in context, the bytes elsewhere -- so this
     is the arm the headline has to beat.
     """
-    from headroom.config import CCRConfig
-    from headroom.transforms.smart_crusher import smart_crush_tool_output
+    from alternative_a.config import CCRConfig
+    from alternative_a.transforms.smart_crusher import smart_crush_tool_output
 
     ccr = CCRConfig(
         enabled=True,
@@ -610,11 +634,11 @@ def arm_crusher_lossy(text):
 def _pipeline():
     from unittest.mock import Mock
 
-    from headroom.config import CacheAlignerConfig, SmartCrusherConfig
-    from headroom.transforms.cache_aligner import CacheAligner
-    from headroom.transforms.content_router import ContentRouter, ContentRouterConfig
-    from headroom.transforms.pipeline import TransformPipeline
-    from headroom.transforms.smart_crusher import SmartCrusher
+    from alternative_a.config import CacheAlignerConfig, SmartCrusherConfig
+    from alternative_a.transforms.cache_aligner import CacheAligner
+    from alternative_a.transforms.content_router import ContentRouter, ContentRouterConfig
+    from alternative_a.transforms.pipeline import TransformPipeline
+    from alternative_a.transforms.smart_crusher import SmartCrusher
 
     crusher_cfg = SmartCrusherConfig(
         enabled=True,
@@ -1092,7 +1116,7 @@ take_witness("before-pass-0")
 # a store the earlier chunks already grew, so `chunk-merge.mjs` can only say what
 # that growth was -- and that a later chunk was not handed a fresh store -- if
 # every chunk stamps both ends.
-STORE_PATH = os.path.join(os.path.expanduser("~"), ".headroom", "ccr_store.db")
+STORE_PATH = os.path.join(os.path.expanduser("~"), ".alternative_a", "ccr_store.db")
 
 
 def _store_rows():
@@ -1101,7 +1125,7 @@ def _store_rows():
     THE BYTE COUNT DOES NOT SAY WHAT IS REDEEMABLE, and this is not a hypothetical:
     the 3.87 MB store on this machine held six rows and every one was expired, ages
     4223-4662s against their own ttl of 1800, with 53% of the file free pages. Their
-    `headroom/cache/backends/sqlite.py` runs
+    `alternative_a/cache/backends/sqlite.py` runs
 
         DELETE FROM ccr_entries WHERE created_at + ttl < ?
 
@@ -1290,7 +1314,7 @@ with open(os.path.join(OUT, "natives.json"), "w", encoding="utf-8") as handle:
 # THE STORE STATE IS PART OF THE MEASUREMENT, so it is recorded with it.
 #
 # WHY THIS BLOCK EXISTS. Their `pipeline@*` arms hand blocks to a DURABLE CCR
-# store at ~/.headroom/ccr_store.db, so what those arms return depends on what
+# store at ~/.alternative_a/ccr_store.db, so what those arms return depends on what
 # is already in it -- and nothing in this script used to record which state it
 # ran against. A capture taken against one store was published and compared,
 # workload by workload, against captures taken against another. On the twelve
@@ -1301,11 +1325,10 @@ with open(os.path.join(OUT, "natives.json"), "w", encoding="utf-8") as handle:
 #
 # A digest cannot make the runs comparable, but it makes them VISIBLY
 # incomparable, which is the difference between a wrong number and a known one.
-def _headroom_version():
+def _alt_a_version():
     """Read from installed metadata: the script never imports the package itself."""
     try:
-        import importlib.metadata as _md
-        return _md.version("headroom-ai")
+        return alt_a_alias.version()
     except Exception:  # noqa: BLE001
         return "unknown"
 
@@ -1371,7 +1394,7 @@ provenance = {
     # file exists to prevent, and it read as correct on any machine where the
     # package happened to be installed. `stubArms` below is what such a capture
     # has to be identified by instead.
-    "headroomVersion": None if KNOWN_ANSWER_ARMS else _headroom_version(),
+    "altAVersion": None if KNOWN_ANSWER_ARMS else _alt_a_version(),
     # WHEN THE CAPTURE HAPPENED, BECAUSE THEIR STORE FORGETS. Their CCR
     # markers are redeemable from their store for a bounded time only (their
     # own resolver reports the bound: "CCR TTL: 1800 seconds"). A resolution
@@ -1429,16 +1452,16 @@ provenance = {
     # downstream gate refuses to publish a win from it. `advisory` is the
     # allow-listed remainder, recorded because it is still an asymmetry.
     "competitorWarnings": competitor_warnings,
-    "detectBackend": os.environ.get("HEADROOM_DETECT_BACKEND"),
+    "detectBackend": os.environ.get(_their_env("DETECT_BACKEND")),
     # True means this harness chose their backend; a string means the operator
     # had already pinned one and we left it alone.
     "detectBackendSetByHarness": _DETECT_BACKEND_PRESET is None,
     "detectBackendPreset": _DETECT_BACKEND_PRESET,
     # Their Kompress budgets, and whether this harness raised them (see the note
     # beside the setdefault): a capture states the limits their engine ran under.
-    "kompressTimeBudgetSeconds": os.environ.get("HEADROOM_KOMPRESS_TIME_BUDGET_SECONDS"),
-    "kompressAcquireTimeoutSeconds": os.environ.get("HEADROOM_KOMPRESS_ACQUIRE_TIMEOUT_SECONDS"),
-    "compressionDeadlineMs": os.environ.get("HEADROOM_COMPRESSION_DEADLINE_MS"),
+    "kompressTimeBudgetSeconds": os.environ.get(_their_env("KOMPRESS_TIME_BUDGET_SECONDS")),
+    "kompressAcquireTimeoutSeconds": os.environ.get(_their_env("KOMPRESS_ACQUIRE_TIMEOUT_SECONDS")),
+    "compressionDeadlineMs": os.environ.get(_their_env("COMPRESSION_DEADLINE_MS")),
     "kompressBudgetSetByHarness": _KOMPRESS_BUDGET_PRESET is None and _KOMPRESS_ACQUIRE_PRESET is None and _COMPRESSION_DEADLINE_PRESET is None,
     "kompressWarmup": KOMPRESS_WARMUP,
     # NOT NULL MEANS NOT A MEASUREMENT. A known-answer capture drives this same

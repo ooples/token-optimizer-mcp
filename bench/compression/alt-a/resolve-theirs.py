@@ -1,4 +1,4 @@
-"""Redeem HeadRoom's CCR markers from a SEPARATE, LATER PROCESS.
+"""Redeem Alternative A's CCR markers from a SEPARATE, LATER PROCESS.
 
 WHY A SECOND SCRIPT AND NOT A FEW LINES INSIDE run-theirs.py. Their compressor
 does not delete the rows it elides; it writes `<<ccr:hash,type,size>>` and keeps
@@ -22,7 +22,7 @@ their markers as loss would be wrong. Their real cost is the retrieval turn the
 agent must spend, which this file does not measure and does not pretend to.
 
 Usage:
-    python bench/compression/headroom/resolve-theirs.py <headroom-clone> <out-dir>
+    python bench/compression/alt-a/resolve-theirs.py <alt-a-clone> <out-dir>
 
 Writes <out-dir>/theirs-resolved.json:
     {name: {"text": <resolved>, "markers": n, "redeemed": n, "unresolved": n}}
@@ -33,6 +33,12 @@ import os
 import re
 import time
 import sys
+# The compared package, under a neutral name (bench/alt_a_alias.py).
+import os as _os  # noqa: E402
+sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))))
+import alt_a_alias  # noqa: E402
+
+alt_a_alias.install()
 
 CLONE = sys.argv[1]
 OUT = sys.argv[2]
@@ -72,9 +78,9 @@ if os.path.exists(existing) and not FORCE:
 if CLONE != "-":
     sys.path.append(CLONE)
 
-from headroom.ccr.marker_resolution import resolve_markers_in_text  # noqa: E402
+from alternative_a.ccr.marker_resolution import resolve_markers_in_text  # noqa: E402
 
-# Their own marker grammar, copied from headroom/ccr/marker_resolution.py so the
+# Their own marker grammar, copied from alternative_a/ccr/marker_resolution.py so the
 # count of what WAS there does not depend on the function that consumes it.
 MARKER = re.compile(r"<<ccr:([a-f0-9]{12,24})[^>]*>>")
 # THE WHOLE TOKEN, not just its hash, because the latency probe below has to hand
@@ -221,7 +227,7 @@ if fetch_passes:
         "markersDistinct": len(distinct),
         "hits": len(fetch_hits),
         "misses": fetch_misses,
-        "resolver": "headroom.ccr.marker_resolution.resolve_markers_in_text",
+        "resolver": "alternative_a.ccr.marker_resolution.resolve_markers_in_text",
         "granularity": "one marker per call",
         "warmedUntimed": True,
     }

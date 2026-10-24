@@ -6,11 +6,11 @@
  * rewritten. All of them are about the TEXT. None of them answers the question
  * a reviewer actually asks, which is whether the model's answer changes. That
  * gap mattered more once the head-to-head showed we keep 345 of 3,793
- * retention units directly visible against HeadRoom's 1,890: we reach a higher
+ * retention units directly visible against Alternative A's 1,890: we reach a higher
  * reduction partly by eliding into a spill, and the cost of that shows up in
  * task accuracy or nowhere.
  *
- * HeadRoom publish GSM8K, TruthfulQA, SQuAD v2 and BFCL with a baseline column.
+ * Alternative A publish GSM8K, TruthfulQA, SQuAD v2 and BFCL with a baseline column.
  * This is the SQuAD v2 arm of that, run through the Claude Code subscription
  * rather than an API key.
  *

@@ -12,7 +12,7 @@
           "agentSeconds": 15.6,
           "requests": 3
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.183562,
           "agentSeconds": 14.3,
@@ -31,7 +31,7 @@
           "agentSeconds": 13.8,
           "requests": 3
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.207466,
           "agentSeconds": 14.7,
@@ -50,7 +50,7 @@
           "agentSeconds": 13.3,
           "requests": 3
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.20484,
           "agentSeconds": 15.1,
@@ -69,7 +69,7 @@
           "agentSeconds": 14,
           "requests": 3
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.2054,
           "agentSeconds": 15.7,

@@ -40,6 +40,7 @@ import {
   mkdirSync,
   readFileSync,
   renameSync,
+  rmSync,
   writeFileSync,
 } from 'node:fs';
 import { homedir } from 'node:os';
@@ -203,8 +204,25 @@ export function claudeSettingsFile(
   );
 }
 
-/** Where we record what we wrote, so it can be taken back out exactly. */
+/**
+ * Where we record what we wrote, so it can be taken back out exactly: BESIDE
+ * THE SETTINGS FILE IT DESCRIBES, not in this process's optimizer home.
+ *
+ * The record used to live in TOKEN_OPTIMIZER_HOME while the file it describes
+ * is the client's own settings. A process run with a private home -- a test, a
+ * benchmark, a second install -- then edited the user's real settings and kept
+ * the only record of it where the user's install never looks, so the edit
+ * could not be taken back. Kept next to the settings file, every process that
+ * can edit that file finds the record.
+ */
 export function routingManifestFile(
+  env: NodeJS.ProcessEnv = process.env
+): string {
+  return join(dirname(claudeSettingsFile(env)), 'token-optimizer-routing.json');
+}
+
+/** Where records were kept before: still read, emptied on the next write. */
+export function legacyRoutingManifestFile(
   env: NodeJS.ProcessEnv = process.env
 ): string {
   return join(optimizerHome(env), 'default-routing.json');
@@ -227,11 +245,31 @@ function writeJson(path: string, value: unknown): void {
   renameSync(temporary, path);
 }
 
+function readManifestAt(path: string): RoutingManifest {
+  const parsed = readJson(path) as RoutingManifest | null;
+  return parsed?.schema === 1 &&
+    parsed.entries &&
+    typeof parsed.entries === 'object'
+    ? parsed
+    : { schema: 1, entries: {} };
+}
+
+/**
+ * What we have written, from both places: a record beside the settings file
+ * wins over one left in the optimizer home by an earlier version.
+ */
 export function readRoutingManifest(
   env: NodeJS.ProcessEnv = process.env
 ): RoutingManifest {
-  const parsed = readJson(routingManifestFile(env)) as RoutingManifest | null;
-  return parsed?.schema === 1 ? parsed : { schema: 1, entries: {} };
+  const current = readManifestAt(routingManifestFile(env));
+  const legacy =
+    legacyRoutingManifestFile(env) === routingManifestFile(env)
+      ? { schema: 1 as const, entries: {} }
+      : readManifestAt(legacyRoutingManifestFile(env));
+  return {
+    schema: 1,
+    entries: { ...legacy.entries, ...current.entries },
+  };
 }
 
 /**
@@ -319,11 +357,24 @@ export function saveSettings(path: string, settings: Settings): void {
 }
 
 function record(env: NodeJS.ProcessEnv, entry: RoutingEntry | null): void {
-  const manifest = readRoutingManifest(env);
   const path = claudeSettingsFile(env);
+  const file = routingManifestFile(env);
+  const manifest = readManifestAt(file);
   if (entry) manifest.entries[path] = entry;
   else delete manifest.entries[path];
-  writeJson(routingManifestFile(env), manifest);
+  // An empty record is removed, not left behind in the client's config folder.
+  if (Object.keys(manifest.entries).length) writeJson(file, manifest);
+  else rmSync(file, { force: true });
+  // MIGRATION: this settings file's entry moves out of the old location, so
+  // the two records can never disagree about it. Other files' entries stay.
+  const legacyFile = legacyRoutingManifestFile(env);
+  if (legacyFile !== file && existsSync(legacyFile)) {
+    const legacy = readManifestAt(legacyFile);
+    if (path in legacy.entries) {
+      delete legacy.entries[path];
+      writeJson(legacyFile, legacy);
+    }
+  }
 }
 
 /**

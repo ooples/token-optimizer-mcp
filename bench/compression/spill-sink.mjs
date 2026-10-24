@@ -6,7 +6,7 @@
  * and the like -- and the marker carrying that path is part of what each arm is
  * charged for, on every turn it stays in context. Those inventions were 8 tokens
  * of path where the proxy's sink wrote about 40, so every figure that moved a
- * block under-priced our marker, and the comparison against HeadRoom's
+ * block under-priced our marker, and the comparison against Alternative A's
  * `<<ccr:...>>` flattered us by exactly the part a reader cannot see.
  *
  * So the name comes from the proxy's own naming function, and the directory
