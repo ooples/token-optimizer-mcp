@@ -10,7 +10,7 @@
  * makes that a gate rather than a sentence in a comment.
  *
  * WHAT IT READS IS WHAT IS PUBLISHED. The four records under
- * `headroom/results/` are the pair: two recordings of the warm arm, which is the
+ * `alt-a/results/` are the pair: two recordings of the warm arm, which is the
  * published capture, and two of the empty arm. Both arms are needed twice over
  * because the gate decides a speed row only when it can see two recordings of
  * one capture, and speed is a fifth of the criteria.
@@ -29,7 +29,7 @@ import { sideFromRecord, storeEffect } from './store-effect.mjs';
 import { readEntry } from './ratchet.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const results = join(here, 'headroom', 'results');
+const results = join(here, 'alt-a', 'results');
 const at = (name) => join(results, name);
 
 let failures = 0;

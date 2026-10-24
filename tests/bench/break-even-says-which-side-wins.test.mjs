@@ -22,7 +22,7 @@ const P = {
 
 const at = (name) =>
   fileURLToPath(
-    new URL(`../../bench/compression/headroom/results/${name}`, import.meta.url)
+    new URL(`../../bench/compression/alt-a/results/${name}`, import.meta.url)
   );
 const load = (name) => JSON.parse(readFileSync(at(name), 'utf8'));
 const num = (s) => Number(String(s).replace(/,/g, ''));
@@ -136,7 +136,7 @@ describe.each(['head-to-head.json', 'head-to-head.store-empty.json'])(
       // reader can see which record is which.
       // grep-output MOVED 85% -> 84% IN BOTH, and toward us, when the comparator
       // began charging their marker for the retrieval tool their proxy injects to
-      // redeem it (headroom/ccr-tool.py): their cost at every fetch rate rose by
+      // redeem it (alt-a/ccr-tool.py): their cost at every fetch rate rose by
       // the same amount, so the crossing came earlier. raw-build-log did not move
       // a whole point.
       const expected = {

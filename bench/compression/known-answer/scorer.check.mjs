@@ -49,7 +49,7 @@ const RUN_THEIRS = join(
   REPO,
   'bench',
   'compression',
-  'headroom',
+  'alt-a',
   'run-theirs.py'
 );
 const ARMS = join(HERE, 'arms.py');
@@ -260,9 +260,9 @@ try {
       String(rep.stubArms)
     );
     check(
-      rep.headroomVersion === null,
+      rep.altAVersion === null,
       'and carries no competitor version, because no engine of theirs ran',
-      String(rep.headroomVersion)
+      String(rep.altAVersion)
     );
     // BOTH DIRECTIONS, against the gate itself rather than a restatement of it.
     // An assertion that only ever sees the accepting case cannot tell a rule
@@ -277,10 +277,10 @@ try {
     );
     check(
       /stub arms/.test(
-        String(reproducibilityRefusal({ ...rep, headroomVersion: '0.37.0' }))
+        String(reproducibilityRefusal({ ...rep, altAVersion: 'sha256:5453d116514b14cd' }))
       ),
       'and refuses the same block the moment it claims one',
-      String(reproducibilityRefusal({ ...rep, headroomVersion: '0.37.0' }))
+      String(reproducibilityRefusal({ ...rep, altAVersion: 'sha256:5453d116514b14cd' }))
     );
     // THE BODY ARM DOES NOT EXIST ON EVERY WORKLOAD, and the expected set says
     // so rather than the assertion being widened until it passes. `body` is

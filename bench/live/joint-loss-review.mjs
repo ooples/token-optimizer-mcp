@@ -13,7 +13,7 @@ for (const pair of audit.cases) {
   const state = execution.pairs.find((p) => p.id === pair.id);
   const rows = await read(`cases/${pair.id}/results.json`);
   const arms = {};
-  for (const arm of ['proxy', 'headroom']) {
+  for (const arm of ['proxy', 'altA']) {
     const row = rows.find((r) => r.arm === arm);
     const directory = join(state.raw, `${row.task}-${row.rep}-${arm}`);
     const events = (await readFile(join(directory, 'agent.stdout'), 'utf8'))
@@ -51,7 +51,7 @@ for (const pair of audit.cases) {
     };
   }
   const p = arms.proxy,
-    h = arms.headroom;
+    h = arms.altA;
   const knownCost = [p, h].every((a) => Number.isFinite(a.estimatedUsd));
   const costLoss = knownCost && p.estimatedUsd > h.estimatedUsd;
   const passingSpeedLoss =
@@ -77,7 +77,7 @@ const report = {
   costLossesIncludingTies: cases.filter(
     (c) =>
       !c.unknownCost &&
-      c.arms.proxy.estimatedUsd >= c.arms.headroom.estimatedUsd
+      c.arms.proxy.estimatedUsd >= c.arms.altA.estimatedUsd
   ).length,
   smallerInputCostLosses: cases.filter((c) => c.smallerInputCostLoss).length,
   passingSpeedLosses: speedLosses.length,
@@ -98,7 +98,7 @@ const report = {
     ...speedLosses.map((c) => c.arms.proxy.timing?.transformMs ?? 0)
   ),
   speedLossesWithHigherUpstreamTime: speedLosses.filter(
-    (c) => c.arms.proxy.timing?.upstreamMs > c.arms.headroom.timing?.upstreamMs
+    (c) => c.arms.proxy.timing?.upstreamMs > c.arms.altA.timing?.upstreamMs
   ).length,
   cases,
 };

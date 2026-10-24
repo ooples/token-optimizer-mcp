@@ -16,7 +16,7 @@ if (process.platform !== 'win32')
 const root = resolve('.');
 const raw = await mkdtemp(join(tmpdir(), 'local-proxy-performance-'));
 const repetitions = 40;
-const arms = ['proxy', 'headroom', 'control'];
+const arms = ['proxy', 'altA', 'control'];
 const records = [];
 let failure = null;
 let receivedBytes = 0;
@@ -93,10 +93,10 @@ try {
       const out = openSync(join(raw, `${round}-${arm}.stdout`), 'w');
       const err = openSync(join(raw, `${round}-${arm}.stderr`), 'w');
       const args =
-        arm === 'headroom'
+        arm === 'altA'
           ? [
               '-m',
-              'headroom.cli',
+              'alternative_a.cli',
               'proxy',
               '--port',
               String(port),
@@ -107,7 +107,7 @@ try {
           : ['dist/proxy/cli.js', '--port', String(port), '--upstream', base];
       const start = performance.now();
       const child = spawn(
-        arm === 'headroom' ? 'python' : process.execPath,
+        arm === 'altA' ? 'python' : process.execPath,
         args,
         { cwd: root, env, windowsHide: true, stdio: ['ignore', out, err] }
       );
@@ -230,7 +230,7 @@ try {
         raw,
         complete: failure === null,
         failure,
-        headroomOverrides: ['--no-rate-limit', 'local --openai-api-url'],
+        altAOverrides: ['--no-rate-limit', 'local --openai-api-url'],
         repetitions,
         records,
         limitations: [

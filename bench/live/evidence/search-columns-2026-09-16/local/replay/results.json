@@ -2,7 +2,7 @@
   "complete": true,
   "replayPrior": true,
   "localUpstreamOnly": true,
-  "headroomOverrides": [
+  "altAOverrides": [
     "--no-rate-limit"
   ],
   "tokenizer": "o200k_base estimate, not observed model usage",

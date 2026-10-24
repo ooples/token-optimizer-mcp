@@ -95,7 +95,7 @@
   },
   {
     "task": "json",
-    "arm": "headroom",
+    "arm": "altA",
     "rep": 1,
     "position": 2,
     "kind": "controlled-read",
@@ -189,7 +189,7 @@
   },
   {
     "task": "json",
-    "arm": "headroom",
+    "arm": "altA",
     "rep": 2,
     "position": 1,
     "kind": "controlled-read",

@@ -28,7 +28,7 @@
     },
     {
       "task": "bugfix",
-      "arm": "headroom",
+      "arm": "altA",
       "rep": 1,
       "recordedVerdict": "PASS",
       "verdict": "PASS",
@@ -43,7 +43,7 @@
     },
     {
       "task": "bugfix",
-      "arm": "headroom",
+      "arm": "altA",
       "meanEstimatedUsd": 0.315048
     }
   ],
@@ -51,7 +51,7 @@
     {
       "task": "bugfix",
       "candidate": "proxy",
-      "against": "headroom",
+      "against": "altA",
       "estimatedUsdDelta": -0.09085599999999999,
       "reductionPercent": 28.83878012239405
     }

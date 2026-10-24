@@ -36,7 +36,7 @@
     },
     {
       "task": "json",
-      "arm": "headroom",
+      "arm": "altA",
       "rep": 1,
       "recordedVerdict": "PASS",
       "verdict": "PASS",
@@ -52,7 +52,7 @@
     },
     {
       "task": "json",
-      "arm": "headroom",
+      "arm": "altA",
       "rep": 2,
       "recordedVerdict": "PASS",
       "verdict": "PASS",
@@ -68,7 +68,7 @@
     },
     {
       "task": "json",
-      "arm": "headroom",
+      "arm": "altA",
       "rep": 3,
       "recordedVerdict": "PASS",
       "verdict": "PASS",
@@ -108,7 +108,7 @@
     },
     {
       "task": "code",
-      "arm": "headroom",
+      "arm": "altA",
       "rep": 1,
       "recordedVerdict": "INVALID_READ",
       "verdict": "PASS",
@@ -124,7 +124,7 @@
     },
     {
       "task": "code",
-      "arm": "headroom",
+      "arm": "altA",
       "rep": 2,
       "recordedVerdict": "INVALID_READ",
       "verdict": "PASS",
@@ -140,7 +140,7 @@
     },
     {
       "task": "code",
-      "arm": "headroom",
+      "arm": "altA",
       "rep": 3,
       "recordedVerdict": "INVALID_READ",
       "verdict": "PASS",
@@ -180,7 +180,7 @@
     },
     {
       "task": "logs",
-      "arm": "headroom",
+      "arm": "altA",
       "rep": 1,
       "recordedVerdict": "INVALID_READ",
       "verdict": "PASS",
@@ -196,7 +196,7 @@
     },
     {
       "task": "logs",
-      "arm": "headroom",
+      "arm": "altA",
       "rep": 2,
       "recordedVerdict": "INVALID_READ",
       "verdict": "PASS",
@@ -212,7 +212,7 @@
     },
     {
       "task": "logs",
-      "arm": "headroom",
+      "arm": "altA",
       "rep": 3,
       "recordedVerdict": "INVALID_READ",
       "verdict": "PASS",
@@ -248,7 +248,7 @@
     },
     {
       "task": "json",
-      "arm": "headroom",
+      "arm": "altA",
       "meanEstimatedUsd": 0.19668066666666664
     },
     {
@@ -263,7 +263,7 @@
     },
     {
       "task": "code",
-      "arm": "headroom",
+      "arm": "altA",
       "meanEstimatedUsd": 0.30834
     },
     {
@@ -278,7 +278,7 @@
     },
     {
       "task": "logs",
-      "arm": "headroom",
+      "arm": "altA",
       "meanEstimatedUsd": 0.29356733333333335
     }
   ],
@@ -293,7 +293,7 @@
     {
       "task": "json",
       "candidate": "proxy",
-      "against": "headroom",
+      "against": "altA",
       "estimatedUsdDelta": -0.05372866666666665,
       "reductionPercent": 27.317716365953604
     },
@@ -307,7 +307,7 @@
     {
       "task": "code",
       "candidate": "proxy",
-      "against": "headroom",
+      "against": "altA",
       "estimatedUsdDelta": -0.13716133333333333,
       "reductionPercent": 44.483794944974164
     },
@@ -321,7 +321,7 @@
     {
       "task": "logs",
       "candidate": "proxy",
-      "against": "headroom",
+      "against": "altA",
       "estimatedUsdDelta": -0.14081400000000002,
       "reductionPercent": 47.96650853523667
     }

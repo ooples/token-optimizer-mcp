@@ -1,7 +1,7 @@
 [
   {
     "task": "numeric",
-    "arm": "headroom",
+    "arm": "altA",
     "rep": 1,
     "position": 1,
     "kind": "controlled-read",
@@ -211,7 +211,7 @@
   },
   {
     "task": "numeric",
-    "arm": "headroom",
+    "arm": "altA",
     "rep": 2,
     "position": 2,
     "kind": "controlled-read",
@@ -281,7 +281,7 @@
   },
   {
     "task": "numeric",
-    "arm": "headroom",
+    "arm": "altA",
     "rep": 3,
     "position": 1,
     "kind": "controlled-read",
@@ -491,7 +491,7 @@
   },
   {
     "task": "numeric",
-    "arm": "headroom",
+    "arm": "altA",
     "rep": 4,
     "position": 2,
     "kind": "controlled-read",

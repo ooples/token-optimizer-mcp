@@ -13,14 +13,14 @@
       "firstRequestColdEstimatedUsd": 0.250178
     },
     {
-      "arm": "headroom",
+      "arm": "altA",
       "rep": 1,
       "initialCached": 0,
       "observedEstimatedUsd": 0.28214,
       "firstRequestColdEstimatedUsd": 0.28214
     },
     {
-      "arm": "headroom",
+      "arm": "altA",
       "rep": 2,
       "initialCached": 0,
       "observedEstimatedUsd": 0.242852,
@@ -36,7 +36,7 @@
   ],
   "means": {
     "proxy": 0.250169,
-    "headroom": 0.262496
+    "altA": 0.262496
   },
   "reductionPercent": 4.696071559185677
 }

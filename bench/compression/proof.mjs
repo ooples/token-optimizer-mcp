@@ -6,7 +6,7 @@
  *
  *   gross      the content blocks, before vs after. Their methodology.
  *   net        the entire serialised request, including anything a strategy
- *              INJECTED to make its markers redeemable. HeadRoom appends a
+ *              INJECTED to make its markers redeemable. Alternative A appends a
  *              system message and a retrieval tool definition to every
  *              compressed request; a payload-only number does not charge for
  *              that, and the user is billed for it.
@@ -508,7 +508,7 @@ function steadyTokens(request, run, spill) {
 
 function main() {
   console.log(
-    "\nCompression proof -- synthetic fixtures at the scale of HeadRoom's published workloads."
+    "\nCompression proof -- synthetic fixtures at the scale of Alternative A's published workloads."
   );
   console.log(
     'gross = payload only (their methodology) | net = whole request | effective = cache-weighted\n'

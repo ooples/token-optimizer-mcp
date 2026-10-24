@@ -1,7 +1,7 @@
 /**
  * Dispatch: classify a block, then hand it to the engine that fits.
  *
- * NO INSTANCE STATE, AND THAT IS THE WHOLE DESIGN. HeadRoom's open issue #3486
+ * NO INSTANCE STATE, AND THAT IS THE WHOLE DESIGN. Alternative A's open issue #3486
  * is "Concurrent requests cross-contaminate compression options -- one shared
  * `ContentRouter` stores per-request state on `self`". A proxy is concurrent by
  * definition: two agents, or one agent with parallel tool calls, are two
@@ -363,7 +363,7 @@ function routed(text: string, ctx: EngineContext = {}): CompressionResult {
   // duplicates. The trial runs against a sink that writes nothing; only the
   // branch that is kept touches the real one.
   //
-  // GATED ON THE SAVING RATHER THAN THE SIZE. HeadRoom's content-cache
+  // GATED ON THE SAVING RATHER THAN THE SIZE. Alternative A's content-cache
   // references move every block over a size floor; gating on what the engines
   // achieved keeps every block they compressed well IN the request, where the
   // reader still has it, and moves only where they had nothing to offer.

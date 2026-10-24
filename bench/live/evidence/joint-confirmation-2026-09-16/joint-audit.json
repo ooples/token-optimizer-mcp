@@ -143,9 +143,9 @@
             "upstreamHeadersMs": 3223.7788999999993,
             "upstreamMs": 15817.252899999998
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.111986,
           "agentSeconds": 17.8,
@@ -162,7 +162,7 @@
             "upstreamHeadersMs": 3885.959499999999,
             "upstreamMs": 15776.660899999999
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -194,9 +194,9 @@
             "upstreamHeadersMs": 9899.721800000001,
             "upstreamMs": 45260.6826
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.315388,
           "agentSeconds": 57.7,
@@ -213,7 +213,7 @@
             "upstreamHeadersMs": 8252.933500000005,
             "upstreamMs": 52173.9133
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -245,9 +245,9 @@
             "upstreamHeadersMs": 4917.5254,
             "upstreamMs": 14255.9215
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.122646,
           "agentSeconds": 15.3,
@@ -264,7 +264,7 @@
             "upstreamHeadersMs": 2114.1143999999995,
             "upstreamMs": 13203.746099999998
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -296,9 +296,9 @@
             "upstreamHeadersMs": 2949.4421,
             "upstreamMs": 16325.805799999998
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.356018,
           "agentSeconds": 31.6,
@@ -315,7 +315,7 @@
             "upstreamHeadersMs": 5407.030499999999,
             "upstreamMs": 29340.7485
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -347,9 +347,9 @@
             "upstreamHeadersMs": 4982.814899999999,
             "upstreamMs": 43119.4746
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.584526,
           "agentSeconds": 105.2,
@@ -366,7 +366,7 @@
             "upstreamHeadersMs": 17994.844300000004,
             "upstreamMs": 100985.49720000001
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -398,9 +398,9 @@
             "upstreamHeadersMs": 2650.0791999999997,
             "upstreamMs": 12011.2813
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.168668,
           "agentSeconds": 14.1,
@@ -417,7 +417,7 @@
             "upstreamHeadersMs": 2657.427100000001,
             "upstreamMs": 12200.744700000001
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -449,9 +449,9 @@
             "upstreamHeadersMs": 4830.252300000007,
             "upstreamMs": 45822.174399999996
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.445512,
           "agentSeconds": 61.3,
@@ -468,7 +468,7 @@
             "upstreamHeadersMs": 8585.555499999999,
             "upstreamMs": 56517.2436
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -500,9 +500,9 @@
             "upstreamHeadersMs": 7225.518600000004,
             "upstreamMs": 37474.00259999999
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.240632,
           "agentSeconds": 49.7,
@@ -519,7 +519,7 @@
             "upstreamHeadersMs": 8590.727100000004,
             "upstreamMs": 46587.35970000001
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -551,9 +551,9 @@
             "upstreamHeadersMs": 2127.9132999999993,
             "upstreamMs": 13099.1676
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.38999,
           "agentSeconds": 32.6,
@@ -570,7 +570,7 @@
             "upstreamHeadersMs": 5868.586800000001,
             "upstreamMs": 29753.884299999998
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -602,9 +602,9 @@
             "upstreamHeadersMs": 6090.300499999998,
             "upstreamMs": 42345.3936
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.395898,
           "agentSeconds": 98.2,
@@ -621,7 +621,7 @@
             "upstreamHeadersMs": 14741.847999999994,
             "upstreamMs": 94945.94249999999
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -653,9 +653,9 @@
             "upstreamHeadersMs": 6451.2162999999955,
             "upstreamMs": 37388.763
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.40261,
           "agentSeconds": 51.6,
@@ -672,7 +672,7 @@
             "upstreamHeadersMs": 9132.105299999997,
             "upstreamMs": 48180.750799999994
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -704,9 +704,9 @@
             "upstreamHeadersMs": 6781.977299999999,
             "upstreamMs": 45230.8053
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.380166,
           "agentSeconds": 77.7,
@@ -723,7 +723,7 @@
             "upstreamHeadersMs": 13124.089999999995,
             "upstreamMs": 74205.4919
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -755,9 +755,9 @@
             "upstreamHeadersMs": 3542.399800000002,
             "upstreamMs": 11713.2778
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.169568,
           "agentSeconds": 17.6,
@@ -774,7 +774,7 @@
             "upstreamHeadersMs": 3131.363999999999,
             "upstreamMs": 15652.844099999998
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -806,9 +806,9 @@
             "upstreamHeadersMs": 2236.6295999999993,
             "upstreamMs": 11976.7289
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.201882,
           "agentSeconds": 15.7,
@@ -825,7 +825,7 @@
             "upstreamHeadersMs": 1998.3311000000003,
             "upstreamMs": 13836.7623
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -857,9 +857,9 @@
             "upstreamHeadersMs": 5850.495599999999,
             "upstreamMs": 19146.442900000002
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.29731,
           "agentSeconds": 82.8,
@@ -876,7 +876,7 @@
             "upstreamHeadersMs": 5464.017100000005,
             "upstreamMs": 80482.83140000002
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -908,9 +908,9 @@
             "upstreamHeadersMs": 2569.097100000001,
             "upstreamMs": 15278.535600000001
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.257832,
           "agentSeconds": 36.9,
@@ -927,7 +927,7 @@
             "upstreamHeadersMs": 12414.367700000006,
             "upstreamMs": 34617.71160000001
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -959,9 +959,9 @@
             "upstreamHeadersMs": 5842.734500000002,
             "upstreamMs": 41416.27620000001
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.309174,
           "agentSeconds": 147.5,
@@ -978,7 +978,7 @@
             "upstreamHeadersMs": 12381.845900000011,
             "upstreamMs": 143163.1137
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -1010,9 +1010,9 @@
             "upstreamHeadersMs": 6239.962699999998,
             "upstreamMs": 23761.9447
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.253546,
           "agentSeconds": 29.8,
@@ -1029,7 +1029,7 @@
             "upstreamHeadersMs": 5532.999399999997,
             "upstreamMs": 27680.625899999995
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -1061,9 +1061,9 @@
             "upstreamHeadersMs": 7529.743500000002,
             "upstreamMs": 44674.1706
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.305348,
           "agentSeconds": 50.2,
@@ -1080,7 +1080,7 @@
             "upstreamHeadersMs": 7095.3848,
             "upstreamMs": 46888.3374
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -1112,9 +1112,9 @@
             "upstreamHeadersMs": 4753.855600000003,
             "upstreamMs": 28725.188100000007
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.314968,
           "agentSeconds": 39.9,
@@ -1131,7 +1131,7 @@
             "upstreamHeadersMs": 8243.961000000003,
             "upstreamMs": 35722.5374
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -1163,9 +1163,9 @@
             "upstreamHeadersMs": 2365.1063999999997,
             "upstreamMs": 12937.899000000001
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.211116,
           "agentSeconds": 27.7,
@@ -1182,7 +1182,7 @@
             "upstreamHeadersMs": 4335.017399999996,
             "upstreamMs": 25453.3734
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -1214,9 +1214,9 @@
             "upstreamHeadersMs": 2524.7576000000013,
             "upstreamMs": 16236.7785
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.222216,
           "agentSeconds": 16.4,
@@ -1233,7 +1233,7 @@
             "upstreamHeadersMs": 2878.2376000000004,
             "upstreamMs": 14014.4951
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -1265,9 +1265,9 @@
             "upstreamHeadersMs": 3327.9717999999984,
             "upstreamMs": 40315.00319999999
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.396694,
           "agentSeconds": 76.4,
@@ -1284,7 +1284,7 @@
             "upstreamHeadersMs": 11110.264600000006,
             "upstreamMs": 72063.6536
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -1316,9 +1316,9 @@
             "upstreamHeadersMs": 2524.6136999999994,
             "upstreamMs": 16219.6446
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.27976,
           "agentSeconds": 27.2,
@@ -1335,7 +1335,7 @@
             "upstreamHeadersMs": 9296.743599999998,
             "upstreamMs": 24823.226400000003
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -1367,9 +1367,9 @@
             "upstreamHeadersMs": 6610.924499999999,
             "upstreamMs": 41617.3854
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.47501,
           "agentSeconds": 60.4,
@@ -1386,7 +1386,7 @@
             "upstreamHeadersMs": 10444.088300000003,
             "upstreamMs": 56697.317299999995
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -1418,9 +1418,9 @@
             "upstreamHeadersMs": 4529.074199999999,
             "upstreamMs": 15992.249900000003
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.229504,
           "agentSeconds": 23.9,
@@ -1437,7 +1437,7 @@
             "upstreamHeadersMs": 6961.261500000002,
             "upstreamMs": 21755.9622
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -1469,9 +1469,9 @@
             "upstreamHeadersMs": 2497.6841000000004,
             "upstreamMs": 15551.677999999998
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.215018,
           "agentSeconds": 45.4,
@@ -1488,7 +1488,7 @@
             "upstreamHeadersMs": 11236.954399999997,
             "upstreamMs": 42979.53629999999
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -1520,9 +1520,9 @@
             "upstreamHeadersMs": 5213.1741999999995,
             "upstreamMs": 16994.9151
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.225918,
           "agentSeconds": 15.3,
@@ -1539,7 +1539,7 @@
             "upstreamHeadersMs": 2354.313600000001,
             "upstreamMs": 13382.761400000001
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -1571,9 +1571,9 @@
             "upstreamHeadersMs": 4759.459299999999,
             "upstreamMs": 30948.348899999997
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.460514,
           "agentSeconds": 59.6,
@@ -1590,7 +1590,7 @@
             "upstreamHeadersMs": 9750.490099999995,
             "upstreamMs": 55432.7749
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -1622,9 +1622,9 @@
             "upstreamHeadersMs": 5380.989300000003,
             "upstreamMs": 34670.8331
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.253658,
           "agentSeconds": 67.2,
@@ -1641,7 +1641,7 @@
             "upstreamHeadersMs": 12442.662399999997,
             "upstreamMs": 63362.3174
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -1673,9 +1673,9 @@
             "upstreamHeadersMs": 5203.1325000000015,
             "upstreamMs": 43834.46319999999
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.329754,
           "agentSeconds": 47.3,
@@ -1692,7 +1692,7 @@
             "upstreamHeadersMs": 10991.002500000004,
             "upstreamMs": 44084.513100000004
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -1724,9 +1724,9 @@
             "upstreamHeadersMs": 4832.753399999995,
             "upstreamMs": 27770.6488
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.285612,
           "agentSeconds": 50.2,
@@ -1743,7 +1743,7 @@
             "upstreamHeadersMs": 9038.419999999996,
             "upstreamMs": 46498.2815
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -1775,9 +1775,9 @@
             "upstreamHeadersMs": 2423.8609000000006,
             "upstreamMs": 15348.968800000002
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.17108,
           "agentSeconds": 26.2,
@@ -1794,7 +1794,7 @@
             "upstreamHeadersMs": 5452.529500000001,
             "upstreamMs": 23823.4557
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -1826,9 +1826,9 @@
             "upstreamHeadersMs": 3170.510599999999,
             "upstreamMs": 12938.3671
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.168648,
           "agentSeconds": 17.5,
@@ -1845,7 +1845,7 @@
             "upstreamHeadersMs": 2975.5397999999996,
             "upstreamMs": 15203.535299999998
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -1877,9 +1877,9 @@
             "upstreamHeadersMs": 4885.859700000003,
             "upstreamMs": 33522.827900000004
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.296946,
           "agentSeconds": 51.6,
@@ -1896,7 +1896,7 @@
             "upstreamHeadersMs": 11612.680400000008,
             "upstreamMs": 47156.371999999996
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -1928,9 +1928,9 @@
             "upstreamHeadersMs": 3244.3905999999997,
             "upstreamMs": 37712.4471
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.319218,
           "agentSeconds": 72.9,
@@ -1947,7 +1947,7 @@
             "upstreamHeadersMs": 13112.790299999995,
             "upstreamMs": 68977.6698
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -1979,9 +1979,9 @@
             "upstreamHeadersMs": 2878.0422000000003,
             "upstreamMs": 12839.767300000001
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.198656,
           "agentSeconds": 15.3,
@@ -1998,7 +1998,7 @@
             "upstreamHeadersMs": 2899.7552000000005,
             "upstreamMs": 13172.5945
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -2030,9 +2030,9 @@
             "upstreamHeadersMs": 2884.5493000000006,
             "upstreamMs": 12764.8363
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.176624,
           "agentSeconds": 28.1,
@@ -2049,7 +2049,7 @@
             "upstreamHeadersMs": 6509.190500000001,
             "upstreamMs": 25882.960000000003
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -2081,9 +2081,9 @@
             "upstreamHeadersMs": 3874.547699999999,
             "upstreamMs": 14737.8425
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.085634,
           "agentSeconds": 15.3,
@@ -2100,7 +2100,7 @@
             "upstreamHeadersMs": 2769.7398000000017,
             "upstreamMs": 13303.8245
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -2132,9 +2132,9 @@
             "upstreamHeadersMs": 2898.631799999999,
             "upstreamMs": 12761.3676
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.26676,
           "agentSeconds": 29.9,
@@ -2151,7 +2151,7 @@
             "upstreamHeadersMs": 9542.210999999998,
             "upstreamMs": 27466.954100000003
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -2183,9 +2183,9 @@
             "upstreamHeadersMs": 2349.6948999999986,
             "upstreamMs": 14901.786200000002
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.142824,
           "agentSeconds": 15.2,
@@ -2202,7 +2202,7 @@
             "upstreamHeadersMs": 2829.5718,
             "upstreamMs": 13193.513400000002
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -2234,9 +2234,9 @@
             "upstreamHeadersMs": 7052.2161999999935,
             "upstreamMs": 43940.051699999996
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.229924,
           "agentSeconds": 43.5,
@@ -2253,7 +2253,7 @@
             "upstreamHeadersMs": 7435.8214000000025,
             "upstreamMs": 40371.816300000006
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -2285,9 +2285,9 @@
             "upstreamHeadersMs": 2728.2781000000014,
             "upstreamMs": 12923.343200000001
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.20562,
           "agentSeconds": 15.7,
@@ -2304,7 +2304,7 @@
             "upstreamHeadersMs": 2136.5779,
             "upstreamMs": 13646.034
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -2336,9 +2336,9 @@
             "upstreamHeadersMs": 3042.2385000000004,
             "upstreamMs": 14263.525299999998
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.20552,
           "agentSeconds": 16.2,
@@ -2355,7 +2355,7 @@
             "upstreamHeadersMs": 2536.0392999999995,
             "upstreamMs": 14058.346800000001
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -2387,9 +2387,9 @@
             "upstreamHeadersMs": 2397.2663999999995,
             "upstreamMs": 13557.9562
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.26176,
           "agentSeconds": 31,
@@ -2406,7 +2406,7 @@
             "upstreamHeadersMs": 5487.587000000005,
             "upstreamMs": 28619.3381
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -2438,9 +2438,9 @@
             "upstreamHeadersMs": 6655.4077,
             "upstreamMs": 43622.282699999996
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.47286,
           "agentSeconds": 57.4,
@@ -2457,7 +2457,7 @@
             "upstreamHeadersMs": 10610.3665,
             "upstreamMs": 53379.631299999994
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -2489,9 +2489,9 @@
             "upstreamHeadersMs": 2291.7639000000004,
             "upstreamMs": 11299.572300000002
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.154742,
           "agentSeconds": 19,
@@ -2508,7 +2508,7 @@
             "upstreamHeadersMs": 3663.8479999999977,
             "upstreamMs": 16963.791999999998
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -2540,9 +2540,9 @@
             "upstreamHeadersMs": 4791.2369,
             "upstreamMs": 37976.5006
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.495972,
           "agentSeconds": 71.5,
@@ -2559,7 +2559,7 @@
             "upstreamHeadersMs": 9678.353500000012,
             "upstreamMs": 66098.41500000001
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -2591,9 +2591,9 @@
             "upstreamHeadersMs": 7546.6285,
             "upstreamMs": 17716.6893
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.131668,
           "agentSeconds": 30.1,
@@ -2610,7 +2610,7 @@
             "upstreamHeadersMs": 7200.1587999999965,
             "upstreamMs": 27874.6046
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -2642,9 +2642,9 @@
             "upstreamHeadersMs": 3051.7356,
             "upstreamMs": 12594.9712
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.270674,
           "agentSeconds": 26.2,
@@ -2661,7 +2661,7 @@
             "upstreamHeadersMs": 7076.674499999999,
             "upstreamMs": 23906.3431
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -2693,9 +2693,9 @@
             "upstreamHeadersMs": 4165.302099999999,
             "upstreamMs": 13957.172
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.110802,
           "agentSeconds": 17.3,
@@ -2712,7 +2712,7 @@
             "upstreamHeadersMs": 2736.0312,
             "upstreamMs": 15148.5624
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -2744,9 +2744,9 @@
             "upstreamHeadersMs": 2024.3217000000002,
             "upstreamMs": 13082.771
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.147538,
           "agentSeconds": 18.4,
@@ -2763,7 +2763,7 @@
             "upstreamHeadersMs": 3326.277899999999,
             "upstreamMs": 16376.325599999998
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -2795,9 +2795,9 @@
             "upstreamHeadersMs": 4983.836400000002,
             "upstreamMs": 30161.422500000004
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.2843,
           "agentSeconds": 50.7,
@@ -2814,7 +2814,7 @@
             "upstreamHeadersMs": 10612.6691,
             "upstreamMs": 46488.519
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -2846,9 +2846,9 @@
             "upstreamHeadersMs": 2954.4696999999996,
             "upstreamMs": 12707.618499999999
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.27542,
           "agentSeconds": 42.3,
@@ -2865,7 +2865,7 @@
             "upstreamHeadersMs": 18448.282100000004,
             "upstreamMs": 39328.559499999996
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -2897,9 +2897,9 @@
             "upstreamHeadersMs": 5282.875500000004,
             "upstreamMs": 42866.416300000004
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.315048,
           "agentSeconds": 73.2,
@@ -2916,7 +2916,7 @@
             "upstreamHeadersMs": 11085.781299999999,
             "upstreamMs": 68704.8075
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -2948,9 +2948,9 @@
             "upstreamHeadersMs": 3199.7862000000014,
             "upstreamMs": 17035.062400000003
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.208086,
           "agentSeconds": 24.3,
@@ -2967,7 +2967,7 @@
             "upstreamHeadersMs": 9780.463900000002,
             "upstreamMs": 22565.2267
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -2999,9 +2999,9 @@
             "upstreamHeadersMs": 6572.4898,
             "upstreamMs": 49428.33500000001
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.24464,
           "agentSeconds": 53.9,
@@ -3018,7 +3018,7 @@
             "upstreamHeadersMs": 13479.193900000006,
             "upstreamMs": 50886.3023
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -3050,9 +3050,9 @@
             "upstreamHeadersMs": 2354.084500000001,
             "upstreamMs": 12257.769400000001
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.171478,
           "agentSeconds": 25.4,
@@ -3069,7 +3069,7 @@
             "upstreamHeadersMs": 5593.0088,
             "upstreamMs": 23051.6496
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -3101,9 +3101,9 @@
             "upstreamHeadersMs": 10007.15000000001,
             "upstreamMs": 53476.42680000001
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.274342,
           "agentSeconds": 80,
@@ -3120,7 +3120,7 @@
             "upstreamHeadersMs": 20375.06560000001,
             "upstreamMs": 76239.98509999999
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -3152,9 +3152,9 @@
             "upstreamHeadersMs": 8037.251199999997,
             "upstreamMs": 45348.14479999999
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.377264,
           "agentSeconds": 64,
@@ -3171,7 +3171,7 @@
             "upstreamHeadersMs": 9982.073899999994,
             "upstreamMs": 60309.26109999999
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -3203,9 +3203,9 @@
             "upstreamHeadersMs": 2682.9154,
             "upstreamMs": 13911.6622
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.21781,
           "agentSeconds": 32.8,
@@ -3222,7 +3222,7 @@
             "upstreamHeadersMs": 9494.806700000001,
             "upstreamMs": 30604.981999999996
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -3254,9 +3254,9 @@
             "upstreamHeadersMs": 4890.060100000001,
             "upstreamMs": 14948.603100000002
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.122566,
           "agentSeconds": 16.5,
@@ -3273,7 +3273,7 @@
             "upstreamHeadersMs": 3733.694400000001,
             "upstreamMs": 14129.6396
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -3305,9 +3305,9 @@
             "upstreamHeadersMs": 2594.9118000000017,
             "upstreamMs": 11508.114000000001
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.247026,
           "agentSeconds": 28,
@@ -3324,7 +3324,7 @@
             "upstreamHeadersMs": 7122.590000000005,
             "upstreamMs": 26000.348100000003
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -3356,9 +3356,9 @@
             "upstreamHeadersMs": 3701.4403000000007,
             "upstreamMs": 12472.7079
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.200192,
           "agentSeconds": 18.4,
@@ -3375,7 +3375,7 @@
             "upstreamHeadersMs": 2504.299000000001,
             "upstreamMs": 16380.704000000002
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -3407,9 +3407,9 @@
             "upstreamHeadersMs": 3035.2996000000003,
             "upstreamMs": 15368.9386
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.169088,
           "agentSeconds": 14.3,
@@ -3426,7 +3426,7 @@
             "upstreamHeadersMs": 2813.0628000000006,
             "upstreamMs": 12386.9412
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -3458,9 +3458,9 @@
             "upstreamHeadersMs": 8475.707799999993,
             "upstreamMs": 46008.6149
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.281758,
           "agentSeconds": 78.7,
@@ -3477,7 +3477,7 @@
             "upstreamHeadersMs": 14778.356899999999,
             "upstreamMs": 73878.1052
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -3509,9 +3509,9 @@
             "upstreamHeadersMs": 4920.2196,
             "upstreamMs": 39249.021499999995
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.317998,
           "agentSeconds": 61.1,
@@ -3528,7 +3528,7 @@
             "upstreamHeadersMs": 12735.157199999992,
             "upstreamMs": 57941.4611
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -3560,9 +3560,9 @@
             "upstreamHeadersMs": 5269.8794,
             "upstreamMs": 35280.5261
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.229974,
           "agentSeconds": 37.2,
@@ -3579,7 +3579,7 @@
             "upstreamHeadersMs": 6984.2485000000015,
             "upstreamMs": 33733.18199999999
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -3611,9 +3611,9 @@
             "upstreamHeadersMs": 4828.411499999996,
             "upstreamMs": 35668.8998
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.44332,
           "agentSeconds": 60.4,
@@ -3630,7 +3630,7 @@
             "upstreamHeadersMs": 11260.186200000004,
             "upstreamMs": 56653.3266
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -3662,9 +3662,9 @@
             "upstreamHeadersMs": 4614.592499999995,
             "upstreamMs": 39354.715
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.520262,
           "agentSeconds": 79.7,
@@ -3681,7 +3681,7 @@
             "upstreamHeadersMs": 13265.38710000001,
             "upstreamMs": 76195.53420000001
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -3713,9 +3713,9 @@
             "upstreamHeadersMs": 5188.9156,
             "upstreamMs": 32445.710199999998
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.398884,
           "agentSeconds": 53.7,
@@ -3732,7 +3732,7 @@
             "upstreamHeadersMs": 8969.840799999996,
             "upstreamMs": 49799.958399999996
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -3764,9 +3764,9 @@
             "upstreamHeadersMs": 2697.6411,
             "upstreamMs": 13982.211099999999
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.301044,
           "agentSeconds": 28,
@@ -3783,7 +3783,7 @@
             "upstreamHeadersMs": 5593.736100000002,
             "upstreamMs": 25549.2422
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -3815,9 +3815,9 @@
             "upstreamHeadersMs": 4518.211600000001,
             "upstreamMs": 39305.7271
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.297906,
           "agentSeconds": 70.8,
@@ -3834,7 +3834,7 @@
             "upstreamHeadersMs": 10771.70629999999,
             "upstreamMs": 67287.71479999999
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -3866,9 +3866,9 @@
             "upstreamHeadersMs": 6453.751100000007,
             "upstreamMs": 55122.3643
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.417126,
           "agentSeconds": 57.6,
@@ -3885,7 +3885,7 @@
             "upstreamHeadersMs": 8783.292600000013,
             "upstreamMs": 49203.9439
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -3917,9 +3917,9 @@
             "upstreamHeadersMs": 2304.1605,
             "upstreamMs": 14607.048600000002
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.129594,
           "agentSeconds": 26.3,
@@ -3936,7 +3936,7 @@
             "upstreamHeadersMs": 4251.424900000002,
             "upstreamMs": 24091.2766
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -3968,9 +3968,9 @@
             "upstreamHeadersMs": 9135.193800000008,
             "upstreamMs": 45685.94650000001
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.206344,
           "agentSeconds": 36,
@@ -3987,7 +3987,7 @@
             "upstreamHeadersMs": 7835.1199000000015,
             "upstreamMs": 32890.2944
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -4019,9 +4019,9 @@
             "upstreamHeadersMs": 2398.6625000000004,
             "upstreamMs": 11901.373800000001
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.173124,
           "agentSeconds": 27.1,
@@ -4038,7 +4038,7 @@
             "upstreamHeadersMs": 5890.203899999999,
             "upstreamMs": 24524.045299999998
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -4070,9 +4070,9 @@
             "upstreamHeadersMs": 3307.1201,
             "upstreamMs": 13924.9936
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.201792,
           "agentSeconds": 15.2,
@@ -4089,7 +4089,7 @@
             "upstreamHeadersMs": 3948.8021999999996,
             "upstreamMs": 13068.9234
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -4121,9 +4121,9 @@
             "upstreamHeadersMs": 2470.110999999999,
             "upstreamMs": 10988.304199999999
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.197208,
           "agentSeconds": 17.5,
@@ -4140,7 +4140,7 @@
             "upstreamHeadersMs": 2909.1804,
             "upstreamMs": 15604.6349
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -4172,9 +4172,9 @@
             "upstreamHeadersMs": 2671.747099999999,
             "upstreamMs": 14481.5414
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.086694,
           "agentSeconds": 18.6,
@@ -4191,7 +4191,7 @@
             "upstreamHeadersMs": 3683.1889,
             "upstreamMs": 16618.463799999998
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -4223,9 +4223,9 @@
             "upstreamHeadersMs": 7468.449900000005,
             "upstreamMs": 42211.360199999996
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.239852,
           "agentSeconds": 49.6,
@@ -4242,7 +4242,7 @@
             "upstreamHeadersMs": 9454.107200000002,
             "upstreamMs": 45840.68440000001
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -4274,9 +4274,9 @@
             "upstreamHeadersMs": 4185.246300000006,
             "upstreamMs": 37601.0297
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.316976,
           "agentSeconds": 62.4,
@@ -4293,7 +4293,7 @@
             "upstreamHeadersMs": 12598.631099999997,
             "upstreamMs": 58621.7803
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -4325,9 +4325,9 @@
             "upstreamHeadersMs": 4024.5864999999994,
             "upstreamMs": 15826.665299999999
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.086594,
           "agentSeconds": 13,
@@ -4344,7 +4344,7 @@
             "upstreamHeadersMs": 2447.9151999999995,
             "upstreamMs": 10696.836199999998
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -4376,9 +4376,9 @@
             "upstreamHeadersMs": 6879.0013,
             "upstreamMs": 36900.85170000001
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.222374,
           "agentSeconds": 37,
@@ -4395,7 +4395,7 @@
             "upstreamHeadersMs": 6931.588599999999,
             "upstreamMs": 33141.2072
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -4427,9 +4427,9 @@
             "upstreamHeadersMs": 5399.237100000003,
             "upstreamMs": 42459.5188
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.440372,
           "agentSeconds": 91.7,
@@ -4446,7 +4446,7 @@
             "upstreamHeadersMs": 15951.081900000008,
             "upstreamMs": 86256.2143
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -4478,9 +4478,9 @@
             "upstreamHeadersMs": 3566.0652999999993,
             "upstreamMs": 13611.3691
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.140432,
           "agentSeconds": 25,
@@ -4497,7 +4497,7 @@
             "upstreamHeadersMs": 3152.387899999999,
             "upstreamMs": 21678.132500000003
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -4529,9 +4529,9 @@
             "upstreamHeadersMs": 4122.1842000000015,
             "upstreamMs": 14800.67
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.20354,
           "agentSeconds": 21.4,
@@ -4548,7 +4548,7 @@
             "upstreamHeadersMs": 2474.960500000001,
             "upstreamMs": 16194.8749
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -4574,7 +4574,7 @@
           "timing": null,
           "timingNote": "Older capture has no request timing; no causal speed attribution available."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.111018,
           "agentSeconds": 15.7,
@@ -4591,7 +4591,7 @@
             "upstreamHeadersMs": 2097.9033,
             "upstreamMs": 13070.845199999998
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": null
@@ -4619,9 +4619,9 @@
             "upstreamHeadersMs": 4716.7062000000005,
             "upstreamMs": 15759.007399999999
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.286922,
           "agentSeconds": 27.7,
@@ -4638,7 +4638,7 @@
             "upstreamHeadersMs": 6723.032500000001,
             "upstreamMs": 24542.449
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -4670,9 +4670,9 @@
             "upstreamHeadersMs": 2277.1603999999993,
             "upstreamMs": 12925.784999999998
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.28904,
           "agentSeconds": 27.6,
@@ -4689,7 +4689,7 @@
             "upstreamHeadersMs": 7394.031099999997,
             "upstreamMs": 24697.352799999997
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -4721,9 +4721,9 @@
             "upstreamHeadersMs": 4781.674900000001,
             "upstreamMs": 42923.2174
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.384048,
           "agentSeconds": 89.4,
@@ -4740,7 +4740,7 @@
             "upstreamHeadersMs": 20081.169599999997,
             "upstreamMs": 85954.68369999998
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -4772,9 +4772,9 @@
             "upstreamHeadersMs": 2666.120900000001,
             "upstreamMs": 16942.703200000004
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.190228,
           "agentSeconds": 24.9,
@@ -4791,7 +4791,7 @@
             "upstreamHeadersMs": 6123.584700000003,
             "upstreamMs": 22557.4694
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -4823,9 +4823,9 @@
             "upstreamHeadersMs": 2313.4435999999996,
             "upstreamMs": 15855.233000000002
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.191332,
           "agentSeconds": 28.9,
@@ -4842,7 +4842,7 @@
             "upstreamHeadersMs": 7288.349400000001,
             "upstreamMs": 26009.945200000006
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -4874,9 +4874,9 @@
             "upstreamHeadersMs": 4702.477800000004,
             "upstreamMs": 45172.78920000001
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.632118,
           "agentSeconds": 77.5,
@@ -4893,7 +4893,7 @@
             "upstreamHeadersMs": 12150.122100000004,
             "upstreamMs": 72805.2733
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -4925,9 +4925,9 @@
             "upstreamHeadersMs": 3370.0231999999996,
             "upstreamMs": 38579.6738
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.450136,
           "agentSeconds": 65.4,
@@ -4944,7 +4944,7 @@
             "upstreamHeadersMs": 9935.956200000002,
             "upstreamMs": 61614.08129999999
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -4976,9 +4976,9 @@
             "upstreamHeadersMs": 6359.270300000004,
             "upstreamMs": 38324.9997
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.188158,
           "agentSeconds": 35.4,
@@ -4995,7 +4995,7 @@
             "upstreamHeadersMs": 6588.478099999998,
             "upstreamMs": 32238.473600000005
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -5027,9 +5027,9 @@
             "upstreamHeadersMs": 4547.929500000001,
             "upstreamMs": 15678.219
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.214384,
           "agentSeconds": 26.9,
@@ -5046,7 +5046,7 @@
             "upstreamHeadersMs": 8281.263400000002,
             "upstreamMs": 24302.417900000004
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -5078,9 +5078,9 @@
             "upstreamHeadersMs": 8683.797599999996,
             "upstreamMs": 49347.198000000004
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.310258,
           "agentSeconds": 67.3,
@@ -5097,7 +5097,7 @@
             "upstreamHeadersMs": 13479.107300000001,
             "upstreamMs": 63905.6614
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -5129,9 +5129,9 @@
             "upstreamHeadersMs": 4815.0323,
             "upstreamMs": 16637.816
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.130264,
           "agentSeconds": 19.2,
@@ -5148,7 +5148,7 @@
             "upstreamHeadersMs": 2606.706900000001,
             "upstreamMs": 16726.3089
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -5180,9 +5180,9 @@
             "upstreamHeadersMs": 2680.312,
             "upstreamMs": 13647.2613
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.263656,
           "agentSeconds": 31.8,
@@ -5199,7 +5199,7 @@
             "upstreamHeadersMs": 7404.022,
             "upstreamMs": 29285.7576
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -5231,9 +5231,9 @@
             "upstreamHeadersMs": 3255.2007,
             "upstreamMs": 14495.247899999998
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.198626,
           "agentSeconds": 43.9,
@@ -5250,7 +5250,7 @@
             "upstreamHeadersMs": 8732.310699999995,
             "upstreamMs": 41474.86849999999
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -5282,9 +5282,9 @@
             "upstreamHeadersMs": 2303.142100000001,
             "upstreamMs": 14564.769300000002
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.185664,
           "agentSeconds": 28,
@@ -5301,7 +5301,7 @@
             "upstreamHeadersMs": 5954.9198000000015,
             "upstreamMs": 25678.8743
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -5333,9 +5333,9 @@
             "upstreamHeadersMs": 2787.323799999999,
             "upstreamMs": 15031.507699999998
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.229284,
           "agentSeconds": 14.4,
@@ -5352,7 +5352,7 @@
             "upstreamHeadersMs": 2414.5174000000015,
             "upstreamMs": 11912.854100000002
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -5384,9 +5384,9 @@
             "upstreamHeadersMs": 3534.732100000001,
             "upstreamMs": 13080.194200000002
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.208246,
           "agentSeconds": 15.2,
@@ -5403,7 +5403,7 @@
             "upstreamHeadersMs": 2559.9588999999987,
             "upstreamMs": 13361.2496
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -5435,9 +5435,9 @@
             "upstreamHeadersMs": 2655.753999999999,
             "upstreamMs": 12295.509199999999
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.21507,
           "agentSeconds": 30.8,
@@ -5454,7 +5454,7 @@
             "upstreamHeadersMs": 4919.5443,
             "upstreamMs": 28364.6944
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -5486,9 +5486,9 @@
             "upstreamHeadersMs": 3570.6380000000017,
             "upstreamMs": 11476.217999999999
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.085874,
           "agentSeconds": 17.1,
@@ -5505,7 +5505,7 @@
             "upstreamHeadersMs": 2903.5140999999985,
             "upstreamMs": 14923.6076
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -5537,9 +5537,9 @@
             "upstreamHeadersMs": 2836.4136999999996,
             "upstreamMs": 13231.6806
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.137834,
           "agentSeconds": 15,
@@ -5556,7 +5556,7 @@
             "upstreamHeadersMs": 2627.5599999999995,
             "upstreamMs": 12807.3559
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -5588,9 +5588,9 @@
             "upstreamHeadersMs": 4881.002999999999,
             "upstreamMs": 14926.9061
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.223264,
           "agentSeconds": 14.9,
@@ -5607,7 +5607,7 @@
             "upstreamHeadersMs": 4787.399300000001,
             "upstreamMs": 12805.921900000001
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -5639,9 +5639,9 @@
             "upstreamHeadersMs": 4714.450999999999,
             "upstreamMs": 35605.2581
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.242314,
           "agentSeconds": 47.8,
@@ -5658,7 +5658,7 @@
             "upstreamHeadersMs": 7552.670799999992,
             "upstreamMs": 44625.0747
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -5690,9 +5690,9 @@
             "upstreamHeadersMs": 2051.651600000001,
             "upstreamMs": 13928.436900000002
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.14672,
           "agentSeconds": 16.4,
@@ -5709,7 +5709,7 @@
             "upstreamHeadersMs": 3120.9752,
             "upstreamMs": 14361.7935
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -5741,9 +5741,9 @@
             "upstreamHeadersMs": 5578.7509999999975,
             "upstreamMs": 41650.5504
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.243104,
           "agentSeconds": 57.9,
@@ -5760,7 +5760,7 @@
             "upstreamHeadersMs": 10488.180200000003,
             "upstreamMs": 54087.6498
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -5792,9 +5792,9 @@
             "upstreamHeadersMs": 4535.487700000007,
             "upstreamMs": 48409.2202
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.31415,
           "agentSeconds": 68.7,
@@ -5811,7 +5811,7 @@
             "upstreamHeadersMs": 8842.449800000002,
             "upstreamMs": 62899.965
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -5843,9 +5843,9 @@
             "upstreamHeadersMs": 4904.212799999996,
             "upstreamMs": 33707.80529999999
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.178032,
           "agentSeconds": 29.8,
@@ -5862,7 +5862,7 @@
             "upstreamHeadersMs": 5119.975800000002,
             "upstreamMs": 26698.0678
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -5894,9 +5894,9 @@
             "upstreamHeadersMs": 8669.616200000004,
             "upstreamMs": 42130.350099999996
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.223844,
           "agentSeconds": 48.8,
@@ -5913,7 +5913,7 @@
             "upstreamHeadersMs": 9480.150700000007,
             "upstreamMs": 45271.02390000001
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -5945,9 +5945,9 @@
             "upstreamHeadersMs": 2620.5181999999995,
             "upstreamMs": 14877.8598
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.236016,
           "agentSeconds": 17.4,
@@ -5964,7 +5964,7 @@
             "upstreamHeadersMs": 3130.7747999999997,
             "upstreamMs": 15360.987000000001
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -5996,9 +5996,9 @@
             "upstreamHeadersMs": 2643.4121000000005,
             "upstreamMs": 13532.1162
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.086044,
           "agentSeconds": 13.1,
@@ -6015,7 +6015,7 @@
             "upstreamHeadersMs": 2756.4736000000003,
             "upstreamMs": 11191.490999999998
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -6047,9 +6047,9 @@
             "upstreamHeadersMs": 2945.7529000000004,
             "upstreamMs": 12103.444200000002
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.223442,
           "agentSeconds": 15.9,
@@ -6066,7 +6066,7 @@
             "upstreamHeadersMs": 3102.4507999999987,
             "upstreamMs": 13450.621200000001
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -6098,9 +6098,9 @@
             "upstreamHeadersMs": 2390.7309000000005,
             "upstreamMs": 10862.966
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.085874,
           "agentSeconds": 16.6,
@@ -6117,7 +6117,7 @@
             "upstreamHeadersMs": 3325.4730000000004,
             "upstreamMs": 14701.182
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -6149,9 +6149,9 @@
             "upstreamHeadersMs": 3559.3275000000003,
             "upstreamMs": 12125.706300000002
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.118778,
           "agentSeconds": 16,
@@ -6168,7 +6168,7 @@
             "upstreamHeadersMs": 2779.991499999999,
             "upstreamMs": 14004.479699999998
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {
@@ -6200,9 +6200,9 @@
             "upstreamHeadersMs": 7350.230699999996,
             "upstreamMs": 35713.6223
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.236374,
           "agentSeconds": 49.6,
@@ -6219,7 +6219,7 @@
             "upstreamHeadersMs": 10470.0486,
             "upstreamMs": 46309.5039
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable."
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable."
         }
       },
       "costComponents": {

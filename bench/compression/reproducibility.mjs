@@ -26,7 +26,7 @@
  *                     already been retracted, and nothing in the record showed
  *                     it: ours moved, theirs reverted, the standing went from
  *                     nine workloads to five.
- *   headroomVersion   their engine's own version, without which "theirs" names
+ *   altAVersion   their engine's own version, without which "theirs" names
  *                     nothing -- EXCEPT on a known-answer capture, where their
  *                     engine never ran and a version here would name an engine
  *                     that had no part in the column. See `stubArms`.
@@ -56,10 +56,24 @@
  * repeated at will. So the refusal lists all of them.
  */
 
+import { createHash } from 'node:crypto';
+
 /** sha256 truncated to 16, the width the record uses. */
 const HEX16 = /^[0-9a-f]{16}$/;
 /** A version, permissively: leading major.minor.patch, anything after. */
 const SEMVER = /^[0-9]+[.][0-9]+[.][0-9]+/;
+/**
+ * The compared package's version, recorded as `sha256:` + the first 16 hex of
+ * the digest of its version string (`versionDigest`). The repository names
+ * neither the package nor its version; a re-run hashes the installed version
+ * the same way and compares, so the record still pins which engine ran.
+ */
+const VERSION_DIGEST = /^sha256:[0-9a-f]{16}$/;
+
+/** How a version string is recorded: see VERSION_DIGEST. */
+export function versionDigest(version) {
+  return `sha256:${createHash('sha256').update(String(version)).digest('hex').slice(0, 16)}`;
+}
 const SHA40 = /^[0-9a-f]{40}$/;
 /**
  * A tokenizer name, which may now be provider-qualified.
@@ -151,7 +165,7 @@ export function reproducibilityRefusal(prov) {
   // once reproduced a competitor column that had already been retracted. So both
   // arms refuse, and neither is the lenient one.
   const stubbed = typeof prov.stubArms === 'string' && prov.stubArms !== '';
-  const version = prov.headroomVersion;
+  const version = prov.altAVersion;
   const absent =
     version === undefined ||
     version === null ||
@@ -160,7 +174,7 @@ export function reproducibilityRefusal(prov) {
   if (stubbed) {
     if (!absent) {
       problems.push(
-        `headroomVersion is ${JSON.stringify(version)} on a capture taken with ` +
+        `altAVersion is ${JSON.stringify(version)} on a capture taken with ` +
           `stub arms (${prov.stubArms}), where their engine never ran -- it names ` +
           'an engine that produced none of this column'
       );
@@ -171,13 +185,13 @@ export function reproducibilityRefusal(prov) {
     // first would send a known-answer capture off to install a package it never
     // calls.
     problems.push(
-      'headroomVersion is missing (the competitor package version), and stubArms ' +
+      'altAVersion is missing (the competitor package version), and stubArms ' +
         'does not say a stub produced their column instead'
     );
-  } else if (typeof version !== 'string' || !SEMVER.test(version)) {
+  } else if (typeof version !== 'string' || !VERSION_DIGEST.test(version)) {
     problems.push(
-      `headroomVersion is not usable: ${JSON.stringify(version)} ` +
-        '(the competitor package version)'
+      `altAVersion is not usable: ${JSON.stringify(version)} ` +
+        '(the competitor package version, as sha256:<16 hex> of its version string)'
     );
   }
   // A DIRTY TREE IS THE ONE FIELD WHOSE HONEST VALUE IS A REFUSAL. The sha is

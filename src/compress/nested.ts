@@ -3,7 +3,7 @@
  *
  * THE GAP THIS CLOSES, and it is one gap rather than two. Every workload this
  * package compresses well is won by finding the repeating unit; a JSON array
- * hands that unit over for free. Two of HeadRoom's own fixtures hide it behind a
+ * hands that unit over for free. Two of Alternative A's own fixtures hide it behind a
  * string value instead, and we scored badly on exactly those two:
  *
  *   agentic-conversation   48 messages whose `content` fields hold tool results
@@ -32,7 +32,7 @@ import type { CompressionResult, Elision, EngineContext } from './types.js';
  * CONTAINER NESTING IS NOT THE RISK AND MUST NOT BE BUDGETED AS IF IT WERE.
  * `JSON.parse` cannot produce a cycle, so the object tree is finite and walking
  * all of it terminates. Counting object and array levels against a depth budget
- * only starves legitimate documents: the tool results in HeadRoom's
+ * only starves legitimate documents: the tool results in Alternative A's
  * agentic-conversation fixture sit at array > object > array > object > string,
  * which is level four, so a budget of three skipped every one of them and the
  * descent measured 0.0% on the payload it was written for.

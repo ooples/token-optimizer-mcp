@@ -413,7 +413,7 @@ describe('the proxy on the wire', () => {
     expect(seen.headers!['x-api-key']).toBe('sk-test-secret');
   });
 
-  // HeadRoom #3463.
+  // Alternative A #3463.
   it('preserves response headers, including Location', async () => {
     // Their issue is a proxy losing Location on the way back. Headers are
     // copied rather than reconstructed for exactly this reason.

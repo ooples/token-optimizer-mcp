@@ -18,12 +18,12 @@
   "valid": false,
   "failures": [
     "Campaign audit is invalid",
-    "Unverified run refactor:headroom:1"
+    "Unverified run refactor:altA:1"
   ],
   "measured": [
     {
       "task": "refactor",
-      "arm": "headroom",
+      "arm": "altA",
       "rep": 1,
       "recordedVerdict": "FAIL",
       "verdict": "FAIL",

@@ -213,7 +213,7 @@
   },
   {
     "task": "bugfix",
-    "arm": "headroom",
+    "arm": "altA",
     "rep": 1,
     "position": 3,
     "kind": "workflow",
@@ -641,7 +641,7 @@
   },
   {
     "task": "refresh",
-    "arm": "headroom",
+    "arm": "altA",
     "rep": 1,
     "position": 3,
     "kind": "workflow",

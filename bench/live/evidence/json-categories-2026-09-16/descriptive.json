@@ -7,7 +7,7 @@
   ],
   "attempts": 8,
   "proxyPasses": 3,
-  "headroomPasses": 4,
+  "altAPasses": 4,
   "missingCostAttempt": "proxy rep 1: upstream 503 after initial read; partial provider ledger retained, total cost unknown",
   "arms": {
     "proxy": {
@@ -17,7 +17,7 @@
       "agentSeconds": 56.6,
       "coldFirstSensitivityUsd": 0.642438
     },
-    "headroom": {
+    "altA": {
       "estimatedUsd": 0.6882820000000001,
       "input": 145476,
       "requests": 9,

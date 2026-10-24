@@ -66,14 +66,14 @@ export async function provenance(root, codex, python, proxyBin) {
       codex.endsWith('.js') ? process.execPath : codex,
       codex.endsWith('.js') ? [codex, '--version'] : ['--version']
     ),
-    version(python, ['-c', 'import headroom; print(headroom.__version__)']),
+    version(python, ['-c', 'import importlib, os; print(importlib.import_module(os.environ["ALT_A_MODULE"]).__version__)']),
     version('git', ['rev-parse', 'HEAD']),
   ]);
   return {
     capturedAt: new Date().toISOString(),
     node: process.version,
     codex: client,
-    headroom: competitor,
+    altA: competitor,
     gitHead,
     proxyBin,
     sha256,

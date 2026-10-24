@@ -28,7 +28,7 @@
     },
     {
       "task": "entropy",
-      "arm": "headroom",
+      "arm": "altA",
       "rep": 1,
       "recordedVerdict": "PASS",
       "verdict": "PASS",
@@ -43,7 +43,7 @@
     },
     {
       "task": "entropy",
-      "arm": "headroom",
+      "arm": "altA",
       "meanEstimatedUsd": 0.211116
     }
   ],
@@ -51,7 +51,7 @@
     {
       "task": "entropy",
       "candidate": "proxy",
-      "against": "headroom",
+      "against": "altA",
       "estimatedUsdDelta": -0.08426,
       "reductionPercent": 39.91170730783077
     }

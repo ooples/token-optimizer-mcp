@@ -6,7 +6,7 @@
  *   V2 speculative   V1, plus re-inflate a span the model's last reply shows it
  *                    is about to need -- on a request that was happening anyway
  *   V3 history       V1's markers, applied behind the frontier too
- *   ccr              a faithful imitation of HeadRoom: opaque hash markers, an
+ *   ccr              a faithful imitation of Alternative A: opaque hash markers, an
  *                    injected retrieval tool, an injected system message, and
  *                    history compressed. The control we have to beat.
  *
@@ -87,7 +87,7 @@ export interface StrategyOptions {
    *
    * Supplied by the caller rather than held here, so this module keeps no
    * state of its own and two concurrent requests cannot observe each
-   * other's -- HeadRoom's #3486 is exactly that bug. Absent means V1 behaves
+   * other's -- Alternative A's #3486 is exactly that bug. Absent means V1 behaves
    * as it always has and never touches the cached prefix.
    */
   readonly anchors?: AnchorStore;
@@ -162,15 +162,15 @@ export interface StrategyResult {
   readonly anchor?: AnchorDecision;
 }
 
-/** The system message HeadRoom appends, reproduced from ccr/tool_injection.py:143. */
+/** The system message Alternative A appends, reproduced from ccr/tool_injection.py:143. */
 const CCR_SYSTEM = `
 ## Compressed Context Available
 
 Some tool outputs have been compressed to reduce context size. If you need
-the full uncompressed data, you can retrieve it using the \`headroom_retrieve\` tool.
+the full uncompressed data, you can retrieve it using the \`alternative_a_retrieve\` tool.
 
 **How to retrieve:**
-- Call \`headroom_retrieve(hash="<hash>")\` to get the full original content back
+- Call \`alternative_a_retrieve(hash="<hash>")\` to get the full original content back
 
 **Available hashes:** {HASHES}
 
@@ -178,9 +178,9 @@ Look for markers like \`[N items compressed to M. Retrieve more: hash=abc123]\`
 in tool results to find the hash for each compressed output.
 `;
 
-/** The tool definition HeadRoom injects alongside it. */
+/** The tool definition Alternative A injects alongside it. */
 const CCR_TOOL = {
-  name: 'headroom_retrieve',
+  name: 'alternative_a_retrieve',
   description:
     'Retrieve the original, uncompressed content for a compression marker. Call this when you need the full data behind a <<ccr:...>> marker.',
   input_schema: {
@@ -646,7 +646,7 @@ function visitImages(
 /**
  * Collapses repeated images, and records what that removed.
  *
- * SHARED WITH THE CONTROL ARM, deliberately. HeadRoom's published engines are
+ * SHARED WITH THE CONTROL ARM, deliberately. Alternative A's published engines are
  * text engines and all four of their published workloads are text, but their
  * marker layer is content-hash addressed and hash dedup of an identical image
  * block is its natural extension -- so assuming they cannot do this would be
@@ -1367,7 +1367,7 @@ export function v3History(
 }
 
 /**
- * The CCR-style control: what HeadRoom does, as faithfully as we can state it.
+ * The CCR-style control: what Alternative A does, as faithfully as we can state it.
  *
  * Opaque markers, history compressed, and the two injections that make the
  * markers redeemable. `injectedChars` is what those cost -- the number their

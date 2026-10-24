@@ -3,9 +3,9 @@
  *
  * WHAT MAKES THIS DIFFERENT FROM THE COMPETITION, in one type.
  *
- * HeadRoom's CCR replaces elided content with an opaque marker --
+ * Alternative A's CCR replaces elided content with an opaque marker --
  * `<<ccr:HASH,KIND,SIZE>>` -- and teaches the model a bespoke
- * `headroom_retrieve` tool to redeem it. That costs a system message and a
+ * `alternative_a_retrieve` tool to redeem it. That costs a system message and a
  * tool definition on every compressed request, and it degrades badly: on a
  * cache miss the model receives `<<ccr:a1b2c3>> [unresolved: entry not found]`,
  * an unusable token sitting mid-context, and their own module docstring records
@@ -113,7 +113,7 @@ export type ContentKind =
 /**
  * Per-call state handed to an engine.
  *
- * PASSED, NEVER STORED ON THE ENGINE. HeadRoom's #3486 is precisely this: one
+ * PASSED, NEVER STORED ON THE ENGINE. Alternative A's #3486 is precisely this: one
  * shared `ContentRouter` keeping per-request state on `self`, so concurrent
  * requests cross-contaminate each other's options. Engines here are pure
  * functions of (text, context) and hold no mutable state at all, which makes

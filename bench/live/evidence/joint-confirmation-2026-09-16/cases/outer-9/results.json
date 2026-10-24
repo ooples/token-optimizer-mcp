@@ -111,7 +111,7 @@
   },
   {
     "task": "refresh",
-    "arm": "headroom",
+    "arm": "altA",
     "rep": 1,
     "position": 2,
     "kind": "workflow-truncated-read",

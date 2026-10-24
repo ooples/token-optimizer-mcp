@@ -48,7 +48,7 @@
 #
 # Usage:
 #   bash bench/live/ab.sh
-#     ARMS=control,proxy,aggressive,headroom   which arms to run
+#     ARMS=control,proxy,aggressive,altA   which arms to run
 #     (REPS should be a multiple of the arm count, so the rotation completes
 #     and every arm has held every position the same number of times.)
 #     REPS=3                          repetitions per arm
@@ -61,7 +61,7 @@ OUT="${OUT:-${TEMP:-/tmp}/live-ab}"
 REPS="${REPS:-1}"
 ARMS="${ARMS:-control,proxy,substitute}"
 PORT_BASE="${PORT_BASE:-8830}"
-HEADROOM_PORT="${HEADROOM_PORT:-8787}"
+ALT_A_PORT="${ALT_A_PORT:-8787}"
 
 command -v claude >/dev/null 2>&1 || { echo "claude CLI not found" >&2; exit 2; }
 python -m pytest --version >/dev/null 2>&1 || { echo "pytest not available" >&2; exit 2; }
@@ -91,7 +91,7 @@ proxy_env_for() {
     # The competitor's arm runs OUR proxy in null mode: it compresses nothing
     # and only records, so their compressor's output is measured on the same
     # instrument as ours rather than on their own reporting.
-    headroom)   echo "TOKEN_OPTIMIZER_PROXY_NULL=1" ;;
+    altA)   echo "TOKEN_OPTIMIZER_PROXY_NULL=1" ;;
     *)          echo "" ;;
   esac
 }
@@ -101,7 +101,7 @@ port_for() { # deterministic per arm, so two arms never collide
     proxy) echo $((PORT_BASE));;
     nodefer) echo $((PORT_BASE+1));;
     substitute) echo $((PORT_BASE+2));;
-    headroom) echo $((PORT_BASE+3));;
+    altA) echo $((PORT_BASE+3));;
     aggressive) echo $((PORT_BASE+4));;
     control) echo $((PORT_BASE+5));;
     *) echo 0;;
@@ -131,20 +131,20 @@ run_arm() { # arm rep
   # ANTHROPIC_BASE_URL as an upstream, which they do not, and the arm recorded
   # nothing at all.
   local upstream=""
-  if [ "$arm" = "headroom" ]; then
-    python -m headroom.cli proxy --port "$HEADROOM_PORT" \
-      >/dev/null 2>"$OUT/$arm-$rep.headroom.err" &
+  if [ "$arm" = "altA" ]; then
+    python -m alternative_a.cli proxy --port "$ALT_A_PORT" \
+      >/dev/null 2>"$OUT/$arm-$rep.alt-a.err" &
     hrpid=$!
     local hrup=1
-    for _ in $(seq 1 30); do alive "$HEADROOM_PORT" && { hrup=0; break; }; sleep 2; done
+    for _ in $(seq 1 30); do alive "$ALT_A_PORT" && { hrup=0; break; }; sleep 2; done
     if [ "$hrup" != "0" ]; then
       kill "$hrpid" 2>/dev/null
       printf '%-11s rep%-2s %-5s  competitor proxy never came up -- see %s\n' \
-        "$arm" "$rep" "SKIP" "$OUT/$arm-$rep.headroom.err"
+        "$arm" "$rep" "SKIP" "$OUT/$arm-$rep.alt-a.err"
       echo "$arm,$rep,$POSITION,SKIP,0,," >> "$OUT/results.csv"
       return
     fi
-    upstream="http://127.0.0.1:$HEADROOM_PORT"
+    upstream="http://127.0.0.1:$ALT_A_PORT"
   fi
 
   # EVERY ARM RUNS THROUGH OUR PROXY, which is what makes the arms comparable:

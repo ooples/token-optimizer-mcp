@@ -25,7 +25,7 @@ import { spawnSync } from 'node:child_process';
 const here = dirname(fileURLToPath(import.meta.url));
 const repo = join(here, '..', '..');
 const GATE = join(repo, 'bench', 'compression', 'must-win.check.mjs');
-const RECORDS = join(repo, 'bench', 'compression', 'headroom', 'results');
+const RECORDS = join(repo, 'bench', 'compression', 'alt-a', 'results');
 const RUN_MS = 180000;
 
 let dir;

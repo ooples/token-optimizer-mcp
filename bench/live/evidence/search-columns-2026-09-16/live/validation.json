@@ -14,7 +14,7 @@
   },
   {
     "task": "code",
-    "arm": "headroom",
+    "arm": "altA",
     "rep": 1,
     "recordedVerdict": "PASS",
     "verdict": "PASS",
@@ -27,7 +27,7 @@
   },
   {
     "task": "code",
-    "arm": "headroom",
+    "arm": "altA",
     "rep": 2,
     "recordedVerdict": "PASS",
     "verdict": "PASS",
@@ -66,7 +66,7 @@
   },
   {
     "task": "code",
-    "arm": "headroom",
+    "arm": "altA",
     "rep": 3,
     "recordedVerdict": "PASS",
     "verdict": "PASS",
@@ -79,7 +79,7 @@
   },
   {
     "task": "code",
-    "arm": "headroom",
+    "arm": "altA",
     "rep": 4,
     "recordedVerdict": "PASS",
     "verdict": "PASS",

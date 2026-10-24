@@ -20,7 +20,7 @@
   "measured": [
     {
       "task": "json",
-      "arm": "headroom",
+      "arm": "altA",
       "rep": 1,
       "recordedVerdict": "PASS",
       "verdict": "PASS",
@@ -38,7 +38,7 @@
   "aggregates": [
     {
       "task": "json",
-      "arm": "headroom",
+      "arm": "altA",
       "meanEstimatedUsd": 0.133688
     },
     {
@@ -51,7 +51,7 @@
     {
       "task": "json",
       "candidate": "proxy",
-      "against": "headroom",
+      "against": "altA",
       "estimatedUsdDelta": -0.043261999999999995,
       "reductionPercent": 32.3604212793968
     }

@@ -36,7 +36,7 @@
     },
     {
       "task": "bugfix",
-      "arm": "headroom",
+      "arm": "altA",
       "rep": 1,
       "recordedVerdict": "PASS",
       "verdict": "PASS",
@@ -52,7 +52,7 @@
     },
     {
       "task": "bugfix",
-      "arm": "headroom",
+      "arm": "altA",
       "rep": 2,
       "recordedVerdict": "PASS",
       "verdict": "PASS",
@@ -68,7 +68,7 @@
     },
     {
       "task": "bugfix",
-      "arm": "headroom",
+      "arm": "altA",
       "rep": 3,
       "recordedVerdict": "PASS",
       "verdict": "PASS",
@@ -108,7 +108,7 @@
     },
     {
       "task": "refactor",
-      "arm": "headroom",
+      "arm": "altA",
       "rep": 1,
       "recordedVerdict": "PASS",
       "verdict": "PASS",
@@ -124,7 +124,7 @@
     },
     {
       "task": "refactor",
-      "arm": "headroom",
+      "arm": "altA",
       "rep": 2,
       "recordedVerdict": "PASS",
       "verdict": "PASS",
@@ -140,7 +140,7 @@
     },
     {
       "task": "refactor",
-      "arm": "headroom",
+      "arm": "altA",
       "rep": 3,
       "recordedVerdict": "PASS",
       "verdict": "PASS",
@@ -180,7 +180,7 @@
     },
     {
       "task": "refresh",
-      "arm": "headroom",
+      "arm": "altA",
       "rep": 1,
       "recordedVerdict": "PASS",
       "verdict": "PASS",
@@ -196,7 +196,7 @@
     },
     {
       "task": "refresh",
-      "arm": "headroom",
+      "arm": "altA",
       "rep": 2,
       "recordedVerdict": "PASS",
       "verdict": "PASS",
@@ -212,7 +212,7 @@
     },
     {
       "task": "refresh",
-      "arm": "headroom",
+      "arm": "altA",
       "rep": 3,
       "recordedVerdict": "PASS",
       "verdict": "PASS",
@@ -248,7 +248,7 @@
     },
     {
       "task": "bugfix",
-      "arm": "headroom",
+      "arm": "altA",
       "meanEstimatedUsd": 0.3338286666666667
     },
     {
@@ -263,7 +263,7 @@
     },
     {
       "task": "refactor",
-      "arm": "headroom",
+      "arm": "altA",
       "meanEstimatedUsd": 0.3280426666666667
     },
     {
@@ -278,7 +278,7 @@
     },
     {
       "task": "refresh",
-      "arm": "headroom",
+      "arm": "altA",
       "meanEstimatedUsd": 0.324262
     }
   ],
@@ -293,7 +293,7 @@
     {
       "task": "bugfix",
       "candidate": "proxy",
-      "against": "headroom",
+      "against": "altA",
       "estimatedUsdDelta": -0.05675000000000002,
       "reductionPercent": 16.999738388754317
     },
@@ -307,7 +307,7 @@
     {
       "task": "refactor",
       "candidate": "proxy",
-      "against": "headroom",
+      "against": "altA",
       "estimatedUsdDelta": -0.05020600000000003,
       "reductionPercent": 15.304716459647526
     },
@@ -321,7 +321,7 @@
     {
       "task": "refresh",
       "candidate": "proxy",
-      "against": "headroom",
+      "against": "altA",
       "estimatedUsdDelta": -0.10037399999999999,
       "reductionPercent": 30.954598442000602
     }

@@ -3,7 +3,7 @@
 All four refresh attempts passed independent artifact and MCP cache audits.
 Both arms retain our proxy. The explicit prompt carries the same bounded
 discovery guidance added to integrations/AGENTS.md. This is a development
-screen, not a HeadRoom comparison or a controlled before/after experiment.
+screen, not a Alternative A comparison or a controlled before/after experiment.
 
 Core averaged 149,543 input tokens; files averaged 169,634 (13.4% more).
 Files had a 10.1% lower standard-rate cost scenario because of its cache mix.

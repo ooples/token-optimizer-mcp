@@ -2,7 +2,7 @@
  * Search-result compression: say the path once, not on every line.
  *
  * FOUND BY THE BENCHMARK, NOT BY DESIGN. The code-search workload -- the one
- * HeadRoom reports their largest number on, 92% -- scored 0.0% here for every
+ * Alternative A reports their largest number on, 92% -- scored 0.0% here for every
  * strategy including the CCR control, because grep output is not code, not a
  * log, and not prose. It is a fifth content type that none of the engines
  * recognised, and no unit test would have noticed since a hand-written fixture

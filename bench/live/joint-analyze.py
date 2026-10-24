@@ -10,7 +10,7 @@ from scipy.stats import beta, t
 def bounds(pairs, metric, alpha):
     values = []
     for pair in pairs:
-        p, h = (pair['arms'][a][metric] for a in ['proxy', 'headroom'])
+        p, h = (pair['arms'][a][metric] for a in ['proxy', 'altA'])
         if not isinstance(p, (int, float)) or not isinstance(h, (int, float)) or not math.isfinite(p) or not math.isfinite(h) or p <= 0 or h <= 0:
             return {'upperRatio': None, 'reason': 'Incomplete or nonpositive measurement'}
         values.append(math.log(p / h))
@@ -35,7 +35,7 @@ def analyze(plan, audit):
         lower = float(beta.ppf(alpha, wins, n-wins+1)) if wins else 0
         cost = bounds(group, 'estimatedUsd', alpha)
         speed = bounds(group, 'agentSeconds', alpha)
-        valid = len(group) == n and all(r['arms'][a]['verdict'] == 'PASS' for r in group for a in ['proxy', 'headroom'])
+        valid = len(group) == n and all(r['arms'][a]['verdict'] == 'PASS' for r in group for a in ['proxy', 'altA'])
         passed = valid and all(v['upperRatio'] is not None and v['upperRatio'] < 1 and not v.get('degenerate') for v in [cost, speed]) and lower > plan['joint']['minimumFamilyJointWinProbability']
         families[family] = {'planned': n, 'jointWins': wins, 'jointWinProbabilityLower': lower, 'cost': cost, 'speed': speed, 'qualified': passed}
     return {'complete': complete, 'simultaneousConfidence': 1-plan['joint']['alpha'], 'families': families,

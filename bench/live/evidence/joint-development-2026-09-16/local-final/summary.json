@@ -1,5 +1,5 @@
 {
-  "scope": "Local static upstream. Latency and wire bytes; no provider cost or model-quality inference. HeadRoom rate limiter disabled equally for all workloads.",
+  "scope": "Local static upstream. Latency and wire bytes; no provider cost or model-quality inference. Alternative A rate limiter disabled equally for all workloads.",
   "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\adversarial-local-hPa6tf",
   "complete": true,
   "requests": 3840,
@@ -17,7 +17,7 @@
           "cacheKeyChanges": 0,
           "outputChanges": 0
         },
-        "headroom": {
+        "altA": {
           "samples": 40,
           "meanMs": 7.34602999999961,
           "p95Ms": 10.608299999999872,
@@ -43,7 +43,7 @@
           "cacheKeyChanges": 0,
           "outputChanges": 0
         },
-        "headroom": {
+        "altA": {
           "samples": 40,
           "meanMs": 40.286245000000235,
           "p95Ms": 56.834100000000035,
@@ -69,7 +69,7 @@
           "cacheKeyChanges": 0,
           "outputChanges": 0
         },
-        "headroom": {
+        "altA": {
           "samples": 40,
           "meanMs": 7.844060000000172,
           "p95Ms": 8.794199999996636,
@@ -95,7 +95,7 @@
           "cacheKeyChanges": 0,
           "outputChanges": 0
         },
-        "headroom": {
+        "altA": {
           "samples": 40,
           "meanMs": 41.403222500000176,
           "p95Ms": 55.77100000000064,
@@ -121,7 +121,7 @@
           "cacheKeyChanges": 0,
           "outputChanges": 0
         },
-        "headroom": {
+        "altA": {
           "samples": 40,
           "meanMs": 8.184462500000517,
           "p95Ms": 9.567899999994552,
@@ -147,7 +147,7 @@
           "cacheKeyChanges": 0,
           "outputChanges": 0
         },
-        "headroom": {
+        "altA": {
           "samples": 40,
           "meanMs": 39.861470000000374,
           "p95Ms": 47.90910000000076,
@@ -173,7 +173,7 @@
           "cacheKeyChanges": 0,
           "outputChanges": 0
         },
-        "headroom": {
+        "altA": {
           "samples": 40,
           "meanMs": 7.450429999999597,
           "p95Ms": 8.93579999999929,
@@ -199,7 +199,7 @@
           "cacheKeyChanges": 0,
           "outputChanges": 0
         },
-        "headroom": {
+        "altA": {
           "samples": 40,
           "meanMs": 39.77441249999988,
           "p95Ms": 53.41769999999815,
@@ -225,7 +225,7 @@
           "cacheKeyChanges": 0,
           "outputChanges": 0
         },
-        "headroom": {
+        "altA": {
           "samples": 40,
           "meanMs": 12.227277499999218,
           "p95Ms": 17.59200000000419,
@@ -251,7 +251,7 @@
           "cacheKeyChanges": 0,
           "outputChanges": 0
         },
-        "headroom": {
+        "altA": {
           "samples": 40,
           "meanMs": 59.81142750000022,
           "p95Ms": 79.14100000000326,
@@ -277,7 +277,7 @@
           "cacheKeyChanges": 0,
           "outputChanges": 0
         },
-        "headroom": {
+        "altA": {
           "samples": 40,
           "meanMs": 16.025797499999772,
           "p95Ms": 19.412499999998545,
@@ -303,7 +303,7 @@
           "cacheKeyChanges": 0,
           "outputChanges": 0
         },
-        "headroom": {
+        "altA": {
           "samples": 40,
           "meanMs": 58.89860999999937,
           "p95Ms": 68.55849999999919,
@@ -329,7 +329,7 @@
           "cacheKeyChanges": 0,
           "outputChanges": 0
         },
-        "headroom": {
+        "altA": {
           "samples": 40,
           "meanMs": 10.36596499999996,
           "p95Ms": 11.886999999998807,
@@ -355,7 +355,7 @@
           "cacheKeyChanges": 0,
           "outputChanges": 0
         },
-        "headroom": {
+        "altA": {
           "samples": 40,
           "meanMs": 65.99734749999979,
           "p95Ms": 86.85800000000017,
@@ -381,7 +381,7 @@
           "cacheKeyChanges": 0,
           "outputChanges": 0
         },
-        "headroom": {
+        "altA": {
           "samples": 40,
           "meanMs": 11.25334249999969,
           "p95Ms": 15.019599999999627,
@@ -407,7 +407,7 @@
           "cacheKeyChanges": 0,
           "outputChanges": 0
         },
-        "headroom": {
+        "altA": {
           "samples": 40,
           "meanMs": 60.641435000000094,
           "p95Ms": 79.51840000000084,
@@ -433,7 +433,7 @@
           "cacheKeyChanges": 0,
           "outputChanges": 0
         },
-        "headroom": {
+        "altA": {
           "samples": 40,
           "meanMs": 16.724595000000136,
           "p95Ms": 18.899600000000646,
@@ -459,7 +459,7 @@
           "cacheKeyChanges": 0,
           "outputChanges": 0
         },
-        "headroom": {
+        "altA": {
           "samples": 40,
           "meanMs": 86.80367499999984,
           "p95Ms": 107.48240000000078,
@@ -485,7 +485,7 @@
           "cacheKeyChanges": 0,
           "outputChanges": 0
         },
-        "headroom": {
+        "altA": {
           "samples": 40,
           "meanMs": 47.643512499999815,
           "p95Ms": 70.77779999999984,
@@ -511,7 +511,7 @@
           "cacheKeyChanges": 0,
           "outputChanges": 0
         },
-        "headroom": {
+        "altA": {
           "samples": 40,
           "meanMs": 97.71708000000035,
           "p95Ms": 138.26740000000427,
@@ -537,7 +537,7 @@
           "cacheKeyChanges": 0,
           "outputChanges": 0
         },
-        "headroom": {
+        "altA": {
           "samples": 40,
           "meanMs": 17.541617500000484,
           "p95Ms": 23.242600000001403,
@@ -563,7 +563,7 @@
           "cacheKeyChanges": 0,
           "outputChanges": 0
         },
-        "headroom": {
+        "altA": {
           "samples": 40,
           "meanMs": 91.89382500000056,
           "p95Ms": 123.1053000000029,
@@ -589,7 +589,7 @@
           "cacheKeyChanges": 0,
           "outputChanges": 0
         },
-        "headroom": {
+        "altA": {
           "samples": 40,
           "meanMs": 18.079234999999972,
           "p95Ms": 31.906999999999243,
@@ -615,7 +615,7 @@
           "cacheKeyChanges": 0,
           "outputChanges": 0
         },
-        "headroom": {
+        "altA": {
           "samples": 40,
           "meanMs": 85.8786449999997,
           "p95Ms": 112.12359999999899,
@@ -641,7 +641,7 @@
           "cacheKeyChanges": 0,
           "outputChanges": 0
         },
-        "headroom": {
+        "altA": {
           "samples": 40,
           "meanMs": 19.227087499999378,
           "p95Ms": 29.077399999998306,
@@ -667,7 +667,7 @@
           "cacheKeyChanges": 0,
           "outputChanges": 0
         },
-        "headroom": {
+        "altA": {
           "samples": 40,
           "meanMs": 78.61268500000014,
           "p95Ms": 94.79290000000037,
@@ -693,7 +693,7 @@
           "cacheKeyChanges": 0,
           "outputChanges": 0
         },
-        "headroom": {
+        "altA": {
           "samples": 40,
           "meanMs": 36.22236249999996,
           "p95Ms": 42.8778999999995,
@@ -719,7 +719,7 @@
           "cacheKeyChanges": 0,
           "outputChanges": 0
         },
-        "headroom": {
+        "altA": {
           "samples": 40,
           "meanMs": 83.4045250000001,
           "p95Ms": 110.64600000000064,
@@ -745,7 +745,7 @@
           "cacheKeyChanges": 0,
           "outputChanges": 0
         },
-        "headroom": {
+        "altA": {
           "samples": 40,
           "meanMs": 15.683205000000726,
           "p95Ms": 19.385800000000017,
@@ -771,7 +771,7 @@
           "cacheKeyChanges": 0,
           "outputChanges": 0
         },
-        "headroom": {
+        "altA": {
           "samples": 40,
           "meanMs": 81.96840249999968,
           "p95Ms": 107.07559999999648,
@@ -797,7 +797,7 @@
           "cacheKeyChanges": 0,
           "outputChanges": 0
         },
-        "headroom": {
+        "altA": {
           "samples": 40,
           "meanMs": 14.225657500000398,
           "p95Ms": 15.533100000000559,
@@ -823,7 +823,7 @@
           "cacheKeyChanges": 0,
           "outputChanges": 0
         },
-        "headroom": {
+        "altA": {
           "samples": 40,
           "meanMs": 80.37978249999988,
           "p95Ms": 96.80099999999948,
@@ -849,7 +849,7 @@
           "cacheKeyChanges": 0,
           "outputChanges": 0
         },
-        "headroom": {
+        "altA": {
           "samples": 40,
           "meanMs": 15.551047500000276,
           "p95Ms": 18.616799999996147,
@@ -875,7 +875,7 @@
           "cacheKeyChanges": 0,
           "outputChanges": 0
         },
-        "headroom": {
+        "altA": {
           "samples": 40,
           "meanMs": 90.5689150000002,
           "p95Ms": 121.3885999999984,
@@ -901,7 +901,7 @@
           "cacheKeyChanges": 0,
           "outputChanges": 0
         },
-        "headroom": {
+        "altA": {
           "samples": 40,
           "meanMs": 50.74437249999992,
           "p95Ms": 58.79239999999845,
@@ -927,7 +927,7 @@
           "cacheKeyChanges": 0,
           "outputChanges": 0
         },
-        "headroom": {
+        "altA": {
           "samples": 40,
           "meanMs": 204.9173050000003,
           "p95Ms": 473.7635999999984,
@@ -953,7 +953,7 @@
           "cacheKeyChanges": 0,
           "outputChanges": 0
         },
-        "headroom": {
+        "altA": {
           "samples": 40,
           "meanMs": 27.991305000000374,
           "p95Ms": 68.199099999998,
@@ -979,7 +979,7 @@
           "cacheKeyChanges": 0,
           "outputChanges": 0
         },
-        "headroom": {
+        "altA": {
           "samples": 40,
           "meanMs": 125.42114500000025,
           "p95Ms": 333.9438999999984,
@@ -1005,7 +1005,7 @@
           "cacheKeyChanges": 0,
           "outputChanges": 0
         },
-        "headroom": {
+        "altA": {
           "samples": 40,
           "meanMs": 25.071464999999442,
           "p95Ms": 28.501000000000204,
@@ -1031,7 +1031,7 @@
           "cacheKeyChanges": 0,
           "outputChanges": 0
         },
-        "headroom": {
+        "altA": {
           "samples": 40,
           "meanMs": 105.77892749999955,
           "p95Ms": 138.4415999999983,
@@ -1057,7 +1057,7 @@
           "cacheKeyChanges": 0,
           "outputChanges": 0
         },
-        "headroom": {
+        "altA": {
           "samples": 40,
           "meanMs": 17.38881749999964,
           "p95Ms": 19.126000000000204,
@@ -1083,7 +1083,7 @@
           "cacheKeyChanges": 0,
           "outputChanges": 0
         },
-        "headroom": {
+        "altA": {
           "samples": 40,
           "meanMs": 106.71922000000022,
           "p95Ms": 133.17719999999827,
@@ -1109,7 +1109,7 @@
           "cacheKeyChanges": 0,
           "outputChanges": 0
         },
-        "headroom": {
+        "altA": {
           "samples": 40,
           "meanMs": 26.319247499999346,
           "p95Ms": 41.15200000000186,
@@ -1135,7 +1135,7 @@
           "cacheKeyChanges": 0,
           "outputChanges": 0
         },
-        "headroom": {
+        "altA": {
           "samples": 40,
           "meanMs": 110.91231000000008,
           "p95Ms": 160.17179999999644,
@@ -1161,7 +1161,7 @@
           "cacheKeyChanges": 0,
           "outputChanges": 0
         },
-        "headroom": {
+        "altA": {
           "samples": 40,
           "meanMs": 18.787702500000524,
           "p95Ms": 37.72030000000086,
@@ -1187,7 +1187,7 @@
           "cacheKeyChanges": 0,
           "outputChanges": 0
         },
-        "headroom": {
+        "altA": {
           "samples": 40,
           "meanMs": 87.96300249999986,
           "p95Ms": 118.33469999999943,
@@ -1213,7 +1213,7 @@
           "cacheKeyChanges": 0,
           "outputChanges": 0
         },
-        "headroom": {
+        "altA": {
           "samples": 40,
           "meanMs": 15.423500000000331,
           "p95Ms": 24.27509999999893,
@@ -1239,7 +1239,7 @@
           "cacheKeyChanges": 0,
           "outputChanges": 0
         },
-        "headroom": {
+        "altA": {
           "samples": 40,
           "meanMs": 113.7335849999995,
           "p95Ms": 151.23189999999886,

@@ -9,7 +9,7 @@ for (const task of [...new Set(data.records.map((r) => r.task))])
   for (const mode of [...new Set(data.records.map((r) => r.mode))])
     for (const concurrency of [1, 8]) {
       const arms = {};
-      for (const arm of ['proxy', 'headroom']) {
+      for (const arm of ['proxy', 'altA']) {
         const samples = data.records
           .filter(
             (r) =>
@@ -40,9 +40,9 @@ for (const task of [...new Set(data.records.map((r) => r.task))])
         mode,
         concurrency,
         arms,
-        latencyWin: arms.proxy.meanMs < arms.headroom.meanMs,
-        wireBytesWin: arms.proxy.meanBytes < arms.headroom.meanBytes,
-        wireBytesTie: arms.proxy.meanBytes === arms.headroom.meanBytes,
+        latencyWin: arms.proxy.meanMs < arms.altA.meanMs,
+        wireBytesWin: arms.proxy.meanBytes < arms.altA.meanBytes,
+        wireBytesTie: arms.proxy.meanBytes === arms.altA.meanBytes,
       });
     }
 const summary = {
@@ -54,7 +54,7 @@ const summary = {
       data.records,
       {
         round: [0, 1],
-        arm: ['proxy', 'headroom'],
+        arm: ['proxy', 'altA'],
         task: ['tiny', 'entropy', 'numeric', 'nullable', 'json', 'code'],
         mode: ['repeated', 'unique', 'append', 'changing-prefix'],
         concurrency: [1, 8],

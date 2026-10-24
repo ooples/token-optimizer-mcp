@@ -2,7 +2,7 @@
   "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\local-proxy-performance-6FvvHE",
   "complete": true,
   "failure": null,
-  "headroomOverrides": [
+  "altAOverrides": [
     "--no-rate-limit",
     "local --openai-api-url"
   ],
@@ -1373,7 +1373,7 @@
     {
       "round": 0,
       "position": 1,
-      "arm": "headroom",
+      "arm": "altA",
       "task": "logs",
       "mode": "repeated",
       "startupMs": 11763.8592,
@@ -1600,7 +1600,7 @@
     {
       "round": 0,
       "position": 1,
-      "arm": "headroom",
+      "arm": "altA",
       "task": "logs",
       "mode": "unique",
       "startupMs": 11763.8592,
@@ -1827,7 +1827,7 @@
     {
       "round": 0,
       "position": 1,
-      "arm": "headroom",
+      "arm": "altA",
       "task": "json",
       "mode": "repeated",
       "startupMs": 11763.8592,
@@ -2054,7 +2054,7 @@
     {
       "round": 0,
       "position": 1,
-      "arm": "headroom",
+      "arm": "altA",
       "task": "json",
       "mode": "unique",
       "startupMs": 11763.8592,
@@ -2281,7 +2281,7 @@
     {
       "round": 0,
       "position": 1,
-      "arm": "headroom",
+      "arm": "altA",
       "task": "code",
       "mode": "repeated",
       "startupMs": 11763.8592,
@@ -2508,7 +2508,7 @@
     {
       "round": 0,
       "position": 1,
-      "arm": "headroom",
+      "arm": "altA",
       "task": "code",
       "mode": "unique",
       "startupMs": 11763.8592,
@@ -4097,7 +4097,7 @@
     {
       "round": 1,
       "position": 0,
-      "arm": "headroom",
+      "arm": "altA",
       "task": "logs",
       "mode": "repeated",
       "startupMs": 10560.56270000001,
@@ -4324,7 +4324,7 @@
     {
       "round": 1,
       "position": 0,
-      "arm": "headroom",
+      "arm": "altA",
       "task": "logs",
       "mode": "unique",
       "startupMs": 10560.56270000001,
@@ -4551,7 +4551,7 @@
     {
       "round": 1,
       "position": 0,
-      "arm": "headroom",
+      "arm": "altA",
       "task": "json",
       "mode": "repeated",
       "startupMs": 10560.56270000001,
@@ -4778,7 +4778,7 @@
     {
       "round": 1,
       "position": 0,
-      "arm": "headroom",
+      "arm": "altA",
       "task": "json",
       "mode": "unique",
       "startupMs": 10560.56270000001,
@@ -5005,7 +5005,7 @@
     {
       "round": 1,
       "position": 0,
-      "arm": "headroom",
+      "arm": "altA",
       "task": "code",
       "mode": "repeated",
       "startupMs": 10560.56270000001,
@@ -5232,7 +5232,7 @@
     {
       "round": 1,
       "position": 0,
-      "arm": "headroom",
+      "arm": "altA",
       "task": "code",
       "mode": "unique",
       "startupMs": 10560.56270000001,
@@ -10907,7 +10907,7 @@
     {
       "round": 2,
       "position": 2,
-      "arm": "headroom",
+      "arm": "altA",
       "task": "logs",
       "mode": "repeated",
       "startupMs": 13553.633199999924,
@@ -11134,7 +11134,7 @@
     {
       "round": 2,
       "position": 2,
-      "arm": "headroom",
+      "arm": "altA",
       "task": "logs",
       "mode": "unique",
       "startupMs": 13553.633199999924,
@@ -11361,7 +11361,7 @@
     {
       "round": 2,
       "position": 2,
-      "arm": "headroom",
+      "arm": "altA",
       "task": "json",
       "mode": "repeated",
       "startupMs": 13553.633199999924,
@@ -11588,7 +11588,7 @@
     {
       "round": 2,
       "position": 2,
-      "arm": "headroom",
+      "arm": "altA",
       "task": "json",
       "mode": "unique",
       "startupMs": 13553.633199999924,
@@ -11815,7 +11815,7 @@
     {
       "round": 2,
       "position": 2,
-      "arm": "headroom",
+      "arm": "altA",
       "task": "code",
       "mode": "repeated",
       "startupMs": 13553.633199999924,
@@ -12042,7 +12042,7 @@
     {
       "round": 2,
       "position": 2,
-      "arm": "headroom",
+      "arm": "altA",
       "task": "code",
       "mode": "unique",
       "startupMs": 13553.633199999924,

@@ -8,7 +8,7 @@ spec = importlib.util.spec_from_file_location('joint', Path(__file__).with_name(
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
 plan = {'families': ['a', 'b'], 'joint': {'alpha': .05, 'comparisonsPerFamily': 3, 'minimumFamilyJointWinProbability': .5}, 'schedule': [{'id': f'{f}-{i}', 'family': f} for f in ['a', 'b'] for i in range(10)]}
-audit = {'cases': [{**c, 'classification': 'joint-win', 'arms': {'proxy': {'estimatedUsd': .4+i*.001, 'agentSeconds': 1+i*.001, 'verdict': 'PASS'}, 'headroom': {'estimatedUsd': 2, 'agentSeconds': 4, 'verdict': 'PASS'}}} for i,c in enumerate(plan['schedule'])]}
+audit = {'cases': [{**c, 'classification': 'joint-win', 'arms': {'proxy': {'estimatedUsd': .4+i*.001, 'agentSeconds': 1+i*.001, 'verdict': 'PASS'}, 'altA': {'estimatedUsd': 2, 'agentSeconds': 4, 'verdict': 'PASS'}}} for i,c in enumerate(plan['schedule'])]}
 result = module.analyze(plan, audit)
 assert result['allFamiliesQualified'] and result['everyObservedTaskJointWin']
 assert result['families']['a']['jointWinProbabilityLower'] == beta.ppf(.05/6, 10, 1)

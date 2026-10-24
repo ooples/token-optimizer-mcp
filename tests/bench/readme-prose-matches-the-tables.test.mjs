@@ -37,7 +37,7 @@ describe('the README as committed', () => {
     // caught on its own terms: proseDrift raises a `scope` fault for a marker
     // pair it cannot find, which the control below holds it to.
     //
-    // LOWERED ONCE, ON PURPOSE, 2026-10-17 (#505): the HeadRoom section was
+    // LOWERED ONCE, ON PURPOSE, 2026-10-17 (#505): the Alternative A section was
     // rewritten from an 18-row record, and the prose it replaced -- the
     // dial-on and preset paragraphs, the 12-row tallies, the second corpus
     // paragraph -- carried ten figures and 38 covered lines that are now in the
@@ -82,7 +82,7 @@ describe('control: the check catches the drift it was written for', () => {
       'tree had moved.',
       'tree had moved. A later pass took it to 97.3%.'
     );
-    // A figure no table holds. This was 99.4%, which the 18-row HeadRoom table
+    // A figure no table holds. This was 99.4%, which the 18-row Alternative A table
     // now holds (rag-conversation, proxy tokens), so the forgery matched a
     // guarded cell and the control stopped forging anything undeclared.
     expect(README).not.toContain('97.3%');

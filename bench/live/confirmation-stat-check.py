@@ -20,7 +20,7 @@ with tempfile.TemporaryDirectory(prefix='confirmation-stat-check-') as name:
     plan={'pairs':70,'pairsPerFamily':10,'families':[str(i) for i in range(7)],'model':'test','caseSuite':'heldout-v1','scenario':{'usdPerMillion':{'uncached':10,'cached':1,'output':50}},'bootstrap':{'resamples':1000,'seed':17},'success':{'minimumOneSided95SuccessBound':.95,'bothCostUpper95Below':.95},'schedule':[]}
     for family in plan['families']:
         for i in range(10):
-            case={'id':f'{family}-{i}','family':family,'task':'refresh','seed':100+i,'readMode':'natural','arms':['proxy','headroom']}
+            case={'id':f'{family}-{i}','family':family,'task':'refresh','seed':100+i,'readMode':'natural','arms':['proxy','altA']}
             plan['schedule'].append(case)
             folder=root/'cases'/case['id'];folder.mkdir(parents=True)
             (folder/'manifest.json').write_text(json.dumps({'model':'test','caseSuite':'heldout-v1','readMode':'natural','arms':case['arms'],'seedOffset':case['seed']-1,'tasks':['refresh'],'reps':1}))
@@ -42,17 +42,17 @@ with tempfile.TemporaryDirectory(prefix='confirmation-stat-check-') as name:
     failed_rows[1]['usage'] = None
     failed_rows[1]['clientErrors'] = ['unexpected status 503']
     result_file.write_text(json.dumps(failed_rows))
-    first.write_text(json.dumps([{'arm':'proxy','verdict':'PASS'},{'arm':'headroom','verdict':'FAIL','clientErrors':['unexpected status 503']}]))
+    first.write_text(json.dumps([{'arm':'proxy','verdict':'PASS'},{'arm':'altA','verdict':'FAIL','clientErrors':['unexpected status 503']}]))
     incomplete = module.analyze(root)
     assert not incomplete['superiorityEstablished']
-    assert incomplete['proxyPasses'] == 70 and incomplete['headroomPasses'] == 69
+    assert incomplete['proxyPasses'] == 70 and incomplete['altAPasses'] == 69
     assert len(incomplete['attempts']) == 140 and incomplete['pairsMeasured'] == 69
-    failed = next(a for a in incomplete['attempts'] if a['case']=='0-0' and a['arm']=='headroom')
+    failed = next(a for a in incomplete['attempts'] if a['case']=='0-0' and a['arm']=='altA')
     assert failed['knownEstimatedUsd'] > 0 and failed['totalEstimatedUsd'] is None
     assert failed['unknownUsageRequests'] == [{'request':2,'status':503}]
-    assert incomplete['attemptAccounting']['headroom']['unknownCostAttempts'] == 1
+    assert incomplete['attemptAccounting']['altA']['unknownCostAttempts'] == 1
     result_file.write_text(json.dumps(saved_rows))
-    first.write_text(json.dumps([{'arm':'proxy','verdict':'FAIL'},{'arm':'headroom','verdict':'PASS'}]))
+    first.write_text(json.dumps([{'arm':'proxy','verdict':'FAIL'},{'arm':'altA','verdict':'PASS'}]))
     assert not module.analyze(root)['superiorityEstablished']
     first.unlink()
     assert not module.analyze(root)['superiorityEstablished']

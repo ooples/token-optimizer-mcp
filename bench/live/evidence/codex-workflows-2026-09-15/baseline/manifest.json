@@ -3,7 +3,7 @@
   "arms": [
     "control",
     "proxy",
-    "headroom"
+    "altA"
   ],
   "reps": 3,
   "tasks": [

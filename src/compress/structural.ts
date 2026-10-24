@@ -14,7 +14,7 @@
  * an identifier that a model may quote it back or search for it. A dropped
  * value is visibly missing; a shredded one is invisibly wrong, which is worse.
  *
- * HeadRoom's masks.py carries the same idea and names the same threshold: a
+ * Alternative A's masks.py carries the same idea and names the same threshold: a
  * length floor of 20, because "normalized Shannon entropy alone cannot tell a
  * 40-char API key from an 8-char diverse word", matching what trufflehog and
  * detect-secrets use. That floor is adopted here for the same reason.

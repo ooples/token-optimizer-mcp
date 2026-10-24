@@ -34,7 +34,7 @@
 
 ---
 
-## How it compares to HeadRoom
+## How it compares to Alternative A
 
 Providers cache the prompt prefix: cached tokens re-read at **0.1x**, rewritten
 ones bill at **1.25x**. Most compressors optimise bytes removed and ignore that
@@ -55,10 +55,10 @@ leaves a marker naming the path -- the same kind of trade their content-cache
 reference makes. `ours, preset` is the block engine with that move switched on
 at `spillWholeBlockBelow: 0.9`.
 
-<!-- HEADROOM-TABLE:START -- every figure below must appear in
-     `bench/compression/headroom/results/head-to-head.json`. Written by
-     `node bench/compression/readme-headroom.render.mjs` and guarded by
-     `node bench/compression/readme-headroom.check.mjs`; do not hand-edit.
+<!-- ALT-A-TABLE:START -- every figure below must appear in
+     `bench/compression/alt-a/results/head-to-head.json`. Written by
+     `node bench/compression/readme-alt-a.render.mjs` and guarded by
+     `node bench/compression/readme-alt-a.check.mjs`; do not hand-edit.
      Each figure cell is `characters / tokens` removed, tokens counted by
      Anthropic's tokenizer over both arms' real output. `zero-turn ids` is
      `ours / theirs / preset`: of the identifiers planted in that workload,
@@ -88,16 +88,16 @@ at `spillWholeBlockBelow: 0.9`.
 | sre-debugging        | 312,276 | 88.4% / 89.9% | 67.4% / 62.4% | 98.5% / 98.7% |   97.1% / 97.5% |  3116 / 506 / 82 |
 
 Recorded 2026-10-17 at `b1231a8c`, by the command in the
-record's `regenerate` field, over HeadRoom 0.37.0's own fixtures and harness. That arm runs
-HeadRoom itself, so CI does not re-derive it -- it checks these figures and
+record's `regenerate` field, over Alternative A's own fixtures and harness. That arm runs
+Alternative A itself, so CI does not re-derive it -- it checks these figures and
 this provenance against the record instead.
 
-<!-- HEADROOM-TABLE:END -->
+<!-- ALT-A-TABLE:END -->
 
-<!-- HEADROOM-CORPUS:START -- every figure between a CORPUS:START and its CORPUS:END
+<!-- ALT-A-CORPUS:START -- every figure between a CORPUS:START and its CORPUS:END
      must appear in `totals` of
-     `bench/compression/headroom/results/head-to-head.json`. Guarded by
-     `node bench/compression/readme-headroom.check.mjs`; do not hand-edit. -->
+     `bench/compression/alt-a/results/head-to-head.json`. Guarded by
+     `node bench/compression/readme-alt-a.check.mjs`; do not hand-edit. -->
 
 Over the corpus the proxy removes **82.5%** of the characters and **91.5%** of
 the tokens; their best configuration removes 51.5% and 61.4%. It is cheaper than
@@ -106,7 +106,7 @@ the end of the range their markers are built for, and on 17 of 18 when every
 moved block is fetched back. The block engine alone removes
 72.0% and 55.9%: more of the characters than theirs, fewer of the tokens.
 
-<!-- HEADROOM-CORPUS:END -->
+<!-- ALT-A-CORPUS:END -->
 
 **Where they still win, and why.** On `codebase-exploration`, `grep-output`,
 `raw-build-log`, `sre-debugging` and the four raw-data rows their best arm takes
@@ -123,7 +123,7 @@ they move none of that conversation out, so they cost the same at either end,
 while the proxy moves part of it and pays a retrieval for each part it wants
 back.
 
-<!-- HEADROOM-CORPUS:START -->
+<!-- ALT-A-CORPUS:START -->
 
 **The other column is a turn.** A marker is not the content: to read what it
 stands for, the agent spends a request. Of the 13,792 retention units planted in
@@ -135,14 +135,14 @@ round trips across the corpus to get their content back; the block engine
 forces 0. The proxy, like theirs, trades a turn for every block it moves, and
 that turn is what the fetch-rate end of the cost model prices.
 
-<!-- HEADROOM-CORPUS:END -->
+<!-- ALT-A-CORPUS:END -->
 
 **What their marker costs is priced, not just its size.** Their marker is only
-redeemable because their proxy also sends a `headroom_retrieve` tool with the
+redeemable because their proxy also sends a `alternative_a_retrieve` tool with the
 request -- on by default (`ccr_inject_tool`), and on every later request once a
 session has used it -- so every row where their best arm leaves a marker is
 charged for that tool's definition as well, recorded from their own package by
-`bench/compression/headroom/ccr-tool.py`. The turn that first adds the tool also
+`bench/compression/alt-a/ccr-tool.py`. The turn that first adds the tool also
 rewrites the whole cached prefix behind it; that is not charged, which errs in
 their favour. Ours needs no tool: our marker names a path the agent opens with
 the `Read` it already has, and the path is priced at the length the proxy really
@@ -162,9 +162,9 @@ from pixels on both arms either way.
 Reproduce the whole table:
 
 ```bash
-python bench/compression/headroom/run-theirs.py <headroom-clone> <out-dir>
+python bench/compression/alt-a/run-theirs.py <alt-a-clone> <out-dir>
 
-python bench/compression/headroom/resolve-theirs.py <headroom-clone> <out-dir>
+python bench/compression/alt-a/resolve-theirs.py <alt-a-clone> <out-dir>
 node bench/compression/head-to-head.mjs <out-dir>
 ```
 
@@ -724,7 +724,7 @@ planted needle disappears, because a size metric alone cannot tell compression
 from truncation.
 
 Reduction over the content each strategy is permitted to rewrite, on fixtures
-matching the four workloads HeadRoom publishes, is the guarded table earlier in
+matching the four workloads Alternative A publishes, is the guarded table earlier in
 this section -- 97.5%, 97.8%, 98.6% and 54.7% against their 72.8%, 92.1%, 92.2%
 and 47.4%. It is stated once and checked there rather than restated here, which
 is how this copy came to claim 98.9%, 98.2%, 92.8% and 61.3% long after the
@@ -740,7 +740,7 @@ of their published ones, from their own benchmark generator's definition.
 arithmetic: a cached prefix is re-read at 0.1x and a rewritten one is charged at
 1.25x, so an arm can remove more bytes and still cost more. Run
 `node bench/compression/proof.mjs` and that is exactly what happens -- the
-HeadRoom-style arm removes a larger share of every workload and loses on
+Alternative A-style arm removes a larger share of every workload and loses on
 cache-weighted effective tokens on all of them:
 
 | workload        | raw reduction, ours / theirs | effective tokens, ours / theirs |
@@ -763,7 +763,7 @@ charging the longest byte-identical leading run at 0.1x and everything after at
 1.25x. Four independent sessions, whole request including system prompt and tool
 schema, against no proxy at all:
 
-| turns | HeadRoom's design | ours (v4-substitute) | cheaper on |
+| turns | Alternative A's design | ours (v4-substitute) | cheaper on |
 | ----- | ----------------- | -------------------- | ---------- |
 | 10    | 1.000x            | **0.953x**           | 4 of 4     |
 | 20    | 0.999x            | **0.915x**           | 4 of 4     |
@@ -773,7 +773,7 @@ signatures. Its savings therefore do not establish that useful reasoning survive
 compression. It also uses our reimplementation of the competitor's design;
 these are offline estimates, not results from their shipped proxy.
 
-**Live comparison against HeadRoom's shipped proxy.** The balanced four-arm run
+**Live comparison against Alternative A's shipped proxy.** The balanced four-arm run
 recorded in commit `f712b4ec` used `bench/live/ab.sh`, rotated each arm through
 every position, and re-ran pytest independently after each task:
 
@@ -782,19 +782,19 @@ every position, and re-ran pytest independently after each task:
 | uncompressed control                                     |                    134,706 |          4/4 |
 | Token Optimizer, previous 1,500-character deferral floor |                    100,818 |          4/4 |
 | Token Optimizer, zero floor (now the default)            |                     49,053 |          4/4 |
-| HeadRoom shipped proxy                                   |                     48,626 |          4/4 |
+| Alternative A shipped proxy                                   |                     48,626 |          4/4 |
 
 Weighted input is `input + 1.25 * cache_creation + 0.1 * cache_read`; it excludes
-output cost. Both zero-floor Token Optimizer and HeadRoom reduced that measure
-by about 64% versus control. Token Optimizer used about 0.9% more than HeadRoom.
+output cost. Both zero-floor Token Optimizer and Alternative A reduced that measure
+by about 64% versus control. Token Optimizer used about 0.9% more than Alternative A.
 This small arithmetic repair task does not establish superiority across tasks,
 compression quality, or total cost. Rotation balances run position, but does
 not guarantee that shared provider-cache effects disappear.
 
-**Codex three-task comparison against HeadRoom 0.37.0 (2026-09-18).** Three
+**Codex three-task comparison against Alternative A (2026-09-18).** Three
 synthetic controlled-read tasks, three repetitions, three arms, every arm in
 every position. All 27 runs returned the correct answer, so this compares cost
-at equal correctness rather than accuracy. HeadRoom ran in `--mode token`, its
+at equal correctness rather than accuracy. Alternative A ran in `--mode token`, its
 compression-first setting, not the `cache` default that exists to freeze the
 cache hit rate.
 
@@ -802,17 +802,17 @@ cache hit rate.
 | ------------------------------- | ----------------: | --------------: | -----: | -------: | ------------: |
 | uncompressed control            |            55,632 |          43,079 |    200 |      3.0 |          19.1 |
 | Token Optimizer                 |            42,468 |          33,052 |    189 |      3.0 |          17.3 |
-| HeadRoom 0.37.0, `--mode token` |            71,626 |          51,897 |    285 |      4.3 |          27.3 |
+| Alternative A, `--mode token` |            71,626 |          51,897 |    285 |      4.3 |          27.3 |
 
 Input reduction against the control was 22.7% on the log task, 34.3% on the JSON
-task and 11.5% on the code search; against HeadRoom, 54.9%, 10.0% and 42.2%.
+task and 11.5% on the code search; against Alternative A, 54.9%, 10.0% and 42.2%.
 Every task favoured this proxy on both comparisons, and the JSON column is where
-HeadRoom is strongest and the margin thinnest.
+Alternative A is strongest and the margin thinnest.
 
 The mechanism is visible in two numbers that move independently. Mean input per
-REQUEST was 14,156 here against HeadRoom's 16,529 and the control's 18,544 --
+REQUEST was 14,156 here against Alternative A's 16,529 and the control's 18,544 --
 both proxies compress, and this one compresses harder. Mean requests per RUN was
-3.0, the same as the control, against HeadRoom's 4.3. A compressor that elides
+3.0, the same as the control, against Alternative A's 4.3. A compressor that elides
 content the agent then has to read back spends a turn recovering it, and on
 these workloads a turn costs more than the elision saved; that is the failure
 this project's own deferral floor exists to avoid, and it is what the extra
@@ -823,15 +823,15 @@ WHAT THIS DOES NOT SHOW. These are token counts, not dollar costs, and
 synthetic workloads do not establish a universal win. Each task ran in a fresh
 temporary workspace with no knowledge graph, so graph injection contributed
 nothing and this measures compression alone. Cached tokens are a subset of the
-input column, not an additional charge. HeadRoom's compression is scored from
+input column, not an additional charge. Alternative A's compression is scored from
 provider usage rather than byte counts recorded at our own listener.
 
-Reproduce with `HEADROOM_MODE=token node bench/live/codex.mjs`, then
+Reproduce with `ALT_A_MODE=token node bench/live/codex.mjs`, then
 `node bench/live/report-codex.mjs <evidence-dir>`; the figures above were read
 only after that reporter returned `valid: true` with `balanced: true` and no
 failures. Four earlier campaigns were discarded rather than published: one ran
-without HeadRoom's `[proxy]` extra so every HeadRoom run errored before
-readiness, one ran HeadRoom in its `cache` default, one was voided by the
+without Alternative A's `[proxy]` extra so every Alternative A run errored before
+readiness, one ran Alternative A in its `cache` default, one was voided by the
 reporter for an incomplete request capture, and one died on `ENOSPC` with the
 host disk full.
 
@@ -840,8 +840,8 @@ weekly usage limit and is incomplete. Its missing usage cannot count as a win.
 Codex validation runs independently through the Responses API.
 
 **Latest Codex joint confirmation (2026-09-16).** The frozen twelve-family study
-completed 120 pairs against installed HeadRoom 0.37.0. Our proxy passed 119/120
-attempts; HeadRoom passed 120/120. One local allocation crash left unknown usage.
+completed 120 pairs against installed Alternative A. Our proxy passed 119/120
+attempts; Alternative A passed 120/120. One local allocation crash left unknown usage.
 There were **77 strict joint wins** (passing, cheaper, and faster), 20 cost-only
 losses, 12 speed-only losses, nine losses on both measures, one equal-time pair
 that cost more, and the failed attempt. Across the **119 fully measured pairs
@@ -853,8 +853,8 @@ preserves explicit nulls, retains complete numeric tables, and avoids copying
 unchanged payloads. See the [full results, every loss, and retained crash](bench/live/evidence/joint-confirmation-2026-09-16/README.md).
 
 **Earlier expanded local Codex confirmation.** A preregistered seven-family study ran
-70 pairs / 140 attempts against installed HeadRoom 0.37.0. Our frozen proxy
-passed 70/70; HeadRoom passed 69/70 with one upstream HTTP 503 and missing usage.
+70 pairs / 140 attempts against installed Alternative A. Our frozen proxy
+passed 70/70; Alternative A passed 69/70 with one upstream HTTP 503 and missing usage.
 The complete-ledger gate therefore failed: **superiority was not established**.
 Across the 69 fully measured pairs only, descriptive totals were 25.7% lower
 estimated cost, 38.9% lower input, and 30.0% lower agent time for our proxy.
@@ -863,13 +863,13 @@ JSON remained a loss (35.1% higher estimated cost). See the
 
 A subsequent rare-string-group fix targets that JSON loss. In three fully measured
 fresh pairs, input fell 17.7%, estimated cost 13.4%, and agent time 13.6% versus
-HeadRoom, with three requests each. A fourth pair had a retained upstream 503 on
+Alternative A, with three requests each. A fourth pair had a retained upstream 503 on
 our arm; one measured pair still cost more. These are development results, not
 confirmation of the new build or an all-workload win. See the
 [complete screen and exclusions](bench/live/evidence/json-categories-2026-09-16/README.md).
 
 **Current amended Codex study.** The next fixed 70-pair schedule completed:
-our proxy passed 69/70 and HeadRoom 70/70. Our remaining attempt hit an upstream
+our proxy passed 69/70 and Alternative A 70/70. Our remaining attempt hit an upstream
 503 with unknown usage, so strict superiority was not established. Across the
 69 fully measured pairs only, estimated cost was 27.9% lower, input 44.2% lower,
 and agent time 31.7% lower. Every family's mean cost favored our proxy, including
@@ -879,7 +879,7 @@ schedule stayed fixed. See the [full results, amendment, and retained failure](b
 
 **Exact search rows, subsequent development.** Factoring shared declaration syntax
 while preserving every identifier and value closed the code-size gap: 37.5% fewer
-bytes than archived HeadRoom on the original 40 losing inputs. Eight fresh local
+bytes than archived Alternative A on the original 40 losing inputs. Eight fresh local
 cases also sent fewer bytes. Four balanced live pairs all passed their audits;
 our estimated token cost was 50.1% lower, input 44.8% lower, and agent time 51.1%
 lower. This is a small development follow-up, separate from the broader study.
@@ -895,22 +895,22 @@ lower, and input was 15.9% lower. These development runs retain every original
 loss; cache and model variation also affect results. See the [case-by-case audit,
 fixes, exact replay, and live evidence](bench/live/evidence/cost-losses-2026-09-16/README.md).
 
-**Local proxy performance (2026-09-16).** Against installed HeadRoom 0.37.0,
+**Local proxy performance (2026-09-16).** Against installed Alternative A,
 2,160 completed local-upstream requests covered repeated and unique logs, JSON,
 and code-search output in three rotated arm orders. Our mean latency and process
 CPU were lower in all six groups. Sampled peak process-tree private memory was
 80.0 MiB versus 1,909.9 MiB; this is footprint, not allocation volume. Unique
-code still forwarded 5.7% more bytes. HeadRoom's rate limit was disabled for this
+code still forwarded 5.7% more bytes. Alternative A's rate limit was disabled for this
 throughput measurement; compression settings stayed default. These measurements
 do not measure model quality or billed cost. See the
 [raw samples, reproduction commands, and limitations](bench/live/evidence/local-proxy-performance-2026-09-16/README.md).
 
 **Live Codex comparison (2026-09-15).** Local Codex CLI 0.154.0, `gpt-6-astra`,
-and installed HeadRoom 0.37.0 completed a balanced 27-run campaign. All three
+and installed Alternative A completed a balanced 27-run campaign. All three
 arms passed all nine tasks; every initial read was complete, and all provider
 ledger totals matched Codex's reported usage.
 
-| workload            | mean input, ours | mean input, HeadRoom | reduction vs HeadRoom |
+| workload            | mean input, ours | mean input, Alternative A | reduction vs Alternative A |
 | ------------------- | ---------------: | -------------------: | --------------------: |
 | JSON outlier lookup |           39,318 |               44,043 |                 10.7% |
 | code search         |           44,427 |               82,697 |                 46.3% |
@@ -923,7 +923,7 @@ and [reproduction instructions](bench/live/README.md). These three synthetic tas
 do not establish superiority across all workloads.
 
 A separate **27-run natural-workflow development screen** passed all runs and
-measured 35.5%, 43.5%, and 16.6% less total input than installed HeadRoom for retry
+measured 35.5%, 43.5%, and 16.6% less total input than installed Alternative A for retry
 bug fixes, multi-file refactors, and configuration refreshes. These are small
 synthetic repositories with natural tool selection. Uncached input and latency
 have separate results; see the [workflow evidence and limitations](bench/live/evidence/codex-workflows-2026-09-15/README.md).

@@ -1,5 +1,5 @@
 {
-  "scope": "Local static upstream. Latency and wire bytes; no provider cost or model-quality inference. HeadRoom rate limiter disabled equally for all workloads.",
+  "scope": "Local static upstream. Latency and wire bytes; no provider cost or model-quality inference. Alternative A rate limiter disabled equally for all workloads.",
   "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\adversarial-local-zDbxdN",
   "complete": true,
   "requests": 2880,
@@ -15,7 +15,7 @@
           "p95Ms": 4.962099999999964,
           "meanBytes": 353
         },
-        "headroom": {
+        "altA": {
           "samples": 40,
           "meanMs": 7.142420000000447,
           "p95Ms": 10.009100000002945,
@@ -37,7 +37,7 @@
           "p95Ms": 15.900099999998929,
           "meanBytes": 353
         },
-        "headroom": {
+        "altA": {
           "samples": 40,
           "meanMs": 38.88147499999959,
           "p95Ms": 51.92759999999544,
@@ -59,7 +59,7 @@
           "p95Ms": 2.5011999999987893,
           "meanBytes": 353
         },
-        "headroom": {
+        "altA": {
           "samples": 40,
           "meanMs": 7.340419999999767,
           "p95Ms": 9.227999999999156,
@@ -81,7 +81,7 @@
           "p95Ms": 7.4641000000046915,
           "meanBytes": 353
         },
-        "headroom": {
+        "altA": {
           "samples": 40,
           "meanMs": 39.82127499999947,
           "p95Ms": 56.47220000000016,
@@ -103,7 +103,7 @@
           "p95Ms": 2.3607999999999265,
           "meanBytes": 773.25
         },
-        "headroom": {
+        "altA": {
           "samples": 40,
           "meanMs": 7.8085600000003526,
           "p95Ms": 9.10360000000037,
@@ -125,7 +125,7 @@
           "p95Ms": 7.676599999998871,
           "meanBytes": 773.25
         },
-        "headroom": {
+        "altA": {
           "samples": 40,
           "meanMs": 40.87597499999997,
           "p95Ms": 52.85989999999947,
@@ -147,7 +147,7 @@
           "p95Ms": 3.0239000000001397,
           "meanBytes": 6308
         },
-        "headroom": {
+        "altA": {
           "samples": 40,
           "meanMs": 12.79065499999956,
           "p95Ms": 18.15020000000004,
@@ -169,7 +169,7 @@
           "p95Ms": 9.122299999999996,
           "meanBytes": 6308
         },
-        "headroom": {
+        "altA": {
           "samples": 40,
           "meanMs": 58.26145749999987,
           "p95Ms": 76.05589999999938,
@@ -191,7 +191,7 @@
           "p95Ms": 3.23859999999695,
           "meanBytes": 6308
         },
-        "headroom": {
+        "altA": {
           "samples": 40,
           "meanMs": 15.926055000000678,
           "p95Ms": 19.868900000001304,
@@ -213,7 +213,7 @@
           "p95Ms": 8.70920000000001,
           "meanBytes": 6308
         },
-        "headroom": {
+        "altA": {
           "samples": 40,
           "meanMs": 61.474527499999475,
           "p95Ms": 82.75310000000172,
@@ -235,7 +235,7 @@
           "p95Ms": 2.4779000000000906,
           "meanBytes": 6728.25
         },
-        "headroom": {
+        "altA": {
           "samples": 40,
           "meanMs": 10.414707500000167,
           "p95Ms": 12.321100000001024,
@@ -257,7 +257,7 @@
           "p95Ms": 7.791799999999057,
           "meanBytes": 6728.25
         },
-        "headroom": {
+        "altA": {
           "samples": 40,
           "meanMs": 57.67803749999975,
           "p95Ms": 70.99469999999565,
@@ -279,7 +279,7 @@
           "p95Ms": 4.043700000001991,
           "meanBytes": 1084
         },
-        "headroom": {
+        "altA": {
           "samples": 40,
           "meanMs": 14.500572499999999,
           "p95Ms": 16.881000000001222,
@@ -301,7 +301,7 @@
           "p95Ms": 16.48529999999994,
           "meanBytes": 1084
         },
-        "headroom": {
+        "altA": {
           "samples": 40,
           "meanMs": 83.09551750000037,
           "p95Ms": 108.16159999999945,
@@ -323,7 +323,7 @@
           "p95Ms": 6.812200000000303,
           "meanBytes": 1083.5
         },
-        "headroom": {
+        "altA": {
           "samples": 40,
           "meanMs": 36.05548249999974,
           "p95Ms": 46.37589999999909,
@@ -345,7 +345,7 @@
           "p95Ms": 18.026599999999917,
           "meanBytes": 1083.5
         },
-        "headroom": {
+        "altA": {
           "samples": 40,
           "meanMs": 76.31368999999977,
           "p95Ms": 106.11329999999725,
@@ -367,7 +367,7 @@
           "p95Ms": 3.565599999999904,
           "meanBytes": 1504.25
         },
-        "headroom": {
+        "altA": {
           "samples": 40,
           "meanMs": 25.812577500000863,
           "p95Ms": 30.957900000001246,
@@ -389,7 +389,7 @@
           "p95Ms": 17.144900000000007,
           "meanBytes": 1504.25
         },
-        "headroom": {
+        "altA": {
           "samples": 40,
           "meanMs": 89.79636249999984,
           "p95Ms": 110.10350000000471,
@@ -411,7 +411,7 @@
           "p95Ms": 3.3598999999958323,
           "meanBytes": 1051
         },
-        "headroom": {
+        "altA": {
           "samples": 40,
           "meanMs": 14.578419999999733,
           "p95Ms": 18.12199999999939,
@@ -433,7 +433,7 @@
           "p95Ms": 15.097500000003492,
           "meanBytes": 1051
         },
-        "headroom": {
+        "altA": {
           "samples": 40,
           "meanMs": 90.13379499999965,
           "p95Ms": 142.25570000000153,
@@ -455,7 +455,7 @@
           "p95Ms": 5.6041000000041095,
           "meanBytes": 1051
         },
-        "headroom": {
+        "altA": {
           "samples": 40,
           "meanMs": 32.59992999999986,
           "p95Ms": 43.031899999994494,
@@ -477,7 +477,7 @@
           "p95Ms": 22.853000000000065,
           "meanBytes": 1051
         },
-        "headroom": {
+        "altA": {
           "samples": 40,
           "meanMs": 91.95150500000027,
           "p95Ms": 123.28149999999732,
@@ -499,7 +499,7 @@
           "p95Ms": 4.2146999999999935,
           "meanBytes": 1471.25
         },
-        "headroom": {
+        "altA": {
           "samples": 40,
           "meanMs": 14.275112499999887,
           "p95Ms": 17.74789999999848,
@@ -521,7 +521,7 @@
           "p95Ms": 16.687299999999823,
           "meanBytes": 1471.25
         },
-        "headroom": {
+        "altA": {
           "samples": 40,
           "meanMs": 74.73880249999993,
           "p95Ms": 101.00540000000183,
@@ -543,7 +543,7 @@
           "p95Ms": 3.9832000000001244,
           "meanBytes": 1681
         },
-        "headroom": {
+        "altA": {
           "samples": 40,
           "meanMs": 14.350967500000298,
           "p95Ms": 18.18760000000111,
@@ -565,7 +565,7 @@
           "p95Ms": 21.648699999997916,
           "meanBytes": 1681
         },
-        "headroom": {
+        "altA": {
           "samples": 40,
           "meanMs": 78.05419499999934,
           "p95Ms": 93.60519999999815,
@@ -587,7 +587,7 @@
           "p95Ms": 5.655999999999949,
           "meanBytes": 1674.85
         },
-        "headroom": {
+        "altA": {
           "samples": 40,
           "meanMs": 49.66914500000003,
           "p95Ms": 60.45829999999842,
@@ -609,7 +609,7 @@
           "p95Ms": 18.346599999999853,
           "meanBytes": 1674.85
         },
-        "headroom": {
+        "altA": {
           "samples": 40,
           "meanMs": 83.75464750000046,
           "p95Ms": 104.27250000000276,
@@ -631,7 +631,7 @@
           "p95Ms": 4.395400000001246,
           "meanBytes": 2101.25
         },
-        "headroom": {
+        "altA": {
           "samples": 40,
           "meanMs": 14.98256999999985,
           "p95Ms": 17.08589999999822,
@@ -653,7 +653,7 @@
           "p95Ms": 19.010499999999865,
           "meanBytes": 2101.25
         },
-        "headroom": {
+        "altA": {
           "samples": 40,
           "meanMs": 84.50276250000016,
           "p95Ms": 105.22080000000278,
@@ -675,7 +675,7 @@
           "p95Ms": 3.014599999994971,
           "meanBytes": 7206
         },
-        "headroom": {
+        "altA": {
           "samples": 40,
           "meanMs": 14.709627499999897,
           "p95Ms": 17.503899999999703,
@@ -697,7 +697,7 @@
           "p95Ms": 9.302599999999984,
           "meanBytes": 7206
         },
-        "headroom": {
+        "altA": {
           "samples": 40,
           "meanMs": 81.3593649999998,
           "p95Ms": 108.18800000000192,
@@ -719,7 +719,7 @@
           "p95Ms": 3.674200000001292,
           "meanBytes": 6593.45
         },
-        "headroom": {
+        "altA": {
           "samples": 40,
           "meanMs": 30.903487500000303,
           "p95Ms": 82.81429999999818,
@@ -741,7 +741,7 @@
           "p95Ms": 7.4689999999973224,
           "meanBytes": 6593.45
         },
-        "headroom": {
+        "altA": {
           "samples": 40,
           "meanMs": 112.31329499999993,
           "p95Ms": 170.3686000000016,
@@ -763,7 +763,7 @@
           "p95Ms": 2.4308999999998377,
           "meanBytes": 7626.25
         },
-        "headroom": {
+        "altA": {
           "samples": 40,
           "meanMs": 26.11982749999952,
           "p95Ms": 30.045100000003004,
@@ -785,7 +785,7 @@
           "p95Ms": 12.514299999999821,
           "meanBytes": 7626.25
         },
-        "headroom": {
+        "altA": {
           "samples": 40,
           "meanMs": 86.30389249999962,
           "p95Ms": 106.58309999999983,

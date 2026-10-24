@@ -12,7 +12,7 @@ if (
     data.records,
     {
       round: [0, 1, 2],
-      arm: ['proxy', 'headroom', 'control'],
+      arm: ['proxy', 'altA', 'control'],
       task: ['logs', 'json', 'code'],
       mode: ['repeated', 'unique'],
     },
@@ -46,7 +46,7 @@ const cases = [];
 for (const task of ['logs', 'json', 'code'])
   for (const mode of ['repeated', 'unique']) {
     const arms = {};
-    for (const arm of ['proxy', 'headroom', 'control']) {
+    for (const arm of ['proxy', 'altA', 'control']) {
       const groups = data.records.filter(
         (r) => r.task === task && r.mode === mode && r.arm === arm
       );
@@ -77,26 +77,26 @@ for (const task of ['logs', 'json', 'code'])
       mode,
       arms,
       latencyReductionPercent:
-        reduction(arms.proxy.meanMs, arms.headroom.meanMs) === null
+        reduction(arms.proxy.meanMs, arms.altA.meanMs) === null
           ? null
-          : 100 * reduction(arms.proxy.meanMs, arms.headroom.meanMs),
+          : 100 * reduction(arms.proxy.meanMs, arms.altA.meanMs),
       cpuReductionPercent:
-        arms.headroom.processCpuMsPerRequest === 0
+        arms.altA.processCpuMsPerRequest === 0
           ? null
           : 100 *
             reduction(
               arms.proxy.processCpuMsPerRequest,
-              arms.headroom.processCpuMsPerRequest
+              arms.altA.processCpuMsPerRequest
             ),
     });
   }
 const summary = {
   complete: true,
   requests: data.records.reduce((n, r) => n + r.samples.length, 0),
-  headroomOverrides: data.headroomOverrides,
+  altAOverrides: data.altAOverrides,
   cases,
   memoryFootprint: Object.fromEntries(
-    ['proxy', 'headroom', 'control'].map((arm) => [
+    ['proxy', 'altA', 'control'].map((arm) => [
       arm,
       Math.max(
         ...data.records

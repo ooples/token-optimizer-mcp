@@ -28,7 +28,7 @@
     },
     {
       "task": "refactor",
-      "arm": "headroom",
+      "arm": "altA",
       "rep": 1,
       "recordedVerdict": "PASS",
       "verdict": "PASS",
@@ -43,7 +43,7 @@
     },
     {
       "task": "refactor",
-      "arm": "headroom",
+      "arm": "altA",
       "meanEstimatedUsd": 0.418908
     }
   ],
@@ -51,7 +51,7 @@
     {
       "task": "refactor",
       "candidate": "proxy",
-      "against": "headroom",
+      "against": "altA",
       "estimatedUsdDelta": -0.221056,
       "reductionPercent": 52.76958186523055
     }

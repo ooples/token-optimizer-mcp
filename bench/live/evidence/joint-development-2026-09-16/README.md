@@ -6,7 +6,7 @@ The original 70-pair study has **51 joint wins, 11 cost-only losses, five speed-
 
 - Preserve explicit JSON nulls, including recovery files. Null and absent are different values.
 - Supply exact bounded null/missing counts and numeric extrema with source rows.
-- Record monotonic transform, upstream-header and upstream-completion timing for successful and failed requests. Upstream includes transport and provider processing; the HeadRoom arm also includes its proxy.
+- Record monotonic transform, upstream-header and upstream-completion timing for successful and failed requests. Upstream includes transport and provider processing; the Alternative A arm also includes its proxy.
 - Reject impossible numbered-read candidates before allocating per-line matches.
 - Share unchanged nested trees and multimodal output parts instead of copying them.
 - Represent complete numeric arrays with exact templates when no rare categorical/boolean population supplies a compact summary and the representation materially beats minification. Every source byte can be reconstructed; incomplete arrays cannot claim completeness.
@@ -15,15 +15,15 @@ The original 70-pair study has **51 joint wins, 11 cost-only losses, five speed-
 
 ## Initial live development campaign
 
-`live-initial/` records product `253318f0`, eight balanced pairs, all 16 tasks passing. It predates complete numeric-array templates. Numeric summaries still caused verification reads: four requests versus HeadRoom's three in both cases. The complete-array codec was implemented in response; these losing attempts remain evidence.
+`live-initial/` records product `253318f0`, eight balanced pairs, all 16 tasks passing. It predates complete numeric-array templates. Numeric summaries still caused verification reads: four requests versus Alternative A's three in both cases. The complete-array codec was implemented in response; these losing attempts remain evidence.
 
-Two entropy pairs were joint wins (three requests versus five). Tiny tasks had no compressible outputs and lost agent time in both pairs. Inspection of HeadRoom's installed tool compactor found description-whitespace changes consistent with the first-request token gap; we have not established that as its sole cause. Nullable tasks needed no recovery reads but provider cache and response times varied. One nullable proxy attempt spent 49.56 seconds upstream versus 15.49 milliseconds transforming requests; its competitor arm spent 13.97 seconds upstream. This is observed timing, not proof of why the provider was slower.
+Two entropy pairs were joint wins (three requests versus five). Tiny tasks had no compressible outputs and lost agent time in both pairs. Inspection of Alternative A's installed tool compactor found description-whitespace changes consistent with the first-request token gap; we have not established that as its sole cause. Nullable tasks needed no recovery reads but provider cache and response times varied. One nullable proxy attempt spent 49.56 seconds upstream versus 15.49 milliseconds transforming requests; its competitor arm spent 13.97 seconds upstream. This is observed timing, not proof of why the provider was slower.
 
 The initial nullable generator had fixed counts across seeds. The subsequent generator varies row count, null frequency and missing-key frequency. Reproduce initial evidence from its recorded commit; do not apply a newer generator's validator to those older files.
 
 ## Local comparison before the final array codec
 
-`local-before-null-facts/`: 2,880 measured requests, 36 groups, two reversed arm orders. Proxy mean latency was lower in all 36 groups; forwarded bytes were smaller in 24 and tied in 12 tiny/opaque groups. Actual installed HeadRoom 0.37.0, with its rate limiter disabled for local throughput measurement. Warmup is excluded. These are local transport/byte measurements, not provider costs or task-quality evidence. This preliminary build predates the complete-array and copy-on-write changes.
+`local-before-null-facts/`: 2,880 measured requests, 36 groups, two reversed arm orders. Proxy mean latency was lower in all 36 groups; forwarded bytes were smaller in 24 and tied in 12 tiny/opaque groups. Actual installed Alternative A, with its rate limiter disabled for local throughput measurement. Warmup is excluded. These are local transport/byte measurements, not provider costs or task-quality evidence. This preliminary build predates the complete-array and copy-on-write changes.
 
 ## Complete-array follow-up and final local results
 

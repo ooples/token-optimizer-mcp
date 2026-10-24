@@ -2,7 +2,7 @@
 
 ## Scope and fixed claim
 
-Compare our existing compression proxy with installed HeadRoom using local
+Compare our existing compression proxy with installed Alternative A using local
 Codex 0.154.0 and gpt-6-astra. The candidate product is frozen at the source
 state of 62c0b678 (same product as 09b3fcf5). Only measurement code and generated
 cases changed during this preparation. freeze.json records executable/module
@@ -27,7 +27,7 @@ regimes. This adversarial self-review is not an independent third-party audit.
 | Cheap wrong answers count as cost wins. | Correctness gate is mandatory. Failed tasks remain in cost totals when usage is measurable; they cannot establish superiority. Missing/unreconciled usage invalidates the claim, never becomes zero. |
 | Failure retries disappear from accounting. | No automatic reattempts into this sample. Existing model-level retries are disabled by the harness. Tool recovery inside a run remains included. Record provider errors and partial attempts. |
 | The grader shares the implementation's mistake. | Protected-file checks plus post-run external oracles and public tests for code changes; independent parsing of lookup keys; exact before/after configuration and override checks. Gold and deliberately broken implementations validate oracle rejection. Process-compliance claims beyond these audits are out of scope. |
-| The comparator is an imitation or silently reconfigured. | Use installed HeadRoom's actual proxy with its shipped defaults. Our proxy uses its current defaults. Freeze implementation hashes and record Python package versions. This is a defaults comparison, not a search over HeadRoom settings. |
+| The comparator is an imitation or silently reconfigured. | Use installed Alternative A's actual proxy with its shipped defaults. Our proxy uses its current defaults. Freeze implementation hashes and record Python package versions. This is a defaults comparison, not a search over Alternative A settings. |
 | Geometric averages hide a dollar-cost regression. | Require both paired geometric cost ratio and equal-family aggregate-dollar ratio to pass the margin. Report both. |
 | Testing seven families inflates claims. | Only the overall suite is confirmatory. Per-family outcomes are exploratory and include losses; no per-family superiority claim from unadjusted intervals. |
 | A narrow/biased confidence method overstates certainty. | Use 20,000 paired, family-stratified BCa bootstrap draws, with delete-one-pair jackknife acceleration; implementation is checked against SciPy on a single-family case. Intervals remain approximate and assume independent case pairs. Shared provider state can violate independence. |
@@ -70,7 +70,7 @@ billing. Scenario source and assumptions are copied into plan.json.
 
 Primary cost endpoints, equally weighting the seven families:
 
-1. Geometric mean of paired proxy/HeadRoom cost ratios.
+1. Geometric mean of paired proxy/Alternative A cost ratios.
 2. Ratio of the two arms' mean dollar costs, with each family equally weighted.
 
 Both **two-sided 95% BCa interval upper bounds must be below 0.95**. Every

@@ -50,7 +50,7 @@ let child,
   error = null;
 try {
   for (let round = 0; round < 2; round++) {
-    for (const arm of round ? ['headroom', 'proxy'] : ['proxy', 'headroom']) {
+    for (const arm of round ? ['altA', 'proxy'] : ['proxy', 'altA']) {
       const p = await port();
       const out = openSync(join(raw, `${round}-${arm}.stdout`), 'w');
       const err = openSync(join(raw, `${round}-${arm}.stderr`), 'w');
@@ -59,11 +59,11 @@ try {
         if (key.startsWith('TOKEN_OPTIMIZER_PROXY')) delete env[key];
       env.TOKEN_OPTIMIZER_PROXY = '1';
       child = spawn(
-        arm === 'headroom' ? 'python' : process.execPath,
-        arm === 'headroom'
+        arm === 'altA' ? 'python' : process.execPath,
+        arm === 'altA'
           ? [
               '-m',
-              'headroom.cli',
+              'alternative_a.cli',
               'proxy',
               '--port',
               String(p),
@@ -224,7 +224,7 @@ try {
         records,
         expectedGroups: 192,
         scope:
-          'Local static upstream. Latency and wire bytes; no provider cost or model-quality inference. HeadRoom rate limiter disabled equally for all workloads.',
+          'Local static upstream. Latency and wire bytes; no provider cost or model-quality inference. Alternative A rate limiter disabled equally for all workloads.',
       },
       null,
       2

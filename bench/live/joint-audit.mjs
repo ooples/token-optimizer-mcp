@@ -4,10 +4,10 @@ import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 export function classifyPair(arms) {
-  if (!['proxy', 'headroom'].every((a) => arms[a]?.verdict === 'PASS'))
+  if (!['proxy', 'altA'].every((a) => arms[a]?.verdict === 'PASS'))
     return 'quality-failure';
   if (
-    !['proxy', 'headroom'].every((a) =>
+    !['proxy', 'altA'].every((a) =>
       ['estimatedUsd', 'agentSeconds'].every(
         (k) => Number.isFinite(arms[a][k]) && arms[a][k] >= 0
       )
@@ -15,7 +15,7 @@ export function classifyPair(arms) {
   )
     return 'unknown';
   const p = arms.proxy,
-    h = arms.headroom;
+    h = arms.altA;
   if (p.estimatedUsd === h.estimatedUsd || p.agentSeconds === h.agentSeconds)
     return 'tie';
   if (p.estimatedUsd < h.estimatedUsd && p.agentSeconds < h.agentSeconds)
@@ -41,7 +41,7 @@ export async function jointAudit(study) {
     const rows = await optional('results.json');
     const costs = await optional('cost-scenario.json');
     const arms = {};
-    for (const arm of ['proxy', 'headroom']) {
+    for (const arm of ['proxy', 'altA']) {
       const row = rows?.find((r) => r.arm === arm);
       const cost = costs?.measured.find((r) => r.arm === arm);
       let ledger = [];
@@ -84,12 +84,12 @@ export async function jointAudit(study) {
           null,
         timing,
         timingNote: timing
-          ? 'Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable.'
+          ? 'Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable.'
           : 'Older capture has no request timing; no causal speed attribution available.',
       };
     }
     const p = arms.proxy,
-      h = arms.headroom;
+      h = arms.altA;
     const components =
       p.usage && h.usage
         ? {
@@ -156,8 +156,8 @@ if (
           .map((r) => ({
             id: r.id,
             classification: r.classification,
-            cost: [r.arms.proxy.estimatedUsd, r.arms.headroom.estimatedUsd],
-            seconds: [r.arms.proxy.agentSeconds, r.arms.headroom.agentSeconds],
+            cost: [r.arms.proxy.estimatedUsd, r.arms.altA.estimatedUsd],
+            seconds: [r.arms.proxy.agentSeconds, r.arms.altA.agentSeconds],
           })),
       },
       null,

@@ -286,7 +286,7 @@ const ARMS = {
   // never running half of it. A benchmark arm must call the shipped entry
   // point, or it is measuring the benchmark.
   // THE COMPETITOR, ON THE SAME BYTES. `ccrStyle` is this repo's faithful
-  // reimplementation of HeadRoom's design -- opaque hash markers, history
+  // reimplementation of Alternative A's design -- opaque hash markers, history
   // compressed, a retrieval tool and system message injected. Without it in
   // this harness "we win" only ever meant "we beat doing nothing", which is a
   // much weaker claim than the one the project is actually trying to make.

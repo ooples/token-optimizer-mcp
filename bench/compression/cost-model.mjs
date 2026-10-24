@@ -48,7 +48,7 @@
  *
  * 2. IT CHARGED AN EXTRA REQUEST PER BLOCK RATHER THAN PER ROUND. A retrieval
  *    round is one extra request no matter how many blocks it resolves. In
- *    HeadRoom's proxy that is explicit: every `headroom_retrieve` call in one
+ *    Alternative A's proxy that is explicit: every `alternative_a_retrieve` call in one
  *    assistant response is executed together and followed by a single
  *    continuation call (`ccr/response_handler.py`, the `while rounds <
  *    max_retrieval_rounds` loop -- `results = [...]` over all `ccr_calls`, then
@@ -83,7 +83,7 @@
  * cost term, so it does not appear here.
  *
  * THEIR MIXED-CALL BAILOUT IS NOT MODELLED EITHER. When the model calls
- * `headroom_retrieve` alongside a non-CCR tool, their proxy declines to resolve
+ * `alternative_a_retrieve` alongside a non-CCR tool, their proxy declines to resolve
  * it and hands the call back to the client, which then spends a real agent turn
  * on it. That is a cost their arm pays and this model does not charge them,
  * because the rate at which a model mixes the two is unmeasured. It is an
@@ -598,7 +598,7 @@ export function paramsFromMeter(ratios = {}, overrides = {}) {
 }
 
 /**
- * Bytes as HeadRoom's markers declare them: `<<ccr:HASH,KIND,156.3KB>>`.
+ * Bytes as Alternative A's markers declare them: `<<ccr:HASH,KIND,156.3KB>>`.
  *
  * Their marker states the size of what it replaced, which is the only per-block
  * split available without re-running their resolver. It is used for the SPLIT

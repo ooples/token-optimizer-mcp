@@ -4,10 +4,10 @@
  * THE WHOLE COMPETITIVE ARGUMENT IS IN THIS FILE, so it is worth being explicit
  * about what is being avoided.
  *
- * HeadRoom emits `<<ccr:a1b2c3d4e5f6 38_rows_offloaded>>` and, to make that
+ * Alternative A emits `<<ccr:a1b2c3d4e5f6 38_rows_offloaded>>` and, to make that
  * redeemable, appends to every compressed request a `## Compressed Context
- * Available` system message plus a `headroom_retrieve` tool definition
- * (`headroom/ccr/tool_injection.py:143`). Roughly 200 tokens of preamble per
+ * Available` system message plus a `alternative_a_retrieve` tool definition
+ * (`alternative_a/ccr/tool_injection.py:143`). Roughly 200 tokens of preamble per
  * request, and around 8,000 across a forty-turn session -- context spent in
  * order to save context.
  *

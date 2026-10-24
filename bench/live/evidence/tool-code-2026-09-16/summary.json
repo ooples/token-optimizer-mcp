@@ -23,7 +23,7 @@
         13004
       ]
     },
-    "headroom": {
+    "altA": {
       "qualityPasses": 4,
       "estimatedUsd": 0.50962,
       "agentSeconds": 66.9,
@@ -59,7 +59,7 @@
           "agentSeconds": 12.5,
           "requests": 3
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.120798,
           "agentSeconds": 18.8,
@@ -78,7 +78,7 @@
           "agentSeconds": 15.5,
           "requests": 3
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.115502,
           "agentSeconds": 16.2,
@@ -97,7 +97,7 @@
           "agentSeconds": 15,
           "requests": 3
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.134388,
           "agentSeconds": 15.4,
@@ -116,7 +116,7 @@
           "agentSeconds": 19,
           "requests": 3
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.138932,
           "agentSeconds": 16.5,

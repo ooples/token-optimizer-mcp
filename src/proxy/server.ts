@@ -976,7 +976,7 @@ function compressBodyOnce(
   // A PROBE, NOT THE FEATURE. The substitution design in the plan turns on one
   // untested question -- will the API accept history whose older assistant turns
   // have had their `thinking` blocks removed? `frontier.ts` refuses to touch a
-  // signed block and cites HeadRoom's issue #3456, but that is their bug report,
+  // signed block and cites Alternative A's issue #3456, but that is their bug report,
   // and removal is not rewriting: a signature covers block CONTENT, so deleting
   // the block leaves nothing to mismatch.
   //
@@ -1745,7 +1745,7 @@ function forward(
   const send = target.protocol === 'http:' ? httpRequest : httpsRequest;
 
   // BYTE-FAITHFUL PASSTHROUGH of everything we did not deliberately change.
-  // HeadRoom's #3463 is a proxy losing `Location` on the way back; the fix is
+  // Alternative A's #3463 is a proxy losing `Location` on the way back; the fix is
   // to copy headers rather than reconstruct them.
   // Anything named by the request's own `Connection` header is hop-by-hop
   // too, by definition -- the sender is telling us which headers it considers
@@ -2186,7 +2186,7 @@ export async function startProxy(options: ProxyOptions = {}): Promise<{
    */
   // One store per proxy, holding a hash and a boolean per conversation.
   // Per-conversation, never per-request, and passed in explicitly rather
-  // than reached for -- HeadRoom's #3486 is a shared router keeping request
+  // than reached for -- Alternative A's #3486 is a shared router keeping request
   // state on itself, and two agents through one proxy is the exact shape
   // that turns into.
   const anchors = anchorStore();

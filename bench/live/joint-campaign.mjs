@@ -13,7 +13,7 @@ const pairs = [];
 for (const task of manifest.tasks)
   for (let rep = 1; rep <= manifest.reps; rep++) {
     const arms = {};
-    for (const arm of ['proxy', 'headroom']) {
+    for (const arm of ['proxy', 'altA']) {
       const row = rows.find(
         (r) => r.task === task && r.rep === rep && r.arm === arm
       );

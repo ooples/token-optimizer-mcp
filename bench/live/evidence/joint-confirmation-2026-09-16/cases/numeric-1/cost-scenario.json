@@ -28,7 +28,7 @@
     },
     {
       "task": "numeric",
-      "arm": "headroom",
+      "arm": "altA",
       "rep": 1,
       "recordedVerdict": "PASS",
       "verdict": "PASS",
@@ -43,7 +43,7 @@
     },
     {
       "task": "numeric",
-      "arm": "headroom",
+      "arm": "altA",
       "meanEstimatedUsd": 0.208086
     }
   ],
@@ -51,7 +51,7 @@
     {
       "task": "numeric",
       "candidate": "proxy",
-      "against": "headroom",
+      "against": "altA",
       "estimatedUsdDelta": -0.09873,
       "reductionPercent": 47.44672875637958
     }

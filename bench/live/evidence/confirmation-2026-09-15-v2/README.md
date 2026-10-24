@@ -1,7 +1,7 @@
 # Completed schedule; superiority gate not met
 
 All 70 pairs / 140 attempts ran in the committed order on the frozen product.
-Proxy passed 70/70. HeadRoom passed 69/70; refactor-5 received an upstream HTTP
+Proxy passed 70/70. Alternative A passed 69/70; refactor-5 received an upstream HTTP
 503 before a model response, with no usable cost ledger. This is an infrastructure
 failure, not demonstrated task incompetence. It was retained without replacement.
 
@@ -9,7 +9,7 @@ failure, not demonstrated task incompetence. It was retained without replacement
 claim or primary confidence interval is reported.** analysis.json correctly
 reports superiorityEstablished=false. Its 69-pair pass counts concern the
 fully measured subset; execution.json records all 140 attempts, including the
-passing proxy counterpart of the unmeasured HeadRoom attempt.
+passing proxy counterpart of the unmeasured Alternative A attempt.
 
 ## Descriptive results only
 

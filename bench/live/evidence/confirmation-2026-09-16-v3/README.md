@@ -10,7 +10,7 @@ The verifier read whole files into buffers, including a 298,169,136-byte Codex
 executable. A separate Python SHA-256 check using 64 KiB chunks verified all 800
 original hashes after the stop and before any harness edit; see freeze-at-stop.json.
 This establishes artifact integrity, not the exact operating-system cause of
-the allocation failure. No proxy/HeadRoom child process was left running.
+the allocation failure. No proxy/Alternative A child process was left running.
 
 The original execution, protocol, freeze, schedule and all 22 paired artifacts
 remain here. The same precommitted schedule continues in the adjacent

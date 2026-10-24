@@ -56,15 +56,15 @@ The revised harness separates sustained capture completeness from overload
 survival and writes its measured result before asserting capture completeness.
 These local replays establish neither model quality nor provider cost wins.
 
-## Live Codex versus installed HeadRoom
+## Live Codex versus installed Alternative A
 
 Four development pairs / eight attempts, with both arm orders within each family.
-Codex 0.154.0, gpt-6-astra, HeadRoom 0.37.0. Nullable seeds 2494523014 and
+Codex 0.154.0, gpt-6-astra, Alternative A. Nullable seeds 2494523014 and
 2494523015 (the first deliberately repeats the failed case); JSON seeds
 3141592001 and 3141592002. These are new follow-up results, not replacements in
 the frozen 120-pair study.
 
-| Measure | Token Optimizer | HeadRoom |
+| Measure | Token Optimizer | Alternative A |
 | --- | ---: | ---: |
 | Independently validated quality | 4/4 | 4/4 |
 | Estimated token cost, recorded rate-card scenario | $0.646138 | $0.751738 |

@@ -20,7 +20,7 @@
   "measured": [
     {
       "task": "tiny",
-      "arm": "headroom",
+      "arm": "altA",
       "rep": 1,
       "recordedVerdict": "PASS",
       "verdict": "PASS",
@@ -38,7 +38,7 @@
   "aggregates": [
     {
       "task": "tiny",
-      "arm": "headroom",
+      "arm": "altA",
       "meanEstimatedUsd": 0.169568
     },
     {
@@ -51,7 +51,7 @@
     {
       "task": "tiny",
       "candidate": "proxy",
-      "against": "headroom",
+      "against": "altA",
       "estimatedUsdDelta": -0.08373799999999999,
       "reductionPercent": 49.38313832798641
     }
