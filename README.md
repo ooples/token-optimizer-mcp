@@ -1076,9 +1076,9 @@ all.
 | `TOKEN_OPTIMIZER_PROXY_WORKER_TERSE`   | on         | ask subagents for short reports (output is billed 5x input)                 |
 | `TOKEN_OPTIMIZER_PROXY_CLEAR_TOOL_USES`| off        | server-side clearing of old tool results; measured to cost more (see below) |
 | `TOKEN_OPTIMIZER_PROXY_COMPACT`        | off        | server-side compaction past `_TRIGGER` input tokens (min 50,000)            |
-| `TOKEN_OPTIMIZER_REPEATS`              | on         | a re-run command or re-read file returns only what changed                  |
+| `TOKEN_OPTIMIZER_REPEATS`              | on         | a re-run shell command returns only what changed                            |
 | `TOKEN_OPTIMIZER_BLACKBOARD`           | on         | a subagent's briefing lists read-only commands its siblings already ran     |
-| `TOKEN_OPTIMIZER_LEAN_HANDOFF`         | on         | a foreground subagent's report over 4,000 characters reaches the lead lean  |
+| `TOKEN_OPTIMIZER_LEAN_HANDOFF`         | off        | a subagent's report over 4,000 characters reaches the lead lean; also needs `Agent\|Task` in the PostToolUse matcher |
 | `TOKEN_OPTIMIZER_REPO_ASK`             | off        | a `repo_ask "<question>"` shell command for agents, named in their briefing |
 
 Both of the `on` rows said `off` here until 7.1.0, which was wrong about the

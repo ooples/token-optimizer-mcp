@@ -412,8 +412,14 @@ export const HANDOFF_MIN_CHARS = 4000;
 /** What the caller reads in place of a long report. */
 export const HANDOFF_BUDGET = 2400;
 
+/**
+ * OPT-IN (TOKEN_OPTIMIZER_LEAN_HANDOFF=1), and it also needs Agent|Task in the
+ * PostToolUse matcher, which the shipped wiring leaves out (wire.mjs): across
+ * the benchmarks no worker report reached HANDOFF_MIN_CHARS, so the hook on
+ * every subagent completion was latency for nothing.
+ */
 export function leanHandoffEnabled(env = process.env) {
-  return !OFF.test(String(env.TOKEN_OPTIMIZER_LEAN_HANDOFF ?? '').trim());
+  return /^(1|true|yes|on)$/i.test(String(env.TOKEN_OPTIMIZER_LEAN_HANDOFF ?? '').trim());
 }
 
 /** A line a caller acts on: a file:line citation, a figure, a heading, a verdict. */
@@ -430,7 +436,7 @@ const REPORT_SIGNAL =
  * the largest context in the run. Kept: the opening (where a report puts its
  * conclusion), every line that cites a file:line, a figure, a heading or a
  * verdict, and the ending; the full report one Read away in the artifact store.
- * TOKEN_OPTIMIZER_LEAN_HANDOFF=0 turns it off.
+ * Opt-in: see leanHandoffEnabled.
  */
 export function leanHandoff(response, { dir, sessionId = null, tool = 'Agent' }) {
   if (!leanHandoffEnabled()) return null;
