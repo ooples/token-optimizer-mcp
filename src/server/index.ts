@@ -409,7 +409,9 @@ export const PLUGIN_INSTRUCTIONS =
   'mid-session load re-writes the prompt cache. Load one only for what the ' +
   'built-in tools cannot do -- smart_edit for a large multi-site edit, ' +
   'optimize_session when context is tight, wiki_write for a durable non-obvious ' +
-  'conclusion -- and never call or redirect to an unlisted schema.';
+  'conclusion -- or when a hook refuses a built-in call and names one of these ' +
+  'tools instead (enforce mode does this for large reads); then load it and ' +
+  'use it. Never call or redirect to an unlisted schema.';
 
 export function instructionsFor(env: NodeJS.ProcessEnv = process.env): string {
   return String(env.CLAUDE_PLUGIN_ROOT ?? '').trim()

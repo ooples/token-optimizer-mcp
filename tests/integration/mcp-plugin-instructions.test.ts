@@ -107,7 +107,11 @@ describe('instructions by install kind', () => {
     expect(text).toContain(
       'Do not load these tools with ToolSearch just to read or search'
     );
-    expect(text).toContain('never call or redirect to an unlisted schema');
+    expect(text).toContain('Never call or redirect to an unlisted schema');
+    // Enforce mode refuses large built-in reads and names smart_read: that wins.
+    expect(text).toContain(
+      'when a hook refuses a built-in call and names one of these tools'
+    );
     expect(text).not.toContain('mandatory routing policy');
     expect(text).not.toContain('the first time a large read');
   });
