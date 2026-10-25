@@ -6,7 +6,7 @@
  * report has something to show; nothing crosses the network. `..._BEACON`
  * uploads an anonymous summary. Overloading one flag to mean both would make
  * every operator who once turned on local stats begin transmitting the moment
- * they upgraded, having answered a different question. HeadRoom's own
+ * they upgraded, having answered a different question. Alternative A's own
  * implementation splits them for exactly this reason and says so in its
  * docstring; the split is worth copying, the default is not.
  *

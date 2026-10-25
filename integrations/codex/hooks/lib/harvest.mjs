@@ -815,8 +815,8 @@ async function runHostCli(cli, system, digest, timeoutMs) {
  * OPT-IN, deliberately, and this is the one default in this file that is not
  * on. Every other path either reads local files or spends a key the user
  * already configured for this purpose; this one spends the subscription that
- * runs their editor, automatically, at the end of every session. HeadRoom
- * makes the equivalent call user-invoked (`headroom learn`, cli/learn.py) and
+ * runs their editor, automatically, at the end of every session. Alternative A
+ * makes the equivalent call user-invoked (`learn`, cli/learn.py) and
  * its own design note says to log events and analyse offline. Charging someone
  * quota they did not ask to spend is not a default worth taking.
  */

@@ -9,13 +9,13 @@ const raw = resolve(rawArg),
   rep = Number(repArg);
 const rows = JSON.parse(await readFile(join(raw, 'results.json'), 'utf8'));
 const arms = Object.fromEntries(
-  ['proxy', 'headroom'].map((arm) => [
+  ['proxy', 'altA'].map((arm) => [
     arm,
     rows.find((row) => row.arm === arm && row.task === task && row.rep === rep),
   ])
 );
-assert.ok(arms.proxy && arms.headroom);
-const delta = (key) => arms.proxy.usage[key] - arms.headroom.usage[key];
+assert.ok(arms.proxy && arms.altA);
+const delta = (key) => arms.proxy.usage[key] - arms.altA.usage[key];
 const contributions = {
   inputAtUncachedRate: (delta('input') * 10) / 1e6,
   cacheDiscount: (-delta('cached') * 9) / 1e6,

@@ -1,7 +1,7 @@
 /**
  * The README prose must not restate a figure the guarded tables do not hold.
  *
- * WHY THIS EXISTS. readme-table.check.mjs and readme-headroom.check.mjs pin the
+ * WHY THIS EXISTS. readme-table.check.mjs and readme-alt-a.check.mjs pin the
  * marked TABLES. Nothing pinned the sentences around them, and the sentences
  * quote the same numbers: a review found four prose figures stale against the
  * tables two markers above them, in a section whose whole argument is that a
@@ -50,14 +50,14 @@ export const Source = Object.freeze({
  * so rather than implying a sweep it does not do.
  */
 const SECTIONS = [
-  { from: '## How it compares to HeadRoom', to: '## The 30-second version' },
+  { from: '## How it compares to Alternative A', to: '## The 30-second version' },
 ];
 const SPAN = ['<!-- PROSE-CLAIMS:START', '<!-- PROSE-CLAIMS:END -->'];
 
 const GUARDS = [
   ['<!-- PROOF-TABLE:START', '<!-- PROOF-TABLE:END -->'],
-  ['<!-- HEADROOM-TABLE:START', '<!-- HEADROOM-TABLE:END -->'],
-  ['<!-- HEADROOM-CORPUS:START', '<!-- HEADROOM-CORPUS:END -->'],
+  ['<!-- ALT-A-TABLE:START', '<!-- ALT-A-TABLE:END -->'],
+  ['<!-- ALT-A-CORPUS:START', '<!-- ALT-A-CORPUS:END -->'],
 ];
 
 /**
@@ -128,7 +128,7 @@ export const DECLARED = [
     // OTHER_HARNESS, not RETRACTED: this is what the elide-after-N strategy
     // scored on proof.mjs's needle fixture, a different harness from either
     // table. Filed as retracted, it read as "a figure the tree moved past", and
-    // the 18-row HeadRoom table now holds an unrelated 95.7% (log-entries,
+    // the 18-row Alternative A table now holds an unrelated 95.7% (log-entries,
     // proxy tokens), which the resurrection rule then took for a contradiction.
     kind: Source.OTHER_HARNESS,
     from: 'what the elide-after-N strategy scored on the proof.mjs needle fixture while losing the needles',

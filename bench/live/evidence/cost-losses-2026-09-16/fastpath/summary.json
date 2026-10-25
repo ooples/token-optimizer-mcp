@@ -1,5 +1,5 @@
 {
-  "scope": "One before/after V8-profiled replay of the seven captured refresh-2 requests, 200 rounds, a fresh output cache per round. 32 KiB allocation sampling; disk and network excluded. Internal comparison, not HeadRoom or live agent latency.",
+  "scope": "One before/after V8-profiled replay of the seven captured refresh-2 requests, 200 rounds, a fresh output cache per round. 32 KiB allocation sampling; disk and network excluded. Internal comparison, not Alternative A or live agent latency.",
   "baselineRevision": "510d570a",
   "calls": 1400,
   "equalOutputLengthChecksum": true,

@@ -10,7 +10,7 @@
       "cachedTokens": 112512,
       "requests": 10
     },
-    "headroom": {
+    "altA": {
       "attempts": 2,
       "passes": 2,
       "estimatedUsd": 0.621684,
@@ -35,7 +35,7 @@
           "agentSeconds": 24.1,
           "requests": 5
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.327278,
           "agentSeconds": 31.2,
@@ -50,7 +50,7 @@
       "seed": 3141592202,
       "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-responses-nested-2026-09-16\\repeat\\run-REvpwx",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.294406,
           "agentSeconds": 22.5,

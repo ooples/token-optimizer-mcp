@@ -50,7 +50,7 @@ const validateWorkflow =
   caseSuite !== 'development'
     ? validateHeldoutWorkflow
     : validateDevelopmentWorkflow;
-const arms = (process.env.ARMS || 'control,proxy,headroom').split(',');
+const arms = (process.env.ARMS || 'control,proxy,altA').split(',');
 const reps = Number(process.env.REPS || arms.length);
 const seedOffset = Number(process.env.SEED_OFFSET || 0);
 if (!Number.isInteger(seedOffset) || seedOffset < 0)
@@ -79,7 +79,7 @@ if (
   reps < 1 ||
   arms.some(
     (a) =>
-      !['control', 'proxy', 'headroom', 'mcp', 'full', 'full-files'].includes(a)
+      !['control', 'proxy', 'altA', 'mcp', 'full', 'full-files'].includes(a)
   )
 )
   throw Error('Invalid REPS or ARMS');
@@ -295,26 +295,26 @@ try {
           const env = { ...process.env };
           for (const key of Object.keys(env))
             if (key.startsWith('TOKEN_OPTIMIZER_PROXY_')) delete env[key];
-          if (arm === 'headroom') {
-            const headroomPort = await port();
+          if (arm === 'altA') {
+            const altAPort = await port();
             const hr = launch(
               process.env.PYTHON || 'python',
               [
                 '-m',
-                'headroom.cli',
+                'alternative_a.cli',
                 'proxy',
                 '--port',
-                String(headroomPort),
+                String(altAPort),
                 '--openai-api-url',
                 'https://chatgpt.com',
               ],
               work,
               env,
-              join(artifacts, 'headroom')
+              join(artifacts, 'altA')
             );
             children.push(hr.child);
-            await ready(headroomPort, hr.child);
-            upstream = `http://127.0.0.1:${headroomPort}`;
+            await ready(altAPort, hr.child);
+            upstream = `http://127.0.0.1:${altAPort}`;
           }
           env.TOKEN_OPTIMIZER_PROXY = '1';
           env.TOKEN_OPTIMIZER_PROXY_TOOL_CODE =

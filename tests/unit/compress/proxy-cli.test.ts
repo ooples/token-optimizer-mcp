@@ -536,7 +536,7 @@ describe('hop-by-hop headers are stripped in BOTH directions', () => {
     // the UPSTREAM's value did not travel.
     expect(response.headers.get('keep-alive') ?? '').not.toContain('99');
     // End-to-end headers still arrive -- the fix must not become a filter that
-    // eats everything, which is HeadRoom's #3463 in a different guise.
+    // eats everything, which is Alternative A's #3463 in a different guise.
     expect(response.headers.get('content-type')).toContain('application/json');
   });
 });

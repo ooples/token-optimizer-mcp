@@ -38,7 +38,7 @@ async function scan(path) {
       )) {
         const theirs = rows.find(
           (r) =>
-            r.arm === 'headroom' &&
+            r.arm === 'altA' &&
             r.task === ours.task &&
             r.rep === ours.rep &&
             r.verdict === 'PASS'
@@ -120,7 +120,7 @@ const schedule = [];
 for (const family of families) {
   const orders = shuffle(
     Array.from({ length: pairs / 7 }, (_, i) =>
-      i % 2 ? ['headroom', 'proxy'] : ['proxy', 'headroom']
+      i % 2 ? ['altA', 'proxy'] : ['proxy', 'altA']
     )
   );
   for (let i = 0; i < pairs / 7; i++) {
@@ -163,7 +163,7 @@ const plan = {
     planningSd,
     costPairs,
     sourcePolicy:
-      'All comparable passing proxy/HeadRoom development pairs available before confirmation; mixed builds, excluded from final inference.',
+      'All comparable passing proxy/Alternative A development pairs available before confirmation; mixed builds, excluded from final inference.',
     records: pilot,
   },
   sizing: {

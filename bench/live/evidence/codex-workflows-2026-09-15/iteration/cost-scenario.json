@@ -36,7 +36,7 @@
     },
     {
       "task": "bugfix",
-      "arm": "headroom",
+      "arm": "altA",
       "rep": 1,
       "recordedVerdict": "PASS",
       "verdict": "PASS",
@@ -60,7 +60,7 @@
     },
     {
       "task": "refresh",
-      "arm": "headroom",
+      "arm": "altA",
       "rep": 1,
       "recordedVerdict": "PASS",
       "verdict": "PASS",
@@ -80,7 +80,7 @@
     },
     {
       "task": "bugfix",
-      "arm": "headroom",
+      "arm": "altA",
       "meanEstimatedUsd": 0.300594
     },
     {
@@ -95,7 +95,7 @@
     },
     {
       "task": "refresh",
-      "arm": "headroom",
+      "arm": "altA",
       "meanEstimatedUsd": 0.228216
     }
   ],
@@ -110,7 +110,7 @@
     {
       "task": "bugfix",
       "candidate": "proxy",
-      "against": "headroom",
+      "against": "altA",
       "estimatedUsdDelta": -0.05526399999999998,
       "reductionPercent": 18.38493116961749
     },
@@ -124,7 +124,7 @@
     {
       "task": "refresh",
       "candidate": "proxy",
-      "against": "headroom",
+      "against": "altA",
       "estimatedUsdDelta": -0.020488000000000006,
       "reductionPercent": 8.977459950222599
     }

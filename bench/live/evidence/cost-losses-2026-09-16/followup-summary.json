@@ -11,7 +11,7 @@
       "estimatedUsdCompletePairs": 2.9725480000000006,
       "inputCompletePairs": 1011978
     },
-    "headroom": {
+    "altA": {
       "pass": 13,
       "estimatedUsdCompletePairs": 4.464508,
       "inputCompletePairs": 1545277
@@ -35,7 +35,7 @@
           "estimatedUsd": 0.213496,
           "firstRequestCached": 0
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "auditedPass": true,
           "usage": {
@@ -70,7 +70,7 @@
           "estimatedUsd": 0.147436,
           "firstRequestCached": 9344
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "auditedPass": true,
           "usage": {
@@ -105,7 +105,7 @@
           "estimatedUsd": 0.12809,
           "firstRequestCached": 5120
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "auditedPass": true,
           "usage": {
@@ -140,7 +140,7 @@
           "estimatedUsd": 0.17439,
           "firstRequestCached": 0
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "auditedPass": true,
           "usage": {
@@ -175,7 +175,7 @@
           "estimatedUsd": 0.12922,
           "firstRequestCached": 5120
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "auditedPass": true,
           "usage": {
@@ -210,7 +210,7 @@
           "estimatedUsd": 0.169334,
           "firstRequestCached": 9344
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "auditedPass": true,
           "usage": {
@@ -245,7 +245,7 @@
           "estimatedUsd": 0.508406,
           "firstRequestCached": 0
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "auditedPass": true,
           "usage": {
@@ -280,7 +280,7 @@
           "estimatedUsd": 0.154614,
           "firstRequestCached": 5120
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "auditedPass": true,
           "usage": {
@@ -315,7 +315,7 @@
           "estimatedUsd": 0.315954,
           "firstRequestCached": 0
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "auditedPass": true,
           "usage": {
@@ -350,7 +350,7 @@
           "estimatedUsd": 0.242538,
           "firstRequestCached": 9344
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "auditedPass": true,
           "usage": {
@@ -385,7 +385,7 @@
           "estimatedUsd": 0.282686,
           "firstRequestCached": 0
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "auditedPass": true,
           "usage": {
@@ -420,7 +420,7 @@
           "estimatedUsd": 0.252418,
           "firstRequestCached": 0
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "auditedPass": true,
           "usage": {
@@ -455,7 +455,7 @@
           "estimatedUsd": 0.253966,
           "firstRequestCached": 5120
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "auditedPass": true,
           "usage": {

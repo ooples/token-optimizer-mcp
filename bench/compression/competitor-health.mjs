@@ -6,7 +6,7 @@
  * not be compressed" -- their own comment at the emission site calls the result
  * degraded) and the native content detector is off by default on Windows. Each
  * one makes their output larger, which makes our reduction figure better, and
- * neither changes an exit code. `bench/competitive/probe-headroom.py` has
+ * neither changes an exit code. `bench/competitive/probe-alt-a.py` has
  * refused to write a claims file under that condition since it was written; the
  * head-to-head capture, which is where the published table comes from, recorded
  * nothing at all until `run-theirs.py` was taught to.
@@ -24,7 +24,7 @@
  * other.
  */
 
-/** Mirrors `ADVISORY_SIGNATURES` in `headroom/run-theirs.py`. Kept in sync by the gate. */
+/** Mirrors `ADVISORY_SIGNATURES` in `alt-a/run-theirs.py`. Kept in sync by the gate. */
 export const ADVISORY_SIGNATURES = Object.freeze([
   // Their cache aligner reporting that OUR fixture carries a timestamp in the
   // system prompt. Their engine ran; the advice is about what we handed it.

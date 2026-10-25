@@ -42,7 +42,7 @@ for (const family of families)
       family,
       task,
       seed,
-      arms: i % 2 ? ['headroom', 'proxy'] : ['proxy', 'headroom'],
+      arms: i % 2 ? ['altA', 'proxy'] : ['proxy', 'altA'],
       readMode:
         family === 'mixed'
           ? 'mixed'

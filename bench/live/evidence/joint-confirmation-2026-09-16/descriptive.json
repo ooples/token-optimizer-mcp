@@ -17,7 +17,7 @@
         "firstRequestColdSensitivityUsd": 29.498039999999996,
         "allInputUncachedSensitivityUsd": 72.79596
       },
-      "headroom": {
+      "altA": {
         "estimatedUsd": 30.43143800000001,
         "input": 10950930,
         "cached": 9175168,
@@ -57,7 +57,7 @@
           "firstRequestColdSensitivityUsd": 3.2162439999999997,
           "allInputUncachedSensitivityUsd": 8.67442
         },
-        "headroom": {
+        "altA": {
           "estimatedUsd": 3.8294519999999994,
           "input": 1485299,
           "cached": 1292032,
@@ -96,7 +96,7 @@
           "firstRequestColdSensitivityUsd": 2.2584459999999997,
           "allInputUncachedSensitivityUsd": 4.50715
         },
-        "headroom": {
+        "altA": {
           "estimatedUsd": 2.3187379999999997,
           "input": 806083,
           "cached": 658688,
@@ -135,7 +135,7 @@
           "firstRequestColdSensitivityUsd": 2.173474,
           "allInputUncachedSensitivityUsd": 4.74589
         },
-        "headroom": {
+        "altA": {
           "estimatedUsd": 2.1607220000000003,
           "input": 729465,
           "cached": 590592,
@@ -174,7 +174,7 @@
           "firstRequestColdSensitivityUsd": 1.797284,
           "allInputUncachedSensitivityUsd": 4.11626
         },
-        "headroom": {
+        "altA": {
           "estimatedUsd": 1.9177819999999999,
           "input": 491635,
           "cached": 343552,
@@ -213,7 +213,7 @@
           "firstRequestColdSensitivityUsd": 2.2426380000000004,
           "allInputUncachedSensitivityUsd": 4.88187
         },
-        "headroom": {
+        "altA": {
           "estimatedUsd": 2.5925920000000002,
           "input": 881004,
           "cached": 710272,
@@ -252,7 +252,7 @@
           "firstRequestColdSensitivityUsd": 2.897434,
           "allInputUncachedSensitivityUsd": 8.47657
         },
-        "headroom": {
+        "altA": {
           "estimatedUsd": 3.3844659999999998,
           "input": 1521660,
           "cached": 1368576,
@@ -291,7 +291,7 @@
           "firstRequestColdSensitivityUsd": 1.852902,
           "allInputUncachedSensitivityUsd": 3.66615
         },
-        "headroom": {
+        "altA": {
           "estimatedUsd": 1.55738,
           "input": 406595,
           "cached": 292480,
@@ -330,7 +330,7 @@
           "firstRequestColdSensitivityUsd": 2.101152,
           "allInputUncachedSensitivityUsd": 4.45584
         },
-        "headroom": {
+        "altA": {
           "estimatedUsd": 1.749878,
           "input": 455210,
           "cached": 321408,
@@ -369,7 +369,7 @@
           "firstRequestColdSensitivityUsd": 3.214926,
           "allInputUncachedSensitivityUsd": 9.85275
         },
-        "headroom": {
+        "altA": {
           "estimatedUsd": 2.8917080000000004,
           "input": 1174399,
           "cached": 1029248,
@@ -408,7 +408,7 @@
           "firstRequestColdSensitivityUsd": 2.934372,
           "allInputUncachedSensitivityUsd": 6.05514
         },
-        "headroom": {
+        "altA": {
           "estimatedUsd": 4.084952,
           "input": 1574993,
           "cached": 1377792,
@@ -447,7 +447,7 @@
           "firstRequestColdSensitivityUsd": 3.1036340000000004,
           "allInputUncachedSensitivityUsd": 9.33365
         },
-        "headroom": {
+        "altA": {
           "estimatedUsd": 2.751082,
           "input": 1032175,
           "cached": 877952,
@@ -486,7 +486,7 @@
           "firstRequestColdSensitivityUsd": 1.705534,
           "allInputUncachedSensitivityUsd": 4.03027
         },
-        "headroom": {
+        "altA": {
           "estimatedUsd": 1.1926860000000001,
           "input": 392412,
           "cached": 312576,

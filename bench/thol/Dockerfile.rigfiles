@@ -4,7 +4,7 @@
 # cargo registry, which on overlayfs copies up the entire tree into a new layer. Once
 # Docker Desktop garbage-collects the build cache -- measured going from 15.53GB
 # reclaimable to 2.04GB between attempts -- that step has to run again, and on a 15.7GB
-# machine it was killed for low memory eight times running, at every headroom from
+# machine it was killed for low memory eight times running, at every altA from
 # 0.8GB to 8.5GB free and with the WSL VM capped at both 6GB and 4GB. It is not a cost
 # that can be made room for.
 #

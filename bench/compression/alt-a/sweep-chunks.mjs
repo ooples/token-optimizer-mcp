@@ -27,7 +27,7 @@
  * disk to look at, instead of reporting a coverage gap several minutes later.
  *
  * Usage:
- *   node bench/compression/headroom/sweep-chunks.mjs <clone|-> <out-dir> \
+ *   node bench/compression/alt-a/sweep-chunks.mjs <clone|-> <out-dir> \
  *     --chunks <n> [--extra <natives.json>] [--merge-into <dir>]
  *
  * `--extra` wants the `natives.json` of a previous capture, never `payloads.json`:
@@ -80,7 +80,7 @@ const MAX_BUSY = flag('--max-busy') === null ? DEFAULT_MAX_BUSY : Number(flag('-
 
 if (CLONE === undefined || OUT === undefined || !Number.isInteger(N) || N < 1) {
   console.error(
-    'usage: node bench/compression/headroom/sweep-chunks.mjs <clone|-> <out-dir> ' +
+    'usage: node bench/compression/alt-a/sweep-chunks.mjs <clone|-> <out-dir> ' +
       '--chunks <n> [--paired] [--extra <natives.json>] [--merge-into <dir>] ' +
       '[--separators default|compact] [--max-busy <fraction>]'
   );
@@ -117,7 +117,7 @@ const run = (cmd, argv, label) => {
 // THE SAME PATH run-theirs.py STAMPS, and the only three files SQLite keeps for it.
 // A stale `-wal` left behind by an aborted sweep would overlay a store we just
 // cleared, so it goes with the db rather than being left as a surprise.
-const STORE = path.join(os.homedir(), '.headroom', 'ccr_store.db');
+const STORE = path.join(os.homedir(), '.alternative_a', 'ccr_store.db');
 const clearStore = () => {
   const removed = [];
   for (const suffix of ['', '-wal', '-shm']) {

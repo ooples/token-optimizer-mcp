@@ -46,7 +46,7 @@
  * content-addressed (`proxy/server.ts` -- a random path per call changes the
  * output). Neither is optional; without them this makes billing worse.
  *
- * NO PER-REQUEST STATE ON A SHARED OBJECT. HeadRoom's #3486 is one shared
+ * NO PER-REQUEST STATE ON A SHARED OBJECT. Alternative A's #3486 is one shared
  * `ContentRouter` keeping request state on `self`, so concurrent requests
  * cross-contaminate. What is kept here is per CONVERSATION, is only ever a hash
  * plus a boolean, is passed in explicitly, and is consulted for nothing but

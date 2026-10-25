@@ -53,7 +53,7 @@ for (const family of ['overall', ...plan.families]) {
   const scoped =
     family === 'overall' ? records : records.filter((r) => r.family === family);
   const proxy = stats(scoped.filter((r) => r.arm === 'proxy'));
-  const headroom = stats(scoped.filter((r) => r.arm === 'headroom'));
+  const altA = stats(scoped.filter((r) => r.arm === 'altA'));
   const reductionsPercent = {};
   for (const key of [
     'estimatedUsd',
@@ -64,8 +64,8 @@ for (const family of ['overall', ...plan.families]) {
     'startupInclusiveSeconds',
   ])
     reductionsPercent[key] =
-      headroom[key] === 0 ? null : 100 * reduction(proxy[key], headroom[key]);
-  output[family] = { proxy, headroom, reductionsPercent };
+      altA[key] === 0 ? null : 100 * reduction(proxy[key], altA[key]);
+  output[family] = { proxy, altA, reductionsPercent };
 }
 await writeFile(
   study + '/descriptive.json',

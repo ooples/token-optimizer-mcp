@@ -1,7 +1,7 @@
 {
   "node": "v22.15.0",
   "codex": "0.154.0",
-  "headroom": "0.37.0",
+  "altA": "sha256:5453d116514b14cd",
   "gitHead": "f712b4ec80240a0a004f5eadefbbdf2b8196d5bc",
   "transport": "HTTP Responses API; Codex ChatGPT authentication; gpt-6-astra",
   "sha256": {

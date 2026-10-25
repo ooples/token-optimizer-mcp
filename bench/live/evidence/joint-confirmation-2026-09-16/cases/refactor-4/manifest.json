@@ -1,7 +1,7 @@
 {
   "model": "gpt-6-astra",
   "arms": [
-    "headroom",
+    "altA",
     "proxy"
   ],
   "reps": 1,

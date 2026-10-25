@@ -24,7 +24,13 @@
 /* eslint-disable n/no-sync -- SYNCHRONOUS FOR THE REASON default-routing.ts gives: a few hundred
  * bytes of settings and manifest, written once at server start, where an interleaved write between
  * two passes is the failure that matters and awaiting would buy no concurrency. */
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { dirname, join } from 'node:path';
 import {
   claudeSettingsFile,
@@ -41,24 +47,60 @@ interface Recorded {
   readonly writtenAt: string;
 }
 
-const manifestPath = (env: NodeJS.ProcessEnv) =>
+/**
+ * The record of what we wrote, BESIDE THE SETTINGS FILE it describes, for the
+ * reason default-routing.ts gives: kept in the optimizer home, a process with
+ * a private home wrote the user's real settings and kept the only record
+ * where the user's install never looks -- and a value with no record reads as
+ * the user's own, so it could never be taken back, not even by the off switch.
+ */
+export const compactWindowRecordFile = (env: NodeJS.ProcessEnv): string =>
+  join(dirname(claudeSettingsFile(env)), 'token-optimizer-compact-window.json');
+
+/** Where records were kept before: still read, emptied on the next write. */
+export const legacyCompactWindowRecordFile = (env: NodeJS.ProcessEnv): string =>
   join(optimizerHome(env), 'compact-window.json');
 
-function readManifest(env: NodeJS.ProcessEnv): Record<string, Recorded> {
+function readAt(path: string): Record<string, Recorded> {
   try {
-    const parsed = JSON.parse(readFileSync(manifestPath(env), 'utf8'));
+    const parsed = JSON.parse(readFileSync(path, 'utf8'));
     return parsed && typeof parsed === 'object' ? parsed : {};
   } catch {
     return {};
   }
 }
 
+function readManifest(env: NodeJS.ProcessEnv): Record<string, Recorded> {
+  const legacy =
+    legacyCompactWindowRecordFile(env) === compactWindowRecordFile(env)
+      ? {}
+      : readAt(legacyCompactWindowRecordFile(env));
+  return { ...legacy, ...readAt(compactWindowRecordFile(env)) };
+}
+
 function writeManifest(
   env: NodeJS.ProcessEnv,
   manifest: Record<string, Recorded>
 ): void {
-  mkdirSync(dirname(manifestPath(env)), { recursive: true });
-  writeFileSync(manifestPath(env), `${JSON.stringify(manifest, null, 2)}\n`);
+  const file = compactWindowRecordFile(env);
+  const path = claudeSettingsFile(env);
+  // Only this settings file's entry moves; any other file's stays where it was.
+  const current = readAt(file);
+  if (path in manifest) current[path] = manifest[path];
+  else delete current[path];
+  // An empty record is removed, not left behind in the client's config folder.
+  if (Object.keys(current).length) {
+    mkdirSync(dirname(file), { recursive: true });
+    writeFileSync(file, `${JSON.stringify(current, null, 2)}\n`);
+  } else rmSync(file, { force: true });
+  const legacyFile = legacyCompactWindowRecordFile(env);
+  if (legacyFile !== file && existsSync(legacyFile)) {
+    const legacy = readAt(legacyFile);
+    if (path in legacy) {
+      delete legacy[path];
+      writeFileSync(legacyFile, `${JSON.stringify(legacy, null, 2)}\n`);
+    }
+  }
 }
 
 /** The window to write, or null when the user switched this off. */

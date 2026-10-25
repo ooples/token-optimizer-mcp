@@ -31,7 +31,7 @@
  * once, remembered, and replayed verbatim until a turn on which rewriting the
  * prefix is already free. `anchor.ts` is what knows when that is.
  *
- * THIS IS NOT THE INJECTION WE CRITICISE HEADROOM FOR, and the distinction has
+ * THIS IS NOT THE INJECTION WE CRITICISE ALTERNATIVE A FOR, and the distinction has
  * to be real rather than rhetorical. Theirs is MECHANISM: a tool definition and
  * instructions for redeeming markers, tokens spent to make compression work,
  * pure overhead on every request. This is PAYLOAD: conclusions that replace

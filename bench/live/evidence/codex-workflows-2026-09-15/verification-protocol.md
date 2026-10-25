@@ -5,10 +5,10 @@ Recorded before examining results from this campaign.
 Status: deferred at the user's request. No runs started. Product improvements
 in measured losing areas take priority; use focused checks for changed behavior.
 
-- Model: gpt-6-astra; local Codex and installed HeadRoom binaries.
+- Model: gpt-6-astra; local Codex and installed Alternative A binaries.
 - Tasks: JSON outlier lookup, code search, log diagnosis, retry-policy bugfix,
   multi-file money refactor, external route refresh.
-- Arms: control, our compression proxy, installed HeadRoom proxy.
+- Arms: control, our compression proxy, installed Alternative A proxy.
 - Three repetitions per task and arm, each arm in each position once: 54 runs.
 - Workflow seeds 15-17 (`SEED_OFFSET=14`). Refresh route positions vary. The
   JSON/code/log fixtures and the post-seed-4 bugfix/refactor variants are fixed

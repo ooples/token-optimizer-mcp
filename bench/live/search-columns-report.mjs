@@ -46,7 +46,7 @@ for (const [name, run] of [
 const mean = (rows, key) =>
   rows.reduce((total, row) => total + row[key], 0) / rows.length;
 const arms = Object.fromEntries(
-  ['proxy', 'headroom'].map((arm) => [
+  ['proxy', 'altA'].map((arm) => [
     arm,
     Object.fromEntries(
       ['forwardedBytes', 'estimatedO200kTokens', 'milliseconds'].map((key) => [
@@ -73,8 +73,8 @@ const oldProxy = mean(
   groups.filter((row) => row.arm === 'proxy').flatMap((row) => row.samples),
   'forwardedBytes'
 );
-const oldHeadroom = mean(
-  groups.filter((row) => row.arm === 'headroom').flatMap((row) => row.samples),
+const oldAltA = mean(
+  groups.filter((row) => row.arm === 'altA').flatMap((row) => row.samples),
   'forwardedBytes'
 );
 const newProxy = mean(replay.rows, 'forwardedBytes');
@@ -86,7 +86,7 @@ const result = {
     reductions: Object.fromEntries(
       Object.keys(arms.proxy).map((key) => [
         key,
-        1 - arms.proxy[key] / arms.headroom[key],
+        1 - arms.proxy[key] / arms.altA[key],
       ])
     ),
     byteWins: fresh.rows.filter(
@@ -94,16 +94,16 @@ const result = {
         row.arm === 'proxy' &&
         row.forwardedBytes <
           fresh.rows.find(
-            (other) => other.arm === 'headroom' && other.seed === row.seed
+            (other) => other.arm === 'altA' && other.seed === row.seed
           ).forwardedBytes
     ).length,
   },
   originalLosingInputs: {
     cases: 40,
     oldProxyMeanBytes: oldProxy,
-    archivedHeadroomMeanBytes: oldHeadroom,
+    archivedAltAMeanBytes: oldAltA,
     newProxyMeanBytes: newProxy,
-    reductionVersusArchivedHeadroom: 1 - newProxy / oldHeadroom,
+    reductionVersusArchivedAltA: 1 - newProxy / oldAltA,
     reductionVersusOldProxy: 1 - newProxy / oldProxy,
   },
   limitations: [

@@ -2,7 +2,7 @@
   "capturedAt": "2026-09-16T00:59:53.227Z",
   "node": "v22.15.0",
   "codex": "codex-cli 0.154.0",
-  "headroom": "0.37.0",
+  "altA": "sha256:5453d116514b14cd",
   "gitHead": "8776575a01e0a5cddce350a6da38b59e32e5c4de",
   "proxyBin": "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\dist\\proxy\\cli.js",
   "sha256": {

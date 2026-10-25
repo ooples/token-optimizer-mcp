@@ -115,6 +115,14 @@ export const envelope = () => fixture().envelope;
 const CENSUS = process.env.TOKEN_OPTIMIZER_BENCH_CENSUS;
 let announced = false;
 
+/**
+ * True in a census run, where a verdict is not a measurement (see above). A
+ * gate prints its verdict there but does not fail the run: the recorder reads
+ * a non-zero exit as a target that never reached its payloads, and its strict
+ * pass, which follows, is where every gate is enforced on recorded counts.
+ */
+export const censusMode = () => Boolean(CENSUS);
+
 export function tokens(text) {
   // An empty block carries nothing, and `count_tokens` refuses to price a text
   // block that is empty or all whitespace, so there is no count to record.

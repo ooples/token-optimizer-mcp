@@ -22,7 +22,7 @@
     "residualSd": 0.3140900607789867,
     "planningSd": 0.5,
     "costPairs": 67,
-    "sourcePolicy": "All comparable passing proxy/HeadRoom development pairs available before confirmation; mixed builds, excluded from final inference.",
+    "sourcePolicy": "All comparable passing proxy/Alternative A development pairs available before confirmation; mixed builds, excluded from final inference.",
     "records": [
       {
         "file": "C:\\Users\\yolan\\source\\repos\\token-optimizer-mcp\\bench\\live\\evidence\\codex-2026-09-15\\results.json",
@@ -264,7 +264,7 @@
       "seed": 35884616,
       "arms": [
         "proxy",
-        "headroom"
+        "altA"
       ],
       "readMode": "mixed",
       "caseSha256": "d35a862bf6e1f3bd138289f59fca49387e1fd710524e52d63303d9faffbd4fd3"
@@ -275,7 +275,7 @@
       "task": "refactor",
       "seed": 441249274,
       "arms": [
-        "headroom",
+        "altA",
         "proxy"
       ],
       "readMode": "natural",
@@ -287,7 +287,7 @@
       "task": "bugfix",
       "seed": 877162058,
       "arms": [
-        "headroom",
+        "altA",
         "proxy"
       ],
       "readMode": "natural",
@@ -299,7 +299,7 @@
       "task": "refresh",
       "seed": 439770681,
       "arms": [
-        "headroom",
+        "altA",
         "proxy"
       ],
       "readMode": "mixed",
@@ -312,7 +312,7 @@
       "seed": 978268664,
       "arms": [
         "proxy",
-        "headroom"
+        "altA"
       ],
       "readMode": "natural",
       "caseSha256": "4df9466266fdfa7605b56196a41de7f95adf40d1ae9235e6ce570e619e3e24a7"
@@ -324,7 +324,7 @@
       "seed": 542328163,
       "arms": [
         "proxy",
-        "headroom"
+        "altA"
       ],
       "readMode": "mixed",
       "caseSha256": "e4dfc2f3198c88605f911927fa6763a0f80fecf3312c94be7c9b1c386f9d938d"
@@ -336,7 +336,7 @@
       "seed": 683487178,
       "arms": [
         "proxy",
-        "headroom"
+        "altA"
       ],
       "readMode": "natural",
       "caseSha256": "707ff36235ce8e656962cd3038a7c85b57de0ac2ad5cc6362ded00dfde8620e3"
@@ -347,7 +347,7 @@
       "task": "refresh",
       "seed": 149982985,
       "arms": [
-        "headroom",
+        "altA",
         "proxy"
       ],
       "readMode": "mixed",
@@ -359,7 +359,7 @@
       "task": "code",
       "seed": 587234040,
       "arms": [
-        "headroom",
+        "altA",
         "proxy"
       ],
       "readMode": "natural",
@@ -371,7 +371,7 @@
       "task": "logs",
       "seed": 418705370,
       "arms": [
-        "headroom",
+        "altA",
         "proxy"
       ],
       "readMode": "natural",
@@ -384,7 +384,7 @@
       "seed": 80859747,
       "arms": [
         "proxy",
-        "headroom"
+        "altA"
       ],
       "readMode": "natural",
       "caseSha256": "3bcde8ac51358fcdb5a4df9ff958672123abda6976dbba2fdff8cca2720df30e"
@@ -395,7 +395,7 @@
       "task": "bugfix",
       "seed": 566533727,
       "arms": [
-        "headroom",
+        "altA",
         "proxy"
       ],
       "readMode": "natural",
@@ -408,7 +408,7 @@
       "seed": 113744461,
       "arms": [
         "proxy",
-        "headroom"
+        "altA"
       ],
       "readMode": "natural",
       "caseSha256": "8978269e1f93b68f5d6b92e316fede54c1afa1f0e5d77b5442ce5246eeab7232"
@@ -419,7 +419,7 @@
       "task": "json",
       "seed": 568003918,
       "arms": [
-        "headroom",
+        "altA",
         "proxy"
       ],
       "readMode": "natural",
@@ -431,7 +431,7 @@
       "task": "refactor",
       "seed": 496524024,
       "arms": [
-        "headroom",
+        "altA",
         "proxy"
       ],
       "readMode": "natural",
@@ -444,7 +444,7 @@
       "seed": 586027041,
       "arms": [
         "proxy",
-        "headroom"
+        "altA"
       ],
       "readMode": "mixed",
       "caseSha256": "a7a03b4e7e96cbe13db5835b146d49a45729c61c6a88df5977edfb2a7fc064b2"
@@ -455,7 +455,7 @@
       "task": "logs",
       "seed": 372471358,
       "arms": [
-        "headroom",
+        "altA",
         "proxy"
       ],
       "readMode": "natural",
@@ -468,7 +468,7 @@
       "seed": 486444956,
       "arms": [
         "proxy",
-        "headroom"
+        "altA"
       ],
       "readMode": "natural",
       "caseSha256": "d0e16a54eb4f235175f3ff1ac3ca23b811466615a8da64d2ed8df9a8799c3210"
@@ -479,7 +479,7 @@
       "task": "json",
       "seed": 955782253,
       "arms": [
-        "headroom",
+        "altA",
         "proxy"
       ],
       "readMode": "natural",
@@ -491,7 +491,7 @@
       "task": "code",
       "seed": 520856079,
       "arms": [
-        "headroom",
+        "altA",
         "proxy"
       ],
       "readMode": "natural",
@@ -504,7 +504,7 @@
       "seed": 101983047,
       "arms": [
         "proxy",
-        "headroom"
+        "altA"
       ],
       "readMode": "natural",
       "caseSha256": "266af574752097be3880d7051b7932c5efbd74774af78beaa601b81e6e48d734"
@@ -515,7 +515,7 @@
       "task": "json",
       "seed": 472197432,
       "arms": [
-        "headroom",
+        "altA",
         "proxy"
       ],
       "readMode": "natural",
@@ -527,7 +527,7 @@
       "task": "refresh",
       "seed": 678370808,
       "arms": [
-        "headroom",
+        "altA",
         "proxy"
       ],
       "readMode": "natural",
@@ -540,7 +540,7 @@
       "seed": 858929001,
       "arms": [
         "proxy",
-        "headroom"
+        "altA"
       ],
       "readMode": "natural",
       "caseSha256": "26298bde856c90e36b2f1b05aff24a3f06c8ad00504925506d45edface1ce609"
@@ -552,7 +552,7 @@
       "seed": 340327926,
       "arms": [
         "proxy",
-        "headroom"
+        "altA"
       ],
       "readMode": "natural",
       "caseSha256": "ee339adcaa5532104bdbfe742409009055423b639d3c37ecdd160498ca5a4959"
@@ -563,7 +563,7 @@
       "task": "code",
       "seed": 33155875,
       "arms": [
-        "headroom",
+        "altA",
         "proxy"
       ],
       "readMode": "natural",
@@ -576,7 +576,7 @@
       "seed": 722876816,
       "arms": [
         "proxy",
-        "headroom"
+        "altA"
       ],
       "readMode": "natural",
       "caseSha256": "4a7b89e56034e0d1ce44bfd50117c3746bd542282b386c4b1c85d22e9cf65fc7"
@@ -588,7 +588,7 @@
       "seed": 66846557,
       "arms": [
         "proxy",
-        "headroom"
+        "altA"
       ],
       "readMode": "mixed",
       "caseSha256": "246026eb24cf21f779d6318748b67dacfa3fac656a7872b585cedecb29f7f19c"
@@ -599,7 +599,7 @@
       "task": "refactor",
       "seed": 300967068,
       "arms": [
-        "headroom",
+        "altA",
         "proxy"
       ],
       "readMode": "natural",
@@ -611,7 +611,7 @@
       "task": "refresh",
       "seed": 139520376,
       "arms": [
-        "headroom",
+        "altA",
         "proxy"
       ],
       "readMode": "natural",
@@ -623,7 +623,7 @@
       "task": "code",
       "seed": 212560053,
       "arms": [
-        "headroom",
+        "altA",
         "proxy"
       ],
       "readMode": "natural",
@@ -636,7 +636,7 @@
       "seed": 847607179,
       "arms": [
         "proxy",
-        "headroom"
+        "altA"
       ],
       "readMode": "natural",
       "caseSha256": "9abe64a66136beb45c2e45fbd14a6b31aaaef3d9a2ba999c3582dc869be3d309"
@@ -648,7 +648,7 @@
       "seed": 484636344,
       "arms": [
         "proxy",
-        "headroom"
+        "altA"
       ],
       "readMode": "natural",
       "caseSha256": "08035c3d80071ddd29da8be84dfda861b550a6b701197d0bbbc7c94918c0ee92"
@@ -659,7 +659,7 @@
       "task": "refresh",
       "seed": 623750609,
       "arms": [
-        "headroom",
+        "altA",
         "proxy"
       ],
       "readMode": "natural",
@@ -671,7 +671,7 @@
       "task": "json",
       "seed": 987199599,
       "arms": [
-        "headroom",
+        "altA",
         "proxy"
       ],
       "readMode": "natural",
@@ -684,7 +684,7 @@
       "seed": 658803232,
       "arms": [
         "proxy",
-        "headroom"
+        "altA"
       ],
       "readMode": "natural",
       "caseSha256": "3492b709c5373a58ca2507611ce4e59adb19ebe2d079db1e3e9e9feb6a4425f5"
@@ -695,7 +695,7 @@
       "task": "logs",
       "seed": 340915507,
       "arms": [
-        "headroom",
+        "altA",
         "proxy"
       ],
       "readMode": "natural",
@@ -708,7 +708,7 @@
       "seed": 710493651,
       "arms": [
         "proxy",
-        "headroom"
+        "altA"
       ],
       "readMode": "natural",
       "caseSha256": "aed7b1e80be134cb275e14f8511915aa4b46d4e9a39f42280bc77fda2574b4db"
@@ -720,7 +720,7 @@
       "seed": 341501972,
       "arms": [
         "proxy",
-        "headroom"
+        "altA"
       ],
       "readMode": "natural",
       "caseSha256": "818ab5352bbeee67340fad6481f86a94fad2b3d71615f393b33ed1580e7caf23"
@@ -732,7 +732,7 @@
       "seed": 946303580,
       "arms": [
         "proxy",
-        "headroom"
+        "altA"
       ],
       "readMode": "natural",
       "caseSha256": "63e6907570495839965abc283af8c806c374e18bfb468b1d347f941948e6667d"
@@ -743,7 +743,7 @@
       "task": "bugfix",
       "seed": 800696801,
       "arms": [
-        "headroom",
+        "altA",
         "proxy"
       ],
       "readMode": "natural",
@@ -755,7 +755,7 @@
       "task": "bugfix",
       "seed": 789059046,
       "arms": [
-        "headroom",
+        "altA",
         "proxy"
       ],
       "readMode": "natural",
@@ -768,7 +768,7 @@
       "seed": 358109890,
       "arms": [
         "proxy",
-        "headroom"
+        "altA"
       ],
       "readMode": "natural",
       "caseSha256": "68e990ac6428144a635e3e360e65260007d7119cc2337572ace3216dbe436b0a"
@@ -779,7 +779,7 @@
       "task": "refactor",
       "seed": 64396761,
       "arms": [
-        "headroom",
+        "altA",
         "proxy"
       ],
       "readMode": "natural",
@@ -792,7 +792,7 @@
       "seed": 724790539,
       "arms": [
         "proxy",
-        "headroom"
+        "altA"
       ],
       "readMode": "mixed",
       "caseSha256": "9fcbe7e7b08c6a3a7bdb6fbc072a467893dabc75a674bcd753f520848f9c0b72"
@@ -804,7 +804,7 @@
       "seed": 337593919,
       "arms": [
         "proxy",
-        "headroom"
+        "altA"
       ],
       "readMode": "natural",
       "caseSha256": "f6aed4e5b6d456e0d3c3fc8afe02c5b1d6bcafe6586b3a2e45d2e1287c56f14c"
@@ -816,7 +816,7 @@
       "seed": 175519724,
       "arms": [
         "proxy",
-        "headroom"
+        "altA"
       ],
       "readMode": "natural",
       "caseSha256": "d856f5fd18372db062b52ad9e38cee9a3e66b1a3fbee31f074b08fcc8e4d2f41"
@@ -828,7 +828,7 @@
       "seed": 403350086,
       "arms": [
         "proxy",
-        "headroom"
+        "altA"
       ],
       "readMode": "natural",
       "caseSha256": "d9381c3bbb1f2001b93f88905fa46c58212dedfd44c1598434ae1b218d7e197b"
@@ -840,7 +840,7 @@
       "seed": 93950190,
       "arms": [
         "proxy",
-        "headroom"
+        "altA"
       ],
       "readMode": "natural",
       "caseSha256": "6cdc12dfed4d03662104c80f5215afc2f64cc221d64f7533204b72665db45cab"
@@ -852,7 +852,7 @@
       "seed": 620013553,
       "arms": [
         "proxy",
-        "headroom"
+        "altA"
       ],
       "readMode": "natural",
       "caseSha256": "feebef1bfd043df6159a58ddce301ae1a1f97b908b935c0a1c169244c91850af"
@@ -864,7 +864,7 @@
       "seed": 473460093,
       "arms": [
         "proxy",
-        "headroom"
+        "altA"
       ],
       "readMode": "natural",
       "caseSha256": "c16d16886686f713a22f04cf94c3b94ad3492752a8602f1c09d603e67a0756ea"
@@ -875,7 +875,7 @@
       "task": "refresh",
       "seed": 645716644,
       "arms": [
-        "headroom",
+        "altA",
         "proxy"
       ],
       "readMode": "natural",
@@ -887,7 +887,7 @@
       "task": "logs",
       "seed": 724999358,
       "arms": [
-        "headroom",
+        "altA",
         "proxy"
       ],
       "readMode": "natural",
@@ -900,7 +900,7 @@
       "seed": 335770031,
       "arms": [
         "proxy",
-        "headroom"
+        "altA"
       ],
       "readMode": "natural",
       "caseSha256": "87edc6fcdddbdaefe788bc0ac9f17fbb0146e543e32a6019fcad8fbbf124debf"
@@ -912,7 +912,7 @@
       "seed": 806292253,
       "arms": [
         "proxy",
-        "headroom"
+        "altA"
       ],
       "readMode": "natural",
       "caseSha256": "4bd912091d0471a6b91536226340c2506e554fe5236673bb4599ec42e1a304f3"
@@ -923,7 +923,7 @@
       "task": "refresh",
       "seed": 953185487,
       "arms": [
-        "headroom",
+        "altA",
         "proxy"
       ],
       "readMode": "mixed",
@@ -935,7 +935,7 @@
       "task": "bugfix",
       "seed": 792050108,
       "arms": [
-        "headroom",
+        "altA",
         "proxy"
       ],
       "readMode": "natural",
@@ -947,7 +947,7 @@
       "task": "code",
       "seed": 846664398,
       "arms": [
-        "headroom",
+        "altA",
         "proxy"
       ],
       "readMode": "natural",
@@ -959,7 +959,7 @@
       "task": "refresh",
       "seed": 96655857,
       "arms": [
-        "headroom",
+        "altA",
         "proxy"
       ],
       "readMode": "mixed",
@@ -971,7 +971,7 @@
       "task": "logs",
       "seed": 932489495,
       "arms": [
-        "headroom",
+        "altA",
         "proxy"
       ],
       "readMode": "natural",
@@ -983,7 +983,7 @@
       "task": "refresh",
       "seed": 678598069,
       "arms": [
-        "headroom",
+        "altA",
         "proxy"
       ],
       "readMode": "natural",
@@ -995,7 +995,7 @@
       "task": "refresh",
       "seed": 509309393,
       "arms": [
-        "headroom",
+        "altA",
         "proxy"
       ],
       "readMode": "mixed",
@@ -1007,7 +1007,7 @@
       "task": "json",
       "seed": 464973747,
       "arms": [
-        "headroom",
+        "altA",
         "proxy"
       ],
       "readMode": "natural",
@@ -1020,7 +1020,7 @@
       "seed": 777719575,
       "arms": [
         "proxy",
-        "headroom"
+        "altA"
       ],
       "readMode": "natural",
       "caseSha256": "54a15cb0b0e6101ed28788762d7cd0c023d3b08a9fda415c28413081ebbdda91"
@@ -1032,7 +1032,7 @@
       "seed": 518140609,
       "arms": [
         "proxy",
-        "headroom"
+        "altA"
       ],
       "readMode": "natural",
       "caseSha256": "ef934e27bf48b92dfc5c7e10ca1c7752d84c4313206b646f03bc2be5fc0c6ee7"
@@ -1043,7 +1043,7 @@
       "task": "refactor",
       "seed": 550267425,
       "arms": [
-        "headroom",
+        "altA",
         "proxy"
       ],
       "readMode": "natural",
@@ -1056,7 +1056,7 @@
       "seed": 425654112,
       "arms": [
         "proxy",
-        "headroom"
+        "altA"
       ],
       "readMode": "natural",
       "caseSha256": "1a1421d19cf7dde5033d083f21ba220c911da98d61a809633333b5d4751f8b46"
@@ -1068,7 +1068,7 @@
       "seed": 540989732,
       "arms": [
         "proxy",
-        "headroom"
+        "altA"
       ],
       "readMode": "natural",
       "caseSha256": "e81d1b7113ed15d60d78cebcc8665cd79fd1ec0df3e825edfd612f7fff35ce61"
@@ -1080,7 +1080,7 @@
       "seed": 84612777,
       "arms": [
         "proxy",
-        "headroom"
+        "altA"
       ],
       "readMode": "natural",
       "caseSha256": "44c2fe009dd8f8df1eda26b9fb9344662de4a1918344852b0ee2b62fbd56b2b7"
@@ -1092,7 +1092,7 @@
       "seed": 626882115,
       "arms": [
         "proxy",
-        "headroom"
+        "altA"
       ],
       "readMode": "natural",
       "caseSha256": "85f283759fd3e8ac79bce4cd71246127b147654d52fce7e0ec29d88519940fe9"

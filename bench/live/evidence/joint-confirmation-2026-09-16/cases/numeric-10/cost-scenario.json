@@ -20,7 +20,7 @@
   "measured": [
     {
       "task": "numeric",
-      "arm": "headroom",
+      "arm": "altA",
       "rep": 1,
       "recordedVerdict": "PASS",
       "verdict": "PASS",
@@ -38,7 +38,7 @@
   "aggregates": [
     {
       "task": "numeric",
-      "arm": "headroom",
+      "arm": "altA",
       "meanEstimatedUsd": 0.20562
     },
     {
@@ -51,7 +51,7 @@
     {
       "task": "numeric",
       "candidate": "proxy",
-      "against": "headroom",
+      "against": "altA",
       "estimatedUsdDelta": -0.09607399999999999,
       "reductionPercent": 46.724054080342384
     }

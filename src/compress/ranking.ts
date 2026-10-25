@@ -5,7 +5,7 @@
  * ranker is BM25, and that is a competitive position rather than a shortcut:
  * it needs no Python, no model weights and no RAM floor, it runs in a
  * restricted sandbox, and it is deterministic -- which is what lets the cached
- * prefix stay byte-stable and a benchmark number mean anything. HeadRoom's
+ * prefix stay byte-stable and a benchmark number mean anything. Alternative A's
  * ModernBERT buys semantic recall and pays for it with all four of those.
  *
  * But BM25 is lexical, and lexical has a real ceiling: a question about "the
@@ -17,7 +17,7 @@
  *
  * RANKING IS SYNCHRONOUS, AND THAT IS NOT THE BARRIER IT LOOKED LIKE. The
  * engines are pure synchronous functions of (text, context) -- what keeps them
- * free of the per-request state HeadRoom's #3486 is about -- and
+ * free of the per-request state Alternative A's #3486 is about -- and
  * `onnxruntime-node`'s `session.run()` is async, so there is no `await` at the
  * point a ranker is called.
  *

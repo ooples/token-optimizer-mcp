@@ -43,7 +43,7 @@ test('follow-up report retains a campaign that produced no artifacts', async () 
   expect(result.complete).toBe(0);
   expect(result.costReductionCompletePairs).toBeNull();
   expect(result.cases[0].arms.proxy.estimatedUsd).toBeNull();
-  expect(result.cases[0].arms.headroom.verdict).toBe('INCOMPLETE');
+  expect(result.cases[0].arms.altA.verdict).toBe('INCOMPLETE');
 });
 
 test('replay tools reject corpora containing no Responses requests', async () => {
@@ -57,7 +57,7 @@ test('replay tools reject corpora containing no Responses requests', async () =>
   await jsonFile(
     dir,
     'results.json',
-    ['proxy', 'headroom'].map((arm) => ({
+    ['proxy', 'altA'].map((arm) => ({
       task: 'json',
       rep: 1,
       arm,
@@ -81,7 +81,7 @@ test('replay tools reject corpora containing no Responses requests', async () =>
 test('performance report rejects an unexpected group with the correct total count', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'invalid-matrix-'));
   const records = [0, 1, 2].flatMap((round) =>
-    ['proxy', 'headroom', 'control'].flatMap((arm) =>
+    ['proxy', 'altA', 'control'].flatMap((arm) =>
       ['logs', 'json', 'code'].flatMap((task) =>
         ['repeated', 'unique'].map((mode) => ({
           round,
@@ -105,7 +105,7 @@ test('performance report rejects an unexpected group with the correct total coun
 });
 
 test('a replacement or duplicate group cannot satisfy a complete matrix', () => {
-  const dimensions = { round: [0, 1], arm: ['proxy', 'headroom'] };
+  const dimensions = { round: [0, 1], arm: ['proxy', 'altA'] };
   const rows = [0, 1].flatMap((round) =>
     dimensions.arm.map((arm) => ({ round, arm, samples: [{}] }))
   );
@@ -123,7 +123,7 @@ test('a replacement or duplicate group cannot satisfy a complete matrix', () => 
   expect(groupMatrix(rows, dimensions, 2)).toBe(false);
 });
 test('audit identities and verdicts control reporting and pilot selection', () => {
-  const rows = ['proxy', 'headroom'].map((arm) => ({
+  const rows = ['proxy', 'altA'].map((arm) => ({
     task: 'json',
     rep: 1,
     arm,
@@ -134,7 +134,7 @@ test('audit identities and verdicts control reporting and pilot selection', () =
     verdict: r.arm === 'proxy' ? 'FAIL' : 'PASS',
   }));
   expect(auditedPilot(rows, audit, { valid: true }).map((r) => r.arm)).toEqual([
-    'headroom',
+    'altA',
   ]);
   expect(auditedPilot(rows, audit, { valid: false })).toEqual([]);
   expect(() => matchAudits(rows, [audit[0], audit[0]])).toThrow();

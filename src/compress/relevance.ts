@@ -9,7 +9,7 @@
  * away the answer half the time and keeps it by luck the other half.
  *
  * WHY BM25 AND NOT AN EMBEDDING MODEL, which is the whole competitive point.
- * HeadRoom's relevance engine is ModernBERT: it needs a Python runtime, model
+ * Alternative A's relevance engine is ModernBERT: it needs a Python runtime, model
  * weights, and enough RAM to hold them, and their own docs record the result --
  * "incompatible with restricted sandboxes", a base-image RAM overhead, and
  * cross-agent memory that needs Docker. This is arithmetic over token counts.

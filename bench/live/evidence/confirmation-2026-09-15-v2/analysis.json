@@ -6,14 +6,14 @@
   "pairsMeasured": 69,
   "pairsPlanned": 70,
   "proxyPasses": 69,
-  "headroomPasses": 69,
+  "altAPasses": 69,
   "zeroFailureOneSided95SuccessLowerBound": 0.9575125894514063,
   "pairs": [
     {
       "id": "mixed-9",
       "family": "mixed",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.290552,
           "firstRequestColdSensitivityUsd": 0.373496,
@@ -49,7 +49,7 @@
       "id": "code-5",
       "family": "code",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.217966,
           "firstRequestColdSensitivityUsd": 0.217966,
@@ -85,7 +85,7 @@
       "id": "refactor-6",
       "family": "refactor",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.75811,
           "firstRequestColdSensitivityUsd": 0.75811,
@@ -121,7 +121,7 @@
       "id": "refresh-2",
       "family": "refresh",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.47588,
           "firstRequestColdSensitivityUsd": 0.47588,
@@ -157,7 +157,7 @@
       "id": "bugfix-2",
       "family": "bugfix",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.28785,
           "firstRequestColdSensitivityUsd": 0.370794,
@@ -193,7 +193,7 @@
       "id": "refresh-7",
       "family": "refresh",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.426812,
           "firstRequestColdSensitivityUsd": 0.426812,
@@ -244,7 +244,7 @@
           "agentSeconds": 15.3,
           "seconds": 16.2
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.426342,
           "firstRequestColdSensitivityUsd": 0.426342,
@@ -265,7 +265,7 @@
       "id": "mixed-2",
       "family": "mixed",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.27454,
           "firstRequestColdSensitivityUsd": 0.357484,
@@ -301,7 +301,7 @@
       "id": "refactor-7",
       "family": "refactor",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.424664,
           "firstRequestColdSensitivityUsd": 0.507608,
@@ -337,7 +337,7 @@
       "id": "bugfix-7",
       "family": "bugfix",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.46513,
           "firstRequestColdSensitivityUsd": 0.548074,
@@ -388,7 +388,7 @@
           "agentSeconds": 18.4,
           "seconds": 19.3
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.29083,
           "firstRequestColdSensitivityUsd": 0.29083,
@@ -409,7 +409,7 @@
       "id": "bugfix-6",
       "family": "bugfix",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.285382,
           "firstRequestColdSensitivityUsd": 0.36832600000000004,
@@ -445,7 +445,7 @@
       "id": "refactor-2",
       "family": "refactor",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.5696,
           "firstRequestColdSensitivityUsd": 0.5696,
@@ -496,7 +496,7 @@
           "agentSeconds": 24.8,
           "seconds": 25.8
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.14159,
           "firstRequestColdSensitivityUsd": 0.224534,
@@ -532,7 +532,7 @@
           "agentSeconds": 50.8,
           "seconds": 52
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.258802,
           "firstRequestColdSensitivityUsd": 0.341746,
@@ -568,7 +568,7 @@
           "agentSeconds": 43.1,
           "seconds": 44.2
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.618998,
           "firstRequestColdSensitivityUsd": 0.618998,
@@ -589,7 +589,7 @@
       "id": "mixed-1",
       "family": "mixed",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.241384,
           "firstRequestColdSensitivityUsd": 0.324328,
@@ -640,7 +640,7 @@
           "agentSeconds": 41.2,
           "seconds": 42.2
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.315132,
           "firstRequestColdSensitivityUsd": 0.315132,
@@ -661,7 +661,7 @@
       "id": "logs-1",
       "family": "logs",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.364368,
           "firstRequestColdSensitivityUsd": 0.364368,
@@ -712,7 +712,7 @@
           "agentSeconds": 41,
           "seconds": 41.9
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.297118,
           "firstRequestColdSensitivityUsd": 0.297118,
@@ -733,7 +733,7 @@
       "id": "json-10",
       "family": "json",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.138654,
           "firstRequestColdSensitivityUsd": 0.22159800000000002,
@@ -784,7 +784,7 @@
           "agentSeconds": 39.3,
           "seconds": 40.2
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.455128,
           "firstRequestColdSensitivityUsd": 0.455128,
@@ -805,7 +805,7 @@
       "id": "json-9",
       "family": "json",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.139152,
           "firstRequestColdSensitivityUsd": 0.22209600000000002,
@@ -841,7 +841,7 @@
       "id": "code-3",
       "family": "code",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.255864,
           "firstRequestColdSensitivityUsd": 0.255864,
@@ -892,7 +892,7 @@
           "agentSeconds": 37.8,
           "seconds": 38.7
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.377978,
           "firstRequestColdSensitivityUsd": 0.377978,
@@ -928,7 +928,7 @@
           "agentSeconds": 45,
           "seconds": 46.1
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.399542,
           "firstRequestColdSensitivityUsd": 0.445622,
@@ -964,7 +964,7 @@
           "agentSeconds": 52.1,
           "seconds": 53
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.345804,
           "firstRequestColdSensitivityUsd": 0.345804,
@@ -1000,7 +1000,7 @@
           "agentSeconds": 37.2,
           "seconds": 38.2
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.333176,
           "firstRequestColdSensitivityUsd": 0.333176,
@@ -1021,7 +1021,7 @@
       "id": "refresh-10",
       "family": "refresh",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.258188,
           "firstRequestColdSensitivityUsd": 0.304268,
@@ -1072,7 +1072,7 @@
           "agentSeconds": 37.9,
           "seconds": 39.8
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.272114,
           "firstRequestColdSensitivityUsd": 0.31819400000000003,
@@ -1108,7 +1108,7 @@
           "agentSeconds": 20.2,
           "seconds": 21.1
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.21925,
           "firstRequestColdSensitivityUsd": 0.21925,
@@ -1144,7 +1144,7 @@
           "agentSeconds": 15.1,
           "seconds": 16.1
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.135636,
           "firstRequestColdSensitivityUsd": 0.21858,
@@ -1165,7 +1165,7 @@
       "id": "logs-5",
       "family": "logs",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.268208,
           "firstRequestColdSensitivityUsd": 0.268208,
@@ -1201,7 +1201,7 @@
       "id": "refresh-9",
       "family": "refresh",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.22629,
           "firstRequestColdSensitivityUsd": 0.27237,
@@ -1237,7 +1237,7 @@
       "id": "json-1",
       "family": "json",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.130614,
           "firstRequestColdSensitivityUsd": 0.21355800000000003,
@@ -1288,7 +1288,7 @@
           "agentSeconds": 18.9,
           "seconds": 19.8
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.221342,
           "firstRequestColdSensitivityUsd": 0.267422,
@@ -1309,7 +1309,7 @@
       "id": "logs-7",
       "family": "logs",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.35303,
           "firstRequestColdSensitivityUsd": 0.39911,
@@ -1345,7 +1345,7 @@
       "id": "json-6",
       "family": "json",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.14771,
           "firstRequestColdSensitivityUsd": 0.23065400000000003,
@@ -1396,7 +1396,7 @@
           "agentSeconds": 25.3,
           "seconds": 26.2
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.17309,
           "firstRequestColdSensitivityUsd": 0.21917,
@@ -1417,7 +1417,7 @@
       "id": "refactor-1",
       "family": "refactor",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.277066,
           "firstRequestColdSensitivityUsd": 0.36001,
@@ -1468,7 +1468,7 @@
           "agentSeconds": 44.4,
           "seconds": 45.6
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.368452,
           "firstRequestColdSensitivityUsd": 0.414532,
@@ -1504,7 +1504,7 @@
           "agentSeconds": 12.7,
           "seconds": 13.7
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.352274,
           "firstRequestColdSensitivityUsd": 0.352274,
@@ -1540,7 +1540,7 @@
           "agentSeconds": 38.3,
           "seconds": 39.3
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.337754,
           "firstRequestColdSensitivityUsd": 0.337754,
@@ -1576,7 +1576,7 @@
           "agentSeconds": 31.5,
           "seconds": 32.5
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.151652,
           "firstRequestColdSensitivityUsd": 0.23459600000000003,
@@ -1612,7 +1612,7 @@
           "agentSeconds": 21.6,
           "seconds": 22.6
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.310002,
           "firstRequestColdSensitivityUsd": 0.356082,
@@ -1648,7 +1648,7 @@
           "agentSeconds": 39.1,
           "seconds": 40.2
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.363924,
           "firstRequestColdSensitivityUsd": 0.41000400000000004,
@@ -1669,7 +1669,7 @@
       "id": "code-9",
       "family": "code",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.23742,
           "firstRequestColdSensitivityUsd": 0.2835,
@@ -1705,7 +1705,7 @@
       "id": "code-1",
       "family": "code",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.247516,
           "firstRequestColdSensitivityUsd": 0.293596,
@@ -1741,7 +1741,7 @@
       "id": "json-8",
       "family": "json",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.190258,
           "firstRequestColdSensitivityUsd": 0.23633800000000002,
@@ -1792,7 +1792,7 @@
           "agentSeconds": 40.2,
           "seconds": 41.4
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.552544,
           "firstRequestColdSensitivityUsd": 0.552544,
@@ -1828,7 +1828,7 @@
           "agentSeconds": 40.1,
           "seconds": 41.2
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.375332,
           "firstRequestColdSensitivityUsd": 0.375332,
@@ -1864,7 +1864,7 @@
           "agentSeconds": 42.7,
           "seconds": 43.6
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.462058,
           "firstRequestColdSensitivityUsd": 0.462058,
@@ -1885,7 +1885,7 @@
       "id": "refresh-1",
       "family": "refresh",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.361098,
           "firstRequestColdSensitivityUsd": 0.407178,
@@ -1921,7 +1921,7 @@
       "id": "mixed-4",
       "family": "mixed",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.526694,
           "firstRequestColdSensitivityUsd": 0.526694,
@@ -1957,7 +1957,7 @@
       "id": "logs-3",
       "family": "logs",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.291086,
           "firstRequestColdSensitivityUsd": 0.291086,
@@ -2008,7 +2008,7 @@
           "agentSeconds": 24.4,
           "seconds": 25.4
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.223306,
           "firstRequestColdSensitivityUsd": 0.223306,
@@ -2044,7 +2044,7 @@
           "agentSeconds": 18.4,
           "seconds": 19.3
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.318908,
           "firstRequestColdSensitivityUsd": 0.318908,
@@ -2080,7 +2080,7 @@
           "agentSeconds": 14.4,
           "seconds": 15.3
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.305688,
           "firstRequestColdSensitivityUsd": 0.305688,
@@ -2101,7 +2101,7 @@
       "id": "bugfix-4",
       "family": "bugfix",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.407476,
           "firstRequestColdSensitivityUsd": 0.407476,
@@ -2137,7 +2137,7 @@
       "id": "logs-10",
       "family": "logs",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.209898,
           "firstRequestColdSensitivityUsd": 0.255978,
@@ -2188,7 +2188,7 @@
           "agentSeconds": 17.7,
           "seconds": 18.6
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.311444,
           "firstRequestColdSensitivityUsd": 0.357524,
@@ -2209,7 +2209,7 @@
       "id": "bugfix-3",
       "family": "bugfix",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.4572,
           "firstRequestColdSensitivityUsd": 0.4572,
@@ -2260,7 +2260,7 @@
           "agentSeconds": 40.1,
           "seconds": 41.2
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.27781,
           "firstRequestColdSensitivityUsd": 0.360754,
@@ -2296,7 +2296,7 @@
           "agentSeconds": 38.9,
           "seconds": 39.8
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.422068,
           "firstRequestColdSensitivityUsd": 0.468148,
@@ -2332,7 +2332,7 @@
           "agentSeconds": 15.3,
           "seconds": 16.2
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.309542,
           "firstRequestColdSensitivityUsd": 0.392486,
@@ -2368,7 +2368,7 @@
           "agentSeconds": 42.9,
           "seconds": 44.1
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.436498,
           "firstRequestColdSensitivityUsd": 0.436498,
@@ -2389,7 +2389,7 @@
       "id": "mixed-6",
       "family": "mixed",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.231872,
           "firstRequestColdSensitivityUsd": 0.314816,
@@ -2440,7 +2440,7 @@
           "agentSeconds": 45.1,
           "seconds": 46.3
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.275016,
           "firstRequestColdSensitivityUsd": 0.321096,
@@ -2461,7 +2461,7 @@
       "id": "code-2",
       "family": "code",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.171706,
           "firstRequestColdSensitivityUsd": 0.25465,

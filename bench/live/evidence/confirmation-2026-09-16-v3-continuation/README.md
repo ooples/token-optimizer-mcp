@@ -1,7 +1,7 @@
 # Completed amended live comparison
 
 All **70 scheduled pairs / 140 attempts** completed. Proxy passed **69/70**;
-installed HeadRoom 0.37.0 passed **70/70**. Proxy bugfix-10 hit an upstream HTTP 503
+installed Alternative A passed **70/70**. Proxy bugfix-10 hit an upstream HTTP 503
 after two successful responses. The failed request had no compressed output.
 Its third-request usage is unknown; its total cost remains null, and known partial
 usage is retained. **Strict superiority was not established**: the quality and
@@ -40,10 +40,10 @@ Across complete pairs, requests are 37.5% lower and startup-inclusive time 43.6%
 lower. See descriptive.json for raw totals and all metrics.
 
 Known estimated subtotal across **all 70 proxy attempts** is $15.635996 plus the
-unknown charge, if any, for the failed third request. HeadRoom's fully measured
+unknown charge, if any, for the failed third request. Alternative A's fully measured
 70-attempt total is $21.968986. These are not a complete like-for-like total-cost
 comparison. The failed proxy attempt has $0.068654 in known charges plus unknown
-usage; the matching HeadRoom attempt costs $0.373884 in the rate scenario.
+usage; the matching Alternative A attempt costs $0.373884 in the rate scenario.
 
 The frozen scenario is USD 10/1/50 per million uncached-input/cached-input/output
 tokens. These are estimated token charges, not invoices, subscription charges or

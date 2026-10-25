@@ -5,7 +5,7 @@
  * THE PATH IS PART OF THE MARKER, AND THE MARKER IS RE-READ ON EVERY LATER
  * TURN. Under the OS temp directory it was
  * `<tmpdir>/token-optimizer-spill/<24 hex>/<16 hex>-block`: 39 tokens of
- * marker on Linux and 51 on Windows (cl100k), against 17 for HeadRoom's
+ * marker on Linux and 51 on Windows (cl100k), against 17 for Alternative A's
  * `<<ccr:hash,kind,size>>`. Every one of those tokens is paid again on every
  * turn the marker stays in context, so a long path is a recurring cost, not a
  * one-off. Here it is `<home>/.tok/<pid>/<15 digits>`, 21-25 tokens.

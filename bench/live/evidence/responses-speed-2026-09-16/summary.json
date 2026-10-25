@@ -8,7 +8,7 @@
       "unknownCosts": 0,
       "agentSeconds": 135.2
     },
-    "headroom": {
+    "altA": {
       "attempts": 4,
       "passes": 4,
       "knownEstimatedUsd": 1.3107039999999999,
@@ -37,7 +37,7 @@
             "upstreamMs": 22584.4689
           }
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.336684,
           "agentSeconds": 27.1,
@@ -58,7 +58,7 @@
       "seed": 3141592302,
       "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-responses-speed-2026-09-16\\repeat\\run-QCBxmE",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.392092,
           "agentSeconds": 26.5,
@@ -103,7 +103,7 @@
             "upstreamMs": 40759.125799999994
           }
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.235676,
           "agentSeconds": 50.7,
@@ -124,7 +124,7 @@
       "seed": 1618034102,
       "raw": "C:\\Users\\yolan\\AppData\\Local\\Temp\\codex-responses-speed-2026-09-16\\refresh\\run-1Tq4dJ",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.346252,
           "agentSeconds": 62.2,

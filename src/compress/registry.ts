@@ -3,7 +3,7 @@
  *
  * WHY THIS EXISTS. The router was a `switch` over five engines, so a user with
  * a proprietary log format, a domain payload or simply a better compressor than
- * ours had nowhere to put it. HeadRoom's engine set is fixed too -- the same
+ * ours had nowhere to put it. Alternative A's engine set is fixed too -- the same
  * closed door; an extension point is the cheapest way to be beaten less often,
  * because the next content type is always one nobody anticipated.
  *
@@ -62,7 +62,7 @@ interface Registered extends EngineRegistration {
 /**
  * Module-level, and deliberately not a class.
  *
- * The registry is configuration, not per-request state -- the thing HeadRoom's
+ * The registry is configuration, not per-request state -- the thing Alternative A's
  * #3486 got wrong was keeping REQUEST state on a shared router. Registrations
  * are immutable once added and every engine remains a pure function of its
  * arguments, so concurrent calls cannot observe each other.

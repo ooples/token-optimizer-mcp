@@ -28,7 +28,7 @@
     },
     {
       "task": "code",
-      "arm": "headroom",
+      "arm": "altA",
       "rep": 1,
       "recordedVerdict": "PASS",
       "verdict": "PASS",
@@ -36,7 +36,7 @@
     },
     {
       "task": "code",
-      "arm": "headroom",
+      "arm": "altA",
       "rep": 2,
       "recordedVerdict": "PASS",
       "verdict": "PASS",
@@ -60,7 +60,7 @@
     },
     {
       "task": "code",
-      "arm": "headroom",
+      "arm": "altA",
       "rep": 3,
       "recordedVerdict": "PASS",
       "verdict": "PASS",
@@ -68,7 +68,7 @@
     },
     {
       "task": "code",
-      "arm": "headroom",
+      "arm": "altA",
       "rep": 4,
       "recordedVerdict": "PASS",
       "verdict": "PASS",
@@ -91,7 +91,7 @@
     },
     {
       "task": "code",
-      "arm": "headroom",
+      "arm": "altA",
       "meanEstimatedUsd": 0.24096399999999998
     }
   ],
@@ -99,7 +99,7 @@
     {
       "task": "code",
       "candidate": "proxy",
-      "against": "headroom",
+      "against": "altA",
       "estimatedUsdDelta": -0.12080099999999999,
       "reductionPercent": 50.13238492056904
     }

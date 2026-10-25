@@ -28,7 +28,7 @@
     },
     {
       "task": "code",
-      "arm": "headroom",
+      "arm": "altA",
       "rep": 1,
       "recordedVerdict": "PASS",
       "verdict": "PASS",
@@ -43,7 +43,7 @@
     },
     {
       "task": "code",
-      "arm": "headroom",
+      "arm": "altA",
       "meanEstimatedUsd": 0.136064
     }
   ],
@@ -51,7 +51,7 @@
     {
       "task": "code",
       "candidate": "proxy",
-      "against": "headroom",
+      "against": "altA",
       "estimatedUsdDelta": 0.104136,
       "reductionPercent": -76.5345719661336
     }

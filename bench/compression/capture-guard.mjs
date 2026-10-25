@@ -20,6 +20,6 @@ export function stubbedCaptureRefusal(theirs, dir = '<capture>') {
   return (
     `refusing ${dir}: this capture was taken with stub arms (${stub}), so it ` +
     'measures the harness and not any engine. Re-run ' +
-    'bench/compression/headroom/run-theirs.py without BENCH_KNOWN_ANSWER_ARMS.'
+    'bench/compression/alt-a/run-theirs.py without BENCH_KNOWN_ANSWER_ARMS.'
   );
 }

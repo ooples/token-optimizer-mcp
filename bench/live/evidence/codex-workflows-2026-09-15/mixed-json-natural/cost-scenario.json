@@ -28,7 +28,7 @@
     },
     {
       "task": "refresh",
-      "arm": "headroom",
+      "arm": "altA",
       "rep": 1,
       "recordedVerdict": "PASS",
       "verdict": "PASS",
@@ -36,7 +36,7 @@
     },
     {
       "task": "refresh",
-      "arm": "headroom",
+      "arm": "altA",
       "rep": 2,
       "recordedVerdict": "PASS",
       "verdict": "PASS",
@@ -59,7 +59,7 @@
     },
     {
       "task": "refresh",
-      "arm": "headroom",
+      "arm": "altA",
       "meanEstimatedUsd": 0.262496
     }
   ],
@@ -67,7 +67,7 @@
     {
       "task": "refresh",
       "candidate": "proxy",
-      "against": "headroom",
+      "against": "altA",
       "estimatedUsdDelta": -0.095271,
       "reductionPercent": 36.294267341216624
     }

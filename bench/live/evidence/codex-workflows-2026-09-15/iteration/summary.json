@@ -32,7 +32,7 @@
     },
     {
       "task": "bugfix",
-      "arm": "headroom",
+      "arm": "altA",
       "passed": 1,
       "expected": 1,
       "measured": 1,
@@ -71,7 +71,7 @@
     },
     {
       "task": "refresh",
-      "arm": "headroom",
+      "arm": "altA",
       "passed": 1,
       "expected": 1,
       "measured": 1,
@@ -87,15 +87,15 @@
     {
       "task": "bugfix",
       "candidate": "proxy",
-      "inputReductionVsHeadroom": 0.3393998209440757,
+      "inputReductionVsAltA": 0.3393998209440757,
       "inputReductionVsControl": -0.0022604025175492204
     },
     {
       "task": "refresh",
       "candidate": "proxy",
-      "inputReductionVsHeadroom": -0.768078711865545,
+      "inputReductionVsAltA": -0.768078711865545,
       "inputReductionVsControl": 0.30668852502189126
     }
   ],
-  "interpretation": "Input includes cached tokens. Cached is a subset, not an additional charge. These are token counts, not dollar costs. Three synthetic workloads do not establish a universal win. Startup is included in seconds. HeadRoom compression is measured through provider usage, not the null recorder byte counts."
+  "interpretation": "Input includes cached tokens. Cached is a subset, not an additional charge. These are token counts, not dollar costs. Three synthetic workloads do not establish a universal win. Startup is included in seconds. Alternative A compression is measured through provider usage, not the null recorder byte counts."
 }

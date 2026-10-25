@@ -24,7 +24,7 @@ const fields = [
 ];
 function summarize(pairs) {
   const arms = {};
-  for (const arm of ['proxy', 'headroom']) {
+  for (const arm of ['proxy', 'altA']) {
     arms[arm] = Object.fromEntries(
       fields.map((key) => [
         key,
@@ -41,11 +41,11 @@ function summarize(pairs) {
     reductions: Object.fromEntries(
       [...fields, 'allInputUncachedSensitivityUsd'].map((key) => [
         key,
-        reduction(arms.proxy[key], arms.headroom[key]),
+        reduction(arms.proxy[key], arms.altA[key]),
       ])
     ),
     proxyCostWins: pairs.filter(
-      (pair) => pair.arms.proxy.estimatedUsd < pair.arms.headroom.estimatedUsd
+      (pair) => pair.arms.proxy.estimatedUsd < pair.arms.altA.estimatedUsd
     ).length,
   };
 }

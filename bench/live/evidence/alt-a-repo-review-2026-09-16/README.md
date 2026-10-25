@@ -1,9 +1,9 @@
-# HeadRoom source review and local route probe
+# Alternative A source review and local route probe
 
 ## Finding
 
 Our strongest next opportunity is to combine our smaller individual encodings
-with stable cross-output deduplication on the Codex Responses route. HeadRoom
+with stable cross-output deduplication on the Codex Responses route. Alternative A
 already does this. Our other conversation route has deduplication, but
 `src/proxy/responses.ts` calls only the independent block compressor.
 
@@ -14,13 +14,12 @@ provider cache hits to unrelated features or further shrinking tool descriptions
 ## Provenance
 
 - Our source/build: `8c70671be8132b33b8b61f5f5d3d77bab2149391`.
-- Upstream: [headroomlabs-ai/headroom at
-  35b11564c6217c358094732618d21eb74503aa47](https://github.com/headroomlabs-ai/headroom/tree/35b11564c6217c358094732618d21eb74503aa47),
-  checked out September 16, 2026. Package metadata points to the old
-  `chopratejas/headroom` location; use the canonical repository above.
-- Local probe: installed `headroom-ai` 0.37.0, Python 3.13; actual HTTP proxy with
-  a local mock upstream. No provider calls, agent tasks, or billable usage.
-- Upstream and installed packages both label themselves 0.37.0, but are not
+- Upstream: the Alternative A repository at commit
+  35b11564c6217c358094732618d21eb74503aa47, checked out September 16, 2026.
+- Local probe: the installed Alternative A package, Python 3.13; actual HTTP
+  proxy with a local mock upstream. No provider calls, agent tasks, or billable
+  usage.
+- Upstream and installed packages carry the same version label but are not
   source-identical. The attached AST comparison ignores formatting/comments.
   Deduplication, the unit cache key, tool lifting, and the payload compressor
   match. The live-unit adapter's upstream change adds byte-exact read exclusions;
@@ -28,20 +27,20 @@ provider cache hits to unrelated features or further shrinking tool descriptions
 - `probe-summary.json` preserves all seven synthetic cases. Full synthetic wire
   captures and process logs remain at its recorded local temporary path.
 - Reproduce from the repository root after building:
-  `node bench/live/headroom-gap-probe.mjs`. This starts the installed HeadRoom
+  `node bench/live/alt-a-gap-probe.mjs`. This starts the installed Alternative A
   proxy, routes it exclusively to a loopback mock, and stops the child afterward.
 
 ## What the actual Responses route does better
 
 All source links below are pinned to the reviewed upstream commit.
 
-| Mechanism                   | HeadRoom source                                                                                                                                                                                                                                                                                                               | Our Responses route / consequence                                                                                                                                                                                         |
+| Mechanism                   | Alternative A source                                                                                                                                                                                                                                                                                                               | Our Responses route / consequence                                                                                                                                                                                         |
 | --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Cross-output deduplication  | [Keep the earliest copy; fold later repeated spans](https://github.com/headroomlabs-ai/headroom/blob/35b11564c6217c358094732618d21eb74503aa47/headroom/proxy/handlers/openai.py#L1244)                                                                                                                                        | Independent `cachedOutput` calls reuse CPU work but still transmit each compressed copy. This is a demonstrated size loss on repeated outputs.                                                                            |
-| More output representations | [Four output item types](https://github.com/headroomlabs-ai/headroom/blob/35b11564c6217c358094732618d21eb74503aa47/headroom/proxy/handlers/openai.py#L1021) and [both text-part types](https://github.com/headroomlabs-ai/headroom/blob/35b11564c6217c358094732618d21eb74503aa47/headroom/proxy/handlers/openai.py#L2049)     | We support function/custom output and `input_text`; we skip local-shell/apply-patch outputs and `output_text` parts. Confirmed by the local probe. Client/API compatibility still needs fixtures before widening support. |
-| Token-count acceptance      | [Reject non-decreasing token counts](https://github.com/headroomlabs-ai/headroom/blob/35b11564c6217c358094732618d21eb74503aa47/headroom/transforms/compression_units.py#L331)                                                                                                                                                 | Our final route acceptance compares serialized bytes. Fewer bytes are not a guarantee of fewer model tokens. Their tokenizer is still an estimate for an unknown provider encoding.                                       |
-| Small-output handling       | [512-byte unit floor](https://github.com/headroomlabs-ai/headroom/blob/35b11564c6217c358094732618d21eb74503aa47/headroom/proxy/handlers/openai.py#L1732), [compatible small-unit batching](https://github.com/headroomlabs-ai/headroom/blob/35b11564c6217c358094732618d21eb74503aa47/headroom/proxy/handlers/openai.py#L2476) | We skip each text under 1,024 JavaScript characters. This is a coverage opportunity, not a demonstrated win: the single small case tied.                                                                                  |
-| Tool-aware read protection  | [Inspect call names, commands, and output content before compressing](https://github.com/headroomlabs-ai/headroom/blob/35b11564c6217c358094732618d21eb74503aa47/headroom/proxy/handlers/openai.py#L2135)                                                                                                                      | We pass text to the compressor without its originating call. Content-based safeguards cannot exploit whether the agent needs exact edit anchors. Potential workflow benefit; not a proven cause of our extra requests.    |
+| Cross-output deduplication  | Keep the earliest copy; fold later repeated spans (Alternative A source: `proxy/handlers/openai.py`)                                                                                                                                        | Independent `cachedOutput` calls reuse CPU work but still transmit each compressed copy. This is a demonstrated size loss on repeated outputs.                                                                            |
+| More output representations | Four output item types (Alternative A source: `proxy/handlers/openai.py`) and both text-part types (Alternative A source: `proxy/handlers/openai.py`)     | We support function/custom output and `input_text`; we skip local-shell/apply-patch outputs and `output_text` parts. Confirmed by the local probe. Client/API compatibility still needs fixtures before widening support. |
+| Token-count acceptance      | Reject non-decreasing token counts (Alternative A source: `transforms/compression_units.py`)                                                                                                                                                 | Our final route acceptance compares serialized bytes. Fewer bytes are not a guarantee of fewer model tokens. Their tokenizer is still an estimate for an unknown provider encoding.                                       |
+| Small-output handling       | 512-byte unit floor (Alternative A source: `proxy/handlers/openai.py`), compatible small-unit batching (Alternative A source: `proxy/handlers/openai.py`) | We skip each text under 1,024 JavaScript characters. This is a coverage opportunity, not a demonstrated win: the single small case tied.                                                                                  |
+| Tool-aware read protection  | Inspect call names, commands, and output content before compressing (Alternative A source: `proxy/handlers/openai.py`)                                                                                                                      | We pass text to the compressor without its originating call. Content-based safeguards cannot exploit whether the agent needs exact edit anchors. Potential workflow benefit; not a proven cause of our extra requests.    |
 
 Their per-unit exact-output cache and ours serve the same broad purpose. Raising
 ours from 128 entries to their 10,000-entry limit is not an evidence-backed fix;
@@ -54,7 +53,7 @@ or cost. Fixtures contain the same 80-row structured result and vary its output
 representation or repeat count. They were selected to exercise source-identified
 gaps, not to estimate the prevalence of those gaps in production.
 
-| Case                      | Original |   Ours | Installed HeadRoom |
+| Case                      | Original |   Ours | Installed Alternative A |
 | ------------------------- | -------: | -----: | -----------------: |
 | One result                |   11,422 |  2,066 |              4,356 |
 | Two identical results     |   22,716 |  4,004 |              4,461 |

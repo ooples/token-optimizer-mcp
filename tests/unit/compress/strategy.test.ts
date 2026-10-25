@@ -18,7 +18,7 @@ import { anchorStore } from '../../../src/compress/anchor.js';
 
 /**
  * The strategies, the cache frontier, and the two failure modes taken straight
- * from HeadRoom's issue tracker.
+ * from Alternative A's issue tracker.
  *
  * These are the tests that would have caught the defects THEY are carrying:
  * #3486, one shared router keeping per-request state so concurrent requests
@@ -161,7 +161,7 @@ describe('v1 frontier strategy', () => {
     expect(textOf(out.request)).not.toContain('<<ccr:');
   });
 
-  // HeadRoom #3456.
+  // Alternative A #3456.
   it('never rewrites a message carrying signed thinking blocks', () => {
     // Their issue: the signature stops matching, the provider returns 400, and
     // because the poisoned block is now in history EVERY later request fails.
@@ -189,7 +189,7 @@ describe('ccr control arm', () => {
     // user is billed for it.
     const out = ccrStyle(request(rows(60), rows(60)), { spill });
     expect(out.injectedChars).toBeGreaterThan(0);
-    expect(JSON.stringify(out.request.tools)).toContain('headroom_retrieve');
+    expect(JSON.stringify(out.request.tools)).toContain('alternative_a_retrieve');
     expect(String(out.request.system)).toContain(
       'Compressed Context Available'
     );
@@ -240,7 +240,7 @@ describe('router', () => {
     }
   });
 
-  // HeadRoom #3486.
+  // Alternative A #3486.
   it('does not cross-contaminate between concurrent calls', async () => {
     // Their issue: one shared ContentRouter keeps per-request state on `self`,
     // so request A's options decide how request B's content is compressed. The

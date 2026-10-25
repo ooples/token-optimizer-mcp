@@ -1,6 +1,4 @@
-import { readFileSync } from 'node:fs';
-import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { routingEntries } from './routing-record.mjs';
 
 /**
  * The product's honest cross-client capability contract.
@@ -632,14 +630,9 @@ export function upstreamFor(client, env = process.env) {
  */
 function ourRoute(value, client, env) {
   try {
-    const home =
-      env.TOKEN_OPTIMIZER_HOME || join(homedir(), '.token-optimizer');
-    const manifest = JSON.parse(
-      readFileSync(join(home, 'default-routing.json'), 'utf8')
-    );
-    if (manifest?.schema !== 1) return false;
+    // Both record locations (routing-record.mjs).
     const variable = CLIENT_PROXY_ENV[client];
-    const matches = Object.values(manifest.entries || {}).filter(
+    const matches = Object.values(routingEntries(env)).filter(
       (entry) => entry?.value === value && entry?.variable === variable
     );
     if (!matches.length) return false;

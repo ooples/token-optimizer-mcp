@@ -138,13 +138,13 @@ check('B3', 'the published tables are reproducible by their harnesses', () => {
   if (!t.ok) return fail('README figures disagree with the harness');
   if (!t.out.includes('README TABLE AGREES'))
     return fail('check did not confirm agreement');
-  // THE SECOND TABLE HAS ITS OWN CHAIN. head-to-head.mjs needs a HeadRoom clone
+  // THE SECOND TABLE HAS ITS OWN CHAIN. head-to-head.mjs needs a Alternative A clone
   // on disk, which this machine may not have, so its figures are checked
   // against the run recorded beside it rather than re-measured here. That is a
   // weaker link and it is a checked one; leaving the larger of the two
   // published tables out entirely would have let it drift unguarded.
   const h = run(process.execPath, [
-    'bench/compression/readme-headroom.check.mjs',
+    'bench/compression/readme-alt-a.check.mjs',
   ]);
   if (!h.ok || !h.out.includes('AGREES with the recorded run')) {
     return fail('README head-to-head figures disagree with the recorded run');
@@ -160,7 +160,7 @@ check('B3', 'the published tables are reproducible by their harnesses', () => {
   // own `regenerate` field, and it needs the clone -- which is exactly why this
   // is a shippability blocker rather than something CI could be asked to fix.
   const record = JSON.parse(
-    read('bench/compression/headroom/results/head-to-head.json')
+    read('bench/compression/alt-a/results/head-to-head.json')
   );
   const moved = run('git', [
     'diff',
@@ -238,7 +238,7 @@ check('B5', 'every reduction claim carries the retention claim', () => {
   // retention figures could not tell that all five had gone stale together.
   // head-to-head.mjs --record writes what the harness printed; the README has
   // to carry those numbers and no others.
-  const recordPath = 'bench/compression/headroom/results/head-to-head.json';
+  const recordPath = 'bench/compression/alt-a/results/head-to-head.json';
   if (!existsSync(join(ROOT, recordPath))) {
     return fail(`no recorded run at ${recordPath}`);
   }
@@ -359,7 +359,7 @@ check('B7', 'no competitor analysis lives in this public repo', () => {
   //
   // Both documents now live outside the repo. This checks the property that
   // replaced the old one: they are absent, and nothing links to them.
-  const banned = ['docs/COMPETITIVE_GAPS.md', 'docs/COMPETITOR_HEADROOM.md'];
+  const banned = ['docs/COMPETITIVE_GAPS.md', 'docs/COMPETITOR_ALT_A.md'];
   const present = banned.filter((f) => existsSync(join(ROOT, f)));
   if (present.length) {
     return fail(
@@ -569,7 +569,7 @@ check('B13', 'info retention is measured on their corpus', () => {
 
   if (m.dataset !== 'info-retention')
     return fail(`${RESULT} is for dataset ${JSON.stringify(m.dataset)}`);
-  if (m.source !== 'headroom/evals/runners/compression_only.py')
+  if (m.source !== 'alternative_a/evals/runners/compression_only.py')
     return fail(`${RESULT} cites ${JSON.stringify(m.source)}, not their generator`);
   if (m.probes !== m.cases * 4)
     return fail(`${RESULT} has ${m.probes} probes for ${m.cases} cases, not four each`);
@@ -626,7 +626,7 @@ check(
   'B14',
   'every competitive claim is backed by a re-runnable measurement',
   () => {
-    const PROBE = 'bench/competitive/probe-headroom.py';
+    const PROBE = 'bench/competitive/probe-alt-a.py';
     const RESULT = 'bench/competitive/results/claims.json';
     const REGEN = `python ${PROBE} ${RESULT}`;
 

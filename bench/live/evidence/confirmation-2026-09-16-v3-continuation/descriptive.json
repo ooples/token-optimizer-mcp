@@ -17,7 +17,7 @@
         "firstRequestColdSensitivityUsd": 18.572909999999997,
         "allInputUncachedSensitivityUsd": 46.04811
       },
-      "headroom": {
+      "altA": {
         "estimatedUsd": 21.595102,
         "input": 7913115,
         "cached": 6668672,
@@ -57,7 +57,7 @@
           "firstRequestColdSensitivityUsd": 3.0246,
           "allInputUncachedSensitivityUsd": 7.43676
         },
-        "headroom": {
+        "altA": {
           "estimatedUsd": 3.679958,
           "input": 1383463,
           "cached": 1182208,
@@ -96,7 +96,7 @@
           "firstRequestColdSensitivityUsd": 2.26082,
           "allInputUncachedSensitivityUsd": 4.6397
         },
-        "headroom": {
+        "altA": {
           "estimatedUsd": 2.422538,
           "input": 816625,
           "cached": 656768,
@@ -135,7 +135,7 @@
           "firstRequestColdSensitivityUsd": 1.7540400000000003,
           "allInputUncachedSensitivityUsd": 4.10412
         },
-        "headroom": {
+        "altA": {
           "estimatedUsd": 1.724574,
           "input": 487966,
           "cached": 360704,
@@ -174,7 +174,7 @@
           "firstRequestColdSensitivityUsd": 2.2587639999999998,
           "allInputUncachedSensitivityUsd": 4.8427
         },
-        "headroom": {
+        "altA": {
           "estimatedUsd": 2.539112,
           "input": 810312,
           "cached": 637312,
@@ -213,7 +213,7 @@
           "firstRequestColdSensitivityUsd": 3.0781819999999995,
           "allInputUncachedSensitivityUsd": 8.79671
         },
-        "headroom": {
+        "altA": {
           "estimatedUsd": 3.301154,
           "input": 1507287,
           "cached": 1357824,
@@ -252,7 +252,7 @@
           "firstRequestColdSensitivityUsd": 2.622478,
           "allInputUncachedSensitivityUsd": 6.02779
         },
-        "headroom": {
+        "altA": {
           "estimatedUsd": 4.327514,
           "input": 1561601,
           "cached": 1334144,
@@ -291,7 +291,7 @@
           "firstRequestColdSensitivityUsd": 3.5740260000000004,
           "allInputUncachedSensitivityUsd": 10.20033
         },
-        "headroom": {
+        "altA": {
           "estimatedUsd": 3.6002520000000002,
           "input": 1345861,
           "cached": 1139712,

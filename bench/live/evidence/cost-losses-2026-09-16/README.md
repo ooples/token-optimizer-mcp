@@ -11,11 +11,11 @@ Two product changes followed:
 
 ## Complete follow-up of all 13 original losses
 
-Product build: `efd2779d`. Same original seeds and tasks, opposite arm order, one attempt per arm per case, no retries or replacements. All 26 attempts passed independently audited task validation. Twelve pairs favored proxy on estimated token cost; one still favored HeadRoom. Total estimated cost: **$2.972548 vs $4.464508**, or **33.4% lower**. Input totals: 1,011,978 vs 1,545,277.
+Product build: `efd2779d`. Same original seeds and tasks, opposite arm order, one attempt per arm per case, no retries or replacements. All 26 attempts passed independently audited task validation. Twelve pairs favored proxy on estimated token cost; one still favored Alternative A. Total estimated cost: **$2.972548 vs $4.464508**, or **33.4% lower**. Input totals: 1,011,978 vs 1,545,277.
 
 These are development results on previously observed cases. Provider cache hits and model behavior changed, so a flipped result is not by itself proof that a product fix caused the flip. Original losses are retained in the earlier study and `loss-audit.json`.
 
-| Original case | Proxy estimated USD | HeadRoom estimated USD | Proxy reduction |
+| Original case | Proxy estimated USD | Alternative A estimated USD | Proxy reduction |
 |---|---:|---:|---:|
 | logs-1 | 0.213496 | 0.282636 | 24.5% |
 | mixed-4 | 0.147436 | 0.321342 | 54.1% |
@@ -39,9 +39,9 @@ The earlier prefix change alone reduced the three original refresh fragments by 
 
 ## Controlled live validation of the additional fix
 
-Product build: `510d570a`; installed HeadRoom 0.37.0; Codex 0.154.0 / gpt-6-astra. Two balanced pairs used the original refresh-2 seed and one fresh neighboring seed. Both arms received the same instruction to force an outer-truncated initial shell envelope. Independent audits confirmed that exposure in all four attempts, and all four tasks passed. Both pairs favored proxy on estimated cost.
+Product build: `510d570a`; installed Alternative A; Codex 0.154.0 / gpt-6-astra. Two balanced pairs used the original refresh-2 seed and one fresh neighboring seed. Both arms received the same instruction to force an outer-truncated initial shell envelope. Independent audits confirmed that exposure in all four attempts, and all four tasks passed. Both pairs favored proxy on estimated cost.
 
-| Total over two attempts per arm | Proxy | HeadRoom |
+| Total over two attempts per arm | Proxy | Alternative A |
 |---|---:|---:|
 | Estimated USD | 0.551652 | 0.839652 |
 | Provider input tokens | 204,594 | 243,251 |
@@ -57,7 +57,7 @@ The actual outer fragments in these fresh captures fell from 8,101 characters ea
 
 V8 CPU/allocation profiling found that every valid escaped record first caused a failed JSON parse and an exception allocation. The final implementation chooses the decoder from the first property quote, keeping canonical round-trip validation and malformed-record rejection intact. No output format changes.
 
-A replay of seven captured requests over 200 fresh-cache rounds (1,400 calls) measured mean time **2.645 to 1.437 ms**, p95 **12.963 to 3.918 ms**, and sampled allocation **913,448,128 to 764,762,056 bytes**: 45.7%, 69.8%, and 16.3% reductions respectively. Total process CPU fell 43.8%. This is one internal before/after profiling comparison with 32 KiB sampling, excluding network/disk; it is not a HeadRoom allocation or live agent-time comparison.
+A replay of seven captured requests over 200 fresh-cache rounds (1,400 calls) measured mean time **2.645 to 1.437 ms**, p95 **12.963 to 3.918 ms**, and sampled allocation **913,448,128 to 764,762,056 bytes**: 45.7%, 69.8%, and 16.3% reductions respectively. Total process CPU fell 43.8%. This is one internal before/after profiling comparison with 32 KiB sampling, excluding network/disk; it is not a Alternative A allocation or live agent-time comparison.
 
 The codec result and metadata match `510d570a` exactly on **69 unique large strings across 28 captured proxy conversations**, including all original losses, the complete follow-up, and both outer-truncation pairs. `fastpath/` retains summaries, allocation profiles, and the equivalence report. The focused fragment regressions and build passed after this change.
 

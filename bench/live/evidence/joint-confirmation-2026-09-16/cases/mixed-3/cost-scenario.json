@@ -28,7 +28,7 @@
     },
     {
       "task": "refresh",
-      "arm": "headroom",
+      "arm": "altA",
       "rep": 1,
       "recordedVerdict": "PASS",
       "verdict": "PASS",
@@ -43,7 +43,7 @@
     },
     {
       "task": "refresh",
-      "arm": "headroom",
+      "arm": "altA",
       "meanEstimatedUsd": 0.47501
     }
   ],
@@ -51,7 +51,7 @@
     {
       "task": "refresh",
       "candidate": "proxy",
-      "against": "headroom",
+      "against": "altA",
       "estimatedUsdDelta": -0.18986599999999998,
       "reductionPercent": 39.970947980042524
     }

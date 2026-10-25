@@ -69,7 +69,12 @@ export const WIRING = [
   { event: 'PreToolUse', file: 'pretooluse-router.mjs', matcher: 'Read|Grep|Glob|Edit|MultiEdit|Write|Bash|PowerShell|WebFetch|WebSearch' },
   // Records which agent made each cached-file call, so the server scopes its cache per agent (#488).
   { event: 'PreToolUse', file: 'agent-scope.mjs', matcher: 'mcp__.*__(?:smart_read|smart_config_read|smart_write|smart_edit)' },
-  { event: 'PostToolUse', file: 'post-tool.mjs', matcher: 'Edit|MultiEdit|Write|Bash|PowerShell|Grep|Read|Agent|Task|mcp__.*__(?:smart_edit|smart_write)' },
+  // NOT Read, Agent or Task: each matched call spawns this hook (~170 ms: Node
+  // start plus module load). For a Read its only work, the unchanged re-read
+  // pointer, never fires -- Claude Code answers an unchanged re-read itself --
+  // and for Agent/Task it is lean handoffs, which never fired across the
+  // benchmarks and are opt-in (output-compact.mjs, leanHandoffEnabled).
+  { event: 'PostToolUse', file: 'post-tool.mjs', matcher: 'Edit|MultiEdit|Write|Bash|PowerShell|Grep|mcp__.*__(?:smart_edit|smart_write)' },
   { event: 'PreCompact', file: 'precompact-optimize.mjs', matcher: null },
   { event: 'Stop', file: 'stop.mjs', matcher: null },
 ];

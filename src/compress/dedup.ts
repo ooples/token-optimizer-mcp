@@ -12,7 +12,7 @@
  *
  * THE REFERENT IS INSIDE THE REQUEST, WHICH IS THE WHOLE POINT.
  *
- * HeadRoom dedups too -- a content hash naturally collapses repeats -- but
+ * Alternative A dedups too -- a content hash naturally collapses repeats -- but
  * their marker points OUT of the payload, at a cache entry keyed by that hash.
  * When the entry is missing the model receives `<<ccr:a1b2c3>> [unresolved:
  * entry not found]` (their #2509), a dead token mid-context. A back-reference
@@ -240,7 +240,7 @@ function quoteFor(referent: string, above: ReadonlySet<string>): string | null {
  * The back-reference written where the repeat used to be.
  *
  * THE PRICE OF BEING LEGIBLE, stated plainly: this runs about 100 characters
- * where HeadRoom's `<<ccr:hash,blob,32107>>` runs 24, and on the repeated-reads
+ * where Alternative A's `<<ccr:hash,blob,32107>>` runs 24, and on the repeated-reads
  * workload that difference is the entire margin by which their control arm
  * leads ours on raw gross reduction. It is still the right trade. Their 24
  * characters only mean anything to a process holding the matching cache entry;

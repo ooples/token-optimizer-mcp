@@ -1,6 +1,6 @@
 {
   "dataset": "info-retention",
-  "source": "headroom/evals/runners/compression_only.py",
+  "source": "alternative_a/evals/runners/compression_only.py",
   "measuredAt": "2026-09-23T11:49:06.549Z",
   "harnessSha": "15e4eca78f9c62da73ca2c6fe7a662fdf4656105",
   "cases": 30,

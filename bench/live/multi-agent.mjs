@@ -185,11 +185,14 @@ const ARM = {
     alt: false,
     env: { TOKEN_OPTIMIZER_BLACKBOARD: '0' },
   },
-  'ours-next-nohandoff': {
+  // Lean handoffs are opt-in and need Agent|Task in the PostToolUse matcher,
+  // which the shipped plugin leaves out (hooks-core/wire.mjs); this arm sets the
+  // switch only, so it measures nothing until the matcher is widened as well.
+  'ours-next-handoff': {
     plugin: 'next',
     proxyNull: false,
     alt: false,
-    env: { TOKEN_OPTIMIZER_LEAN_HANDOFF: '0' },
+    env: { TOKEN_OPTIMIZER_LEAN_HANDOFF: '1' },
   },
   // The pack appended after the system prompt, as before (repo-pack.ts, packPosition).
   'ours-next-packlast': {

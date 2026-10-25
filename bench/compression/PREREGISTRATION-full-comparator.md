@@ -5,7 +5,7 @@ so the analysis cannot be chosen after the result is in. Nothing here is a
 result. Every threshold below is a commitment made while the outcome is unknown.
 
 Governs: `bench/compression/proof.mjs`, `bench/compression/head-to-head.mjs`,
-and `bench/compression/headroom/run-theirs.py` when extended to carry our own
+and `bench/compression/alt-a/run-theirs.py` when extended to carry our own
 fixtures. Supersedes nothing; the four-workload table it replaces was correct
 for the comparators it had.
 
@@ -24,7 +24,7 @@ Exactly three, on identical bytes, scored on identical denominators.
 | arm | what it is | why it is here |
 | --- | --- | --- |
 | `ours` | this repository's compressor at the committed SHA | the product |
-| `theirs-binary` | installed HeadRoom wheel, version pinned and recorded | what they actually ship |
+| `theirs-binary` | installed Alternative A wheel, version pinned and recorded | what they actually ship |
 | `theirs-design` | this repository's reimplementation of their published design | the existing comparator, kept so the reimplementation can be audited against the real thing |
 
 `theirs-design` is retained deliberately. If it and `theirs-binary` disagree by
@@ -63,7 +63,7 @@ without its retention figures beside it is not a result.
   a named spill or marker, **subject to the durability precondition below**.
 ### The durability precondition, applied to both sides
 
-`bench/competitive/results/claims.json` records that a HeadRoom CCR marker
+`bench/competitive/results/claims.json` records that a Alternative A CCR marker
 resolves 1 of 1 while its store is warm and **0 of 1 once the store is cleared**,
 with 90 rows in and 12 visible. We publish that as a defect. Our own compressor
 elides into a spill roughly 0.94x the size of the input and asks to have it
@@ -118,7 +118,7 @@ in the same table, with no workload omitted and no comparator dropped.
 
 ## Recorded before the first run
 
-- HeadRoom version: `0.37.0`
+- Alternative A
 - Our tree: recorded per run as the committed SHA; no run is published from a
   dirty tree.
 
@@ -139,7 +139,7 @@ is regenerated *because* these commitments invalidate the one that exists.
 
 ## Two layers, tested separately, and why one test cannot cover both
 
-- **Layer 1, the capture.** `headroom/run-theirs.py` and the payload export:
+- **Layer 1, the capture.** `alt-a/run-theirs.py` and the payload export:
   what bytes each arm was given and what it returned. Its known-answer test is
   `known-answer/capture.check.mjs`, driven by stub arms whose right answer is
   arithmetic (`known-answer/arms.py`, `ours-identity.mjs`, `ours-lossy.mjs`,
@@ -200,7 +200,7 @@ reduction identical on both columns.
 present and usable:
 
 `commit` (40 hex), `node`, `tiktoken`, `encoding`, `payloadsDigest`,
-`theirsDigest`, `headroomVersion`, `python`, plus `dirty: false` and a per-side
+`theirsDigest`, `altAVersion`, `python`, plus `dirty: false` and a per-side
 speed pass count of at least two.
 
 Two commitments about this gate specifically, because a gate is easy to fake:

@@ -148,7 +148,11 @@ beforeAll(async () => {
     cwd: fixtures,
     stdio: ['pipe', 'pipe', 'pipe'],
     env: {
-      ...process.env,
+      // The generic client: a plugin install gets other instructions (see
+      // mcp-plugin-instructions.test.ts), and a run inside one must not leak it.
+      ...Object.fromEntries(
+        Object.entries(process.env).filter(([k]) => k !== 'CLAUDE_PLUGIN_ROOT')
+      ),
       // Keep the server's own graph and state out of the developer's real ones.
       TOKEN_OPTIMIZER_WIKI_DIR: join(fixtures, '.wiki'),
       TOKEN_OPTIMIZER_SHARED_DIR: join(fixtures, '.wiki'),

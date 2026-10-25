@@ -4,7 +4,7 @@ import { costReport } from '../../../bench/live/codex-cost.mjs';
 const manifest = {
   model: 'gpt-6-astra',
   tasks: ['refresh'],
-  arms: ['proxy', 'headroom'],
+  arms: ['proxy', 'altA'],
   reps: 1,
 };
 const summary = { model: manifest.model, valid: true };
@@ -30,14 +30,14 @@ function row(arm, input, cached, output) {
 test('cached tokens are a subset; output can reverse an input win', () => {
   const result = costReport(manifest, summary, [
     row('proxy', 1000, 900, 100),
-    row('headroom', 2000, 0, 1),
+    row('altA', 2000, 0, 1),
   ]);
   expect(result.valid).toBe(true);
   expect(result.measured[0].estimatedUsd).toBeCloseTo(0.0069, 10);
   expect(result.measured[1].estimatedUsd).toBeCloseTo(0.02005, 10);
   const reversed = costReport(manifest, summary, [
     row('proxy', 1000, 900, 1000),
-    row('headroom', 2000, 0, 1),
+    row('altA', 2000, 0, 1),
   ]);
   expect(reversed.comparisons[0].reductionPercent).toBeLessThan(0);
 });
@@ -50,7 +50,7 @@ test.each([
   'negative',
   'cached-overflow',
 ])('invalid %s cannot publish a cost win', (kind) => {
-  const rows = [row('proxy', 1000, 900, 100), row('headroom', 2000, 0, 1)];
+  const rows = [row('proxy', 1000, 900, 100), row('altA', 2000, 0, 1)];
   const audit = { ...summary };
   if (kind === 'missing') rows.pop();
   if (kind === 'duplicate') rows[1] = rows[0];
@@ -73,7 +73,7 @@ test('unknown model cannot inherit astra rates', () => {
 });
 
 test('independent audit supersedes the original runner verdict and must cover every run', () => {
-  const rows = [row('proxy', 1000, 900, 100), row('headroom', 2000, 0, 1)];
+  const rows = [row('proxy', 1000, 900, 100), row('altA', 2000, 0, 1)];
   const audit = structuredClone(rows);
   rows[1].verdict = 'INVALID_READ';
   expect(costReport(manifest, summary, rows, audit).valid).toBe(true);

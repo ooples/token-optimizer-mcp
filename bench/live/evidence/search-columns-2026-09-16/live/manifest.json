@@ -2,7 +2,7 @@
   "model": "gpt-6-astra",
   "arms": [
     "proxy",
-    "headroom"
+    "altA"
   ],
   "reps": 4,
   "tasks": [

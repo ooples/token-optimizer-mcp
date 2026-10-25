@@ -1,11 +1,11 @@
-﻿import { createServer } from 'node:http';
+import { createServer } from 'node:http';
 import { spawn, execFileSync } from 'node:child_process';
 import { writeFile, mkdtemp } from 'node:fs/promises';
 import { createWriteStream } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { compressResponses } from '../../dist/proxy/responses.js';
-const raw = await mkdtemp(join(tmpdir(), 'headroom-gap-probe-'));
+const raw = await mkdtemp(join(tmpdir(), 'alt-a-gap-probe-'));
 const rows = Array.from({ length: 80 }, (_, i) => ({
   id: i,
   status: 'healthy',
@@ -107,7 +107,7 @@ const child = spawn(
   'python',
   [
     '-m',
-    'headroom.cli',
+    'alternative_a.cli',
     'proxy',
     '--port',
     String(port),
@@ -116,13 +116,13 @@ const child = spawn(
   ],
   { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] }
 );
-child.stdout.pipe(createWriteStream(join(raw, 'headroom.stdout')));
-child.stderr.pipe(createWriteStream(join(raw, 'headroom.stderr')));
+child.stdout.pipe(createWriteStream(join(raw, 'alt-a.stdout')));
+child.stderr.pipe(createWriteStream(join(raw, 'alt-a.stderr')));
 const wires = [];
 try {
   let ready = false;
   for (let i = 0; i < 400; i++) {
-    if (child.exitCode !== null) throw Error('HeadRoom exited');
+    if (child.exitCode !== null) throw Error('Alternative A exited');
     try {
       const r = await fetch(`http://127.0.0.1:${port}/health`);
       await r.text();
@@ -152,7 +152,7 @@ try {
     await response.text();
     if (response.status !== 200 || !received)
       throw Error(`status ${response.status}`);
-    wires.push({ name, before, ours, headroom: received });
+    wires.push({ name, before, ours, altA: received });
   }
   await writeFile(join(raw, 'wire.json'), JSON.stringify(wires));
   const bytes = (x) => Buffer.byteLength(JSON.stringify(x));
@@ -163,7 +163,7 @@ try {
       name: x.name,
       inputBytes: bytes(x.before),
       oursBytes: bytes(x.ours),
-      headroomBytes: bytes(x.headroom),
+      altABytes: bytes(x.altA),
     })),
     prefixStability: {
       ours: wires
@@ -174,13 +174,13 @@ try {
               x.ours.input.slice(0, wires[i].ours.input.length)
             ) === JSON.stringify(wires[i].ours.input)
         ),
-      headroom: wires
+      altA: wires
         .slice(1, 3)
         .every(
           (x, i) =>
             JSON.stringify(
-              x.headroom.input.slice(0, wires[i].headroom.input.length)
-            ) === JSON.stringify(wires[i].headroom.input)
+              x.altA.input.slice(0, wires[i].altA.input.length)
+            ) === JSON.stringify(wires[i].altA.input)
         ),
     },
   };

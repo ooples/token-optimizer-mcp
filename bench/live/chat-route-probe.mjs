@@ -32,7 +32,7 @@ const competitor = spawn(
   python,
   [
     '-m',
-    'headroom.cli',
+    'alternative_a.cli',
     'proxy',
     '--port',
     String(port),
@@ -42,15 +42,15 @@ const competitor = spawn(
   ],
   { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] }
 );
-competitor.stdout.pipe(createWriteStream(join(raw, 'headroom.stdout')));
-competitor.stderr.pipe(createWriteStream(join(raw, 'headroom.stderr')));
+competitor.stdout.pipe(createWriteStream(join(raw, 'alt-a.stdout')));
+competitor.stderr.pipe(createWriteStream(join(raw, 'alt-a.stderr')));
 const samples = [];
 let encoder;
 try {
   let ready = false;
   for (let i = 0; i < 600; i++) {
     if (competitor.exitCode !== null)
-      throw Error('HeadRoom exited before readiness');
+      throw Error('Alternative A exited before readiness');
     try {
       const response = await fetch(`http://127.0.0.1:${port}/health`);
       await response.text();
@@ -61,7 +61,7 @@ try {
     } catch {}
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
-  if (!ready) throw Error('HeadRoom readiness timeout');
+  if (!ready) throw Error('Alternative A readiness timeout');
   for (let sample = 0; sample < 8; sample++) {
     const rows = Array.from({ length: 80 + sample }, (_, id) => ({
       id: `case-${sample}-row-${id}`,
@@ -93,8 +93,8 @@ try {
     const request = { model: 'gpt-4.1', messages };
     const body = JSON.stringify(request);
     for (const arm of sample % 2
-      ? ['headroom', 'proxy']
-      : ['proxy', 'headroom']) {
+      ? ['altA', 'proxy']
+      : ['proxy', 'altA']) {
       received = undefined;
       const started = performance.now();
       const response = await fetch(
@@ -146,12 +146,12 @@ try {
     audit,
     kind: 'Synthetic local HTTP probe; no model task or billed cost; first requests include cold transforms',
     raw,
-    headroom: execFileSync(
+    altA: execFileSync(
       python,
-      ['-c', 'import headroom; print(headroom.__version__)'],
+      ['-c', 'import importlib, os; print(importlib.import_module(os.environ["ALT_A_MODULE"]).__version__)'],
       { encoding: 'utf8', windowsHide: true }
     ).trim(),
-    headroomOverrides: ['--no-rate-limit'],
+    altAOverrides: ['--no-rate-limit'],
     optimizerOverrides: ['knowledge:false; isolated compression probe'],
     samples: samples.map(({ wire, ...sample }) => sample),
   };

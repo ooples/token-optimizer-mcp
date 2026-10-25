@@ -11,7 +11,7 @@
 # at the end of the real Dockerfile, which on overlayfs copies the entire Rust
 # toolchain into a new layer; once Docker garbage-collects the build cache it runs
 # again, and on this machine it was killed for low memory eight times running at
-# every headroom from 0.8GB to 8.5GB. Nothing here touches those paths, so that layer
+# every altA from 0.8GB to 8.5GB. Nothing here touches those paths, so that layer
 # is inherited untouched.
 #
 # The product is installed in BOTH places the real Dockerfile puts it: globally, and

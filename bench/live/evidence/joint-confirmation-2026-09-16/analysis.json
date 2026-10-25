@@ -6,14 +6,14 @@
   "pairsMeasured": 119,
   "pairsPlanned": 120,
   "proxyPasses": 119,
-  "headroomPasses": 120,
+  "altAPasses": 120,
   "zeroFailureOneSided95SuccessLowerBound": null,
   "pairs": [
     {
       "id": "nullable-4",
       "family": "nullable",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.111986,
           "firstRequestColdSensitivityUsd": 0.19493,
@@ -64,7 +64,7 @@
           "agentSeconds": 48.9,
           "seconds": 50.1
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.315388,
           "firstRequestColdSensitivityUsd": 0.315388,
@@ -85,7 +85,7 @@
       "id": "numeric-4",
       "family": "numeric",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.122646,
           "firstRequestColdSensitivityUsd": 0.20559,
@@ -136,7 +136,7 @@
           "agentSeconds": 18.5,
           "seconds": 19.5
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.356018,
           "firstRequestColdSensitivityUsd": 0.356018,
@@ -172,7 +172,7 @@
           "agentSeconds": 46.2,
           "seconds": 47.3
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.584526,
           "firstRequestColdSensitivityUsd": 0.584526,
@@ -208,7 +208,7 @@
           "agentSeconds": 14,
           "seconds": 14.9
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.168668,
           "firstRequestColdSensitivityUsd": 0.168668,
@@ -229,7 +229,7 @@
       "id": "bugfix-4",
       "family": "bugfix",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.445512,
           "firstRequestColdSensitivityUsd": 0.445512,
@@ -280,7 +280,7 @@
           "agentSeconds": 40.4,
           "seconds": 41.4
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.240632,
           "firstRequestColdSensitivityUsd": 0.32357600000000003,
@@ -316,7 +316,7 @@
           "agentSeconds": 15.2,
           "seconds": 16.1
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.38999,
           "firstRequestColdSensitivityUsd": 0.38999,
@@ -352,7 +352,7 @@
           "agentSeconds": 45.2,
           "seconds": 46.4
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.395898,
           "firstRequestColdSensitivityUsd": 0.47884200000000005,
@@ -388,7 +388,7 @@
           "agentSeconds": 40.5,
           "seconds": 41.5
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.40261,
           "firstRequestColdSensitivityUsd": 0.40261,
@@ -409,7 +409,7 @@
       "id": "bugfix-2",
       "family": "bugfix",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.380166,
           "firstRequestColdSensitivityUsd": 0.380166,
@@ -445,7 +445,7 @@
       "id": "tiny-2",
       "family": "tiny",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.169568,
           "firstRequestColdSensitivityUsd": 0.169568,
@@ -496,7 +496,7 @@
           "agentSeconds": 14,
           "seconds": 14.9
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.201882,
           "firstRequestColdSensitivityUsd": 0.201882,
@@ -532,7 +532,7 @@
           "agentSeconds": 20.9,
           "seconds": 21.9
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.29731,
           "firstRequestColdSensitivityUsd": 0.29731,
@@ -553,7 +553,7 @@
       "id": "logs-4",
       "family": "logs",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.257832,
           "firstRequestColdSensitivityUsd": 0.257832,
@@ -604,7 +604,7 @@
           "agentSeconds": 44.7,
           "seconds": 45.7
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.309174,
           "firstRequestColdSensitivityUsd": 0.392118,
@@ -640,7 +640,7 @@
           "agentSeconds": 25.7,
           "seconds": 26.7
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.253546,
           "firstRequestColdSensitivityUsd": 0.33649,
@@ -676,7 +676,7 @@
           "agentSeconds": 48,
           "seconds": 49
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.305348,
           "firstRequestColdSensitivityUsd": 0.305348,
@@ -697,7 +697,7 @@
       "id": "refresh-2",
       "family": "refresh",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.314968,
           "firstRequestColdSensitivityUsd": 0.314968,
@@ -748,7 +748,7 @@
           "agentSeconds": 15,
           "seconds": 16
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.211116,
           "firstRequestColdSensitivityUsd": 0.211116,
@@ -769,7 +769,7 @@
       "id": "json-2",
       "family": "json",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.222216,
           "firstRequestColdSensitivityUsd": 0.222216,
@@ -820,7 +820,7 @@
           "agentSeconds": 43,
           "seconds": 44.2
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.396694,
           "firstRequestColdSensitivityUsd": 0.479638,
@@ -856,7 +856,7 @@
           "agentSeconds": 18.3,
           "seconds": 19.3
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.27976,
           "firstRequestColdSensitivityUsd": 0.27976,
@@ -892,7 +892,7 @@
           "agentSeconds": 45.6,
           "seconds": 46.5
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.47501,
           "firstRequestColdSensitivityUsd": 0.47501,
@@ -913,7 +913,7 @@
       "id": "entropy-10",
       "family": "entropy",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.229504,
           "firstRequestColdSensitivityUsd": 0.312448,
@@ -949,7 +949,7 @@
       "id": "code-10",
       "family": "code",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.215018,
           "firstRequestColdSensitivityUsd": 0.297962,
@@ -985,7 +985,7 @@
       "id": "json-8",
       "family": "json",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.225918,
           "firstRequestColdSensitivityUsd": 0.225918,
@@ -1021,7 +1021,7 @@
       "id": "mixed-4",
       "family": "mixed",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.460514,
           "firstRequestColdSensitivityUsd": 0.543458,
@@ -1057,7 +1057,7 @@
       "id": "mixed-8",
       "family": "mixed",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.253658,
           "firstRequestColdSensitivityUsd": 0.336602,
@@ -1093,7 +1093,7 @@
       "id": "outer-8",
       "family": "outer",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.329754,
           "firstRequestColdSensitivityUsd": 0.329754,
@@ -1129,7 +1129,7 @@
       "id": "mixed-2",
       "family": "mixed",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.285612,
           "firstRequestColdSensitivityUsd": 0.368556,
@@ -1165,7 +1165,7 @@
       "id": "entropy-2",
       "family": "entropy",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.17108,
           "firstRequestColdSensitivityUsd": 0.254024,
@@ -1216,7 +1216,7 @@
           "agentSeconds": 15,
           "seconds": 15.9
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.168648,
           "firstRequestColdSensitivityUsd": 0.168648,
@@ -1252,7 +1252,7 @@
           "agentSeconds": 36.6,
           "seconds": 37.6
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.296946,
           "firstRequestColdSensitivityUsd": 0.37989,
@@ -1288,7 +1288,7 @@
           "agentSeconds": 41.3,
           "seconds": 42.5
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.319218,
           "firstRequestColdSensitivityUsd": 0.402162,
@@ -1309,7 +1309,7 @@
       "id": "nullable-8",
       "family": "nullable",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.198656,
           "firstRequestColdSensitivityUsd": 0.198656,
@@ -1360,7 +1360,7 @@
           "agentSeconds": 14.6,
           "seconds": 15.6
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.176624,
           "firstRequestColdSensitivityUsd": 0.259568,
@@ -1396,7 +1396,7 @@
           "agentSeconds": 16.8,
           "seconds": 17.7
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.085634,
           "firstRequestColdSensitivityUsd": 0.168578,
@@ -1432,7 +1432,7 @@
           "agentSeconds": 14.8,
           "seconds": 15.7
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.26676,
           "firstRequestColdSensitivityUsd": 0.26676,
@@ -1468,7 +1468,7 @@
           "agentSeconds": 16.9,
           "seconds": 17.9
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.142824,
           "firstRequestColdSensitivityUsd": 0.22576800000000002,
@@ -1489,7 +1489,7 @@
       "id": "refresh-4",
       "family": "refresh",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.229924,
           "firstRequestColdSensitivityUsd": 0.312868,
@@ -1525,7 +1525,7 @@
       "id": "numeric-10",
       "family": "numeric",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.20562,
           "firstRequestColdSensitivityUsd": 0.20562,
@@ -1576,7 +1576,7 @@
           "agentSeconds": 16.3,
           "seconds": 17.2
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.20552,
           "firstRequestColdSensitivityUsd": 0.20552,
@@ -1597,7 +1597,7 @@
       "id": "entropy-8",
       "family": "entropy",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.26176,
           "firstRequestColdSensitivityUsd": 0.26176,
@@ -1633,7 +1633,7 @@
       "id": "outer-4",
       "family": "outer",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.47286,
           "firstRequestColdSensitivityUsd": 0.47286,
@@ -1669,7 +1669,7 @@
       "id": "numeric-2",
       "family": "numeric",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.154742,
           "firstRequestColdSensitivityUsd": 0.237686,
@@ -1720,7 +1720,7 @@
           "agentSeconds": 41.5,
           "seconds": 42.7
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.495972,
           "firstRequestColdSensitivityUsd": 0.578916,
@@ -1756,7 +1756,7 @@
           "agentSeconds": 20.4,
           "seconds": 21.4
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.131668,
           "firstRequestColdSensitivityUsd": 0.21461200000000002,
@@ -1777,7 +1777,7 @@
       "id": "code-2",
       "family": "code",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.270674,
           "firstRequestColdSensitivityUsd": 0.35361800000000004,
@@ -1813,7 +1813,7 @@
       "id": "nullable-6",
       "family": "nullable",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.110802,
           "firstRequestColdSensitivityUsd": 0.193746,
@@ -1849,7 +1849,7 @@
       "id": "nullable-2",
       "family": "nullable",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.147538,
           "firstRequestColdSensitivityUsd": 0.23048200000000002,
@@ -1900,7 +1900,7 @@
           "agentSeconds": 33.8,
           "seconds": 34.7
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.2843,
           "firstRequestColdSensitivityUsd": 0.367244,
@@ -1936,7 +1936,7 @@
           "agentSeconds": 14.8,
           "seconds": 15.8
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.27542,
           "firstRequestColdSensitivityUsd": 0.358364,
@@ -1972,7 +1972,7 @@
           "agentSeconds": 46.2,
           "seconds": 47.4
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.315048,
           "firstRequestColdSensitivityUsd": 0.397992,
@@ -2008,7 +2008,7 @@
           "agentSeconds": 19.3,
           "seconds": 20.3
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.208086,
           "firstRequestColdSensitivityUsd": 0.208086,
@@ -2044,7 +2044,7 @@
           "agentSeconds": 52.7,
           "seconds": 53.7
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.24464,
           "firstRequestColdSensitivityUsd": 0.327584,
@@ -2080,7 +2080,7 @@
           "agentSeconds": 14.2,
           "seconds": 15.7
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.171478,
           "firstRequestColdSensitivityUsd": 0.254422,
@@ -2101,7 +2101,7 @@
       "id": "outer-6",
       "family": "outer",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.274342,
           "firstRequestColdSensitivityUsd": 0.357286,
@@ -2152,7 +2152,7 @@
           "agentSeconds": 48.4,
           "seconds": 49.3
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.377264,
           "firstRequestColdSensitivityUsd": 0.460208,
@@ -2188,7 +2188,7 @@
           "agentSeconds": 16.1,
           "seconds": 17.1
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.21781,
           "firstRequestColdSensitivityUsd": 0.21781,
@@ -2209,7 +2209,7 @@
       "id": "numeric-8",
       "family": "numeric",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.122566,
           "firstRequestColdSensitivityUsd": 0.20551,
@@ -2260,7 +2260,7 @@
           "agentSeconds": 13.5,
           "seconds": 14.5
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.247026,
           "firstRequestColdSensitivityUsd": 0.32997,
@@ -2296,7 +2296,7 @@
           "agentSeconds": 14.4,
           "seconds": 15.5
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.200192,
           "firstRequestColdSensitivityUsd": 0.200192,
@@ -2317,7 +2317,7 @@
       "id": "tiny-4",
       "family": "tiny",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.169088,
           "firstRequestColdSensitivityUsd": 0.169088,
@@ -2353,7 +2353,7 @@
       "id": "bugfix-10",
       "family": "bugfix",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.281758,
           "firstRequestColdSensitivityUsd": 0.364702,
@@ -2389,7 +2389,7 @@
       "id": "bugfix-6",
       "family": "bugfix",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.317998,
           "firstRequestColdSensitivityUsd": 0.400942,
@@ -2440,7 +2440,7 @@
           "agentSeconds": 38.4,
           "seconds": 39.4
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.229974,
           "firstRequestColdSensitivityUsd": 0.31291800000000003,
@@ -2461,7 +2461,7 @@
       "id": "refresh-6",
       "family": "refresh",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.44332,
           "firstRequestColdSensitivityUsd": 0.44332,
@@ -2512,7 +2512,7 @@
           "agentSeconds": 42.7,
           "seconds": 44
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.520262,
           "firstRequestColdSensitivityUsd": 0.603206,
@@ -2533,7 +2533,7 @@
       "id": "mixed-10",
       "family": "mixed",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.398884,
           "firstRequestColdSensitivityUsd": 0.48182800000000003,
@@ -2569,7 +2569,7 @@
       "id": "code-6",
       "family": "code",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.301044,
           "firstRequestColdSensitivityUsd": 0.301044,
@@ -2620,7 +2620,7 @@
           "agentSeconds": 42,
           "seconds": 43.2
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.297906,
           "firstRequestColdSensitivityUsd": 0.38085,
@@ -2656,7 +2656,7 @@
           "agentSeconds": 58.7,
           "seconds": 59.7
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.417126,
           "firstRequestColdSensitivityUsd": 0.417126,
@@ -2677,7 +2677,7 @@
       "id": "entropy-6",
       "family": "entropy",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.129594,
           "firstRequestColdSensitivityUsd": 0.212538,
@@ -2728,7 +2728,7 @@
           "agentSeconds": 49,
           "seconds": 50
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.206344,
           "firstRequestColdSensitivityUsd": 0.289288,
@@ -2749,7 +2749,7 @@
       "id": "code-4",
       "family": "code",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.173124,
           "firstRequestColdSensitivityUsd": 0.256068,
@@ -2800,7 +2800,7 @@
           "agentSeconds": 16.2,
           "seconds": 17.1
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.201792,
           "firstRequestColdSensitivityUsd": 0.201792,
@@ -2821,7 +2821,7 @@
       "id": "nullable-10",
       "family": "nullable",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.197208,
           "firstRequestColdSensitivityUsd": 0.197208,
@@ -2857,7 +2857,7 @@
       "id": "tiny-10",
       "family": "tiny",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.086694,
           "firstRequestColdSensitivityUsd": 0.169638,
@@ -2908,7 +2908,7 @@
           "agentSeconds": 45.8,
           "seconds": 46.8
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.239852,
           "firstRequestColdSensitivityUsd": 0.322796,
@@ -2944,7 +2944,7 @@
           "agentSeconds": 41.4,
           "seconds": 42.6
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.316976,
           "firstRequestColdSensitivityUsd": 0.39992,
@@ -2980,7 +2980,7 @@
           "agentSeconds": 18.1,
           "seconds": 19.1
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.086594,
           "firstRequestColdSensitivityUsd": 0.16953800000000002,
@@ -3016,7 +3016,7 @@
           "agentSeconds": 41,
           "seconds": 42
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.222374,
           "firstRequestColdSensitivityUsd": 0.305318,
@@ -3037,7 +3037,7 @@
       "id": "bugfix-8",
       "family": "bugfix",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.440372,
           "firstRequestColdSensitivityUsd": 0.523316,
@@ -3088,7 +3088,7 @@
           "agentSeconds": 15.8,
           "seconds": 16.7
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.140432,
           "firstRequestColdSensitivityUsd": 0.22337600000000002,
@@ -3124,7 +3124,7 @@
           "agentSeconds": 18.1,
           "seconds": 19.5
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.20354,
           "firstRequestColdSensitivityUsd": 0.20354,
@@ -3145,7 +3145,7 @@
       "id": "logs-8",
       "family": "logs",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.286922,
           "firstRequestColdSensitivityUsd": 0.36986600000000003,
@@ -3181,7 +3181,7 @@
       "id": "logs-2",
       "family": "logs",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.28904,
           "firstRequestColdSensitivityUsd": 0.37198400000000004,
@@ -3217,7 +3217,7 @@
       "id": "refactor-10",
       "family": "refactor",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.384048,
           "firstRequestColdSensitivityUsd": 0.384048,
@@ -3268,7 +3268,7 @@
           "agentSeconds": 19.1,
           "seconds": 20.1
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.190228,
           "firstRequestColdSensitivityUsd": 0.273172,
@@ -3289,7 +3289,7 @@
       "id": "code-8",
       "family": "code",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.191332,
           "firstRequestColdSensitivityUsd": 0.274276,
@@ -3325,7 +3325,7 @@
       "id": "refactor-2",
       "family": "refactor",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.632118,
           "firstRequestColdSensitivityUsd": 0.715062,
@@ -3361,7 +3361,7 @@
       "id": "refactor-6",
       "family": "refactor",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.450136,
           "firstRequestColdSensitivityUsd": 0.450136,
@@ -3412,7 +3412,7 @@
           "agentSeconds": 41.8,
           "seconds": 42.8
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.188158,
           "firstRequestColdSensitivityUsd": 0.271102,
@@ -3448,7 +3448,7 @@
           "agentSeconds": 17.8,
           "seconds": 18.7
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.214384,
           "firstRequestColdSensitivityUsd": 0.297328,
@@ -3469,7 +3469,7 @@
       "id": "refactor-4",
       "family": "refactor",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.310258,
           "firstRequestColdSensitivityUsd": 0.393202,
@@ -3520,7 +3520,7 @@
           "agentSeconds": 18.6,
           "seconds": 19.6
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.130264,
           "firstRequestColdSensitivityUsd": 0.213208,
@@ -3541,7 +3541,7 @@
       "id": "logs-6",
       "family": "logs",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.263656,
           "firstRequestColdSensitivityUsd": 0.3466,
@@ -3577,7 +3577,7 @@
       "id": "entropy-4",
       "family": "entropy",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.198626,
           "firstRequestColdSensitivityUsd": 0.28157,
@@ -3613,7 +3613,7 @@
       "id": "logs-10",
       "family": "logs",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.185664,
           "firstRequestColdSensitivityUsd": 0.268608,
@@ -3664,7 +3664,7 @@
           "agentSeconds": 17.1,
           "seconds": 18.1
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.229284,
           "firstRequestColdSensitivityUsd": 0.229284,
@@ -3685,7 +3685,7 @@
       "id": "numeric-6",
       "family": "numeric",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.208246,
           "firstRequestColdSensitivityUsd": 0.208246,
@@ -3736,7 +3736,7 @@
           "agentSeconds": 14.4,
           "seconds": 15.4
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.21507,
           "firstRequestColdSensitivityUsd": 0.21507,
@@ -3757,7 +3757,7 @@
       "id": "tiny-6",
       "family": "tiny",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.085874,
           "firstRequestColdSensitivityUsd": 0.16881800000000002,
@@ -3793,7 +3793,7 @@
       "id": "json-4",
       "family": "json",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.137834,
           "firstRequestColdSensitivityUsd": 0.22077800000000003,
@@ -3844,7 +3844,7 @@
           "agentSeconds": 17.1,
           "seconds": 18.1
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.223264,
           "firstRequestColdSensitivityUsd": 0.223264,
@@ -3865,7 +3865,7 @@
       "id": "outer-10",
       "family": "outer",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.242314,
           "firstRequestColdSensitivityUsd": 0.325258,
@@ -3901,7 +3901,7 @@
       "id": "json-6",
       "family": "json",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.14672,
           "firstRequestColdSensitivityUsd": 0.22966399999999998,
@@ -3937,7 +3937,7 @@
       "id": "mixed-6",
       "family": "mixed",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.243104,
           "firstRequestColdSensitivityUsd": 0.326048,
@@ -3973,7 +3973,7 @@
       "id": "refactor-8",
       "family": "refactor",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.31415,
           "firstRequestColdSensitivityUsd": 0.31415,
@@ -4009,7 +4009,7 @@
       "id": "refresh-10",
       "family": "refresh",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.178032,
           "firstRequestColdSensitivityUsd": 0.260976,
@@ -4045,7 +4045,7 @@
       "id": "outer-2",
       "family": "outer",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.223844,
           "firstRequestColdSensitivityUsd": 0.306788,
@@ -4081,7 +4081,7 @@
       "id": "json-10",
       "family": "json",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.236016,
           "firstRequestColdSensitivityUsd": 0.236016,
@@ -4117,7 +4117,7 @@
       "id": "tiny-8",
       "family": "tiny",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.086044,
           "firstRequestColdSensitivityUsd": 0.168988,
@@ -4168,7 +4168,7 @@
           "agentSeconds": 14.1,
           "seconds": 15.1
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.223442,
           "firstRequestColdSensitivityUsd": 0.223442,
@@ -4204,7 +4204,7 @@
           "agentSeconds": 13.5,
           "seconds": 14.5
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.085874,
           "firstRequestColdSensitivityUsd": 0.16881800000000002,
@@ -4240,7 +4240,7 @@
           "agentSeconds": 14.2,
           "seconds": 15.2
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.118778,
           "firstRequestColdSensitivityUsd": 0.201722,
@@ -4261,7 +4261,7 @@
       "id": "refresh-8",
       "family": "refresh",
       "arms": {
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.236374,
           "firstRequestColdSensitivityUsd": 0.319318,
@@ -4305,7 +4305,7 @@
     {
       "case": "nullable-4",
       "family": "nullable",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -4359,7 +4359,7 @@
     {
       "case": "bugfix-7",
       "family": "bugfix",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -4377,7 +4377,7 @@
     {
       "case": "numeric-4",
       "family": "numeric",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -4431,7 +4431,7 @@
     {
       "case": "entropy-7",
       "family": "entropy",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -4467,7 +4467,7 @@
     {
       "case": "refactor-3",
       "family": "refactor",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -4503,7 +4503,7 @@
     {
       "case": "tiny-3",
       "family": "tiny",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -4521,7 +4521,7 @@
     {
       "case": "bugfix-4",
       "family": "bugfix",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -4575,7 +4575,7 @@
     {
       "case": "outer-9",
       "family": "outer",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -4611,7 +4611,7 @@
     {
       "case": "code-7",
       "family": "code",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -4647,7 +4647,7 @@
     {
       "case": "refactor-5",
       "family": "refactor",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -4683,7 +4683,7 @@
     {
       "case": "refresh-9",
       "family": "refresh",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -4701,7 +4701,7 @@
     {
       "case": "bugfix-2",
       "family": "bugfix",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -4737,7 +4737,7 @@
     {
       "case": "tiny-2",
       "family": "tiny",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -4791,7 +4791,7 @@
     {
       "case": "numeric-9",
       "family": "numeric",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -4827,7 +4827,7 @@
     {
       "case": "logs-5",
       "family": "logs",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -4845,7 +4845,7 @@
     {
       "case": "logs-4",
       "family": "logs",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -4899,7 +4899,7 @@
     {
       "case": "mixed-7",
       "family": "mixed",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -4935,7 +4935,7 @@
     {
       "case": "entropy-3",
       "family": "entropy",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -4971,7 +4971,7 @@
     {
       "case": "refresh-7",
       "family": "refresh",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -4989,7 +4989,7 @@
     {
       "case": "refresh-2",
       "family": "refresh",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -5043,7 +5043,7 @@
     {
       "case": "entropy-1",
       "family": "entropy",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -5061,7 +5061,7 @@
     {
       "case": "json-2",
       "family": "json",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -5115,7 +5115,7 @@
     {
       "case": "refactor-7",
       "family": "refactor",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -5151,7 +5151,7 @@
     {
       "case": "logs-3",
       "family": "logs",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -5187,7 +5187,7 @@
     {
       "case": "mixed-3",
       "family": "mixed",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -5205,7 +5205,7 @@
     {
       "case": "entropy-10",
       "family": "entropy",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -5241,7 +5241,7 @@
     {
       "case": "code-10",
       "family": "code",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -5277,7 +5277,7 @@
     {
       "case": "json-8",
       "family": "json",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -5313,7 +5313,7 @@
     {
       "case": "mixed-4",
       "family": "mixed",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -5349,7 +5349,7 @@
     {
       "case": "mixed-8",
       "family": "mixed",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -5385,7 +5385,7 @@
     {
       "case": "outer-8",
       "family": "outer",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -5421,7 +5421,7 @@
     {
       "case": "mixed-2",
       "family": "mixed",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -5457,7 +5457,7 @@
     {
       "case": "entropy-2",
       "family": "entropy",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -5511,7 +5511,7 @@
     {
       "case": "tiny-7",
       "family": "tiny",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -5547,7 +5547,7 @@
     {
       "case": "mixed-9",
       "family": "mixed",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -5583,7 +5583,7 @@
     {
       "case": "refactor-9",
       "family": "refactor",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -5601,7 +5601,7 @@
     {
       "case": "nullable-8",
       "family": "nullable",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -5655,7 +5655,7 @@
     {
       "case": "code-3",
       "family": "code",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -5691,7 +5691,7 @@
     {
       "case": "tiny-9",
       "family": "tiny",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -5727,7 +5727,7 @@
     {
       "case": "logs-9",
       "family": "logs",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -5763,7 +5763,7 @@
     {
       "case": "json-1",
       "family": "json",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -5781,7 +5781,7 @@
     {
       "case": "refresh-4",
       "family": "refresh",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -5817,7 +5817,7 @@
     {
       "case": "numeric-10",
       "family": "numeric",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -5871,7 +5871,7 @@
     {
       "case": "numeric-7",
       "family": "numeric",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -5889,7 +5889,7 @@
     {
       "case": "entropy-8",
       "family": "entropy",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -5925,7 +5925,7 @@
     {
       "case": "outer-4",
       "family": "outer",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -5961,7 +5961,7 @@
     {
       "case": "numeric-2",
       "family": "numeric",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -6015,7 +6015,7 @@
     {
       "case": "bugfix-1",
       "family": "bugfix",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -6051,7 +6051,7 @@
     {
       "case": "entropy-9",
       "family": "entropy",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -6069,7 +6069,7 @@
     {
       "case": "code-2",
       "family": "code",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -6105,7 +6105,7 @@
     {
       "case": "nullable-6",
       "family": "nullable",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -6141,7 +6141,7 @@
     {
       "case": "nullable-2",
       "family": "nullable",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -6195,7 +6195,7 @@
     {
       "case": "mixed-1",
       "family": "mixed",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -6231,7 +6231,7 @@
     {
       "case": "logs-7",
       "family": "logs",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -6267,7 +6267,7 @@
     {
       "case": "bugfix-5",
       "family": "bugfix",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -6303,7 +6303,7 @@
     {
       "case": "numeric-1",
       "family": "numeric",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -6339,7 +6339,7 @@
     {
       "case": "outer-3",
       "family": "outer",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -6375,7 +6375,7 @@
     {
       "case": "code-9",
       "family": "code",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -6393,7 +6393,7 @@
     {
       "case": "outer-6",
       "family": "outer",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -6447,7 +6447,7 @@
     {
       "case": "mixed-5",
       "family": "mixed",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -6483,7 +6483,7 @@
     {
       "case": "entropy-5",
       "family": "entropy",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -6501,7 +6501,7 @@
     {
       "case": "numeric-8",
       "family": "numeric",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -6555,7 +6555,7 @@
     {
       "case": "nullable-3",
       "family": "nullable",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -6591,7 +6591,7 @@
     {
       "case": "nullable-1",
       "family": "nullable",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -6609,7 +6609,7 @@
     {
       "case": "tiny-4",
       "family": "tiny",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -6645,7 +6645,7 @@
     {
       "case": "bugfix-10",
       "family": "bugfix",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -6681,7 +6681,7 @@
     {
       "case": "bugfix-6",
       "family": "bugfix",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -6735,7 +6735,7 @@
     {
       "case": "refresh-5",
       "family": "refresh",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -6753,7 +6753,7 @@
     {
       "case": "refresh-6",
       "family": "refresh",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -6807,7 +6807,7 @@
     {
       "case": "bugfix-9",
       "family": "bugfix",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -6825,7 +6825,7 @@
     {
       "case": "mixed-10",
       "family": "mixed",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -6861,7 +6861,7 @@
     {
       "case": "code-6",
       "family": "code",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -6915,7 +6915,7 @@
     {
       "case": "refactor-1",
       "family": "refactor",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -6951,7 +6951,7 @@
     {
       "case": "outer-7",
       "family": "outer",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -6969,7 +6969,7 @@
     {
       "case": "entropy-6",
       "family": "entropy",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -7023,7 +7023,7 @@
     {
       "case": "outer-5",
       "family": "outer",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -7041,7 +7041,7 @@
     {
       "case": "code-4",
       "family": "code",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -7095,7 +7095,7 @@
     {
       "case": "numeric-3",
       "family": "numeric",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -7113,7 +7113,7 @@
     {
       "case": "nullable-10",
       "family": "nullable",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -7149,7 +7149,7 @@
     {
       "case": "tiny-10",
       "family": "tiny",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -7203,7 +7203,7 @@
     {
       "case": "outer-1",
       "family": "outer",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -7239,7 +7239,7 @@
     {
       "case": "bugfix-3",
       "family": "bugfix",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -7275,7 +7275,7 @@
     {
       "case": "tiny-5",
       "family": "tiny",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -7311,7 +7311,7 @@
     {
       "case": "refresh-3",
       "family": "refresh",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -7329,7 +7329,7 @@
     {
       "case": "bugfix-8",
       "family": "bugfix",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -7383,7 +7383,7 @@
     {
       "case": "nullable-5",
       "family": "nullable",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -7419,7 +7419,7 @@
     {
       "case": "nullable-7",
       "family": "nullable",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -7455,7 +7455,7 @@
     {
       "case": "nullable-9",
       "family": "nullable",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -7473,7 +7473,7 @@
     {
       "case": "logs-8",
       "family": "logs",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -7509,7 +7509,7 @@
     {
       "case": "logs-2",
       "family": "logs",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -7545,7 +7545,7 @@
     {
       "case": "refactor-10",
       "family": "refactor",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -7599,7 +7599,7 @@
     {
       "case": "logs-1",
       "family": "logs",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -7617,7 +7617,7 @@
     {
       "case": "code-8",
       "family": "code",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -7653,7 +7653,7 @@
     {
       "case": "refactor-2",
       "family": "refactor",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -7689,7 +7689,7 @@
     {
       "case": "refactor-6",
       "family": "refactor",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -7743,7 +7743,7 @@
     {
       "case": "refresh-1",
       "family": "refresh",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -7779,7 +7779,7 @@
     {
       "case": "code-1",
       "family": "code",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -7797,7 +7797,7 @@
     {
       "case": "refactor-4",
       "family": "refactor",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -7851,7 +7851,7 @@
     {
       "case": "json-3",
       "family": "json",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -7869,7 +7869,7 @@
     {
       "case": "logs-6",
       "family": "logs",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -7905,7 +7905,7 @@
     {
       "case": "entropy-4",
       "family": "entropy",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -7941,7 +7941,7 @@
     {
       "case": "logs-10",
       "family": "logs",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -7995,7 +7995,7 @@
     {
       "case": "json-7",
       "family": "json",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -8013,7 +8013,7 @@
     {
       "case": "numeric-6",
       "family": "numeric",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -8067,7 +8067,7 @@
     {
       "case": "code-5",
       "family": "code",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -8085,7 +8085,7 @@
     {
       "case": "tiny-6",
       "family": "tiny",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -8121,7 +8121,7 @@
     {
       "case": "json-4",
       "family": "json",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -8175,7 +8175,7 @@
     {
       "case": "json-5",
       "family": "json",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -8193,7 +8193,7 @@
     {
       "case": "outer-10",
       "family": "outer",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -8229,7 +8229,7 @@
     {
       "case": "json-6",
       "family": "json",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -8265,7 +8265,7 @@
     {
       "case": "mixed-6",
       "family": "mixed",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -8301,7 +8301,7 @@
     {
       "case": "refactor-8",
       "family": "refactor",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -8337,7 +8337,7 @@
     {
       "case": "refresh-10",
       "family": "refresh",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -8373,7 +8373,7 @@
     {
       "case": "outer-2",
       "family": "outer",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -8409,7 +8409,7 @@
     {
       "case": "json-10",
       "family": "json",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -8445,7 +8445,7 @@
     {
       "case": "tiny-8",
       "family": "tiny",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -8499,7 +8499,7 @@
     {
       "case": "json-9",
       "family": "json",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -8535,7 +8535,7 @@
     {
       "case": "tiny-1",
       "family": "tiny",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -8571,7 +8571,7 @@
     {
       "case": "numeric-5",
       "family": "numeric",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -8589,7 +8589,7 @@
     {
       "case": "refresh-8",
       "family": "refresh",
-      "arm": "headroom",
+      "arm": "altA",
       "verdict": "PASS",
       "infrastructureFailure": false,
       "clientErrors": [],
@@ -8630,7 +8630,7 @@
       "unknownCostAttempts": 1,
       "infrastructureFailures": 0
     },
-    "headroom": {
+    "altA": {
       "attempts": 120,
       "knownEstimatedUsd": 30.542456,
       "unknownCostAttempts": 0,

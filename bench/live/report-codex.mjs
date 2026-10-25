@@ -275,7 +275,7 @@ const comparison = failures.length
             (a) => a.task === task && a.arm === candidate
           );
           const theirs = aggregates.find(
-            (a) => a.task === task && a.arm === 'headroom'
+            (a) => a.task === task && a.arm === 'altA'
           );
           const control = aggregates.find(
             (a) => a.task === task && a.arm === 'control'
@@ -290,7 +290,7 @@ const comparison = failures.length
               candidate === 'full-files' && full?.meanInput && ours?.meanInput
                 ? 1 - ours.meanInput / full.meanInput
                 : null,
-            inputReductionVsHeadroom:
+            inputReductionVsAltA:
               ours?.meanInput && theirs?.meanInput
                 ? 1 - ours.meanInput / theirs.meanInput
                 : null,
@@ -309,7 +309,7 @@ const summary = {
   aggregates,
   comparison,
   interpretation:
-    'Input includes cached tokens. Cached is a subset, not an additional charge. These are token counts, not dollar costs. Three synthetic workloads do not establish a universal win. Startup is included in seconds. HeadRoom compression is measured through provider usage, not the null recorder byte counts.',
+    'Input includes cached tokens. Cached is a subset, not an additional charge. These are token counts, not dollar costs. Three synthetic workloads do not establish a universal win. Startup is included in seconds. Alternative A compression is measured through provider usage, not the null recorder byte counts.',
 };
 await writeFile(
   join(directory, 'summary.json'),

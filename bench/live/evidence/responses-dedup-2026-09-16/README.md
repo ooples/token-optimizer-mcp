@@ -32,11 +32,11 @@ The proxy remains in place. The rejected tool-description experiment stays off.
 
 ## Fixed live results
 
-Actual local Codex, gpt-6-astra, installed HeadRoom 0.37.0, balanced arm order,
+Actual local Codex, gpt-6-astra, installed Alternative A, balanced arm order,
 independent quality/usage/capture audits, and Windows memory telemetry. The two
 stages have different product commits and remain separate:
 
-| Stage                                                                   | Product    | Quality    | Cost pairs won | Speed pairs won | Our estimated cost / HeadRoom | Our agent seconds / HeadRoom |
+| Stage                                                                   | Product    | Quality    | Cost pairs won | Speed pairs won | Our estimated cost / Alternative A | Our agent seconds / Alternative A |
 | ----------------------------------------------------------------------- | ---------- | ---------- | -------------- | --------------- | ----------------------------- | ---------------------------- |
 | [Initial protocol](PROTOCOL.md): JSON, nullable, refresh, repeated JSON | `90f42537` | 16/16 PASS | 8/8            | 3/8             | $1.182176 / $2.013110         | 250.3 / 240.1                |
 | [Nested-output follow-up](FOLLOWUP.md): repeated JSON                   | `1427417f` | 4/4 PASS   | 2/2            | 1/2             | $0.381052 / $0.621684         | 48.2 / 53.7                  |
@@ -66,7 +66,7 @@ corrected this rather than treating synthetic success as live proof.
 - [Actual live counters](nested-followup/references.json): each candidate attempt
   forwarded reference counts `0, 0, 1, 2, 2`, with HTTP 200 for every request.
 - [Local source-driven probe](local-probe-v2.json): three nested repeated results
-  are 3,878 request bytes for ours versus 13,743 for shipped HeadRoom. Nine small
+  are 3,878 request bytes for ours versus 13,743 for shipped Alternative A. Nine small
   rows are 668 versus 689 bytes. One result remains 2,066 versus 4,356 bytes.
   These are synthetic byte measurements, not model-task or dollar results.
 - Non-object local-shell JSON is deliberately preserved, so the array-shaped
@@ -77,14 +77,14 @@ corrected this rather than treating synthetic success as live proof.
 
 [Recorded speed-loss timing](speed-loss-timing.json) shows higher measured upstream
 time in all five initial speed losses; our summed transform time ranged from
-220.7 to 329.4 ms. HeadRoom sits behind the recorder, so its upstream time includes
+220.7 to 329.4 ms. Alternative A sits behind the recorder, so its upstream time includes
 its own work and is not an isolated provider/competitor CPU measurement. Cold
 tokenizer initialization is a real cost and is not removed from these results.
 
 The cache correction reduced mean warm replay time for ten captured requests
 from 168.3 ms to 10.9 ms (93.5%), over twelve passes in fresh processes. All ten
 output SHA-256 hashes match before/after. This is an internal before/after result,
-not a claim about HeadRoom allocation or latency. Raw samples:
+not a claim about Alternative A allocation or latency. Raw samples:
 [before](token-cache-before.json), [after](token-cache-after.json).
 
 The same corrected replay survived with 32 MiB V8 old space, with matching output
@@ -101,7 +101,7 @@ node bench/live/response-cache-replay.mjs <captured-run-directory> <output.json>
 
 Use `--max-old-space-size=32` before the script for the constrained variant.
 Reproduce the synthetic competitor probe with
-`node bench/live/headroom-gap-probe.mjs`.
+`node bench/live/alt-a-gap-probe.mjs`.
 
 ## Validation
 

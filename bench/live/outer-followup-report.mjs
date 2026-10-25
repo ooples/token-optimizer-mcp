@@ -49,11 +49,11 @@ for (const arm of plan.arms) {
 }
 for (const seed of [plan.seedOffset + 1, plan.seedOffset + 2]) {
   const p = results.find((r) => r.arm === 'proxy' && r.seed === seed);
-  const h = results.find((r) => r.arm === 'headroom' && r.seed === seed);
+  const h = results.find((r) => r.arm === 'altA' && r.seed === seed);
   pairs.push({
     seed,
     proxyEstimatedUsd: costs.valid ? cost(p.usage) : null,
-    headroomEstimatedUsd: costs.valid ? cost(h.usage) : null,
+    altAEstimatedUsd: costs.valid ? cost(h.usage) : null,
   });
 }
 const target = join(evidence, 'outer-live');
@@ -108,7 +108,7 @@ const report = {
   pairs,
   compressedOuterFragments: fragments,
   estimatedCostReduction: costs.valid
-    ? 1 - arms.proxy.estimatedUsd / arms.headroom.estimatedUsd
+    ? 1 - arms.proxy.estimatedUsd / arms.altA.estimatedUsd
     : null,
 };
 await writeFile(

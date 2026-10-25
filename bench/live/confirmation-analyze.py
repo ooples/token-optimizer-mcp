@@ -86,9 +86,9 @@ def analyze(study):
             rows = json.loads((path / "results.json").read_text())
             audit = json.loads((path / "validation.json").read_text())
             manifest = json.loads((path / "manifest.json").read_text())
-            if len(rows) != 2 or {r["arm"] for r in rows} != {"proxy", "headroom"}:
+            if len(rows) != 2 or {r["arm"] for r in rows} != {"proxy", "altA"}:
                 raise ValueError("Missing/duplicate arms")
-            if len(audit) != 2 or {r["arm"] for r in audit} != {"proxy", "headroom"}:
+            if len(audit) != 2 or {r["arm"] for r in audit} != {"proxy", "altA"}:
                 raise ValueError("Missing/duplicate audit arms")
             if (manifest["model"] != plan["model"] or manifest["caseSuite"] != plan["caseSuite"] or manifest["readMode"] != case["readMode"] or manifest["arms"] != case["arms"] or manifest["seedOffset"] != case["seed"]-1 or manifest["tasks"] != [case["task"]] or manifest["reps"] != 1):
                 raise ValueError("Protocol mismatch")
@@ -121,24 +121,24 @@ def analyze(study):
             pairs.append(record)
         except (OSError, KeyError, ValueError, TypeError, StopIteration) as error:
             issues.append(f'{case["id"]}: {error}')
-    groups = [np.array([[p["arms"]["proxy"]["estimatedUsd"], p["arms"]["headroom"]["estimatedUsd"]] for p in pairs if p["family"] == family]) for family in plan["families"]]
+    groups = [np.array([[p["arms"]["proxy"]["estimatedUsd"], p["arms"]["altA"]["estimatedUsd"]] for p in pairs if p["family"] == family]) for family in plan["families"]]
     complete = len(pairs) == plan["pairs"] and all(len(g) == plan["pairsPerFamily"] for g in groups)
     passed = sum(a["arm"] == "proxy" and a["verdict"] == "PASS" for a in attempts)
     quality_lower = 0.05**(1/plan["pairs"]) if passed == plan["pairs"] else None
-    result = {"complete": complete and not issues, "issues": issues, "pairsMeasured": len(pairs), "pairsPlanned": plan["pairs"], "proxyPasses": passed, "headroomPasses": sum(p["arms"]["headroom"]["verdict"] == "PASS" for p in pairs), "zeroFailureOneSided95SuccessLowerBound": quality_lower, "pairs": pairs, "limitations": ["Generated synthetic cases held out from product tuning; not independent real-world repositories.", "Provider cache state is observed, not experimentally flushed. Fresh sessions may start warm.", "Intervals assume independent case pairs within the sampled workload distribution; shared provider state can introduce dependence.", "BCa intervals are approximate, and the study cannot establish superiority outside this model, rate scenario, or suite.", "First-request cold sensitivity holds model behavior and subsequent usage fixed; it is not a cold-session experiment."]}
-    result.update({"attempts": attempts, "headroomPasses": sum(a["arm"] == "headroom" and a["verdict"] == "PASS" for a in attempts),
+    result = {"complete": complete and not issues, "issues": issues, "pairsMeasured": len(pairs), "pairsPlanned": plan["pairs"], "proxyPasses": passed, "altAPasses": sum(p["arms"]["altA"]["verdict"] == "PASS" for p in pairs), "zeroFailureOneSided95SuccessLowerBound": quality_lower, "pairs": pairs, "limitations": ["Generated synthetic cases held out from product tuning; not independent real-world repositories.", "Provider cache state is observed, not experimentally flushed. Fresh sessions may start warm.", "Intervals assume independent case pairs within the sampled workload distribution; shared provider state can introduce dependence.", "BCa intervals are approximate, and the study cannot establish superiority outside this model, rate scenario, or suite.", "First-request cold sensitivity holds model behavior and subsequent usage fixed; it is not a cold-session experiment."]}
+    result.update({"attempts": attempts, "altAPasses": sum(a["arm"] == "altA" and a["verdict"] == "PASS" for a in attempts),
                    "attemptAccounting": {arm: {"attempts": sum(a["arm"] == arm for a in attempts),
                                                "knownEstimatedUsd": sum(a["knownEstimatedUsd"] for a in attempts if a["arm"] == arm),
                                                "unknownCostAttempts": sum(not a["costComplete"] for a in attempts if a["arm"] == arm),
-                                               "infrastructureFailures": sum(a["infrastructureFailure"] for a in attempts if a["arm"] == arm)} for arm in ["proxy", "headroom"]}})
+                                               "infrastructureFailures": sum(a["infrastructureFailure"] for a in attempts if a["arm"] == arm)} for arm in ["proxy", "altA"]}})
     if complete and not issues:
         result["cost"] = intervals(groups, plan["bootstrap"]["resamples"], plan["bootstrap"]["seed"])
-        cold = [np.array([[p["arms"]["proxy"]["firstRequestColdSensitivityUsd"],p["arms"]["headroom"]["firstRequestColdSensitivityUsd"]] for p in pairs if p["family"] == f]) for f in plan["families"]]
+        cold = [np.array([[p["arms"]["proxy"]["firstRequestColdSensitivityUsd"],p["arms"]["altA"]["firstRequestColdSensitivityUsd"]] for p in pairs if p["family"] == f]) for f in plan["families"]]
         result["firstRequestColdSensitivity"] = intervals(cold,plan["bootstrap"]["resamples"],plan["bootstrap"]["seed"])
-        uncached = [np.array([[(p["arms"][arm]["input"]*rates["uncached"]+p["arms"][arm]["output"]*rates["output"])/1e6 for arm in ["proxy", "headroom"]] for p in pairs if p["family"] == f]) for f in plan["families"]]
+        uncached = [np.array([[(p["arms"][arm]["input"]*rates["uncached"]+p["arms"][arm]["output"]*rates["output"])/1e6 for arm in ["proxy", "altA"]] for p in pairs if p["family"] == f]) for f in plan["families"]]
         result["allInputUncachedSensitivity"] = intervals(uncached,plan["bootstrap"]["resamples"],plan["bootstrap"]["seed"])
         result["limitations"].append("All-input-uncached sensitivity holds observed behavior fixed; it is not an observed cold-cache cohort.")
-        result["familyResultsExploratory"] = {family: {"pairs":len(g),"ratios":estimate([g]).tolist(),"proxyPasses":sum(p["family"]==family and p["arms"]["proxy"]["verdict"]=="PASS" for p in pairs),"headroomPasses":sum(p["family"]==family and p["arms"]["headroom"]["verdict"]=="PASS" for p in pairs)} for family,g in zip(plan["families"],groups)}
+        result["familyResultsExploratory"] = {family: {"pairs":len(g),"ratios":estimate([g]).tolist(),"proxyPasses":sum(p["family"]==family and p["arms"]["proxy"]["verdict"]=="PASS" for p in pairs),"altAPasses":sum(p["family"]==family and p["arms"]["altA"]["verdict"]=="PASS" for p in pairs)} for family,g in zip(plan["families"],groups)}
     result["superiorityEstablished"] = bool(complete and not issues and quality_lower is not None and quality_lower >= plan["success"]["minimumOneSided95SuccessBound"] and all(not r["degenerate"] and r["ci95Ratio"][1] < plan["success"]["bothCostUpper95Below"] for r in result.get("cost",{}).values()) and "cost" in result)
     (study / "analysis.json").write_text(json.dumps(result,indent=2)+"\n")
     print(json.dumps({k:v for k,v in result.items() if k not in ["pairs","attempts","limitations"]},indent=2))

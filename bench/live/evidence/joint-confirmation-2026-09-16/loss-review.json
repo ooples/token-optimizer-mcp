@@ -40,7 +40,7 @@
             "upstreamHeadersMs": 3223.7788999999993,
             "upstreamMs": 15817.252899999998
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable.",
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable.",
           "clientExit": 0,
           "clientAllocationFailure": false,
           "firstRequestInput": 13064,
@@ -57,7 +57,7 @@
             }
           ]
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.111986,
           "agentSeconds": 17.8,
@@ -74,7 +74,7 @@
             "upstreamHeadersMs": 3885.959499999999,
             "upstreamMs": 15776.660899999999
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable.",
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable.",
           "clientExit": 0,
           "clientAllocationFailure": false,
           "firstRequestInput": 12981,
@@ -124,7 +124,7 @@
             "upstreamHeadersMs": 4917.5254,
             "upstreamMs": 14255.9215
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable.",
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable.",
           "clientExit": 0,
           "clientAllocationFailure": false,
           "firstRequestInput": 13050,
@@ -141,7 +141,7 @@
             }
           ]
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.122646,
           "agentSeconds": 15.3,
@@ -158,7 +158,7 @@
             "upstreamHeadersMs": 2114.1143999999995,
             "upstreamMs": 13203.746099999998
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable.",
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable.",
           "clientExit": 0,
           "clientAllocationFailure": false,
           "firstRequestInput": 12967,
@@ -208,7 +208,7 @@
             "upstreamHeadersMs": 7225.518600000004,
             "upstreamMs": 37474.00259999999
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable.",
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable.",
           "clientExit": 0,
           "clientAllocationFailure": false,
           "firstRequestInput": 13106,
@@ -240,7 +240,7 @@
             }
           ]
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.240632,
           "agentSeconds": 49.7,
@@ -257,7 +257,7 @@
             "upstreamHeadersMs": 8590.727100000004,
             "upstreamMs": 46587.35970000001
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable.",
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable.",
           "clientExit": 0,
           "clientAllocationFailure": false,
           "firstRequestInput": 13023,
@@ -328,7 +328,7 @@
             "upstreamHeadersMs": 7529.743500000002,
             "upstreamMs": 44674.1706
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable.",
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable.",
           "clientExit": 0,
           "clientAllocationFailure": false,
           "firstRequestInput": 13013,
@@ -366,7 +366,7 @@
             }
           ]
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.305348,
           "agentSeconds": 50.2,
@@ -383,7 +383,7 @@
             "upstreamHeadersMs": 7095.3848,
             "upstreamMs": 46888.3374
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable.",
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable.",
           "clientExit": 0,
           "clientAllocationFailure": false,
           "firstRequestInput": 12930,
@@ -454,7 +454,7 @@
             "upstreamHeadersMs": 2524.7576000000013,
             "upstreamMs": 16236.7785
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable.",
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable.",
           "clientExit": 0,
           "clientAllocationFailure": false,
           "firstRequestInput": 13041,
@@ -471,7 +471,7 @@
             }
           ]
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.222216,
           "agentSeconds": 16.4,
@@ -488,7 +488,7 @@
             "upstreamHeadersMs": 2878.2376000000004,
             "upstreamMs": 14014.4951
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable.",
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable.",
           "clientExit": 0,
           "clientAllocationFailure": false,
           "firstRequestInput": 12958,
@@ -538,7 +538,7 @@
             "upstreamHeadersMs": 5213.1741999999995,
             "upstreamMs": 16994.9151
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable.",
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable.",
           "clientExit": 0,
           "clientAllocationFailure": false,
           "firstRequestInput": 13044,
@@ -555,7 +555,7 @@
             }
           ]
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.225918,
           "agentSeconds": 15.3,
@@ -572,7 +572,7 @@
             "upstreamHeadersMs": 2354.313600000001,
             "upstreamMs": 13382.761400000001
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable.",
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable.",
           "clientExit": 0,
           "clientAllocationFailure": false,
           "firstRequestInput": 12961,
@@ -622,7 +622,7 @@
             "upstreamHeadersMs": 5380.989300000003,
             "upstreamMs": 34670.8331
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable.",
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable.",
           "clientExit": 0,
           "clientAllocationFailure": false,
           "firstRequestInput": 13096,
@@ -654,7 +654,7 @@
             }
           ]
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.253658,
           "agentSeconds": 67.2,
@@ -671,7 +671,7 @@
             "upstreamHeadersMs": 12442.662399999997,
             "upstreamMs": 63362.3174
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable.",
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable.",
           "clientExit": 0,
           "clientAllocationFailure": false,
           "firstRequestInput": 13013,
@@ -747,7 +747,7 @@
             "upstreamHeadersMs": 5203.1325000000015,
             "upstreamMs": 43834.46319999999
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable.",
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable.",
           "clientExit": 0,
           "clientAllocationFailure": false,
           "firstRequestInput": 13100,
@@ -785,7 +785,7 @@
             }
           ]
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.329754,
           "agentSeconds": 47.3,
@@ -802,7 +802,7 @@
             "upstreamHeadersMs": 10991.002500000004,
             "upstreamMs": 44084.513100000004
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable.",
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable.",
           "clientExit": 0,
           "clientAllocationFailure": false,
           "firstRequestInput": 13017,
@@ -877,7 +877,7 @@
             "upstreamHeadersMs": 4832.753399999995,
             "upstreamMs": 27770.6488
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable.",
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable.",
           "clientExit": 0,
           "clientAllocationFailure": false,
           "firstRequestInput": 13102,
@@ -904,7 +904,7 @@
             }
           ]
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.285612,
           "agentSeconds": 50.2,
@@ -921,7 +921,7 @@
             "upstreamHeadersMs": 9038.419999999996,
             "upstreamMs": 46498.2815
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable.",
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable.",
           "clientExit": 0,
           "clientAllocationFailure": false,
           "firstRequestInput": 13019,
@@ -997,7 +997,7 @@
             "upstreamHeadersMs": 3874.547699999999,
             "upstreamMs": 14737.8425
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable.",
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable.",
           "clientExit": 0,
           "clientAllocationFailure": false,
           "firstRequestInput": 13031,
@@ -1014,7 +1014,7 @@
             }
           ]
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.085634,
           "agentSeconds": 15.3,
@@ -1031,7 +1031,7 @@
             "upstreamHeadersMs": 2769.7398000000017,
             "upstreamMs": 13303.8245
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable.",
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable.",
           "clientExit": 0,
           "clientAllocationFailure": false,
           "firstRequestInput": 12948,
@@ -1081,7 +1081,7 @@
             "upstreamHeadersMs": 2349.6948999999986,
             "upstreamMs": 14901.786200000002
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable.",
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable.",
           "clientExit": 0,
           "clientAllocationFailure": false,
           "firstRequestInput": 13041,
@@ -1098,7 +1098,7 @@
             }
           ]
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.142824,
           "agentSeconds": 15.2,
@@ -1115,7 +1115,7 @@
             "upstreamHeadersMs": 2829.5718,
             "upstreamMs": 13193.513400000002
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable.",
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable.",
           "clientExit": 0,
           "clientAllocationFailure": false,
           "firstRequestInput": 12958,
@@ -1165,7 +1165,7 @@
             "upstreamHeadersMs": 7052.2161999999935,
             "upstreamMs": 43940.051699999996
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable.",
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable.",
           "clientExit": 0,
           "clientAllocationFailure": false,
           "firstRequestInput": 13013,
@@ -1197,7 +1197,7 @@
             }
           ]
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.229924,
           "agentSeconds": 43.5,
@@ -1214,7 +1214,7 @@
             "upstreamHeadersMs": 7435.8214000000025,
             "upstreamMs": 40371.816300000006
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable.",
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable.",
           "clientExit": 0,
           "clientAllocationFailure": false,
           "firstRequestInput": 12930,
@@ -1275,7 +1275,7 @@
             "upstreamHeadersMs": 3042.2385000000004,
             "upstreamMs": 14263.525299999998
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable.",
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable.",
           "clientExit": 0,
           "clientAllocationFailure": false,
           "firstRequestInput": 13050,
@@ -1292,7 +1292,7 @@
             }
           ]
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.20552,
           "agentSeconds": 16.2,
@@ -1309,7 +1309,7 @@
             "upstreamHeadersMs": 2536.0392999999995,
             "upstreamMs": 14058.346800000001
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable.",
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable.",
           "clientExit": 0,
           "clientAllocationFailure": false,
           "firstRequestInput": 12967,
@@ -1359,7 +1359,7 @@
             "upstreamHeadersMs": 2291.7639000000004,
             "upstreamMs": 11299.572300000002
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable.",
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable.",
           "clientExit": 0,
           "clientAllocationFailure": false,
           "firstRequestInput": 13050,
@@ -1376,7 +1376,7 @@
             }
           ]
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.154742,
           "agentSeconds": 19,
@@ -1393,7 +1393,7 @@
             "upstreamHeadersMs": 3663.8479999999977,
             "upstreamMs": 16963.791999999998
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable.",
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable.",
           "clientExit": 0,
           "clientAllocationFailure": false,
           "firstRequestInput": 12967,
@@ -1443,7 +1443,7 @@
             "upstreamHeadersMs": 3051.7356,
             "upstreamMs": 12594.9712
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable.",
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable.",
           "clientExit": 0,
           "clientAllocationFailure": false,
           "firstRequestInput": 13050,
@@ -1460,7 +1460,7 @@
             }
           ]
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.270674,
           "agentSeconds": 26.2,
@@ -1477,7 +1477,7 @@
             "upstreamHeadersMs": 7076.674499999999,
             "upstreamMs": 23906.3431
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable.",
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable.",
           "clientExit": 0,
           "clientAllocationFailure": false,
           "firstRequestInput": 12967,
@@ -1527,7 +1527,7 @@
             "upstreamHeadersMs": 2024.3217000000002,
             "upstreamMs": 13082.771
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable.",
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable.",
           "clientExit": 0,
           "clientAllocationFailure": false,
           "firstRequestInput": 13061,
@@ -1544,7 +1544,7 @@
             }
           ]
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.147538,
           "agentSeconds": 18.4,
@@ -1561,7 +1561,7 @@
             "upstreamHeadersMs": 3326.277899999999,
             "upstreamMs": 16376.325599999998
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable.",
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable.",
           "clientExit": 0,
           "clientAllocationFailure": false,
           "firstRequestInput": 12978,
@@ -1611,7 +1611,7 @@
             "upstreamHeadersMs": 2682.9154,
             "upstreamMs": 13911.6622
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable.",
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable.",
           "clientExit": 0,
           "clientAllocationFailure": false,
           "firstRequestInput": 13040,
@@ -1628,7 +1628,7 @@
             }
           ]
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.21781,
           "agentSeconds": 32.8,
@@ -1645,7 +1645,7 @@
             "upstreamHeadersMs": 9494.806700000001,
             "upstreamMs": 30604.981999999996
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable.",
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable.",
           "clientExit": 0,
           "clientAllocationFailure": false,
           "firstRequestInput": 12957,
@@ -1695,7 +1695,7 @@
             "upstreamHeadersMs": 4890.060100000001,
             "upstreamMs": 14948.603100000002
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable.",
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable.",
           "clientExit": 0,
           "clientAllocationFailure": false,
           "firstRequestInput": 13053,
@@ -1712,7 +1712,7 @@
             }
           ]
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.122566,
           "agentSeconds": 16.5,
@@ -1729,7 +1729,7 @@
             "upstreamHeadersMs": 3733.694400000001,
             "upstreamMs": 14129.6396
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable.",
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable.",
           "clientExit": 0,
           "clientAllocationFailure": false,
           "firstRequestInput": 12970,
@@ -1779,7 +1779,7 @@
             "upstreamHeadersMs": 3035.2996000000003,
             "upstreamMs": 15368.9386
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable.",
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable.",
           "clientExit": 0,
           "clientAllocationFailure": false,
           "firstRequestInput": 13034,
@@ -1796,7 +1796,7 @@
             }
           ]
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.169088,
           "agentSeconds": 14.3,
@@ -1813,7 +1813,7 @@
             "upstreamHeadersMs": 2813.0628000000006,
             "upstreamMs": 12386.9412
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable.",
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable.",
           "clientExit": 0,
           "clientAllocationFailure": false,
           "firstRequestInput": 12951,
@@ -1863,7 +1863,7 @@
             "upstreamHeadersMs": 8475.707799999993,
             "upstreamMs": 46008.6149
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable.",
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable.",
           "clientExit": 0,
           "clientAllocationFailure": false,
           "firstRequestInput": 12980,
@@ -1896,7 +1896,7 @@
             }
           ]
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.281758,
           "agentSeconds": 78.7,
@@ -1913,7 +1913,7 @@
             "upstreamHeadersMs": 14778.356899999999,
             "upstreamMs": 73878.1052
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable.",
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable.",
           "clientExit": 0,
           "clientAllocationFailure": false,
           "firstRequestInput": 12897,
@@ -1967,7 +1967,7 @@
               "command": "\"C:\\\\windows\\\\System32\\\\WindowsPowerShell\\\\v1.0\\\\powershell.exe\" -Command 'node --test'",
               "status": "failed",
               "exitCode": 1,
-              "failureOutput": "TAP version 13\n# Subtest: case 201/1\nok 1 - case 201/1\n  ---\n  duration_ms: 1.2882\n  type: 'test'\n  ...\n# Subtest: case 201/2\nok 2 - case 201/2\n  ---\n  duration_ms: 0.1128\n  type: 'test'\n  ...\n# Subtest: case 201/3\nok 3 - case 201/3\n  ---\n  duration_ms: 0.0869\n  type: 'test'\n  ...\n# Subtest: case 201/4\nok 4 - case 201/4\n  ---\n  duration_ms: 0.0791\n  type: 'test'\n  ...\n# Subtest: case 201/5\nok 5 - case 201/5\n  ---\n  duration_ms: 0.2239\n  type: 'test'\n  ...\n# Subtest: case 429/1\nok 6 - case 429/1\n  ---\n  duration_ms: 0.09\n  type: 'test'\n  ...\n# Subtest: case 429/2\nnot ok 7 - case 429/2\n  ---\n  duration_ms: 0.8328\n  type: 'test'\n  location: 'C:\\\\Users\\\\yolan\\\\AppData\\\\Local\\\\Temp\\\\codex-confirmation-hPlQi7\\\\bugfix-10\\\\run-ET9QrA\\\\bugfix-1-headroom\\\\workspace\\\\test\\\\retry.test.mjs:5:82'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    414 !== null\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: ~\n  actual: 414\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///C:/Users/yolan/AppData/Local/Temp/codex-confirmation-hPlQi7/bugfix-10/run-ET9QrA/bugfix-1-headroom/workspace/test/retry.test.mjs:5:126)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)\n  ...\n# Subtest: case 429/3\nnot ok 8 - case 429/3\n  ---\n  duration_ms: 0.1967\n  type: 'test'\n  location: 'C:\\\\Users\\\\yolan\\\\AppData\\\\Local\\\\Temp\\\\codex-confirmation-hPlQi7\\\\bugfix-10\\\\run-ET9QrA\\\\bugfix-1-headroom\\\\workspace\\\\test\\\\retry.test.mjs:5:82'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    621 !== null\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: ~\n  actual: 621\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///C:/Users/yolan/AppData/Local/Temp/codex-confirmation-hPlQi7/bugfix-10/run-ET9QrA/bugfix-1-headroom/workspace/test/retry.test.mjs:5:126)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)\n  ...\n# Subtest: case 429/4\nnot ok 9 - case 429/4\n  ---\n  duration_ms: 0.824\n  type: 'test'\n  location: 'C:\\\\Users\\\\yolan\\\\AppData\\\\Local\\\\Temp\\\\codex-confirmation-hPlQi7\\\\bugfix-10\\\\run-ET9QrA\\\\bugfix-1-headroom\\\\workspace\\\\test\\\\retry.test.mjs:5:82'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    828 !== null\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: ~\n  actual: 828\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///C:/Users/yolan/AppData/Local/Temp/codex-confirmation-hPlQi7/bugfix-10/run-ET9QrA/bugfix-1-headroom/workspace/test/retry.test.mjs:5:126)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)\n  ...\n# Subtest: case 429/5\nnot ok 10 - case 429/5\n  ---\n  duration_ms: 0.6051\n  type: 'test'\n  location: 'C:\\\\Users\\\\yolan\\\\AppData\\\\Local\\\\Temp\\\\codex-confirmation-hPlQi7\\\\bugfix-10\\\\run-ET9QrA\\\\bugfix-1-headroom\\\\workspace\\\\test\\\\retry.test.mjs:5:82'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    1035 !== null\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: ~\n  actual: 1035\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///C:/Users/yolan/AppData/Local/Temp/codex-confirmation-hPlQi7/bugfix-10/run-ET9QrA/bugfix-1-headroom/workspace/test/retry.test.mjs:5:126)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)\n  ...\n# Subtest: case 430/1\nok 11 - case 430/1\n  ---\n  duration_ms: 0.18\n  type: 'test'\n  ...\n# Subtest: case 430/2\nok 12 - case 430/2\n  ---\n  duration_ms: 0.0714\n  type: 'test'\n  ...\n# Subtest: case 430/3\nok 13 - case 430/3\n  ---\n  duration_ms: 0.1204\n  type: 'test'\n  ...\n# Subtest: case 430/4\nok 14 - case 430/4\n  ---\n  duration_ms: 0.0625\n  type: 'test'\n  ...\n# Subtest: case 430/5\nok 15 - case 430/5\n  ---\n  duration_ms: 0.0516\n  type: 'test'\n  ...\n# Subtest: case 500/1\nok 16 - case 500/1\n  ---\n  duration_ms: 0.055\n  type: 'test'\n  ...\n# Subtest: case 500/2\nnot ok 17 - case 500/2\n  ---\n  duration_ms: 0.1988\n  type: 'test'\n  location: 'C:\\\\Users\\\\yolan\\\\AppData\\\\Local\\\\Temp\\\\codex-confirmation-hPlQi7\\\\bugfix-10\\\\run-ET9QrA\\\\bugfix-1-headroom\\\\workspace\\\\test\\\\retry.test.mjs:5:82'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    414 !== null\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: ~\n  actual: 414\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///C:/Users/yolan/AppData/Local/Temp/codex-confirmation-hPlQi7/bugfix-10/run-ET9QrA/bugfix-1-headroom/workspace/test/retry.test.mjs:5:126)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)\n  ...\n# Subtest: case 500/3\nnot ok 18 - case 500/3\n  ---\n  duration_ms: 0.178\n  type: 'test'\n  location: 'C:\\\\Users\\\\yolan\\\\AppData\\\\Local\\\\Temp\\\\codex-confirmation-hPlQi7\\\\bugfix-10\\\\run-ET9QrA\\\\bugfix-1-headroom\\\\workspace\\\\test\\\\retry.test.mjs:5:82'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    621 !== null\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: ~\n  actual: 621\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///C:/Users/yolan/AppData/Local/Temp/codex-confirmation-hPlQi7/bugfix-10/run-ET9QrA/bugfix-1-headroom/workspace/test/retry.test.mjs:5:126)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)\n  ...\n# Subtest: case 500/4\nnot ok 19 - case 500/4\n  ---\n  duration_ms: 0.1357\n  type: 'test'\n  location: 'C:\\\\Users\\\\yolan\\\\AppData\\\\Local\\\\Temp\\\\codex-confirmation-hPlQi7\\\\bugfix-10\\\\run-ET9QrA\\\\bugfix-1-headroom\\\\workspace\\\\test\\\\retry.test.mjs:5:82'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    828 !== null\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: ~\n  actual: 828\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///C:/Users/yolan/AppData/Local/Temp/codex-confirmation-hPlQi7/bugfix-10/run-ET9QrA/bugfix-1-headroom/workspace/test/retry.test.mjs:5:126)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)\n  ...\n# Subtest: case 500/5\nnot ok 20 - case 500/5\n  ---\n  duration_ms: 0.2329\n  type: 'test'\n  location: 'C:\\\\Users\\\\yolan\\\\AppData\\\\Local\\\\Temp\\\\codex-confirmation-hPlQi7\\\\bugfix-10\\\\run-ET9QrA\\\\bugfix-1-headroom\\\\workspace\\\\test\\\\retry.test.mjs:5:82'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    1035 !== null\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: ~\n  actual: 1035\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///C:/Users/yolan/AppData/Local/Temp/codex-confirmation-hPlQi7/bugfix-10/run-ET9QrA/bugfix-1-headroom/workspace/test/retry.test.mjs:5:126)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)\n  ...\n# Subtest: case 599/1\nok 21 - case 599/1\n  ---\n  duration_ms: 0.0656\n  type: 'test'\n  ...\n# Subtest: case 599/2\nnot ok 22 - case 599/2\n  ---\n  duration_ms: 0.294\n  type: 'test'\n  location: 'C:\\\\Users\\\\yolan\\\\AppData\\\\Local\\\\Temp\\\\codex-confirmation-hPlQi7\\\\bugfix-10\\\\run-ET9QrA\\\\bugfix-1-headroom\\\\workspace\\\\test\\\\retry.test.mjs:5:82'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    414 !== null\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: ~\n  actual: 414\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///C:/Users/yolan/AppData/Local/Temp/codex-confirmation-hPlQi7/bugfix-10/run-ET9QrA/bugfix-1-headroom/workspace/test/retry.test.mjs:5:126)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)\n  ...\n# Subtest: case 599/3\nnot ok 23 - case 599/3\n  ---\n  duration_ms: 0.1425\n  type: 'test'\n  location: 'C:\\\\Users\\\\yolan\\\\AppData\\\\Local\\\\Temp\\\\codex-confirmation-hPlQi7\\\\bugfix-10\\\\run-ET9QrA\\\\bugfix-1-headroom\\\\workspace\\\\test\\\\retry.test.mjs:5:82'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    621 !== null\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: ~\n  actual: 621\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///C:/Users/yolan/AppData/Local/Temp/codex-confirmation-hPlQi7/bugfix-10/run-ET9QrA/bugfix-1-headroom/workspace/test/retry.test.mjs:5:126)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)\n  ...\n# Subtest: case 599/4\nnot ok 24 - case 599/4\n  ---\n  duration_ms: 0.1737\n  type: 'test'\n  location: 'C:\\\\Users\\\\yolan\\\\AppData\\\\Local\\\\Temp\\\\codex-confirmation-hPlQi7\\\\bugfix-10\\\\run-ET9QrA\\\\bugfix-1-headroom\\\\workspace\\\\test\\\\retry.test.mjs:5:82'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    828 !== null\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: ~\n  actual: 828\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///C:/Users/yolan/AppData/Local/Temp/codex-confirmation-hPlQi7/bugfix-10/run-ET9QrA/bugfix-1-headroom/workspace/test/retry.test.mjs:5:126)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)\n  ...\n# Subtest: case 599/5\nnot ok 25 - case 599/5\n  ---\n  duration_ms: 0.1022\n  type: 'test'\n  location: 'C:\\\\Users\\\\yolan\\\\AppData\\\\Local\\\\Temp\\\\codex-confirmation-hPlQi7\\\\bugfix-10\\\\run-ET9QrA\\\\bugfix-1-headroom\\\\workspace\\\\test\\\\retry.test.mjs:5:82'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    1035 !== null\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: ~\n  actual: 1035\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///C:/Users/yolan/AppData/Local/Temp/codex-confirmation-hPlQi7/bugfix-10/run-ET9QrA/bugfix-1-headroom/workspace/test/retry.test.mjs:5:126)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)\n  ...\n# Subtest: case 600/1\nnot ok 26 - case 600/1\n  ---\n  duration_ms: 0.0995\n  type: 'test'\n  location: 'C:\\\\Users\\\\yolan\\\\AppData\\\\Local\\\\Temp\\\\codex-confirmation-hPlQi7\\\\bugfix-10\\\\run-ET9QrA\\\\bugfix-1-headroom\\\\workspace\\\\test\\\\retry.test.mjs:5:82'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    207 !== null\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: ~\n  actual: 207\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///C:/Users/yolan/AppData/Local/Temp/codex-confirmation-hPlQi7/bugfix-10/run-ET9QrA/bugfix-1-headroom/workspace/test/retry.test.mjs:5:126)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)\n  ...\n# Subtest: case 600/2\nnot ok 27 - case 600/2\n  ---\n  duration_ms: 0.0943\n  type: 'test'\n  location: 'C:\\\\Users\\\\yolan\\\\AppData\\\\Local\\\\Temp\\\\codex-confirmation-hPlQi7\\\\bugfix-10\\\\run-ET9QrA\\\\bugfix-1-headroom\\\\workspace\\\\test\\\\retry.test.mjs:5:82'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    414 !== null\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: ~\n  actual: 414\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///C:/Users/yolan/AppData/Local/Temp/codex-confirmation-hPlQi7/bugfix-10/run-ET9QrA/bugfix-1-headroom/workspace/test/retry.test.mjs:5:126)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)\n  ...\n# Subtest: case 600/3\nnot ok 28 - case 600/3\n  ---\n  duration_ms: 0.0901\n  type: 'test'\n  location: 'C:\\\\Users\\\\yolan\\\\AppData\\\\Local\\\\Temp\\\\codex-confirmation-hPlQi7\\\\bugfix-10\\\\run-ET9QrA\\\\bugfix-1-headroom\\\\workspace\\\\test\\\\retry.test.mjs:5:82'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    621 !== null\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: ~\n  actual: 621\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///C:/Users/yolan/AppData/Local/Temp/codex-confirmation-hPlQi7/bugfix-10/run-ET9QrA/bugfix-1-headroom/workspace/test/retry.test.mjs:5:126)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)\n  ...\n# Subtest: case 600/4\nnot ok 29 - case 600/4\n  ---\n  duration_ms: 0.0888\n  type: 'test'\n  location: 'C:\\\\Users\\\\yolan\\\\AppData\\\\Local\\\\Temp\\\\codex-confirmation-hPlQi7\\\\bugfix-10\\\\run-ET9QrA\\\\bugfix-1-headroom\\\\workspace\\\\test\\\\retry.test.mjs:5:82'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    828 !== null\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: ~\n  actual: 828\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///C:/Users/yolan/AppData/Local/Temp/codex-confirmation-hPlQi7/bugfix-10/run-ET9QrA/bugfix-1-headroom/workspace/test/retry.test.mjs:5:126)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)\n  ...\n# Subtest: case 600/5\nnot ok 30 - case 600/5\n  ---\n  duration_ms: 0.1551\n  type: 'test'\n  location: 'C:\\\\Users\\\\yolan\\\\AppData\\\\Local\\\\Temp\\\\codex-confirmation-hPlQi7\\\\bugfix-10\\\\run-ET9QrA\\\\bugfix-1-headroom\\\\workspace\\\\test\\\\retry.test.mjs:5:82'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    1035 !== null\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: ~\n  actual: 1035\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///C:/Users/yolan/AppData/Local/Temp/codex-confirmation-hPlQi7/bugfix-10/run-ET9QrA/bugfix-1-headroom/workspace/test/retry.test.mjs:5:126)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)\n  ...\n1..30\n# tests 30\n# suites 0\n# pass 13\n# fail 17\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 121.2203\n"
+              "failureOutput": "TAP version 13\n# Subtest: case 201/1\nok 1 - case 201/1\n  ---\n  duration_ms: 1.2882\n  type: 'test'\n  ...\n# Subtest: case 201/2\nok 2 - case 201/2\n  ---\n  duration_ms: 0.1128\n  type: 'test'\n  ...\n# Subtest: case 201/3\nok 3 - case 201/3\n  ---\n  duration_ms: 0.0869\n  type: 'test'\n  ...\n# Subtest: case 201/4\nok 4 - case 201/4\n  ---\n  duration_ms: 0.0791\n  type: 'test'\n  ...\n# Subtest: case 201/5\nok 5 - case 201/5\n  ---\n  duration_ms: 0.2239\n  type: 'test'\n  ...\n# Subtest: case 429/1\nok 6 - case 429/1\n  ---\n  duration_ms: 0.09\n  type: 'test'\n  ...\n# Subtest: case 429/2\nnot ok 7 - case 429/2\n  ---\n  duration_ms: 0.8328\n  type: 'test'\n  location: 'C:\\\\Users\\\\yolan\\\\AppData\\\\Local\\\\Temp\\\\codex-confirmation-hPlQi7\\\\bugfix-10\\\\run-ET9QrA\\\\bugfix-1-alt-a\\\\workspace\\\\test\\\\retry.test.mjs:5:82'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    414 !== null\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: ~\n  actual: 414\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///C:/Users/yolan/AppData/Local/Temp/codex-confirmation-hPlQi7/bugfix-10/run-ET9QrA/bugfix-1-alt-a/workspace/test/retry.test.mjs:5:126)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)\n  ...\n# Subtest: case 429/3\nnot ok 8 - case 429/3\n  ---\n  duration_ms: 0.1967\n  type: 'test'\n  location: 'C:\\\\Users\\\\yolan\\\\AppData\\\\Local\\\\Temp\\\\codex-confirmation-hPlQi7\\\\bugfix-10\\\\run-ET9QrA\\\\bugfix-1-alt-a\\\\workspace\\\\test\\\\retry.test.mjs:5:82'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    621 !== null\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: ~\n  actual: 621\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///C:/Users/yolan/AppData/Local/Temp/codex-confirmation-hPlQi7/bugfix-10/run-ET9QrA/bugfix-1-alt-a/workspace/test/retry.test.mjs:5:126)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)\n  ...\n# Subtest: case 429/4\nnot ok 9 - case 429/4\n  ---\n  duration_ms: 0.824\n  type: 'test'\n  location: 'C:\\\\Users\\\\yolan\\\\AppData\\\\Local\\\\Temp\\\\codex-confirmation-hPlQi7\\\\bugfix-10\\\\run-ET9QrA\\\\bugfix-1-alt-a\\\\workspace\\\\test\\\\retry.test.mjs:5:82'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    828 !== null\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: ~\n  actual: 828\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///C:/Users/yolan/AppData/Local/Temp/codex-confirmation-hPlQi7/bugfix-10/run-ET9QrA/bugfix-1-alt-a/workspace/test/retry.test.mjs:5:126)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)\n  ...\n# Subtest: case 429/5\nnot ok 10 - case 429/5\n  ---\n  duration_ms: 0.6051\n  type: 'test'\n  location: 'C:\\\\Users\\\\yolan\\\\AppData\\\\Local\\\\Temp\\\\codex-confirmation-hPlQi7\\\\bugfix-10\\\\run-ET9QrA\\\\bugfix-1-alt-a\\\\workspace\\\\test\\\\retry.test.mjs:5:82'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    1035 !== null\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: ~\n  actual: 1035\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///C:/Users/yolan/AppData/Local/Temp/codex-confirmation-hPlQi7/bugfix-10/run-ET9QrA/bugfix-1-alt-a/workspace/test/retry.test.mjs:5:126)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)\n  ...\n# Subtest: case 430/1\nok 11 - case 430/1\n  ---\n  duration_ms: 0.18\n  type: 'test'\n  ...\n# Subtest: case 430/2\nok 12 - case 430/2\n  ---\n  duration_ms: 0.0714\n  type: 'test'\n  ...\n# Subtest: case 430/3\nok 13 - case 430/3\n  ---\n  duration_ms: 0.1204\n  type: 'test'\n  ...\n# Subtest: case 430/4\nok 14 - case 430/4\n  ---\n  duration_ms: 0.0625\n  type: 'test'\n  ...\n# Subtest: case 430/5\nok 15 - case 430/5\n  ---\n  duration_ms: 0.0516\n  type: 'test'\n  ...\n# Subtest: case 500/1\nok 16 - case 500/1\n  ---\n  duration_ms: 0.055\n  type: 'test'\n  ...\n# Subtest: case 500/2\nnot ok 17 - case 500/2\n  ---\n  duration_ms: 0.1988\n  type: 'test'\n  location: 'C:\\\\Users\\\\yolan\\\\AppData\\\\Local\\\\Temp\\\\codex-confirmation-hPlQi7\\\\bugfix-10\\\\run-ET9QrA\\\\bugfix-1-alt-a\\\\workspace\\\\test\\\\retry.test.mjs:5:82'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    414 !== null\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: ~\n  actual: 414\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///C:/Users/yolan/AppData/Local/Temp/codex-confirmation-hPlQi7/bugfix-10/run-ET9QrA/bugfix-1-alt-a/workspace/test/retry.test.mjs:5:126)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)\n  ...\n# Subtest: case 500/3\nnot ok 18 - case 500/3\n  ---\n  duration_ms: 0.178\n  type: 'test'\n  location: 'C:\\\\Users\\\\yolan\\\\AppData\\\\Local\\\\Temp\\\\codex-confirmation-hPlQi7\\\\bugfix-10\\\\run-ET9QrA\\\\bugfix-1-alt-a\\\\workspace\\\\test\\\\retry.test.mjs:5:82'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    621 !== null\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: ~\n  actual: 621\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///C:/Users/yolan/AppData/Local/Temp/codex-confirmation-hPlQi7/bugfix-10/run-ET9QrA/bugfix-1-alt-a/workspace/test/retry.test.mjs:5:126)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)\n  ...\n# Subtest: case 500/4\nnot ok 19 - case 500/4\n  ---\n  duration_ms: 0.1357\n  type: 'test'\n  location: 'C:\\\\Users\\\\yolan\\\\AppData\\\\Local\\\\Temp\\\\codex-confirmation-hPlQi7\\\\bugfix-10\\\\run-ET9QrA\\\\bugfix-1-alt-a\\\\workspace\\\\test\\\\retry.test.mjs:5:82'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    828 !== null\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: ~\n  actual: 828\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///C:/Users/yolan/AppData/Local/Temp/codex-confirmation-hPlQi7/bugfix-10/run-ET9QrA/bugfix-1-alt-a/workspace/test/retry.test.mjs:5:126)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)\n  ...\n# Subtest: case 500/5\nnot ok 20 - case 500/5\n  ---\n  duration_ms: 0.2329\n  type: 'test'\n  location: 'C:\\\\Users\\\\yolan\\\\AppData\\\\Local\\\\Temp\\\\codex-confirmation-hPlQi7\\\\bugfix-10\\\\run-ET9QrA\\\\bugfix-1-alt-a\\\\workspace\\\\test\\\\retry.test.mjs:5:82'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    1035 !== null\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: ~\n  actual: 1035\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///C:/Users/yolan/AppData/Local/Temp/codex-confirmation-hPlQi7/bugfix-10/run-ET9QrA/bugfix-1-alt-a/workspace/test/retry.test.mjs:5:126)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)\n  ...\n# Subtest: case 599/1\nok 21 - case 599/1\n  ---\n  duration_ms: 0.0656\n  type: 'test'\n  ...\n# Subtest: case 599/2\nnot ok 22 - case 599/2\n  ---\n  duration_ms: 0.294\n  type: 'test'\n  location: 'C:\\\\Users\\\\yolan\\\\AppData\\\\Local\\\\Temp\\\\codex-confirmation-hPlQi7\\\\bugfix-10\\\\run-ET9QrA\\\\bugfix-1-alt-a\\\\workspace\\\\test\\\\retry.test.mjs:5:82'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    414 !== null\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: ~\n  actual: 414\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///C:/Users/yolan/AppData/Local/Temp/codex-confirmation-hPlQi7/bugfix-10/run-ET9QrA/bugfix-1-alt-a/workspace/test/retry.test.mjs:5:126)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)\n  ...\n# Subtest: case 599/3\nnot ok 23 - case 599/3\n  ---\n  duration_ms: 0.1425\n  type: 'test'\n  location: 'C:\\\\Users\\\\yolan\\\\AppData\\\\Local\\\\Temp\\\\codex-confirmation-hPlQi7\\\\bugfix-10\\\\run-ET9QrA\\\\bugfix-1-alt-a\\\\workspace\\\\test\\\\retry.test.mjs:5:82'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    621 !== null\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: ~\n  actual: 621\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///C:/Users/yolan/AppData/Local/Temp/codex-confirmation-hPlQi7/bugfix-10/run-ET9QrA/bugfix-1-alt-a/workspace/test/retry.test.mjs:5:126)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)\n  ...\n# Subtest: case 599/4\nnot ok 24 - case 599/4\n  ---\n  duration_ms: 0.1737\n  type: 'test'\n  location: 'C:\\\\Users\\\\yolan\\\\AppData\\\\Local\\\\Temp\\\\codex-confirmation-hPlQi7\\\\bugfix-10\\\\run-ET9QrA\\\\bugfix-1-alt-a\\\\workspace\\\\test\\\\retry.test.mjs:5:82'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    828 !== null\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: ~\n  actual: 828\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///C:/Users/yolan/AppData/Local/Temp/codex-confirmation-hPlQi7/bugfix-10/run-ET9QrA/bugfix-1-alt-a/workspace/test/retry.test.mjs:5:126)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)\n  ...\n# Subtest: case 599/5\nnot ok 25 - case 599/5\n  ---\n  duration_ms: 0.1022\n  type: 'test'\n  location: 'C:\\\\Users\\\\yolan\\\\AppData\\\\Local\\\\Temp\\\\codex-confirmation-hPlQi7\\\\bugfix-10\\\\run-ET9QrA\\\\bugfix-1-alt-a\\\\workspace\\\\test\\\\retry.test.mjs:5:82'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    1035 !== null\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: ~\n  actual: 1035\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///C:/Users/yolan/AppData/Local/Temp/codex-confirmation-hPlQi7/bugfix-10/run-ET9QrA/bugfix-1-alt-a/workspace/test/retry.test.mjs:5:126)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)\n  ...\n# Subtest: case 600/1\nnot ok 26 - case 600/1\n  ---\n  duration_ms: 0.0995\n  type: 'test'\n  location: 'C:\\\\Users\\\\yolan\\\\AppData\\\\Local\\\\Temp\\\\codex-confirmation-hPlQi7\\\\bugfix-10\\\\run-ET9QrA\\\\bugfix-1-alt-a\\\\workspace\\\\test\\\\retry.test.mjs:5:82'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    207 !== null\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: ~\n  actual: 207\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///C:/Users/yolan/AppData/Local/Temp/codex-confirmation-hPlQi7/bugfix-10/run-ET9QrA/bugfix-1-alt-a/workspace/test/retry.test.mjs:5:126)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)\n  ...\n# Subtest: case 600/2\nnot ok 27 - case 600/2\n  ---\n  duration_ms: 0.0943\n  type: 'test'\n  location: 'C:\\\\Users\\\\yolan\\\\AppData\\\\Local\\\\Temp\\\\codex-confirmation-hPlQi7\\\\bugfix-10\\\\run-ET9QrA\\\\bugfix-1-alt-a\\\\workspace\\\\test\\\\retry.test.mjs:5:82'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    414 !== null\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: ~\n  actual: 414\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///C:/Users/yolan/AppData/Local/Temp/codex-confirmation-hPlQi7/bugfix-10/run-ET9QrA/bugfix-1-alt-a/workspace/test/retry.test.mjs:5:126)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)\n  ...\n# Subtest: case 600/3\nnot ok 28 - case 600/3\n  ---\n  duration_ms: 0.0901\n  type: 'test'\n  location: 'C:\\\\Users\\\\yolan\\\\AppData\\\\Local\\\\Temp\\\\codex-confirmation-hPlQi7\\\\bugfix-10\\\\run-ET9QrA\\\\bugfix-1-alt-a\\\\workspace\\\\test\\\\retry.test.mjs:5:82'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    621 !== null\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: ~\n  actual: 621\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///C:/Users/yolan/AppData/Local/Temp/codex-confirmation-hPlQi7/bugfix-10/run-ET9QrA/bugfix-1-alt-a/workspace/test/retry.test.mjs:5:126)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)\n  ...\n# Subtest: case 600/4\nnot ok 29 - case 600/4\n  ---\n  duration_ms: 0.0888\n  type: 'test'\n  location: 'C:\\\\Users\\\\yolan\\\\AppData\\\\Local\\\\Temp\\\\codex-confirmation-hPlQi7\\\\bugfix-10\\\\run-ET9QrA\\\\bugfix-1-alt-a\\\\workspace\\\\test\\\\retry.test.mjs:5:82'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    828 !== null\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: ~\n  actual: 828\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///C:/Users/yolan/AppData/Local/Temp/codex-confirmation-hPlQi7/bugfix-10/run-ET9QrA/bugfix-1-alt-a/workspace/test/retry.test.mjs:5:126)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)\n  ...\n# Subtest: case 600/5\nnot ok 30 - case 600/5\n  ---\n  duration_ms: 0.1551\n  type: 'test'\n  location: 'C:\\\\Users\\\\yolan\\\\AppData\\\\Local\\\\Temp\\\\codex-confirmation-hPlQi7\\\\bugfix-10\\\\run-ET9QrA\\\\bugfix-1-alt-a\\\\workspace\\\\test\\\\retry.test.mjs:5:82'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    1035 !== null\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: ~\n  actual: 1035\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///C:/Users/yolan/AppData/Local/Temp/codex-confirmation-hPlQi7/bugfix-10/run-ET9QrA/bugfix-1-alt-a/workspace/test/retry.test.mjs:5:126)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)\n  ...\n1..30\n# tests 30\n# suites 0\n# pass 13\n# fail 17\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 121.2203\n"
             },
             {
               "command": "\"C:\\\\windows\\\\System32\\\\WindowsPowerShell\\\\v1.0\\\\powershell.exe\" -Command 'node --test'",
@@ -2014,7 +2014,7 @@
             "upstreamHeadersMs": 5269.8794,
             "upstreamMs": 35280.5261
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable.",
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable.",
           "clientExit": 0,
           "clientAllocationFailure": false,
           "firstRequestInput": 13019,
@@ -2041,7 +2041,7 @@
             }
           ]
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.229974,
           "agentSeconds": 37.2,
@@ -2058,7 +2058,7 @@
             "upstreamHeadersMs": 6984.2485000000015,
             "upstreamMs": 33733.18199999999
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable.",
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable.",
           "clientExit": 0,
           "clientAllocationFailure": false,
           "firstRequestInput": 12936,
@@ -2129,7 +2129,7 @@
             "upstreamHeadersMs": 6453.751100000007,
             "upstreamMs": 55122.3643
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable.",
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable.",
           "clientExit": 0,
           "clientAllocationFailure": false,
           "firstRequestInput": 13106,
@@ -2167,7 +2167,7 @@
             }
           ]
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.417126,
           "agentSeconds": 57.6,
@@ -2184,7 +2184,7 @@
             "upstreamHeadersMs": 8783.292600000013,
             "upstreamMs": 49203.9439
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable.",
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable.",
           "clientExit": 0,
           "clientAllocationFailure": false,
           "firstRequestInput": 13163,
@@ -2259,7 +2259,7 @@
             "upstreamHeadersMs": 9135.193800000008,
             "upstreamMs": 45685.94650000001
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable.",
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable.",
           "clientExit": 0,
           "clientAllocationFailure": false,
           "firstRequestInput": 13100,
@@ -2297,7 +2297,7 @@
             }
           ]
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.206344,
           "agentSeconds": 36,
@@ -2314,7 +2314,7 @@
             "upstreamHeadersMs": 7835.1199000000015,
             "upstreamMs": 32890.2944
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable.",
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable.",
           "clientExit": 0,
           "clientAllocationFailure": false,
           "firstRequestInput": 13017,
@@ -2379,7 +2379,7 @@
             "upstreamHeadersMs": 2398.6625000000004,
             "upstreamMs": 11901.373800000001
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable.",
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable.",
           "clientExit": 0,
           "clientAllocationFailure": false,
           "firstRequestInput": 13042,
@@ -2396,7 +2396,7 @@
             }
           ]
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.173124,
           "agentSeconds": 27.1,
@@ -2413,7 +2413,7 @@
             "upstreamHeadersMs": 5890.203899999999,
             "upstreamMs": 24524.045299999998
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable.",
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable.",
           "clientExit": 0,
           "clientAllocationFailure": false,
           "firstRequestInput": 12959,
@@ -2468,7 +2468,7 @@
             "upstreamHeadersMs": 3307.1201,
             "upstreamMs": 13924.9936
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable.",
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable.",
           "clientExit": 0,
           "clientAllocationFailure": false,
           "firstRequestInput": 13050,
@@ -2485,7 +2485,7 @@
             }
           ]
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.201792,
           "agentSeconds": 15.2,
@@ -2502,7 +2502,7 @@
             "upstreamHeadersMs": 3948.8021999999996,
             "upstreamMs": 13068.9234
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable.",
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable.",
           "clientExit": 0,
           "clientAllocationFailure": false,
           "firstRequestInput": 12967,
@@ -2552,7 +2552,7 @@
             "upstreamHeadersMs": 2671.747099999999,
             "upstreamMs": 14481.5414
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable.",
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable.",
           "clientExit": 0,
           "clientAllocationFailure": false,
           "firstRequestInput": 13025,
@@ -2569,7 +2569,7 @@
             }
           ]
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.086694,
           "agentSeconds": 18.6,
@@ -2586,7 +2586,7 @@
             "upstreamHeadersMs": 3683.1889,
             "upstreamMs": 16618.463799999998
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable.",
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable.",
           "clientExit": 0,
           "clientAllocationFailure": false,
           "firstRequestInput": 12942,
@@ -2636,7 +2636,7 @@
             "upstreamHeadersMs": 7468.449900000005,
             "upstreamMs": 42211.360199999996
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable.",
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable.",
           "clientExit": 0,
           "clientAllocationFailure": false,
           "firstRequestInput": 13100,
@@ -2668,7 +2668,7 @@
             }
           ]
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.239852,
           "agentSeconds": 49.6,
@@ -2685,7 +2685,7 @@
             "upstreamHeadersMs": 9454.107200000002,
             "upstreamMs": 45840.68440000001
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable.",
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable.",
           "clientExit": 0,
           "clientAllocationFailure": false,
           "firstRequestInput": 13017,
@@ -2760,7 +2760,7 @@
             "upstreamHeadersMs": 4185.246300000006,
             "upstreamMs": 37601.0297
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable.",
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable.",
           "clientExit": 0,
           "clientAllocationFailure": false,
           "firstRequestInput": 12977,
@@ -2793,7 +2793,7 @@
             }
           ]
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.316976,
           "agentSeconds": 62.4,
@@ -2810,7 +2810,7 @@
             "upstreamHeadersMs": 12598.631099999997,
             "upstreamMs": 58621.7803
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable.",
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable.",
           "clientExit": 0,
           "clientAllocationFailure": false,
           "firstRequestInput": 12894,
@@ -2854,7 +2854,7 @@
               "command": "\"C:\\\\windows\\\\System32\\\\WindowsPowerShell\\\\v1.0\\\\powershell.exe\" -Command 'node --test'",
               "status": "failed",
               "exitCode": 1,
-              "failureOutput": "TAP version 13\n# Subtest: case 201/1\nok 1 - case 201/1\n  ---\n  duration_ms: 1.5098\n  type: 'test'\n  ...\n# Subtest: case 201/2\nok 2 - case 201/2\n  ---\n  duration_ms: 0.1933\n  type: 'test'\n  ...\n# Subtest: case 201/3\nok 3 - case 201/3\n  ---\n  duration_ms: 0.1056\n  type: 'test'\n  ...\n# Subtest: case 201/4\nok 4 - case 201/4\n  ---\n  duration_ms: 0.1034\n  type: 'test'\n  ...\n# Subtest: case 201/5\nok 5 - case 201/5\n  ---\n  duration_ms: 0.3513\n  type: 'test'\n  ...\n# Subtest: case 429/1\nnot ok 6 - case 429/1\n  ---\n  duration_ms: 1.0472\n  type: 'test'\n  location: 'C:\\\\Users\\\\yolan\\\\AppData\\\\Local\\\\Temp\\\\codex-confirmation-hPlQi7\\\\bugfix-3\\\\run-F5iidH\\\\bugfix-1-headroom\\\\workspace\\\\test\\\\retry.test.mjs:5:82'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    192 !== 96\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 96\n  actual: 192\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///C:/Users/yolan/AppData/Local/Temp/codex-confirmation-hPlQi7/bugfix-3/run-F5iidH/bugfix-1-headroom/workspace/test/retry.test.mjs:5:126)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)\n  ...\n# Subtest: case 429/2\nnot ok 7 - case 429/2\n  ---\n  duration_ms: 0.3871\n  type: 'test'\n  location: 'C:\\\\Users\\\\yolan\\\\AppData\\\\Local\\\\Temp\\\\codex-confirmation-hPlQi7\\\\bugfix-3\\\\run-F5iidH\\\\bugfix-1-headroom\\\\workspace\\\\test\\\\retry.test.mjs:5:82'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    384 !== 192\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 192\n  actual: 384\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///C:/Users/yolan/AppData/Local/Temp/codex-confirmation-hPlQi7/bugfix-3/run-F5iidH/bugfix-1-headroom/workspace/test/retry.test.mjs:5:126)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)\n  ...\n# Subtest: case 429/3\nnot ok 8 - case 429/3\n  ---\n  duration_ms: 0.186\n  type: 'test'\n  location: 'C:\\\\Users\\\\yolan\\\\AppData\\\\Local\\\\Temp\\\\codex-confirmation-hPlQi7\\\\bugfix-3\\\\run-F5iidH\\\\bugfix-1-headroom\\\\workspace\\\\test\\\\retry.test.mjs:5:82'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    768 !== null\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: ~\n  actual: 768\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///C:/Users/yolan/AppData/Local/Temp/codex-confirmation-hPlQi7/bugfix-3/run-F5iidH/bugfix-1-headroom/workspace/test/retry.test.mjs:5:126)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)\n  ...\n# Subtest: case 429/4\nok 9 - case 429/4\n  ---\n  duration_ms: 1.1982\n  type: 'test'\n  ...\n# Subtest: case 429/5\nok 10 - case 429/5\n  ---\n  duration_ms: 0.4474\n  type: 'test'\n  ...\n# Subtest: case 430/1\nnot ok 11 - case 430/1\n  ---\n  duration_ms: 0.4376\n  type: 'test'\n  location: 'C:\\\\Users\\\\yolan\\\\AppData\\\\Local\\\\Temp\\\\codex-confirmation-hPlQi7\\\\bugfix-3\\\\run-F5iidH\\\\bugfix-1-headroom\\\\workspace\\\\test\\\\retry.test.mjs:5:82'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    192 !== null\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: ~\n  actual: 192\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///C:/Users/yolan/AppData/Local/Temp/codex-confirmation-hPlQi7/bugfix-3/run-F5iidH/bugfix-1-headroom/workspace/test/retry.test.mjs:5:126)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)\n  ...\n# Subtest: case 430/2\nnot ok 12 - case 430/2\n  ---\n  duration_ms: 0.2142\n  type: 'test'\n  location: 'C:\\\\Users\\\\yolan\\\\AppData\\\\Local\\\\Temp\\\\codex-confirmation-hPlQi7\\\\bugfix-3\\\\run-F5iidH\\\\bugfix-1-headroom\\\\workspace\\\\test\\\\retry.test.mjs:5:82'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    384 !== null\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: ~\n  actual: 384\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///C:/Users/yolan/AppData/Local/Temp/codex-confirmation-hPlQi7/bugfix-3/run-F5iidH/bugfix-1-headroom/workspace/test/retry.test.mjs:5:126)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)\n  ...\n# Subtest: case 430/3\nnot ok 13 - case 430/3\n  ---\n  duration_ms: 0.1178\n  type: 'test'\n  location: 'C:\\\\Users\\\\yolan\\\\AppData\\\\Local\\\\Temp\\\\codex-confirmation-hPlQi7\\\\bugfix-3\\\\run-F5iidH\\\\bugfix-1-headroom\\\\workspace\\\\test\\\\retry.test.mjs:5:82'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    768 !== null\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: ~\n  actual: 768\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///C:/Users/yolan/AppData/Local/Temp/codex-confirmation-hPlQi7/bugfix-3/run-F5iidH/bugfix-1-headroom/workspace/test/retry.test.mjs:5:126)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)\n  ...\n# Subtest: case 430/4\nok 14 - case 430/4\n  ---\n  duration_ms: 0.0716\n  type: 'test'\n  ...\n# Subtest: case 430/5\nok 15 - case 430/5\n  ---\n  duration_ms: 0.06\n  type: 'test'\n  ...\n# Subtest: case 500/1\nnot ok 16 - case 500/1\n  ---\n  duration_ms: 0.1991\n  type: 'test'\n  location: 'C:\\\\Users\\\\yolan\\\\AppData\\\\Local\\\\Temp\\\\codex-confirmation-hPlQi7\\\\bugfix-3\\\\run-F5iidH\\\\bugfix-1-headroom\\\\workspace\\\\test\\\\retry.test.mjs:5:82'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    192 !== 96\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 96\n  actual: 192\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///C:/Users/yolan/AppData/Local/Temp/codex-confirmation-hPlQi7/bugfix-3/run-F5iidH/bugfix-1-headroom/workspace/test/retry.test.mjs:5:126)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)\n  ...\n# Subtest: case 500/2\nnot ok 17 - case 500/2\n  ---\n  duration_ms: 0.2473\n  type: 'test'\n  location: 'C:\\\\Users\\\\yolan\\\\AppData\\\\Local\\\\Temp\\\\codex-confirmation-hPlQi7\\\\bugfix-3\\\\run-F5iidH\\\\bugfix-1-headroom\\\\workspace\\\\test\\\\retry.test.mjs:5:82'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    384 !== 192\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 192\n  actual: 384\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///C:/Users/yolan/AppData/Local/Temp/codex-confirmation-hPlQi7/bugfix-3/run-F5iidH/bugfix-1-headroom/workspace/test/retry.test.mjs:5:126)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)\n  ...\n# Subtest: case 500/3\nnot ok 18 - case 500/3\n  ---\n  duration_ms: 0.3017\n  type: 'test'\n  location: 'C:\\\\Users\\\\yolan\\\\AppData\\\\Local\\\\Temp\\\\codex-confirmation-hPlQi7\\\\bugfix-3\\\\run-F5iidH\\\\bugfix-1-headroom\\\\workspace\\\\test\\\\retry.test.mjs:5:82'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    768 !== null\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: ~\n  actual: 768\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///C:/Users/yolan/AppData/Local/Temp/codex-confirmation-hPlQi7/bugfix-3/run-F5iidH/bugfix-1-headroom/workspace/test/retry.test.mjs:5:126)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)\n  ...\n# Subtest: case 500/4\nok 19 - case 500/4\n  ---\n  duration_ms: 0.0733\n  type: 'test'\n  ...\n# Subtest: case 500/5\nok 20 - case 500/5\n  ---\n  duration_ms: 0.0502\n  type: 'test'\n  ...\n# Subtest: case 599/1\nnot ok 21 - case 599/1\n  ---\n  duration_ms: 0.1737\n  type: 'test'\n  location: 'C:\\\\Users\\\\yolan\\\\AppData\\\\Local\\\\Temp\\\\codex-confirmation-hPlQi7\\\\bugfix-3\\\\run-F5iidH\\\\bugfix-1-headroom\\\\workspace\\\\test\\\\retry.test.mjs:5:82'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    192 !== 96\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 96\n  actual: 192\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///C:/Users/yolan/AppData/Local/Temp/codex-confirmation-hPlQi7/bugfix-3/run-F5iidH/bugfix-1-headroom/workspace/test/retry.test.mjs:5:126)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)\n  ...\n# Subtest: case 599/2\nnot ok 22 - case 599/2\n  ---\n  duration_ms: 0.1329\n  type: 'test'\n  location: 'C:\\\\Users\\\\yolan\\\\AppData\\\\Local\\\\Temp\\\\codex-confirmation-hPlQi7\\\\bugfix-3\\\\run-F5iidH\\\\bugfix-1-headroom\\\\workspace\\\\test\\\\retry.test.mjs:5:82'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    384 !== 192\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 192\n  actual: 384\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///C:/Users/yolan/AppData/Local/Temp/codex-confirmation-hPlQi7/bugfix-3/run-F5iidH/bugfix-1-headroom/workspace/test/retry.test.mjs:5:126)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)\n  ...\n# Subtest: case 599/3\nnot ok 23 - case 599/3\n  ---\n  duration_ms: 0.2701\n  type: 'test'\n  location: 'C:\\\\Users\\\\yolan\\\\AppData\\\\Local\\\\Temp\\\\codex-confirmation-hPlQi7\\\\bugfix-3\\\\run-F5iidH\\\\bugfix-1-headroom\\\\workspace\\\\test\\\\retry.test.mjs:5:82'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    768 !== null\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: ~\n  actual: 768\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///C:/Users/yolan/AppData/Local/Temp/codex-confirmation-hPlQi7/bugfix-3/run-F5iidH/bugfix-1-headroom/workspace/test/retry.test.mjs:5:126)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)\n  ...\n# Subtest: case 599/4\nok 24 - case 599/4\n  ---\n  duration_ms: 0.0689\n  type: 'test'\n  ...\n# Subtest: case 599/5\nok 25 - case 599/5\n  ---\n  duration_ms: 0.0511\n  type: 'test'\n  ...\n# Subtest: case 600/1\nnot ok 26 - case 600/1\n  ---\n  duration_ms: 0.1137\n  type: 'test'\n  location: 'C:\\\\Users\\\\yolan\\\\AppData\\\\Local\\\\Temp\\\\codex-confirmation-hPlQi7\\\\bugfix-3\\\\run-F5iidH\\\\bugfix-1-headroom\\\\workspace\\\\test\\\\retry.test.mjs:5:82'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    192 !== null\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: ~\n  actual: 192\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///C:/Users/yolan/AppData/Local/Temp/codex-confirmation-hPlQi7/bugfix-3/run-F5iidH/bugfix-1-headroom/workspace/test/retry.test.mjs:5:126)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)\n  ...\n# Subtest: case 600/2\nnot ok 27 - case 600/2\n  ---\n  duration_ms: 0.0997\n  type: 'test'\n  location: 'C:\\\\Users\\\\yolan\\\\AppData\\\\Local\\\\Temp\\\\codex-confirmation-hPlQi7\\\\bugfix-3\\\\run-F5iidH\\\\bugfix-1-headroom\\\\workspace\\\\test\\\\retry.test.mjs:5:82'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    384 !== null\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: ~\n  actual: 384\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///C:/Users/yolan/AppData/Local/Temp/codex-confirmation-hPlQi7/bugfix-3/run-F5iidH/bugfix-1-headroom/workspace/test/retry.test.mjs:5:126)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)\n  ...\n# Subtest: case 600/3\nnot ok 28 - case 600/3\n  ---\n  duration_ms: 0.0945\n  type: 'test'\n  location: 'C:\\\\Users\\\\yolan\\\\AppData\\\\Local\\\\Temp\\\\codex-confirmation-hPlQi7\\\\bugfix-3\\\\run-F5iidH\\\\bugfix-1-headroom\\\\workspace\\\\test\\\\retry.test.mjs:5:82'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    768 !== null\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: ~\n  actual: 768\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///C:/Users/yolan/AppData/Local/Temp/codex-confirmation-hPlQi7/bugfix-3/run-F5iidH/bugfix-1-headroom/workspace/test/retry.test.mjs:5:126)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)\n  ...\n# Subtest: case 600/4\nok 29 - case 600/4\n  ---\n  duration_ms: 0.0735\n  type: 'test'\n  ...\n# Subtest: case 600/5\nok 30 - case 600/5\n  ---\n  duration_ms: 0.0566\n  type: 'test'\n  ...\n1..30\n# tests 30\n# suites 0\n# pass 15\n# fail 15\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 150.3477\n"
+              "failureOutput": "TAP version 13\n# Subtest: case 201/1\nok 1 - case 201/1\n  ---\n  duration_ms: 1.5098\n  type: 'test'\n  ...\n# Subtest: case 201/2\nok 2 - case 201/2\n  ---\n  duration_ms: 0.1933\n  type: 'test'\n  ...\n# Subtest: case 201/3\nok 3 - case 201/3\n  ---\n  duration_ms: 0.1056\n  type: 'test'\n  ...\n# Subtest: case 201/4\nok 4 - case 201/4\n  ---\n  duration_ms: 0.1034\n  type: 'test'\n  ...\n# Subtest: case 201/5\nok 5 - case 201/5\n  ---\n  duration_ms: 0.3513\n  type: 'test'\n  ...\n# Subtest: case 429/1\nnot ok 6 - case 429/1\n  ---\n  duration_ms: 1.0472\n  type: 'test'\n  location: 'C:\\\\Users\\\\yolan\\\\AppData\\\\Local\\\\Temp\\\\codex-confirmation-hPlQi7\\\\bugfix-3\\\\run-F5iidH\\\\bugfix-1-alt-a\\\\workspace\\\\test\\\\retry.test.mjs:5:82'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    192 !== 96\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 96\n  actual: 192\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///C:/Users/yolan/AppData/Local/Temp/codex-confirmation-hPlQi7/bugfix-3/run-F5iidH/bugfix-1-alt-a/workspace/test/retry.test.mjs:5:126)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)\n  ...\n# Subtest: case 429/2\nnot ok 7 - case 429/2\n  ---\n  duration_ms: 0.3871\n  type: 'test'\n  location: 'C:\\\\Users\\\\yolan\\\\AppData\\\\Local\\\\Temp\\\\codex-confirmation-hPlQi7\\\\bugfix-3\\\\run-F5iidH\\\\bugfix-1-alt-a\\\\workspace\\\\test\\\\retry.test.mjs:5:82'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    384 !== 192\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 192\n  actual: 384\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///C:/Users/yolan/AppData/Local/Temp/codex-confirmation-hPlQi7/bugfix-3/run-F5iidH/bugfix-1-alt-a/workspace/test/retry.test.mjs:5:126)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)\n  ...\n# Subtest: case 429/3\nnot ok 8 - case 429/3\n  ---\n  duration_ms: 0.186\n  type: 'test'\n  location: 'C:\\\\Users\\\\yolan\\\\AppData\\\\Local\\\\Temp\\\\codex-confirmation-hPlQi7\\\\bugfix-3\\\\run-F5iidH\\\\bugfix-1-alt-a\\\\workspace\\\\test\\\\retry.test.mjs:5:82'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    768 !== null\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: ~\n  actual: 768\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///C:/Users/yolan/AppData/Local/Temp/codex-confirmation-hPlQi7/bugfix-3/run-F5iidH/bugfix-1-alt-a/workspace/test/retry.test.mjs:5:126)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)\n  ...\n# Subtest: case 429/4\nok 9 - case 429/4\n  ---\n  duration_ms: 1.1982\n  type: 'test'\n  ...\n# Subtest: case 429/5\nok 10 - case 429/5\n  ---\n  duration_ms: 0.4474\n  type: 'test'\n  ...\n# Subtest: case 430/1\nnot ok 11 - case 430/1\n  ---\n  duration_ms: 0.4376\n  type: 'test'\n  location: 'C:\\\\Users\\\\yolan\\\\AppData\\\\Local\\\\Temp\\\\codex-confirmation-hPlQi7\\\\bugfix-3\\\\run-F5iidH\\\\bugfix-1-alt-a\\\\workspace\\\\test\\\\retry.test.mjs:5:82'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    192 !== null\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: ~\n  actual: 192\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///C:/Users/yolan/AppData/Local/Temp/codex-confirmation-hPlQi7/bugfix-3/run-F5iidH/bugfix-1-alt-a/workspace/test/retry.test.mjs:5:126)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)\n  ...\n# Subtest: case 430/2\nnot ok 12 - case 430/2\n  ---\n  duration_ms: 0.2142\n  type: 'test'\n  location: 'C:\\\\Users\\\\yolan\\\\AppData\\\\Local\\\\Temp\\\\codex-confirmation-hPlQi7\\\\bugfix-3\\\\run-F5iidH\\\\bugfix-1-alt-a\\\\workspace\\\\test\\\\retry.test.mjs:5:82'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    384 !== null\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: ~\n  actual: 384\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///C:/Users/yolan/AppData/Local/Temp/codex-confirmation-hPlQi7/bugfix-3/run-F5iidH/bugfix-1-alt-a/workspace/test/retry.test.mjs:5:126)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)\n  ...\n# Subtest: case 430/3\nnot ok 13 - case 430/3\n  ---\n  duration_ms: 0.1178\n  type: 'test'\n  location: 'C:\\\\Users\\\\yolan\\\\AppData\\\\Local\\\\Temp\\\\codex-confirmation-hPlQi7\\\\bugfix-3\\\\run-F5iidH\\\\bugfix-1-alt-a\\\\workspace\\\\test\\\\retry.test.mjs:5:82'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    768 !== null\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: ~\n  actual: 768\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///C:/Users/yolan/AppData/Local/Temp/codex-confirmation-hPlQi7/bugfix-3/run-F5iidH/bugfix-1-alt-a/workspace/test/retry.test.mjs:5:126)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)\n  ...\n# Subtest: case 430/4\nok 14 - case 430/4\n  ---\n  duration_ms: 0.0716\n  type: 'test'\n  ...\n# Subtest: case 430/5\nok 15 - case 430/5\n  ---\n  duration_ms: 0.06\n  type: 'test'\n  ...\n# Subtest: case 500/1\nnot ok 16 - case 500/1\n  ---\n  duration_ms: 0.1991\n  type: 'test'\n  location: 'C:\\\\Users\\\\yolan\\\\AppData\\\\Local\\\\Temp\\\\codex-confirmation-hPlQi7\\\\bugfix-3\\\\run-F5iidH\\\\bugfix-1-alt-a\\\\workspace\\\\test\\\\retry.test.mjs:5:82'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    192 !== 96\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 96\n  actual: 192\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///C:/Users/yolan/AppData/Local/Temp/codex-confirmation-hPlQi7/bugfix-3/run-F5iidH/bugfix-1-alt-a/workspace/test/retry.test.mjs:5:126)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)\n  ...\n# Subtest: case 500/2\nnot ok 17 - case 500/2\n  ---\n  duration_ms: 0.2473\n  type: 'test'\n  location: 'C:\\\\Users\\\\yolan\\\\AppData\\\\Local\\\\Temp\\\\codex-confirmation-hPlQi7\\\\bugfix-3\\\\run-F5iidH\\\\bugfix-1-alt-a\\\\workspace\\\\test\\\\retry.test.mjs:5:82'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    384 !== 192\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 192\n  actual: 384\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///C:/Users/yolan/AppData/Local/Temp/codex-confirmation-hPlQi7/bugfix-3/run-F5iidH/bugfix-1-alt-a/workspace/test/retry.test.mjs:5:126)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)\n  ...\n# Subtest: case 500/3\nnot ok 18 - case 500/3\n  ---\n  duration_ms: 0.3017\n  type: 'test'\n  location: 'C:\\\\Users\\\\yolan\\\\AppData\\\\Local\\\\Temp\\\\codex-confirmation-hPlQi7\\\\bugfix-3\\\\run-F5iidH\\\\bugfix-1-alt-a\\\\workspace\\\\test\\\\retry.test.mjs:5:82'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    768 !== null\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: ~\n  actual: 768\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///C:/Users/yolan/AppData/Local/Temp/codex-confirmation-hPlQi7/bugfix-3/run-F5iidH/bugfix-1-alt-a/workspace/test/retry.test.mjs:5:126)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)\n  ...\n# Subtest: case 500/4\nok 19 - case 500/4\n  ---\n  duration_ms: 0.0733\n  type: 'test'\n  ...\n# Subtest: case 500/5\nok 20 - case 500/5\n  ---\n  duration_ms: 0.0502\n  type: 'test'\n  ...\n# Subtest: case 599/1\nnot ok 21 - case 599/1\n  ---\n  duration_ms: 0.1737\n  type: 'test'\n  location: 'C:\\\\Users\\\\yolan\\\\AppData\\\\Local\\\\Temp\\\\codex-confirmation-hPlQi7\\\\bugfix-3\\\\run-F5iidH\\\\bugfix-1-alt-a\\\\workspace\\\\test\\\\retry.test.mjs:5:82'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    192 !== 96\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 96\n  actual: 192\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///C:/Users/yolan/AppData/Local/Temp/codex-confirmation-hPlQi7/bugfix-3/run-F5iidH/bugfix-1-alt-a/workspace/test/retry.test.mjs:5:126)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)\n  ...\n# Subtest: case 599/2\nnot ok 22 - case 599/2\n  ---\n  duration_ms: 0.1329\n  type: 'test'\n  location: 'C:\\\\Users\\\\yolan\\\\AppData\\\\Local\\\\Temp\\\\codex-confirmation-hPlQi7\\\\bugfix-3\\\\run-F5iidH\\\\bugfix-1-alt-a\\\\workspace\\\\test\\\\retry.test.mjs:5:82'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    384 !== 192\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 192\n  actual: 384\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///C:/Users/yolan/AppData/Local/Temp/codex-confirmation-hPlQi7/bugfix-3/run-F5iidH/bugfix-1-alt-a/workspace/test/retry.test.mjs:5:126)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)\n  ...\n# Subtest: case 599/3\nnot ok 23 - case 599/3\n  ---\n  duration_ms: 0.2701\n  type: 'test'\n  location: 'C:\\\\Users\\\\yolan\\\\AppData\\\\Local\\\\Temp\\\\codex-confirmation-hPlQi7\\\\bugfix-3\\\\run-F5iidH\\\\bugfix-1-alt-a\\\\workspace\\\\test\\\\retry.test.mjs:5:82'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    768 !== null\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: ~\n  actual: 768\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///C:/Users/yolan/AppData/Local/Temp/codex-confirmation-hPlQi7/bugfix-3/run-F5iidH/bugfix-1-alt-a/workspace/test/retry.test.mjs:5:126)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)\n  ...\n# Subtest: case 599/4\nok 24 - case 599/4\n  ---\n  duration_ms: 0.0689\n  type: 'test'\n  ...\n# Subtest: case 599/5\nok 25 - case 599/5\n  ---\n  duration_ms: 0.0511\n  type: 'test'\n  ...\n# Subtest: case 600/1\nnot ok 26 - case 600/1\n  ---\n  duration_ms: 0.1137\n  type: 'test'\n  location: 'C:\\\\Users\\\\yolan\\\\AppData\\\\Local\\\\Temp\\\\codex-confirmation-hPlQi7\\\\bugfix-3\\\\run-F5iidH\\\\bugfix-1-alt-a\\\\workspace\\\\test\\\\retry.test.mjs:5:82'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    192 !== null\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: ~\n  actual: 192\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///C:/Users/yolan/AppData/Local/Temp/codex-confirmation-hPlQi7/bugfix-3/run-F5iidH/bugfix-1-alt-a/workspace/test/retry.test.mjs:5:126)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)\n  ...\n# Subtest: case 600/2\nnot ok 27 - case 600/2\n  ---\n  duration_ms: 0.0997\n  type: 'test'\n  location: 'C:\\\\Users\\\\yolan\\\\AppData\\\\Local\\\\Temp\\\\codex-confirmation-hPlQi7\\\\bugfix-3\\\\run-F5iidH\\\\bugfix-1-alt-a\\\\workspace\\\\test\\\\retry.test.mjs:5:82'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    384 !== null\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: ~\n  actual: 384\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///C:/Users/yolan/AppData/Local/Temp/codex-confirmation-hPlQi7/bugfix-3/run-F5iidH/bugfix-1-alt-a/workspace/test/retry.test.mjs:5:126)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)\n  ...\n# Subtest: case 600/3\nnot ok 28 - case 600/3\n  ---\n  duration_ms: 0.0945\n  type: 'test'\n  location: 'C:\\\\Users\\\\yolan\\\\AppData\\\\Local\\\\Temp\\\\codex-confirmation-hPlQi7\\\\bugfix-3\\\\run-F5iidH\\\\bugfix-1-alt-a\\\\workspace\\\\test\\\\retry.test.mjs:5:82'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    768 !== null\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: ~\n  actual: 768\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///C:/Users/yolan/AppData/Local/Temp/codex-confirmation-hPlQi7/bugfix-3/run-F5iidH/bugfix-1-alt-a/workspace/test/retry.test.mjs:5:126)\n    Test.runInAsyncScope (node:async_hooks:214:14)\n    Test.run (node:internal/test_runner/test:1047:25)\n    Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n    Test.postRun (node:internal/test_runner/test:1173:19)\n    Test.run (node:internal/test_runner/test:1101:12)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)\n  ...\n# Subtest: case 600/4\nok 29 - case 600/4\n  ---\n  duration_ms: 0.0735\n  type: 'test'\n  ...\n# Subtest: case 600/5\nok 30 - case 600/5\n  ---\n  duration_ms: 0.0566\n  type: 'test'\n  ...\n1..30\n# tests 30\n# suites 0\n# pass 15\n# fail 15\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 150.3477\n"
             },
             {
               "command": "\"C:\\\\windows\\\\System32\\\\WindowsPowerShell\\\\v1.0\\\\powershell.exe\" -Command \"@'\nimport assert from 'node:assert/strict';\nimport { retryDelay } from './src/retry.mjs';\nconst policy = {status: 429, attempt: 1, maxAttempts: 10, baseMs: 96, capMs: 1907};\nfor (const retryAfter of [0, '0']) assert.equal(retryDelay({...policy, retryAfter}), 0);\nfor (const retryAfter of [undefined, null, '', ' ', 'invalid', -1, '-1', Infinity, 'Infinity', NaN, false]) assert.equal(retryDelay({...policy, retryAfter}), 96);\nassert.equal(retryDelay({...policy, retryAfter: '1.5'}), 1500);\nassert.equal(retryDelay({...policy, retryAfter: 20}), 1907);\nassert.equal(retryDelay({...policy, attempt: 9}), 1907);\nassert.equal(retryDelay({...policy, maxAttempts: 1, retryAfter: 0}), null);\nconsole.log('Retry-After, delay cap, and attempt-limit checks passed.');\n'@ | node --input-type=module\"",
@@ -2901,7 +2901,7 @@
             "upstreamHeadersMs": 4024.5864999999994,
             "upstreamMs": 15826.665299999999
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable.",
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable.",
           "clientExit": 0,
           "clientAllocationFailure": false,
           "firstRequestInput": 13028,
@@ -2918,7 +2918,7 @@
             }
           ]
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.086594,
           "agentSeconds": 13,
@@ -2935,7 +2935,7 @@
             "upstreamHeadersMs": 2447.9151999999995,
             "upstreamMs": 10696.836199999998
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable.",
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable.",
           "clientExit": 0,
           "clientAllocationFailure": false,
           "firstRequestInput": 12945,
@@ -2985,7 +2985,7 @@
             "upstreamHeadersMs": 6879.0013,
             "upstreamMs": 36900.85170000001
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable.",
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable.",
           "clientExit": 0,
           "clientAllocationFailure": false,
           "firstRequestInput": 13013,
@@ -3028,7 +3028,7 @@
             }
           ]
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.222374,
           "agentSeconds": 37,
@@ -3045,7 +3045,7 @@
             "upstreamHeadersMs": 6931.588599999999,
             "upstreamMs": 33141.2072
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable.",
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable.",
           "clientExit": 0,
           "clientAllocationFailure": false,
           "firstRequestInput": 12930,
@@ -3103,7 +3103,7 @@
           "clientAllocationFailure": true,
           "commands": []
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.111018,
           "agentSeconds": 15.7,
@@ -3120,7 +3120,7 @@
             "upstreamHeadersMs": 2097.9033,
             "upstreamMs": 13070.845199999998
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable.",
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable.",
           "clientExit": 0,
           "clientAllocationFailure": false,
           "firstRequestInput": 12984,
@@ -3170,7 +3170,7 @@
             "upstreamHeadersMs": 6359.270300000004,
             "upstreamMs": 38324.9997
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable.",
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable.",
           "clientExit": 0,
           "clientAllocationFailure": false,
           "firstRequestInput": 13016,
@@ -3202,7 +3202,7 @@
             }
           ]
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.188158,
           "agentSeconds": 35.4,
@@ -3219,7 +3219,7 @@
             "upstreamHeadersMs": 6588.478099999998,
             "upstreamMs": 32238.473600000005
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable.",
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable.",
           "clientExit": 0,
           "clientAllocationFailure": false,
           "firstRequestInput": 12933,
@@ -3279,7 +3279,7 @@
             "upstreamHeadersMs": 4815.0323,
             "upstreamMs": 16637.816
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable.",
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable.",
           "clientExit": 0,
           "clientAllocationFailure": false,
           "firstRequestInput": 13041,
@@ -3296,7 +3296,7 @@
             }
           ]
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.130264,
           "agentSeconds": 19.2,
@@ -3313,7 +3313,7 @@
             "upstreamHeadersMs": 2606.706900000001,
             "upstreamMs": 16726.3089
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable.",
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable.",
           "clientExit": 0,
           "clientAllocationFailure": false,
           "firstRequestInput": 12958,
@@ -3363,7 +3363,7 @@
             "upstreamHeadersMs": 2787.323799999999,
             "upstreamMs": 15031.507699999998
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable.",
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable.",
           "clientExit": 0,
           "clientAllocationFailure": false,
           "firstRequestInput": 13041,
@@ -3380,7 +3380,7 @@
             }
           ]
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.229284,
           "agentSeconds": 14.4,
@@ -3397,7 +3397,7 @@
             "upstreamHeadersMs": 2414.5174000000015,
             "upstreamMs": 11912.854100000002
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable.",
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable.",
           "clientExit": 0,
           "clientAllocationFailure": false,
           "firstRequestInput": 12958,
@@ -3447,7 +3447,7 @@
             "upstreamHeadersMs": 3570.6380000000017,
             "upstreamMs": 11476.217999999999
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable.",
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable.",
           "clientExit": 0,
           "clientAllocationFailure": false,
           "firstRequestInput": 13028,
@@ -3464,7 +3464,7 @@
             }
           ]
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.085874,
           "agentSeconds": 17.1,
@@ -3481,7 +3481,7 @@
             "upstreamHeadersMs": 2903.5140999999985,
             "upstreamMs": 14923.6076
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable.",
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable.",
           "clientExit": 0,
           "clientAllocationFailure": false,
           "firstRequestInput": 12945,
@@ -3531,7 +3531,7 @@
             "upstreamHeadersMs": 2836.4136999999996,
             "upstreamMs": 13231.6806
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable.",
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable.",
           "clientExit": 0,
           "clientAllocationFailure": false,
           "firstRequestInput": 13044,
@@ -3548,7 +3548,7 @@
             }
           ]
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.137834,
           "agentSeconds": 15,
@@ -3565,7 +3565,7 @@
             "upstreamHeadersMs": 2627.5599999999995,
             "upstreamMs": 12807.3559
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable.",
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable.",
           "clientExit": 0,
           "clientAllocationFailure": false,
           "firstRequestInput": 12961,
@@ -3615,7 +3615,7 @@
             "upstreamHeadersMs": 4881.002999999999,
             "upstreamMs": 14926.9061
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable.",
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable.",
           "clientExit": 0,
           "clientAllocationFailure": false,
           "firstRequestInput": 13044,
@@ -3632,7 +3632,7 @@
             }
           ]
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.223264,
           "agentSeconds": 14.9,
@@ -3649,7 +3649,7 @@
             "upstreamHeadersMs": 4787.399300000001,
             "upstreamMs": 12805.921900000001
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable.",
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable.",
           "clientExit": 0,
           "clientAllocationFailure": false,
           "firstRequestInput": 12961,
@@ -3699,7 +3699,7 @@
             "upstreamHeadersMs": 4714.450999999999,
             "upstreamMs": 35605.2581
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable.",
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable.",
           "clientExit": 0,
           "clientAllocationFailure": false,
           "firstRequestInput": 13103,
@@ -3731,7 +3731,7 @@
             }
           ]
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.242314,
           "agentSeconds": 47.8,
@@ -3748,7 +3748,7 @@
             "upstreamHeadersMs": 7552.670799999992,
             "upstreamMs": 44625.0747
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable.",
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable.",
           "clientExit": 0,
           "clientAllocationFailure": false,
           "firstRequestInput": 13020,
@@ -3819,7 +3819,7 @@
             "upstreamHeadersMs": 2051.651600000001,
             "upstreamMs": 13928.436900000002
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable.",
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable.",
           "clientExit": 0,
           "clientAllocationFailure": false,
           "firstRequestInput": 13041,
@@ -3836,7 +3836,7 @@
             }
           ]
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.14672,
           "agentSeconds": 16.4,
@@ -3853,7 +3853,7 @@
             "upstreamHeadersMs": 3120.9752,
             "upstreamMs": 14361.7935
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable.",
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable.",
           "clientExit": 0,
           "clientAllocationFailure": false,
           "firstRequestInput": 12958,
@@ -3903,7 +3903,7 @@
             "upstreamHeadersMs": 4904.212799999996,
             "upstreamMs": 33707.80529999999
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable.",
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable.",
           "clientExit": 0,
           "clientAllocationFailure": false,
           "firstRequestInput": 13019,
@@ -3930,7 +3930,7 @@
             }
           ]
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.178032,
           "agentSeconds": 29.8,
@@ -3947,7 +3947,7 @@
             "upstreamHeadersMs": 5119.975800000002,
             "upstreamMs": 26698.0678
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable.",
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable.",
           "clientExit": 0,
           "clientAllocationFailure": false,
           "firstRequestInput": 12936,
@@ -4007,7 +4007,7 @@
             "upstreamHeadersMs": 2643.4121000000005,
             "upstreamMs": 13532.1162
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable.",
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable.",
           "clientExit": 0,
           "clientAllocationFailure": false,
           "firstRequestInput": 13025,
@@ -4024,7 +4024,7 @@
             }
           ]
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.086044,
           "agentSeconds": 13.1,
@@ -4041,7 +4041,7 @@
             "upstreamHeadersMs": 2756.4736000000003,
             "upstreamMs": 11191.490999999998
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable.",
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable.",
           "clientExit": 0,
           "clientAllocationFailure": false,
           "firstRequestInput": 12942,
@@ -4091,7 +4091,7 @@
             "upstreamHeadersMs": 2390.7309000000005,
             "upstreamMs": 10862.966
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable.",
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable.",
           "clientExit": 0,
           "clientAllocationFailure": false,
           "firstRequestInput": 13028,
@@ -4108,7 +4108,7 @@
             }
           ]
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.085874,
           "agentSeconds": 16.6,
@@ -4125,7 +4125,7 @@
             "upstreamHeadersMs": 3325.4730000000004,
             "upstreamMs": 14701.182
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable.",
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable.",
           "clientExit": 0,
           "clientAllocationFailure": false,
           "firstRequestInput": 12945,
@@ -4175,7 +4175,7 @@
             "upstreamHeadersMs": 7350.230699999996,
             "upstreamMs": 35713.6223
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable.",
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable.",
           "clientExit": 0,
           "clientAllocationFailure": false,
           "firstRequestInput": 13013,
@@ -4207,7 +4207,7 @@
             }
           ]
         },
-        "headroom": {
+        "altA": {
           "verdict": "PASS",
           "estimatedUsd": 0.236374,
           "agentSeconds": 49.6,
@@ -4224,7 +4224,7 @@
             "upstreamHeadersMs": 10470.0486,
             "upstreamMs": 46309.5039
           },
-          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for HeadRoom; these are not individually identifiable.",
+          "timingNote": "Upstream includes network, provider queue/prefill/generation, and competitor proxy for Alternative A; these are not individually identifiable.",
           "clientExit": 0,
           "clientAllocationFailure": false,
           "firstRequestInput": 12930,

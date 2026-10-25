@@ -17,7 +17,7 @@ WHAT IS DELIBERATELY NOT HERE. No conclusions, no prose about them, no
 positioning. This repository is public. The numbers are facts about running
 their published package; the argument built on them lives elsewhere.
 
-Run:  python bench/competitive/probe-headroom.py bench/competitive/results/claims.json
+Run:  python bench/competitive/probe-alt-a.py bench/competitive/results/claims.json
 """
 
 from __future__ import annotations
@@ -28,6 +28,12 @@ import logging
 import re
 import subprocess
 import sys
+# The compared package, under a neutral name (bench/alt_a_alias.py).
+import os as _os  # noqa: E402
+sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))
+import alt_a_alias  # noqa: E402
+
+alt_a_alias.install()
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -64,7 +70,7 @@ def _fixture_code(n: int = 40) -> str:
 
 def claim_lossless_mode_drops_keys() -> dict:
     """Their lossless_only path returns valid JSON holding fewer keys, unmarked."""
-    from headroom.transforms.smart_crusher import smart_crush_tool_output
+    from alternative_a.transforms.smart_crusher import smart_crush_tool_output
 
     text = _fixture_object_map()
     out, _modified, _info = smart_crush_tool_output(
@@ -79,7 +85,7 @@ def claim_lossless_mode_drops_keys() -> dict:
         parses = False
     markers = [
         token
-        for token in ("ccr", "headroom", "truncat", "omitted", "dropped", "retriev")
+        for token in ("ccr", "altA", "truncat", "omitted", "dropped", "retriev")
         if token in out.lower()
     ]
     return {
@@ -95,9 +101,9 @@ def claim_lossless_mode_drops_keys() -> dict:
 
 def claim_ccr_marker_dies_with_the_store() -> dict:
     """Their retrieval marker resolves while the store is warm and not after."""
-    from headroom.config import CCRConfig
-    from headroom.transforms.smart_crusher import smart_crush_tool_output
-    from headroom.cache.compression_store import get_compression_store
+    from alternative_a.config import CCRConfig
+    from alternative_a.transforms.smart_crusher import smart_crush_tool_output
+    from alternative_a.cache.compression_store import get_compression_store
 
     text = _fixture_record_array()
     ccr = CCRConfig(enabled=True, inject_retrieval_marker=True, min_items_to_cache=1)
@@ -137,7 +143,7 @@ def claim_ccr_marker_dies_with_the_store() -> dict:
 
 def claim_code_marker_carries_no_location() -> dict:
     """Their code elision states a count; ours states a path and a line range."""
-    from headroom.transforms.code_compressor import CodeAwareCompressor
+    from alternative_a.transforms.code_compressor import CodeAwareCompressor
 
     text = _fixture_code()
     out = CodeAwareCompressor().compress(text, language="python").compressed
@@ -162,7 +168,7 @@ CLAIMS = {
 
 def main() -> int:
     try:
-        import headroom
+        import alternative_a
     except ImportError:
         print("competitor package not installed; nothing measured", file=sys.stderr)
         return 2
@@ -196,7 +202,7 @@ def main() -> int:
         "measuredAt": datetime.now(timezone.utc).isoformat(),
         "harnessSha": sha,
         "probeSha256": probe_hash,
-        "competitorVersion": getattr(headroom, "__version__", "unknown"),
+        "competitorVersion": getattr(alternative_a, "__version__", "unknown"),
         "claims": {},
     }
     # A DEGRADED COMPETITOR MEASURES AS A WEAKER COMPETITOR, SILENTLY.
@@ -209,7 +215,7 @@ def main() -> int:
     # writes a claims file that understates them, and every downstream gate
     # then compares our output against a competitor that was not running.
     #
-    # Both report through logging on the `headroom` hierarchy, so one handler
+    # Both report through logging on the `altA` hierarchy, so one handler
     # catches them -- including whichever optional path they add next.
     degradations: list[str] = []
 
@@ -217,7 +223,7 @@ def main() -> int:
         def emit(self, record: logging.LogRecord) -> None:
             degradations.append(record.getMessage())
 
-    competitor_log = logging.getLogger("headroom")
+    competitor_log = logging.getLogger("altA")
     capture = _Capture(level=logging.WARNING)
     competitor_log.addHandler(capture)
     previous_level = competitor_log.level

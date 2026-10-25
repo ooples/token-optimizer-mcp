@@ -1,12 +1,12 @@
 /**
- * Regenerate the README's HeadRoom table from the recorded head-to-head run.
+ * Regenerate the README's Alternative A table from the recorded head-to-head run.
  *
- *   node bench/compression/readme-headroom.render.mjs
+ *   node bench/compression/readme-alt-a.render.mjs
  *
- * The block between HEADROOM-TABLE:START and HEADROOM-TABLE:END said "do not
+ * The block between ALT-A-TABLE:START and ALT-A-TABLE:END said "do not
  * hand-edit", and was hand-edited anyway, because nothing wrote it: three
  * re-records later it described a run from 2026-09-25 (#505). This writes it,
- * and readme-headroom.check.mjs -- now in CI -- refuses a README that disagrees
+ * and readme-alt-a.check.mjs -- now in CI -- refuses a README that disagrees
  * with the record, so the two cannot drift apart again without a red build.
  *
  * Every figure is copied from the record as formatted there; nothing is
@@ -16,14 +16,14 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { COLUMNS } from './readme-headroom.columns.mjs';
+import { COLUMNS } from './readme-alt-a.columns.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const README = join(here, '..', '..', 'README.md');
-const RECORD = join(here, 'headroom', 'results', 'head-to-head.json');
+const RECORD = join(here, 'alt-a', 'results', 'head-to-head.json');
 
-const START = '<!-- HEADROOM-TABLE:START';
-const END = '<!-- HEADROOM-TABLE:END -->';
+const START = '<!-- ALT-A-TABLE:START';
+const END = '<!-- ALT-A-TABLE:END -->';
 
 const record = JSON.parse(readFileSync(RECORD, 'utf8'));
 const header = COLUMNS.map((c) => c.header);
@@ -42,9 +42,9 @@ const rule = `| ${width
 
 const block = [
   `${START} -- every figure below must appear in`,
-  '     `bench/compression/headroom/results/head-to-head.json`. Written by',
-  '     `node bench/compression/readme-headroom.render.mjs` and guarded by',
-  '     `node bench/compression/readme-headroom.check.mjs`; do not hand-edit.',
+  '     `bench/compression/alt-a/results/head-to-head.json`. Written by',
+  '     `node bench/compression/readme-alt-a.render.mjs` and guarded by',
+  '     `node bench/compression/readme-alt-a.check.mjs`; do not hand-edit.',
   '     Each figure cell is `characters / tokens` removed, tokens counted by',
   "     Anthropic's tokenizer over both arms' real output. `zero-turn ids` is",
   '     `ours / theirs / preset`: of the identifiers planted in that workload,',
@@ -57,10 +57,9 @@ const block = [
   ...rows.map(line),
   '',
   `Recorded ${record.recordedAt} at \`${record.commit.slice(0, 8)}\`, by the command in the`,
-  "record's `regenerate` field, over HeadRoom " +
-    `${record.capture?.theirsProvenance?.headroomVersion ?? '(unrecorded version)'}` +
-    "'s own fixtures and harness. That arm runs",
-  'HeadRoom itself, so CI does not re-derive it -- it checks these figures and',
+  // Its version stays in the record (capture.theirsProvenance), not in prose.
+  "record's `regenerate` field, over Alternative A's own fixtures and harness. That arm runs",
+  'Alternative A itself, so CI does not re-derive it -- it checks these figures and',
   'this provenance against the record instead.',
   '',
   END,
@@ -72,7 +71,7 @@ const from = readme.indexOf(START);
 const to = readme.indexOf(END);
 if (from === -1 || to === -1 || to < from) {
   console.error(
-    'readme-headroom.render: HEADROOM-TABLE markers not found in README.md'
+    'readme-alt-a.render: ALT-A-TABLE markers not found in README.md'
   );
   process.exit(1);
 }
@@ -82,5 +81,5 @@ const next =
   readme.slice(to + END.length);
 writeFileSync(README, next);
 console.log(
-  `readme-headroom.render: ${rows.length} rows from the record of ${record.recordedAt} (${record.commit.slice(0, 8)})`
+  `readme-alt-a.render: ${rows.length} rows from the record of ${record.recordedAt} (${record.commit.slice(0, 8)})`
 );

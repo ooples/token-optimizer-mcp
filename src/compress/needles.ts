@@ -7,7 +7,7 @@
  * `error` or `uuid` field, and fails completely when every row has the same two
  * keys and the signal lives in the VALUES.
  *
- * Measured on HeadRoom's own agentic-conversation fixture: 48 rows, all of them
+ * Measured on Alternative A's own agentic-conversation fixture: 48 rows, all of them
  * `{content, role}`, so zero rows were flagged anomalous, the engine kept three
  * head rows and elided the other forty-five, and every needle went with them --
  * 0 of 12 UUIDs and 0 of 1 error markers survived a 99.6% reduction. A number
@@ -82,7 +82,7 @@ export function needleRows(
  * One representative index per distinct shape, in first-seen order.
  *
  * THE OTHER HALF OF THE SAME DEFECT. `anomalousRows` asks whether a row departs
- * from a single common key set, which presumes the array HAS one. HeadRoom's
+ * from a single common key set, which presumes the array HAS one. Alternative A's
  * database-rows fixture is three interleaved tables -- users, transactions,
  * metrics -- sharing only `id`, so every one of its 300 rows counted as
  * anomalous, the keep set swallowed the array, and nothing was elided at all:

@@ -19,7 +19,7 @@
  * the innermost engine call is replaced by arms whose output is a closed-form
  * function of their input (see arms.py). So every figure the capture publishes
  * has a value computable here with arithmetic, and a mismatch is a harness bug
- * with no second explanation available. No network, no HeadRoom install, no
+ * with no second explanation available. No network, no Alternative A install, no
  * CCR store: a failure here is never a drifted capture.
  *
  * Usage: node bench/compression/known-answer/capture.check.mjs
@@ -44,7 +44,7 @@ import {
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = join(HERE, '..', '..', '..');
-const RUN_THEIRS = join(REPO, 'bench', 'compression', 'headroom', 'run-theirs.py');
+const RUN_THEIRS = join(REPO, 'bench', 'compression', 'alt-a', 'run-theirs.py');
 const ARMS = join(HERE, 'arms.py');
 const EXPORT = join(REPO, 'bench', 'compression', 'export-payloads.mjs');
 

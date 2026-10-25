@@ -1,7 +1,7 @@
 # Two cost losses: diagnosis and rejected default change
 
 The original nullable and JSON losses used fewer input and output tokens than
-HeadRoom. Their cache-discount differences outweighed those savings:
+Alternative A. Their cache-discount differences outweighed those savings:
 
 | Original pair | Input contribution to our cost gap | Cache-discount contribution | Output contribution | Net gap |
 | --- | ---: | ---: | ---: | ---: |
@@ -15,7 +15,7 @@ items when a new user question was appended.
 
 ## Implemented experiment
 
-Actual installed HeadRoom wire replay showed description whitespace normalization,
+Actual installed Alternative A wire replay showed description whitespace normalization,
 including code examples. Added `TOKEN_OPTIMIZER_PROXY_TOOL_CODE=1` as an **off by
 default** experiment: compact selected whitespace inside fenced TypeScript,
 JavaScript and JSON examples, preserving prose, strings, comments and line breaks.
@@ -36,7 +36,7 @@ commit `a27fd59d` additionally fingerprints the compiled experiment module.
 Four pairs / eight attempts, two families, both arm orders. All completed and
 were independently validated. No outcomes were replaced.
 
-| Pair | Our estimated cost | HeadRoom estimated cost | Our agent seconds | HeadRoom agent seconds |
+| Pair | Our estimated cost | Alternative A estimated cost | Our agent seconds | Alternative A agent seconds |
 | --- | ---: | ---: | ---: | ---: |
 | Nullable 2494523015 | $0.173484 | $0.120798 | 12.5 | 18.8 |
 | Nullable 2494523016 | $0.173054 | $0.115502 | 15.5 | 16.2 |
@@ -44,7 +44,7 @@ were independently validated. No outcomes were replaced.
 | JSON 3141592002 | $0.175042 | $0.138932 | 19.0 | 16.5 |
 
 **All eight attempts passed quality; zero of four cost wins, three speed wins.**
-Every candidate first request reported zero cached tokens, while every HeadRoom
+Every candidate first request reported zero cached tokens, while every Alternative A
 first request reported 9,216. Both candidate and competitor used three requests
 per attempt. Do not claim that the formatting change caused these cache outcomes;
 this comparison did not isolate provider cache state. It also did not solve the

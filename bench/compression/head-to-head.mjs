@@ -10,7 +10,7 @@
  * `*`, the subtotals print separately, and the owner of each row is read from
  * THEIR provenance (`carriedPayloads`) rather than from a list kept on this side
  * that could drift away from what actually ran. An earlier
- * version of this comment called them "HeadRoom's own fixtures", which was
+ * version of this comment called them "Alternative A's own fixtures", which was
  * simply false, and it mattered: a corpus the opponent chose would make a win
  * far stronger evidence than a corpus we chose. Read every number below as
  * "on traffic we selected", and note that `run-theirs.py` hands their engine
@@ -24,8 +24,8 @@
  *
  * Run their side first, then redeem their markers, then score:
  *
- *   python bench/compression/headroom/run-theirs.py <headroom-clone> <out-dir>
- *   python bench/compression/headroom/resolve-theirs.py <headroom-clone> <out-dir>
+ *   python bench/compression/alt-a/run-theirs.py <alt-a-clone> <out-dir>
+ *   python bench/compression/alt-a/resolve-theirs.py <alt-a-clone> <out-dir>
  *   node bench/compression/head-to-head.mjs <out-dir>
  *
  * FOUR RULES, because each of them has already caught a wrong answer in this work:
@@ -143,23 +143,23 @@ const theirs = JSON.parse(readFileSync(join(dir, 'theirs.json'), 'utf8'));
 
 // THE TOOL THEIR MARKER NEEDS, CHARGED WHEREVER THEIR OUTPUT CARRIES ONE. A
 // `<<ccr:...>>` marker is only redeemable because their proxy also sends
-// `headroom_retrieve` in the request's tools, by default and on every request
-// once a session has done CCR -- see headroom/ccr-tool.py, which records the
+// `alternative_a_retrieve` in the request's tools, by default and on every request
+// once a session has done CCR -- see alt-a/ccr-tool.py, which records the
 // definition from their package. This priced the marker and never the tool.
 // Ours needs none: our marker names a path the agent opens with its own Read.
 // Charged as handed tokens, which is how the cost line already prices content
 // that is written once and re-read every turn; the one-off rewrite of the
 // cached prefix behind the tool is not charged, which errs in their favour.
 const CCR_TOOL = JSON.parse(
-  readFileSync(new URL('./headroom/ccr-tool.json', import.meta.url), 'utf8')
+  readFileSync(new URL('./alt-a/ccr-tool.json', import.meta.url), 'utf8')
 );
 {
-  const swept = theirs.__provenance__?.headroomVersion ?? null;
-  if (swept !== null && swept !== CCR_TOOL.headroomVersion) {
+  const swept = theirs.__provenance__?.altAVersion ?? null;
+  if (swept !== null && swept !== CCR_TOOL.altAVersion) {
     console.error(
-      `head-to-head: the capture was swept with headroom-ai ${swept} but ` +
-        `headroom/ccr-tool.json records the tool from ${CCR_TOOL.headroomVersion}; ` +
-        're-run python bench/compression/headroom/ccr-tool.py with the version the ' +
+      `head-to-head: the capture was swept with alternative-a ${swept} but ` +
+        `alt-a/ccr-tool.json records the tool from ${CCR_TOOL.altAVersion}; ` +
+        're-run python bench/compression/alt-a/ccr-tool.py with the version the ' +
         'capture used'
     );
     process.exit(2);
@@ -314,7 +314,7 @@ const PARAMS = { ...DEFAULTS, baseContextTokens: BASE.tokens };
  * Optional only because it needs their package importable. Without it their
  * store is unmeasured, and this file says so rather than scoring it as empty.
  *
- *   python bench/compression/headroom/resolve-theirs.py <clone-or-dash> <out-dir>
+ *   python bench/compression/alt-a/resolve-theirs.py <clone-or-dash> <out-dir>
  */
 const resolvedPath = join(dir, 'theirs-resolved.json');
 const resolved = existsSync(resolvedPath)
@@ -646,7 +646,7 @@ for (const [name, text] of Object.entries(payloads)) {
   const subMs = subSorted[(subSorted.length - 1) >> 1];
   const out = compressBlock(text, { query: queryOf(text), stamp: BENCH_STAMP });
 
-  // THE SUBSTITUTION ARM, MEASURED SEPARATELY AND NAMED FOR WHAT IT IS. HeadRoom
+  // THE SUBSTITUTION ARM, MEASURED SEPARATELY AND NAMED FOR WHAT IT IS. Alternative A
   // reaches ~99.7% on the three workloads our engines find hardest by not
   // compressing them at all: a `<<ccr:hash,blob,32107>>` reference is 24
   // characters and the block is in a content store. `spillWholeBlockBelow` does
@@ -1162,7 +1162,7 @@ for (const [name, text] of Object.entries(payloads)) {
   if (!t) {
     throw new Error(
       `theirs.json has no entry for workload "${name}". Re-run ` +
-        'bench/compression/headroom/run-theirs.py so both arms cover the same ' +
+        'bench/compression/alt-a/run-theirs.py so both arms cover the same ' +
         'set, rather than scoring this workload against our own text.'
     );
   }
@@ -1275,7 +1275,7 @@ for (const [name, text] of Object.entries(payloads)) {
 
   // WHAT A RECOVERY COSTS IN ROUND TRIPS, on both sides, counted the same
   // way: one fetch per distinct place content was moved to. Theirs is a
-  // `<<ccr:HASH,...>>` marker redeemed by `headroom_retrieve`; ours is a
+  // `<<ccr:HASH,...>>` marker redeemed by `alternative_a_retrieve`; ours is a
   // spill path redeemed by a Read. Distinct, because two markers naming the
   // same hash are one retrieval, and a byte figure cannot see either.
   const theirMarkers = [...new Set(theirText.match(/<<ccr:[^>]*>>/g) ?? [])];
@@ -1294,7 +1294,7 @@ for (const [name, text] of Object.entries(payloads)) {
   // The difference that remains is the one worth stating plainly: our
   // recoverable content is a path the agent already has and can open with a
   // Read it was going to make anyway, theirs is a marker that costs a
-  // `headroom_retrieve` round trip. That is a turn, not a byte, and this file
+  // `alternative_a_retrieve` round trip. That is a turn, not a byte, and this file
   // measures bytes -- so it reports the counts and leaves the trade visible
   // rather than folding it into a score.
   //
@@ -1534,7 +1534,7 @@ for (const r of rows) {
 // planted in each workload, how many can the agent have WITHOUT spending a
 // turn? Ours: the ones still in the text, plus the ones the text alone
 // rebuilds. Theirs: the ones still in the text. A `<<ccr:...>>` marker is
-// never in the second group -- redeeming it is a `headroom_retrieve` call,
+// never in the second group -- redeeming it is a `alternative_a_retrieve` call,
 // and it re-injects the block at close to its original size.
 console.log('');
 console.log(
@@ -2415,14 +2415,14 @@ if (bodyLost > 0)
 /**
  * The run, written down where a check that cannot run it can still read it.
  *
- * WHY A FILE AND NOT THE STDOUT. This harness needs a HeadRoom clone and their
+ * WHY A FILE AND NOT THE STDOUT. This harness needs a Alternative A clone and their
  * Python harness to produce the arm it scores against, so CI cannot run it the
  * way `readme-table.check.mjs` runs `proof.mjs`. Without somewhere to put the
  * result, the twelve-row table in the README would be the one thing this
  * repository keeps saying it will not ship: a figure with nothing behind it.
  *
  * SO THE CHAIN HAS TWO LINKS, AND BOTH ARE CHECKABLE. Prose against this record
- * is checked in CI on every commit, by `readme-headroom.check.mjs`. This record
+ * is checked in CI on every commit, by `readme-alt-a.check.mjs`. This record
  * against the live harness is checked by anyone holding the clone, by re-running
  * with --record and diffing -- which is also exactly what regenerating it does.
  * Neither link is an assertion; the second one is simply not free.
@@ -2540,7 +2540,7 @@ if (process.argv[3] === '--record') {
       .digest('hex')
       .slice(0, 16),
     theirsDigest: null,
-    headroomVersion: theirs.__provenance__?.headroomVersion ?? null,
+    altAVersion: theirs.__provenance__?.altAVersion ?? null,
     // WHICH FIELDS A READER IS OWED DEPENDS ON WHETHER AN ENGINE RAN. A capture
     // taken under BENCH_KNOWN_ANSWER_ARMS drives this same path with arms whose
     // output is arithmetic, so there is no competitor version to record and
@@ -2589,10 +2589,10 @@ if (process.argv[3] === '--record') {
     // The one thing a reader cannot re-derive from this file: what produced the
     // arm on the other side of the table.
     regenerate:
-      'python bench/compression/headroom/run-theirs.py <headroom-clone> <out-dir> && ' +
-      'python bench/compression/headroom/resolve-theirs.py <headroom-clone> <out-dir> && ' +
+      'python bench/compression/alt-a/run-theirs.py <alt-a-clone> <out-dir> && ' +
+      'python bench/compression/alt-a/resolve-theirs.py <alt-a-clone> <out-dir> && ' +
       'node bench/compression/head-to-head.mjs <out-dir> --record ' +
-      'bench/compression/headroom/results/head-to-head.json',
+      'bench/compression/alt-a/results/head-to-head.json',
     recordedAt: new Date().toISOString().slice(0, 10),
     commit,
     // WHICH CAPTURE THIS WAS SCORED AGAINST, because the out-dir is a

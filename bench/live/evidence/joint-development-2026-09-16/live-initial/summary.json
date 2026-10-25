@@ -19,7 +19,7 @@
     },
     {
       "task": "tiny",
-      "arm": "headroom",
+      "arm": "altA",
       "passed": 2,
       "expected": 2,
       "measured": 2,
@@ -45,7 +45,7 @@
     },
     {
       "task": "entropy",
-      "arm": "headroom",
+      "arm": "altA",
       "passed": 2,
       "expected": 2,
       "measured": 2,
@@ -71,7 +71,7 @@
     },
     {
       "task": "numeric",
-      "arm": "headroom",
+      "arm": "altA",
       "passed": 2,
       "expected": 2,
       "measured": 2,
@@ -97,7 +97,7 @@
     },
     {
       "task": "nullable",
-      "arm": "headroom",
+      "arm": "altA",
       "passed": 2,
       "expected": 2,
       "measured": 2,
@@ -114,30 +114,30 @@
       "task": "tiny",
       "candidate": "proxy",
       "inputReductionVsFull": null,
-      "inputReductionVsHeadroom": -0.006420484280663219,
+      "inputReductionVsAltA": -0.006420484280663219,
       "inputReductionVsControl": null
     },
     {
       "task": "entropy",
       "candidate": "proxy",
       "inputReductionVsFull": null,
-      "inputReductionVsHeadroom": 0.462354317755277,
+      "inputReductionVsAltA": 0.462354317755277,
       "inputReductionVsControl": null
     },
     {
       "task": "numeric",
       "candidate": "proxy",
       "inputReductionVsFull": null,
-      "inputReductionVsHeadroom": -0.24350078132683506,
+      "inputReductionVsAltA": -0.24350078132683506,
       "inputReductionVsControl": null
     },
     {
       "task": "nullable",
       "candidate": "proxy",
       "inputReductionVsFull": null,
-      "inputReductionVsHeadroom": 0.07282454796555482,
+      "inputReductionVsAltA": 0.07282454796555482,
       "inputReductionVsControl": null
     }
   ],
-  "interpretation": "Input includes cached tokens. Cached is a subset, not an additional charge. These are token counts, not dollar costs. Three synthetic workloads do not establish a universal win. Startup is included in seconds. HeadRoom compression is measured through provider usage, not the null recorder byte counts."
+  "interpretation": "Input includes cached tokens. Cached is a subset, not an additional charge. These are token counts, not dollar costs. Three synthetic workloads do not establish a universal win. Startup is included in seconds. Alternative A compression is measured through provider usage, not the null recorder byte counts."
 }

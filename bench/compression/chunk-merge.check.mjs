@@ -39,7 +39,7 @@ const chunk = (index, names, over = {}) => ({
   dir: `hrc${index}`,
   theirs: {
     __provenance__: {
-      headroomVersion: '0.37.0',
+      altAVersion: 'sha256:5453d116514b14cd',
       python: '3.12.1',
       theirFixtures: true,
       detectBackend: 'rust',
@@ -166,7 +166,7 @@ console.log('\na different instrument is refused');
   );
 
   const ver = two();
-  ver[1].theirs.__provenance__.headroomVersion = '0.38.0';
+  ver[1].theirs.__provenance__.altAVersion = '0.38.0';
   check(
     mergeChunks(ver).ok === false,
     'so are two engine versions',

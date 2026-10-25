@@ -11,6 +11,6 @@
     "capturedAt":  "2026-09-15T19:49:35.9694532Z",
     "node":  "v22.15.0",
     "note":  "Build hashes captured during the development screen. The dist build has remained unchanged throughout. Runner source was subsequently hardened; this campaign uses the initial artifact layout.",
-    "headroom":  "0.37.0",
+    "altA":  "sha256:5453d116514b14cd",
     "codex":  "0.154.0"
 }
