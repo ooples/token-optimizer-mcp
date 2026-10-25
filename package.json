@@ -270,7 +270,7 @@
     "tiktoken": "^1.0.22",
     "typescript": "^5.9.3",
     "yaml": "^2.9.0",
-    "zod": "^3.25.0"
+    "zod": "^4.6.7"
   },
   "overrides": {
     "brace-expansion": "5.0.9",
