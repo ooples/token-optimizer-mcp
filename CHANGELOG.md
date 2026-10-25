@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.7.0](https://github.com/ooples/token-optimizer-mcp/compare/v7.6.0...v7.7.0) (2026-10-25)
+
+
+### Features
+
+* aggressive default savings for multi-agent sessions ([#523](https://github.com/ooples/token-optimizer-mcp/issues/523)) ([a20b812](https://github.com/ooples/token-optimizer-mcp/commit/a20b812cea4b1a6bfe92e748e085108bcd48d16f))
+
+
+### Bug Fixes
+
+* **proxy:** parse the project registry only when it changed; pass the startup /api/hello probe ([#526](https://github.com/ooples/token-optimizer-mcp/issues/526)) ([2d4eb1b](https://github.com/ooples/token-optimizer-mcp/commit/2d4eb1b38cf82e3e5a437c17db59564520774a05))
+* release blockers for 7.7.0 -- neutral naming, hook latency, plugin instructions, settings records, upgrade notes ([#527](https://github.com/ooples/token-optimizer-mcp/issues/527)) ([5af1784](https://github.com/ooples/token-optimizer-mcp/commit/5af1784431d019510e285e657991e432df98f3dc))
+* route read-only subagents only on request; repository pack ahead of per-directory text ([#525](https://github.com/ooples/token-optimizer-mcp/issues/525)) ([3c145ba](https://github.com/ooples/token-optimizer-mcp/commit/3c145ba43517911fae8d24e91938a285fd6d70c1))
+
 ## [7.6.0](https://github.com/ooples/token-optimizer-mcp/compare/v7.5.1...v7.6.0) (2026-10-21)
 
 
