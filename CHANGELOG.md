@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.7.1](https://github.com/ooples/token-optimizer-mcp/compare/v7.7.0...v7.7.1) (2026-10-26)
+
+
+### Bug Fixes
+
+* **validation:** build and refuse unknown arguments under zod 4 ([#531](https://github.com/ooples/token-optimizer-mcp/issues/531)) ([070ce1b](https://github.com/ooples/token-optimizer-mcp/commit/070ce1b446412b155ec5ac158ee6bef67d5f287f))
+
 ## [7.7.0](https://github.com/ooples/token-optimizer-mcp/compare/v7.6.0...v7.7.0) (2026-10-25)
 
 
