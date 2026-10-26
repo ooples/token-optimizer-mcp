@@ -227,6 +227,15 @@ const objectFor = (node: JsonSchemaNode, topLevel: boolean): z.ZodTypeAny => {
   return built.passthrough();
 };
 
+/** Every key a node names, in its own properties and required list and in its branches'. */
+const declaredKeys = (node: JsonSchemaNode, into = new Set<string>()) => {
+  for (const key of Object.keys(node.properties ?? {})) into.add(key);
+  for (const key of node.required ?? []) into.add(key);
+  for (const branch of [...(node.oneOf ?? []), ...(node.anyOf ?? [])])
+    if (branch && typeof branch === 'object') declaredKeys(branch, into);
+  return into;
+};
+
 const zodFor = (node: JsonSchemaNode, topLevel: boolean): z.ZodTypeAny => {
   if (!node || typeof node !== 'object') return z.unknown();
 
@@ -234,7 +243,7 @@ const zodFor = (node: JsonSchemaNode, topLevel: boolean): z.ZodTypeAny => {
 
   if (Array.isArray(node.enum) && node.enum.length > 0) {
     const literals: z.ZodTypeAny[] = node.enum.map((value) =>
-      z.literal(value as z.Primitive)
+      z.literal(value as string | number | boolean | null)
     );
     return literals.length === 1 ? literals[0] : union(literals);
   }
@@ -258,7 +267,25 @@ const zodFor = (node: JsonSchemaNode, topLevel: boolean): z.ZodTypeAny => {
       !siblings.required
     )
       return choice;
-    return z.intersection(zodFor(siblings, topLevel), choice);
+    const both = z.intersection(zodFor(siblings, topLevel), choice);
+    if (!topLevel) return both;
+    /*
+     * zod 4 keeps an unrecognized key out of an intersection's result unless
+     * BOTH sides report it, and a branch never does: it passes through what it
+     * does not describe. So the strict top level stopped refusing an unknown
+     * argument the moment its tool published a branch list. The check is made
+     * here, against every key the definition declares anywhere.
+     */
+    const declared = declaredKeys(node);
+    return both.superRefine((value, ctx) => {
+      if (!value || typeof value !== 'object' || Array.isArray(value)) return;
+      const extra = Object.keys(value).filter((key) => !declared.has(key));
+      if (extra.length)
+        ctx.addIssue({
+          code: 'custom',
+          message: `Unrecognized key(s) in object: ${extra.map((key) => `'${key}'`).join(', ')}`,
+        });
+    });
   }
 
   /*
