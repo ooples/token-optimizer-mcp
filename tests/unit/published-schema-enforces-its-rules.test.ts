@@ -288,6 +288,21 @@ describe('published conditional requirements are enforced', () => {
     expect(message).not.toContain('root: Invalid input');
   });
 
+  it('names the field of a nested union, not the root', () => {
+    // An enum derives to a union of literals. zod 4 gives its branch issues
+    // paths relative to the union, so without the union's own path in front a
+    // bad `operation` was reported against `root`.
+    let message = '';
+    try {
+      validateToolArgs('optimization_storage', { operation: 'bogus' });
+      throw new Error('expected an unknown operation to be refused');
+    } catch (error) {
+      message = error instanceof Error ? error.message : String(error);
+    }
+    expect(message).toMatch(/- operation: /);
+    expect(message).not.toContain('root:');
+  });
+
   it('says the same field once, not once per side of the intersection', () => {
     // cognition_record's branch list sits beside its property list, so both
     // halves report a missing `kind`. One line per missing field.

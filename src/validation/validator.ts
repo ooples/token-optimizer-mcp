@@ -26,13 +26,20 @@ import { toolSchemaMap } from './tool-schemas.js';
 const leafIssues = (issues: z.ZodIssue[]): z.ZodIssue[] => {
   const out: z.ZodIssue[] = [];
   for (const issue of issues) {
-    // zod 4 lists each branch's issues under `errors`; zod 3 kept a ZodError
-    // per branch under `unionErrors`.
-    const branches: z.ZodIssue[][] | undefined =
-      (issue as { errors?: z.ZodIssue[][] }).errors ??
-      (issue as { unionErrors?: { issues: z.ZodIssue[] }[] }).unionErrors?.map(
-        (branch) => branch.issues
-      );
+    // zod 4 lists each branch's issues under `errors`, with paths relative to
+    // the union, so the union's own path is put back in front; zod 3 kept a
+    // ZodError per branch under `unionErrors`, with full paths already.
+    const relative = (issue as { errors?: z.ZodIssue[][] }).errors;
+    const branches: z.ZodIssue[][] | undefined = relative
+      ? relative.map((branch) =>
+          branch.map((inner) => ({
+            ...inner,
+            path: [...issue.path, ...inner.path],
+          }))
+        )
+      : (
+          issue as { unionErrors?: { issues: z.ZodIssue[] }[] }
+        ).unionErrors?.map((branch) => branch.issues);
     if (
       issue.code === 'invalid_union' &&
       Array.isArray(branches) &&
