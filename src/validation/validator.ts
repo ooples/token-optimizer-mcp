@@ -26,26 +26,34 @@ import { toolSchemaMap } from './tool-schemas.js';
 const leafIssues = (issues: z.ZodIssue[]): z.ZodIssue[] => {
   const out: z.ZodIssue[] = [];
   for (const issue of issues) {
-    const unionErrors = (issue as { unionErrors?: z.ZodError[] }).unionErrors;
+    // zod 4 lists each branch's issues under `errors`; zod 3 kept a ZodError
+    // per branch under `unionErrors`.
+    const branches: z.ZodIssue[][] | undefined =
+      (issue as { errors?: z.ZodIssue[][] }).errors ??
+      (issue as { unionErrors?: { issues: z.ZodIssue[] }[] }).unionErrors?.map(
+        (branch) => branch.issues
+      );
     if (
-      issue.code === z.ZodIssueCode.invalid_union &&
-      Array.isArray(unionErrors) &&
-      unionErrors.length > 0
+      issue.code === 'invalid_union' &&
+      Array.isArray(branches) &&
+      branches.length > 0
     ) {
-      const disagreesOnDiscriminator = (branch: z.ZodError): boolean =>
-        branch.issues.some(
-          (branchIssue) =>
-            branchIssue.code === z.ZodIssueCode.invalid_literal ||
-            branchIssue.code === z.ZodIssueCode.invalid_enum_value
+      // A literal or enum mismatch: zod 4's `invalid_value`, zod 3's
+      // `invalid_literal` and `invalid_enum_value`.
+      const disagreesOnDiscriminator = (branch: z.ZodIssue[]): boolean =>
+        branch.some((branchIssue) =>
+          ['invalid_value', 'invalid_literal', 'invalid_enum_value'].includes(
+            branchIssue.code as string
+          )
         );
-      const onTopic = unionErrors.filter(
+      const onTopic = branches.filter(
         (branch) => !disagreesOnDiscriminator(branch)
       );
-      const pool = onTopic.length > 0 ? onTopic : unionErrors;
+      const pool = onTopic.length > 0 ? onTopic : branches;
       const nearest = pool.reduce((best, candidate) =>
-        candidate.issues.length < best.issues.length ? candidate : best
+        candidate.length < best.length ? candidate : best
       );
-      out.push(...leafIssues(nearest.issues));
+      out.push(...leafIssues(nearest));
       continue;
     }
     out.push(issue);
