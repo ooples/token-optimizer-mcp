@@ -20,6 +20,8 @@ import { tmpdir } from 'node:os';
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import {
+  DOWNGRADE_NOTE,
+  INERT_HOOK,
   RESTART_NOTE,
   STATE_SCHEMA,
   applyResolution,
@@ -165,6 +167,129 @@ describe('schema change with a migration', () => {
     expect(JSON.parse(readFileSync(join(state, 'sess-1-abcdef123456.json'), 'utf8'))).toEqual({ edits: 1 });
     expect(JSON.parse(readFileSync(join(state, 'sess-1.json'), 'utf8'))).toEqual({ boom: true });
     expect(sessionRecord('sess-1', w.env).schema).toBe(STATE_SCHEMA);
+  });
+});
+
+describe('current older than the session state: older code never reads newer state', () => {
+  const MIGRATE = '{ 1: { to: 2, migrateSessionState: (s) => ({ ...s, migrated: true }) } }';
+  const read = (w, name) => JSON.parse(readFileSync(join(w.env.TOKEN_OPTIMIZER_STATE_DIR, name), 'utf8'));
+  /** A session migrated to schema 2 by 3.0.0; returns 3.0.0's hooks dir. */
+  async function migrated(w) {
+    await call(w, 'session-start');
+    const state = w.env.TOKEN_OPTIMIZER_STATE_DIR;
+    writeFileSync(join(state, 'sess-1.json'), JSON.stringify({ edits: 3 }));
+    writeFileSync(join(state, 'sess-1-abcdef123456.json'), JSON.stringify({ edits: 1 }));
+    const v3 = install(w, '3.0.0', { schema: 2, migrations: MIGRATE });
+    point(w, '3.0.0');
+    expect((await call(w, 'pre-tool')).mode).toBe('current');
+    expect(sessionRecord('sess-1', w.env)).toMatchObject({ schema: 2, version: '3.0.0', hooksDir: v3 });
+    return v3;
+  }
+
+  test('a rollback to an older current restores every file from its backup, verified, then switches', async () => {
+    const w = world();
+    await migrated(w);
+    const v25 = install(w, '2.5.0', { schema: 1 });
+    point(w, '2.5.0');
+    const choice = await call(w, 'pre-tool');
+    expect(choice).toMatchObject({ mode: 'current', version: '2.5.0', hooksDir: v25, note: null });
+    expect(read(w, 'sess-1.json')).toEqual({ edits: 3 });
+    expect(read(w, 'sess-1-abcdef123456.json')).toEqual({ edits: 1 });
+    expect(readdirSync(w.env.TOKEN_OPTIMIZER_STATE_DIR).some((f) => f.endsWith('.bak'))).toBe(false);
+    expect(sessionRecord('sess-1', w.env)).toMatchObject({ schema: 1, version: '2.5.0', restoredFrom: 2 });
+  });
+
+  test("a rollback to this copy's own version restores too: this copy is older than the state", async () => {
+    const w = world();
+    await migrated(w);
+    install(w, '1.0.0');
+    point(w, '1.0.0');
+    expect(await call(w, 'pre-tool')).toMatchObject({ mode: 'self', hooksDir: w.self });
+    expect(read(w, 'sess-1.json')).toEqual({ edits: 3 });
+    expect(sessionRecord('sess-1', w.env).schema).toBe(STATE_SCHEMA);
+  });
+
+  test('a backup that does not parse is not restored: the session stays on the version its state was written by', async () => {
+    const w = world();
+    const v3 = await migrated(w);
+    writeFileSync(join(w.env.TOKEN_OPTIMIZER_STATE_DIR, 'sess-1.json.schema1.bak'), '{ torn');
+    install(w, '2.5.0', { schema: 1 });
+    point(w, '2.5.0');
+    expect(await call(w, 'pre-tool')).toMatchObject({ mode: 'pinned', hooksDir: v3, version: '3.0.0' });
+    expect(read(w, 'sess-1.json')).toEqual({ edits: 3, migrated: true });
+    expect(read(w, 'sess-1-abcdef123456.json')).toEqual({ edits: 1, migrated: true });
+  });
+
+  test('a state file with no backup pins the stateful hooks to the session version, pure from current, note once', async () => {
+    const w = world();
+    const v3 = await migrated(w);
+    // An agent that first ran after the migration: written on schema 2 only.
+    writeFileSync(join(w.env.TOKEN_OPTIMIZER_STATE_DIR, 'sess-1-0123456789ab.json'), JSON.stringify({ edits: 7 }));
+    const v25 = install(w, '2.5.0', { schema: 1 });
+    point(w, '2.5.0');
+    const first = await call(w, 'pre-tool');
+    expect(first).toMatchObject({ mode: 'pinned', hooksDir: v3, version: '3.0.0', pure: v25, note: DOWNGRADE_NOTE });
+    expect(read(w, 'sess-1.json')).toEqual({ edits: 3, migrated: true });
+    expect((await call(w, 'pre-tool')).note).toBeNull();
+  });
+
+  test('a broken current after a migration does not fall back to this older copy', async () => {
+    const w = world();
+    const v3 = await migrated(w);
+    writeFileSync(join(w.env.TOKEN_OPTIMIZER_STATE_DIR, 'sess-1-0123456789ab.json'), JSON.stringify({ edits: 7 }));
+    rmSync(join(w.env.TOKEN_OPTIMIZER_RUNTIME, 'current'));
+    expect(await call(w, 'pre-tool')).toMatchObject({ mode: 'pinned', hooksDir: v3 });
+  });
+
+  test('with the session version uninstalled, the newer state is moved aside and the hooks start afresh', async () => {
+    const w = world();
+    await migrated(w);
+    writeFileSync(join(w.env.TOKEN_OPTIMIZER_STATE_DIR, 'sess-1-0123456789ab.json'), JSON.stringify({ edits: 7 }));
+    rmSync(join(w.env.TOKEN_OPTIMIZER_RUNTIME, 'versions', '3.0.0'), { recursive: true, force: true });
+    const v25 = install(w, '2.5.0', { schema: 1 });
+    point(w, '2.5.0');
+    expect(await call(w, 'pre-tool')).toMatchObject({ mode: 'current', hooksDir: v25, note: DOWNGRADE_NOTE });
+    const names = readdirSync(w.env.TOKEN_OPTIMIZER_STATE_DIR);
+    expect(names).not.toContain('sess-1.json');
+    expect(names).toContain('sess-1.json.schema2.quarantine');
+    expect(names).toContain('sess-1-0123456789ab.json.schema2.quarantine');
+    expect(sessionRecord('sess-1', w.env)).toMatchObject({ schema: 1, quarantinedFrom: 2 });
+  });
+
+  test('when the state can be neither restored, kept on its version nor moved aside, the hook does not run', async () => {
+    const w = world();
+    await migrated(w);
+    writeFileSync(join(w.env.TOKEN_OPTIMIZER_STATE_DIR, 'sess-1-0123456789ab.json'), JSON.stringify({ edits: 7 }));
+    rmSync(join(w.env.TOKEN_OPTIMIZER_RUNTIME, 'versions', '3.0.0'), { recursive: true, force: true });
+    install(w, '2.5.0', { schema: 1 });
+    point(w, '2.5.0');
+    // Another hook holds the session's lock, so nothing can be moved.
+    mkdirSync(join(w.env.TOKEN_OPTIMIZER_STATE_DIR, 'sess-1.migrate.lock'));
+    globalThis.__tokenOptimizerStdin = { raw: JSON.stringify({ session_id: 'sess-1' }), status: 'received', bytes: 1 };
+    const adapter = await importForHook({ here: pathToFileURL(join(w.self, 'entry.mjs')).href, entryRel: 'plugin/hooks', event: 'pre-tool', module: 'lib/adapter.mjs', env: w.env });
+    expect(adapter).toBe(INERT_HOOK);
+    expect(read(w, 'sess-1-0123456789ab.json')).toEqual({ edits: 7 });
+  });
+
+  test('a pinned newer runtime that fails to load does not fall back to this older copy over its state', async () => {
+    const w = world();
+    const v3 = await migrated(w);
+    writeFileSync(join(w.env.TOKEN_OPTIMIZER_STATE_DIR, 'sess-1-0123456789ab.json'), JSON.stringify({ edits: 7 }));
+    writeFileSync(join(v3, 'lib', 'adapter.mjs'), "import './missing.mjs';\nexport const marker = '3.0.0';\n");
+    rmSync(join(w.env.TOKEN_OPTIMIZER_RUNTIME, 'current'));
+    globalThis.__tokenOptimizerStdin = { raw: JSON.stringify({ session_id: 'sess-1' }), status: 'received', bytes: 1 };
+    const adapter = await importForHook({ here: pathToFileURL(join(w.self, 'entry.mjs')).href, entryRel: 'plugin/hooks', event: 'pre-tool', module: 'lib/adapter.mjs', env: w.env });
+    // This copy runs only after the newer state is moved aside.
+    expect(adapter.marker).toBe('self');
+    expect(readdirSync(w.env.TOKEN_OPTIMIZER_STATE_DIR)).toContain('sess-1-0123456789ab.json.schema2.quarantine');
+    expect(sessionRecord('sess-1', w.env).schema).toBe(STATE_SCHEMA);
+  });
+
+  test('with the hot update switched off, this copy still never runs over newer state', async () => {
+    const w = world();
+    const v3 = await migrated(w);
+    writeFileSync(join(w.env.TOKEN_OPTIMIZER_STATE_DIR, 'sess-1-0123456789ab.json'), JSON.stringify({ edits: 7 }));
+    expect(await call({ ...w, env: { ...w.env, TOKEN_OPTIMIZER_HOT_UPDATE: '0' } }, 'pre-tool')).toMatchObject({ mode: 'pinned', hooksDir: v3 });
   });
 });
 
