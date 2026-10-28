@@ -196,10 +196,16 @@ const smallBuildLog = (errors = 1) => {
 
 describe('build and test logs are compacted from 2 KB, around their verdict', () => {
   test('recognises build/test commands in any statement, and nothing else', () => {
-    for (const c of ['dotnet build src/A.csproj 2>&1 | tail -60', 'cd repo && npm test', 'npm.cmd run build', 'npx jest tests/a', 'python -m pytest -q', 'pwsh -File C:\\b\\build.ps1 -Project x', 'cargo test'])
+    for (const c of ['dotnet build src/A.csproj 2>&1 | tail -60', 'cd repo && npm test', 'FOO=1 npm test', './gradlew build', 'git status && make', 'npm.cmd run build', 'npx jest tests/a', 'python -m pytest -q', 'pwsh -File C:\\b\\build.ps1 -Project x', 'cargo test'])
       expect(isBuildOrTestCommand(c)).toBe(true);
-    for (const c of ['git status', 'cat build.log', 'grep -rn dotnet .', 'ls testdata'])
+    for (const c of ['git status', 'cat build.log', 'grep -rn dotnet .', 'ls testdata', 'grep make notes.txt', 'cat a.txt | grep jest', 'git commit -m "fix: make it work"', 'echo make sure', 'grep -n x build.ps1', 'rg -n tsc src'])
       expect(isBuildOrTestCommand(c)).toBe(false);
+  });
+
+  test('a search under the general floor is never folded for naming a build word', () => {
+    const notes = Array.from({ length: 70 }, (_, i) => `note ${i}: remember to make the release notes mention item ${i}`).join('\n');
+    for (const command of ['grep make notes.txt', 'cat notes.txt | grep jest', 'git log --oneline | grep tsc'])
+      expect(compactText(notes, { command })).toBeNull();
   });
 
   test('a 4 KB build log keeps every error and the summary, in under half the size', () => {

@@ -254,6 +254,10 @@ export const BUILD_LOG_MIN_BYTES = 2000;
 /** What a compacted build/test log under OUTPUT_COMPACT_MIN_BYTES keeps besides its verdict lines. */
 export const BUILD_LOG_BUDGET_BYTES = 1200;
 
+/** A pipeline stage that runs a build or a test runner (its first word is the program). */
+const BUILD_STAGE =
+  /^(dotnet(\.exe)?\s+(build|test|msbuild|pack|publish)|msbuild(\.exe)?|npm(\.cmd)?\s+(test|t|run\s+[\w:-]*(build|test|lint|check|typecheck)[\w:-]*)|npx(\.cmd)?\s+(tsc|jest|eslint|vitest)|jest|vitest|tsc|pytest|python3?\s+-m\s+pytest|cargo\s+(build|test|check|clippy)|go\s+(build|test|vet)|mvn|\.?[\\/]?gradlew?|ctest|cmake\s+--build|make)(\s|$)/i;
+
 /**
  * A command that builds or runs tests, in any statement of it.
  *
@@ -264,12 +268,27 @@ export const BUILD_LOG_BUDGET_BYTES = 1200;
  * around one verdict line -- which an agent re-reads on every later call.
  */
 export function isBuildOrTestCommand(command) {
-  const text = String(command ?? '');
-  // A build script is named by path (`pwsh -File C:\b\build.ps1`), so it matches anywhere.
-  if (/(^|[\s\\/'"])build\.(ps1|sh|cmd)(\s|['"]|$)/i.test(text)) return true;
-  return /(^|[\s;&|(])(dotnet\s+(build|test|msbuild|pack|publish)|msbuild|npm(\.cmd)?\s+(test|t|run\s+[\w:-]*(build|test|lint|check|typecheck)[\w:-]*)|npx(\.cmd)?\s+(tsc|jest|eslint|vitest)|jest|vitest|tsc|pytest|python\s+-m\s+pytest|cargo\s+(build|test|check|clippy)|go\s+(build|test|vet)|mvn|gradlew?|ctest|cmake\s+--build|make)(\s|$)/i.test(
-    text
-  );
+  // Judged by the PROGRAM each pipeline stage runs, never by a word anywhere in
+  // the command: `grep make notes.txt`, `cat a | grep jest` and
+  // `git commit -m "make it work"` print searches and text, and the build
+  // budget would fold them lossily.
+  return String(command ?? '')
+    .split(/\|\||&&|;|\||\n/)
+    .map((s) =>
+      s
+        .trim()
+        // `FOO=1 npm test`, `$env:X='1'`, `(dotnet test)`, `& "C:\b\build.ps1"`.
+        .replace(/^(?:[A-Za-z_]\w*=\S*\s+)+/, '')
+        .replace(/^[(&]+\s*/, '')
+    )
+    .some(
+      (stage) =>
+        BUILD_STAGE.test(stage) ||
+        // A build script runs as the program itself or as a shell's script argument.
+        /^(?:(?:pwsh|powershell)(?:\.exe)?\s+(?:-\w+\s+)*?(?:-File\s+)?|(?:ba|z)?sh\s+|cmd(?:\.exe)?\s+\/c\s+)?['"]?(?:\S*[\\/])?build\.(ps1|sh|cmd)['"]?(\s|$)/i.test(
+          stage
+        )
+    );
 }
 
 /**
