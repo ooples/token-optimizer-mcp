@@ -18,7 +18,7 @@
  * default under the OS temp dir) that is removed at the end.
  *
  * Usage:
- *   node bench/field/compaction-replay.mjs [--session <uuid>] [--since <ISO>]
+ *   node bench/field/compaction-replay.mjs [--session <uuid>] [--since <ISO>] [--until <ISO>]
  *     [--root <dir>] [--json out.json] [--artifacts <dir>]
  *
  * Prints one row per pattern (multi-agent-waste.mjs's classifier): results,
@@ -66,6 +66,8 @@ export function replayCall({ tool, input, response, dir }) {
 
 async function main() {
   const since = opt('--since');
+  // A live session keeps appending; a fixed --until is what makes two runs comparable.
+  const until = opt('--until');
   const artifacts = opt('--artifacts') || mkdtempSync(join(tmpdir(), 'compaction-replay-'));
   const rows = new Map();
   const bump = (pattern, r) => {
@@ -90,6 +92,7 @@ async function main() {
           continue;
         }
         if (since && typeof o.timestamp === 'string' && o.timestamp < since) continue;
+        if (until && typeof o.timestamp === 'string' && o.timestamp >= until) continue;
         if (o.type === 'assistant') {
           for (const c of o.message?.content || [])
             if (c.type === 'tool_use') uses.set(c.id, { name: c.name, input: c.input || {} });

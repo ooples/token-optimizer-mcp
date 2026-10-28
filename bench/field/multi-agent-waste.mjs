@@ -27,6 +27,7 @@
  *
  * Usage:
  *   node bench/field/multi-agent-waste.mjs [--session <uuid>] [--json out.json]
+ *     [--since <ISO>] [--until <ISO>] [--verbs]
  *     [--root <dir>]        (default ~/.claude/projects)
  *
  * --session restricts to one main transcript plus its subagents.
@@ -55,6 +56,8 @@ const JSON_OUT = opt('--json');
  * a waste of the current one -- so rank on the window the current release ran.
  */
 const SINCE = opt('--since');
+/** --until <ISO>: records before this instant only, so a live transcript gives a fixed corpus. */
+const UNTIL = opt('--until');
 /** --verbs: also print the first two words of unclassified shell commands, by size. */
 const VERBS = args.includes('--verbs') ? new Map() : null;
 
@@ -160,7 +163,7 @@ export function classify(name, input = {}) {
 }
 
 /** Folds one transcript into per-pattern rows. */
-export async function scan(file, rows, { since = SINCE } = {}) {
+export async function scan(file, rows, { since = SINCE, until = UNTIL } = {}) {
   const events = []; // { pattern, chars, compacted, at }
   const uses = new Map();
   const seenKey = new Map(); // key -> count
@@ -186,6 +189,7 @@ export async function scan(file, rows, { since = SINCE } = {}) {
       continue;
     }
     if (since && typeof o.timestamp === 'string' && o.timestamp < since) continue;
+    if (until && typeof o.timestamp === 'string' && o.timestamp >= until) continue;
     if (o.type === 'system' && o.subtype === 'compact_boundary') {
       // The client summarised the conversation: nothing before this point is
       // resident any more, so its re-read count stops here.
@@ -229,10 +233,19 @@ export async function scan(file, rows, { since = SINCE } = {}) {
         }
         const isOurs = /token-optimizer|Known about|from previous sessions|wiki_write|Token budget|known from previous/i.test(text);
         const p = isOurs ? 'inject:token-optimizer' : 'inject:other-hook';
-        push(p, text.length - dupLines, false);
-        if (dupLines || dup) push(`${p}:repeat`, dup ? text.length : dupLines, false);
-      } else if (a.type === 'instructions' || a.type === 'skill_listing' || a.type === 'deferred_tools_delta') {
-        push('inject:client-context', JSON.stringify(a).length, false);
+        if (dup) push(`${p}:repeat`, text.length, false);
+        else {
+          push(p, text.length - dupLines, false);
+          if (dupLines) push(`${p}:repeat`, dupLines, false);
+        }
+      } else if (a.type === 'instructions') {
+        // CLAUDE.md and friends, delivered again to every agent that starts.
+        const size = (a.files || []).reduce((s, f) => s + String(f?.content ?? '').length, 0);
+        push('inject:claude-md', size || JSON.stringify(a).length, false);
+      } else if (a.type === 'skill_listing') {
+        push('inject:skill-listing', String(a.content ?? '').length, false);
+      } else if (a.type === 'deferred_tools_delta') {
+        push('inject:tool-listing', JSON.stringify(a.addedLines ?? a).length, false);
       }
       continue;
     }
