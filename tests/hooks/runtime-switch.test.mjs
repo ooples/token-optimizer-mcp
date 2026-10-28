@@ -23,6 +23,7 @@ import {
   RESTART_NOTE,
   STATE_SCHEMA,
   applyResolution,
+  hotUpdateEnabled,
   importForHook,
   ownVersion,
   resolveHook,
@@ -150,8 +151,10 @@ describe('schema change with a migration', () => {
     const w = world();
     await call(w, 'session-start');
     const state = w.env.TOKEN_OPTIMIZER_STATE_DIR;
-    writeFileSync(join(state, 'sess-1.json'), JSON.stringify({ edits: 3 }));
-    writeFileSync(join(state, 'sess-1-abcdef123456.json'), JSON.stringify({ boom: true }));
+    // sess-1-abcdef123456.json sorts before sess-1.json, so the agent file is
+    // migrated (and rewritten) before the main file throws: rollback must undo it.
+    writeFileSync(join(state, 'sess-1-abcdef123456.json'), JSON.stringify({ edits: 1 }));
+    writeFileSync(join(state, 'sess-1.json'), JSON.stringify({ boom: true }));
     install(w, '3.1.0', {
       schema: 2,
       migrations: "{ 1: { to: 2, migrateSessionState: (s) => { if (s.boom) throw new Error('x'); return { ...s, migrated: true }; } } }",
@@ -159,7 +162,8 @@ describe('schema change with a migration', () => {
     point(w, '3.1.0');
     const choice = await call(w, 'pre-tool');
     expect(choice.mode).toBe('pinned');
-    expect(JSON.parse(readFileSync(join(state, 'sess-1.json'), 'utf8'))).toEqual({ edits: 3 });
+    expect(JSON.parse(readFileSync(join(state, 'sess-1-abcdef123456.json'), 'utf8'))).toEqual({ edits: 1 });
+    expect(JSON.parse(readFileSync(join(state, 'sess-1.json'), 'utf8'))).toEqual({ boom: true });
     expect(sessionRecord('sess-1', w.env).schema).toBe(STATE_SCHEMA);
   });
 });
@@ -245,6 +249,13 @@ describe('fails safe', () => {
     expect((await call({ ...w, env: { ...w.env, TOKEN_OPTIMIZER_HOT_UPDATE: '0' } }, 'pre-tool')).mode).toBe('self');
     const { TOKEN_OPTIMIZER_RUNTIME: _named, ...unnamed } = w.env;
     expect((await call({ ...w, env: unnamed }, 'pre-tool')).mode).toBe('self');
+  });
+
+  test('hotUpdateEnabled: off by env or under jest without a named runtime, on otherwise', () => {
+    expect(hotUpdateEnabled({})).toBe(true);
+    expect(hotUpdateEnabled({ TOKEN_OPTIMIZER_HOT_UPDATE: '0' })).toBe(false);
+    expect(hotUpdateEnabled({ JEST_WORKER_ID: '1' })).toBe(false);
+    expect(hotUpdateEnabled({ JEST_WORKER_ID: '1', TOKEN_OPTIMIZER_RUNTIME: '/r' })).toBe(true);
   });
 });
 
