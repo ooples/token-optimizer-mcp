@@ -63,33 +63,80 @@ and sizes appear here; no paths, commands or content.
 
 ## Fixes and measured savings
 
-Replay of every recorded Bash/PowerShell/Grep response (23,866 results,
-8.66M tokens) through the compactor, base `c20a1bd9` vs this branch:
+I replayed every recorded Bash/PowerShell/Grep response (23,866 results,
+8.66M tokens) through the compactor: base `c20a1bd9` against this branch at
+`85317f9e`, on the same frozen corpus.
 
 | pattern | base: tokens after compactor | branch | saved | saved x mean residency |
 |---|---:|---:|---:|---:|
-| search | 1,362,516 | 1,297,634 | 64,882 | 19.3M |
-| git:diff-log | 375,861 | 362,913 | 12,948 | 4.0M |
-| shell:other | 2,821,683 | 2,813,329 | 8,354 | 2.6M |
-| build-test:log | 390,513 | 384,390 | 6,123 | 1.7M |
-| gh:issue-pr-body | 126,037 | 124,394 | 1,643 | 0.4M |
-| ci:log | 57,919 | 56,807 | 1,112 | 0.4M |
-| read:shell | 2,418,129 | 2,434,031 | -15,902 | -4.8M |
-| **total** | **7,790,508** | **7,711,372** | **79,136 (1.0% of all shell output)** | |
+| search | 1,362,516 | 1,297,622 | 64,894 | 19.3M |
+| build-test:log | 390,513 | 349,258 | 41,255 | 11.8M |
+| git:diff-log | 375,861 | 362,899 | 12,962 | 4.0M |
+| shell:other | 2,821,683 | 2,812,804 | 8,879 | 2.7M |
+| gh:issue-pr-body | 126,037 | 124,391 | 1,646 | 0.4M |
+| ci:log | 57,919 | 56,804 | 1,115 | 0.4M |
+| read:shell | 2,418,129 | 2,433,974 | -15,845 | -4.8M |
+| **total** | **7,790,508** | **7,675,623** | **114,885 (1.3% of all shell output)** | |
 
-1. **Shell searches grouped by file** (`isShellSearchCommand`). 4,234 shell
-   searches (1.50M tokens) never got the lossless `groupGrepByFile` the Grep tool
-   gets. Results changed: 151 -> 526.
+1. **Shell searches grouped by file** (`isShellSearchCommand`). The 4,234 shell
+   searches (1.50M tokens) never got the lossless `groupGrepByFile` that the Grep
+   tool gets. Results changed went from 151 to 526.
 2. **Read detection by the producing stage** (`isReadLikeCommand`). A pipeline
    was judged by its last stage, so `grep ... | head`, `git log | head` and
-   `dotnet test | tail` were passed byte-exact up to 24 KB as file reads; and
-   `git show <commit>` (a diff) counted as a file. Saved 26k on searches, logs and
-   diffs. The `read:shell` regression (-15.9k) is the other half of the same fix:
-   `Get-Content f | Select-Object -First N` and `$x = Get-Content f` are reads and
-   are now kept byte-exact instead of folded, which an Edit built from them needs.
+   `dotnet test | tail` were passed byte-exact up to 24 KB as if they were file
+   reads. `git show <commit>`, which prints a diff, also counted as a file.
+   The fix saves about 26k on searches, logs and diffs. The `read:shell`
+   regression (-15.8k) is the other half of the same fix:
+   `Get-Content f | Select-Object -First N` and `$x = Get-Content f` are reads,
+   and they are now kept byte-exact instead of folded, because an Edit built from
+   them needs the exact text.
 3. **Build/test logs from 2 KB** (`isBuildOrTestCommand`, `BUILD_LOG_MIN_BYTES`).
-   The budget is sized so every verdict line and its two context lines survive
-   selection; the full log stays one Read away.
+   The budget is sized so that every verdict line and its two context lines
+   survive selection. The full log stays one Read away. `85317f9e` judges each
+   pipeline stage by the program it runs. The first version matched build words
+   anywhere, so `grep make notes.txt` qualified.
+
+**False positives in the first build-log version.** I compared both
+`isBuildOrTestCommand` versions result by result on the 2-6 KB band:
+
+- At `99ec7c51`, the build branch compacted 145 results and saved 42,020 tokens.
+- 16 of those results (3,088 tokens, **7.3% of that saving**) were not build
+  runs. They were `cd ...; <script>` statements and `$out = ...` / `python -`
+  heredocs that only mentioned a build word.
+- At `85317f9e`, the same 129 genuine results save the same 38,932 tokens, plus
+  1 new genuine match that saves nothing. There are no false positives.
+
+**Correction to the figure first published in this PR.** The -6.1k build-log
+saving (and the 79,136 total) was wrong. That replay ran at the same time as my
+mutation checks. It loaded `output-compact.mjs` while the mutation that disables
+the 2 KB build branch was on disk, so it measured the build branch switched off.
+The table above comes from a clean run with no concurrent edits. The per-result
+comparison above gives about 42k for the first version, in line with it.
+
+## The 6 KB+ outputs that reached the model uncompacted
+
+The replay finds 37 outputs of 6 KB or more in session `25a884d9` that the 7.7.1
+compactor shrinks but that reached the model whole. All 37 come from a plugin
+version that had no compactor. Neither the plugin's compaction path nor Claude
+Code is at fault:
+
+- All 37 are PowerShell calls in the main transcript, between
+  2026-10-22T17:39Z and 2026-10-26T14:27Z.
+- The hook did fire for every one of them. Each call has a `tool-outcome` record
+  with its `toolCallId` in `~/.token-optimizer/unrooted/.token-optimizer/wiki/metrics.jsonl`.
+  It is recorded as `toolName: "Bash"` because the adapter normalises
+  PowerShell to Bash. Compaction receives the same normalised name, and later
+  PowerShell results were compacted.
+- `output-compact.mjs` first shipped in v7.7.0 (2026-10-26T00:58Z). The plugin
+  cache holds `7.5.0`, `7.5.1` and `7.7.1`. Neither 7.5.x copy contains
+  `output-compact.mjs`.
+- The `7.7.1` cache directory was created at 2026-10-26T14:52Z, after the last of
+  the 37. The session's next SessionStart came at 2026-10-26T15:24Z, and its
+  first compacted result at 15:56Z. Hook commands resolve `${CLAUDE_PLUGIN_ROOT}`
+  for the plugin version a session loaded, so a running session keeps the old
+  hooks until it restarts.
+- After 15:24Z, there is no eligible output in the session that the running
+  version (7.7.1) would compact and did not.
 
 ## Not fixed here, and why
 
