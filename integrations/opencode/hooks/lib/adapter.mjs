@@ -31,6 +31,7 @@ import {
   readPayloadResult,
   withEscape,
   stateScope,
+  decorateOutput,
 } from './policy.mjs';
 import {
   adviseOnce,
@@ -778,6 +779,7 @@ function harvestDeferred(clientName) {
 }
 
 function emit(object) {
+  object = decorateOutput(object);
   const serialized = JSON.stringify(object);
   noteHookOutput(object, Buffer.byteLength(serialized, 'utf8'));
   process.stdout.write(serialized);
@@ -1964,8 +1966,15 @@ async function runHook(clientName, event, invocation) {
           artifact: ref ? artifactPath(dir, ref) : null,
         });
       }
+      // A session pinned to its own version by a state-schema change still
+      // compacts with the installed runtime's compactor: it is pure, so the
+      // newer one is safe to borrow (runtime-switch.mjs PURE_MODULES).
+      const compact =
+        typeof globalThis.__tokenOptimizerPure?.compactToolResponse === 'function'
+          ? globalThis.__tokenOptimizerPure.compactToolResponse
+          : compactToolResponse;
       if (!updatedToolOutput)
-        updatedToolOutput = compactToolResponse({
+        updatedToolOutput = compact({
           tool,
           input: payload.tool_input,
           response: raw.tool_response,

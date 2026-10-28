@@ -1118,15 +1118,25 @@ export function allow() {
  * is emitted when there is nothing to say, so the common path stays a bare
  * exit(0).
  */
+/**
+ * A hook's output with whatever the runtime resolver must deliver on it -- the
+ * one-time "restart to finish updating" note (runtime-switch.mjs). Identity
+ * when there is nothing to add.
+ */
+export function decorateOutput(output) {
+  const decorate = globalThis.__tokenOptimizerDecorate;
+  return typeof decorate === 'function' ? decorate(output) : output;
+}
+
 export function allowWithContext(context) {
   context = withPreceding(context);
   if (context) {
-    const output = {
+    const output = decorateOutput({
       hookSpecificOutput: {
         hookEventName: 'PreToolUse',
         additionalContext: context,
       },
-    };
+    });
     const serialized = JSON.stringify(output);
     noteHookOutput(output, Buffer.byteLength(serialized, 'utf8'));
     process.stdout.write(serialized);
@@ -1176,6 +1186,13 @@ export function allowWithContext(context) {
  * has gone; there is nobody left to tell.
  */
 function emitAndExit(serialized) {
+  if (typeof globalThis.__tokenOptimizerDecorate === 'function') {
+    try {
+      serialized = JSON.stringify(decorateOutput(JSON.parse(serialized)));
+    } catch {
+      // Not ours to reshape: deliver it as built.
+    }
+  }
   const buffer = Buffer.from(serialized, 'utf8');
   let written = 0;
 
@@ -1307,6 +1324,18 @@ export async function readPayloadResult({
   timeoutMs = 1500,
   maxBytes = 8_000_000,
 } = {}) {
+  // The entry point's runtime resolver (runtime-switch.mjs) may have drained
+  // stdin already to learn the session and tool call; it hands the payload on.
+  const handed = globalThis.__tokenOptimizerStdin;
+  if (handed) {
+    if (handed.raw === null) return { payload: null, status: handed.status, bytes: handed.bytes };
+    if (!handed.raw.trim()) return { payload: null, status: 'empty_input', bytes: handed.bytes };
+    try {
+      return { payload: JSON.parse(handed.raw), status: 'ok', bytes: handed.bytes };
+    } catch {
+      return { payload: null, status: 'invalid_json', bytes: handed.bytes };
+    }
+  }
   const chunks = [];
   let size = 0;
   let inputStatus = 'pending';

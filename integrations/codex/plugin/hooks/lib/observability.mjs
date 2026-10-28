@@ -396,8 +396,17 @@ export function beginHookInvocation(client, event, options = {}) {
       // Beat the host's five-second timeout and fail open deterministically.
       process.exit(0);
     },
-    options.deadlineMs ??
-      positiveInteger('TOKEN_OPTIMIZER_HOOK_DEADLINE_MS', DEFAULT_DEADLINE_MS)
+    // Measured from when the entry point started, not from here: the runtime
+    // resolver (runtime-switch.mjs) runs first, and its time is part of the
+    // same host budget.
+    Math.max(
+      0,
+      (options.deadlineMs ??
+        positiveInteger('TOKEN_OPTIMIZER_HOOK_DEADLINE_MS', DEFAULT_DEADLINE_MS)) -
+        (Number.isFinite(globalThis.__tokenOptimizerHookStartedAt)
+          ? Math.max(0, Date.now() - globalThis.__tokenOptimizerHookStartedAt)
+          : 0)
+    )
   );
   deadline.unref();
 

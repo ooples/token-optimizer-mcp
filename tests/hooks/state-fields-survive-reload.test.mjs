@@ -29,6 +29,10 @@ function writtenFields() {
     ...readdirSync(join(ROOT, 'plugin', 'hooks'))
       .filter((f) => f.endsWith('.mjs'))
       .map((f) => join(ROOT, 'plugin', 'hooks', f)),
+    // The Claude Code hooks' bodies live in impl/ behind their entry shims.
+    ...readdirSync(join(ROOT, 'plugin', 'hooks', 'impl'))
+      .filter((f) => f.endsWith('.mjs'))
+      .map((f) => join(ROOT, 'plugin', 'hooks', 'impl', f)),
   ];
   const fields = new Set();
   const writes = [

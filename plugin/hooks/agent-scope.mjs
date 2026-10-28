@@ -1,22 +1,15 @@
 #!/usr/bin/env node
 /**
- * PreToolUse for the optimizer's cached file tools: record which agent made the
- * call, so the server can scope its read cache to that agent (#488). See
- * lib/agent-scope.mjs.
- *
- * DELIBERATELY TINY. It runs before every smart_read, smart_config_read,
- * smart_write and smart_edit, so it imports one small module, never blocks the
- * call, and prints nothing: an empty reply lets the call through unchanged.
+ * Entry point: resolves which installed runtime runs this hook
+ * (lib/runtime-switch.mjs), then runs impl/agent-scope.mjs from it. When the resolver
+ * cannot be loaded at all, this copy's own impl runs, exactly as before.
  */
-import { readFileSync } from 'node:fs';
-import { recordAgentForCall } from './lib/agent-scope.mjs';
-
+let importForHook = null;
 try {
-  const payload = JSON.parse(readFileSync(0, 'utf8') || '{}');
-  recordAgentForCall(
-    payload.tool_use_id ?? payload.toolUseId,
-    payload.transcript_path ?? payload.transcriptPath
-  );
+  ({ importForHook } = await import('./lib/runtime-switch.mjs'));
 } catch {
-  // A malformed payload only means this call keeps the session scope.
+  // Fall through to this copy's own hook.
 }
+if (importForHook)
+  await importForHook({ here: import.meta.url, entryRel: 'plugin/hooks', event: 'pre-tool', module: 'impl/agent-scope.mjs' });
+else await import('./impl/agent-scope.mjs');

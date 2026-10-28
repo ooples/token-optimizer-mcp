@@ -22,7 +22,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = fileURLToPath(new URL('../..', import.meta.url));
-const DIRS = ['hooks-core', join('plugin', 'hooks')];
+const DIRS = ['hooks-core', join('plugin', 'hooks'), join('plugin', 'hooks', 'impl')];
 
 /**
  * A budget, not a benchmark.
