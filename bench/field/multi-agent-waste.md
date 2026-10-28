@@ -64,29 +64,38 @@ and sizes appear here; no paths, commands or content.
 ## Fixes and measured savings
 
 I replayed every recorded Bash/PowerShell/Grep response (23,866 results,
-8.66M tokens) through the compactor: base `c20a1bd9` against this branch at
-`85317f9e`, on the same frozen corpus.
+8.66M tokens) through the compactor: base `c20a1bd9` against this branch's
+head, on the same frozen corpus, both with the same `--artifacts` directory.
+The compactor's notice includes the artifact path, so the directory has to be
+the same on both sides. The default temp dir has a longer path than a short
+`--artifacts` dir and adds about 9k tokens to either side.
 
 | pattern | base: tokens after compactor | branch | saved | saved x mean residency |
 |---|---:|---:|---:|---:|
-| search | 1,362,516 | 1,297,622 | 64,894 | 19.3M |
-| build-test:log | 390,513 | 349,258 | 41,255 | 11.8M |
-| git:diff-log | 375,861 | 362,899 | 12,962 | 4.0M |
-| shell:other | 2,821,683 | 2,812,804 | 8,879 | 2.7M |
-| gh:issue-pr-body | 126,037 | 124,391 | 1,646 | 0.4M |
-| ci:log | 57,919 | 56,804 | 1,115 | 0.4M |
-| read:shell | 2,418,129 | 2,433,974 | -15,845 | -4.8M |
-| **total** | **7,790,508** | **7,675,623** | **114,885 (1.3% of all shell output)** | |
+| search | 1,362,470 | 1,294,653 | 67,817 | 20.1M |
+| build-test:log | 390,496 | 349,359 | 41,137 | 11.8M |
+| git:diff-log | 375,814 | 362,870 | 12,944 | 4.0M |
+| shell:other | 2,821,446 | 2,811,557 | 9,889 | 3.0M |
+| ci:log | 57,911 | 55,673 | 2,238 | 0.8M |
+| gh:issue-pr-body | 126,027 | 124,335 | 1,692 | 0.4M |
+| gh:api | 148,203 | 148,232 | -29 | 0.0M |
+| read:shell | 2,417,899 | 2,433,926 | -16,027 | -4.9M |
+| **total** | **7,789,896** | **7,670,235** | **119,661 (1.4% of all shell output)** | |
+
+The residency column applies each pattern's mean residency as measured for
+the previous version of this table. About 5k of the total comes from the
+multi-line and pipeline fixes in item 4. Measured against the previous head
+with the same directory, the total goes from 7,675,264 to 7,670,235.
 
 1. **Shell searches grouped by file** (`isShellSearchCommand`). The 4,234 shell
    searches (1.50M tokens) never got the lossless `groupGrepByFile` that the Grep
-   tool gets. Results changed went from 151 to 526.
+   tool gets. Results changed went from 151 to 557.
 2. **Read detection by the producing stage** (`isReadLikeCommand`). A pipeline
    was judged by its last stage, so `grep ... | head`, `git log | head` and
    `dotnet test | tail` were passed byte-exact up to 24 KB as if they were file
    reads. `git show <commit>`, which prints a diff, also counted as a file.
    The fix saves about 26k on searches, logs and diffs. The `read:shell`
-   regression (-15.8k) is the other half of the same fix:
+   regression (-16.0k) is the other half of the same fix:
    `Get-Content f | Select-Object -First N` and `$x = Get-Content f` are reads,
    and they are now kept byte-exact instead of folded, because an Edit built from
    them needs the exact text.
@@ -95,6 +104,15 @@ I replayed every recorded Bash/PowerShell/Grep response (23,866 results,
    survive selection. The full log stays one Read away. `85317f9e` judges each
    pipeline stage by the program it runs. The first version matched build words
    anywhere, so `grep make notes.txt` qualified.
+4. **Multi-line commands and PowerShell pipelines.** Both detectors judged the
+   last `;`/`&&` statement, but never split on newlines. So
+   `cd C:\repo<newline>Get-Content A.cs`, which is the PowerShell tool's usual
+   shape, was not a read, and its file text was folded. Newlines now separate
+   statements, and a line ending in `|`, a backtick or a backslash continues
+   onto the next. `| more` and `Select-Object -Index (10..20)` are now range
+   stages. Search grouping now applies when any stage searches:
+   `git ls-files | xargs grep -n X`, or PowerShell's
+   `Get-ChildItem -Recurse | Select-String X`.
 
 **False positives in the first build-log version.** I compared both
 `isBuildOrTestCommand` versions result by result on the 2-6 KB band:
