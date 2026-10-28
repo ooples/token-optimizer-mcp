@@ -86,8 +86,28 @@ describe('a read is judged by the stage that produces the output', () => {
       '(Get-Content src\\A.cs)[10..50]',
       'cd src; Get-Content a.txt',
       'git show HEAD:src/a.ts | head -40',
+      'Get-Content src\\A.cs | Select-Object -Index (10..20)',
+      'type notes.txt | more',
     ])
       expect(isReadLikeCommand(command)).toBe(true);
+  });
+
+  test('a multi-line command is judged by its last line, CRLF or LF, continuations joined', () => {
+    for (const command of [
+      'cd C:\\repo\nGet-Content src\\A.cs',
+      'cd /repo\r\ncat src/a.ts',
+      '$p = "src\\A.cs"\r\nGet-Content $p |\r\n  Select-Object -First 80',
+      'Get-Content src\\A.cs `\n  | Select-Object -Skip 10',
+    ])
+      expect(isReadLikeCommand(command)).toBe(true);
+    for (const command of ['cat a.ts\ndotnet test', 'cd /repo\r\ngrep -rn x src | head -50'])
+      expect(isReadLikeCommand(command)).toBe(false);
+  });
+
+  test('a multi-line read keeps its exact text where a log would be folded', () => {
+    const source = Array.from({ length: 300 }, (_, i) => `    var x${i} = Compute(${i});`).join('\n');
+    expect(compactText(source, { command: 'cd C:\\repo\nGet-Content src\\A.cs' })).toBeNull();
+    expect(compactText(source, { command: 'cd C:\\repo\nGet-Process' })).not.toBeNull();
   });
 
   test('git show of a commit prints a diff, not a file', () => {
@@ -240,7 +260,16 @@ describe("shell searches get the Grep tool's lossless grouping", () => {
   ].join('\n');
 
   test('recognises shell search commands', () => {
-    for (const c of ['grep -rn Engine src', 'cd repo && git grep -n MatMul | head -200', 'rg -n Conv2D', 'Select-String -Path src\\*.cs -Pattern Engine', 'git -C repo grep -n x'])
+    for (const c of [
+      'grep -rn Engine src',
+      'cd repo && git grep -n MatMul | head -200',
+      'rg -n Conv2D',
+      'Select-String -Path src\\*.cs -Pattern Engine',
+      'git -C repo grep -n x',
+      'Get-ChildItem -Recurse -Filter *.cs | Select-String Engine',
+      'git ls-files | xargs -r grep -n Engine',
+      'cd C:\\repo\r\nrg -n Conv2D',
+    ])
       expect(isShellSearchCommand(c)).toBe(true);
     for (const c of ['git log --grep fix', 'cat a.txt', 'dotnet test', 'echo grep'])
       expect(isShellSearchCommand(c)).toBe(false);

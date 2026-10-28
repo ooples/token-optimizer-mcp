@@ -216,7 +216,39 @@ const READ_STAGE =
   /^(cat|type|head|tail|less|more|bat|nl|Get-Content|gc)\b|^sed\s+-n\b|^git\s+show\s+(?:-\S+\s+)*(?:[^\s:-][^\s:]*)?:\S|^git\s+cat-file\s+-p\b|^awk\s+'NR/i;
 /** A stage that only narrows its input to a line range, so a read stays a read. */
 const RANGE_STAGE =
-  /^(head|tail|nl|cat\s+-n)\b|^sed\s+-n\s+['"]?\d+(,\d+)?p['"]?\s*$|^(Select-Object|select)\s+(-(First|Last|Skip|Index)\s+[\d,.]+\s*)+$|^awk\s+'NR/i;
+  /^(head|tail|nl|more|cat\s+-n)\b|^sed\s+-n\s+['"]?\d+(,\d+)?p['"]?\s*$|^(Select-Object|select)\s+(-(First|Last|Skip|Index)\s+\(?[\d,.]+\)?\s*)+$|^awk\s+'NR/i;
+
+/**
+ * The statement whose output the command ends with, cd/Set-Location skipped.
+ * Newlines separate statements too: the PowerShell tool and multi-line Bash
+ * calls put `cd x` and the read on separate lines. A line ending in `|`, a
+ * PowerShell backtick or a shell backslash continues onto the next one.
+ */
+function lastStatement(command) {
+  return (
+    String(command ?? '')
+      .replace(/\|[ \t]*\r?\n\s*/g, '| ')
+      .replace(/[`\\][ \t]*\r?\n\s*/g, ' ')
+      .split(/\|\||&&|;|\r?\n/)
+      .map((s) => s.trim())
+      .filter((s) => s && !/^(cd|Set-Location|sl|pushd|Push-Location)\s+\S+$/i.test(s))
+      .pop() ?? ''
+  );
+}
+
+/** The pipeline stages of one statement; `$x = ` and leading `(` dropped. */
+function stagesOf(statement) {
+  return statement
+    .split('|')
+    .map((s) =>
+      s
+        .trim()
+        // PowerShell `$x = Get-Content f` and `(Get-Content f)[0..80]` read the same.
+        .replace(/^\$[\w:]+\s*=\s*/, '')
+        .replace(/^\(+/, '')
+    )
+    .filter(Boolean);
+}
 
 /**
  * A command whose output IS the content of a file: an edit may need it byte-exact.
@@ -231,22 +263,7 @@ const RANGE_STAGE =
  * reads and every later stage merely cuts a line range out of it.
  */
 export function isReadLikeCommand(command) {
-  const statement =
-    String(command ?? '')
-      .split(/\|\||&&|;/)
-      .map((s) => s.trim())
-      .filter((s) => s && !/^(cd|Set-Location|sl|pushd|Push-Location)\s+\S+$/i.test(s))
-      .pop() ?? '';
-  const stages = statement
-    .split('|')
-    .map((s) =>
-      s
-        .trim()
-        // PowerShell `$x = Get-Content f` and `(Get-Content f)[0..80]` read the same.
-        .replace(/^\$[\w:]+\s*=\s*/, '')
-        .replace(/^\(+/, '')
-    )
-    .filter(Boolean);
+  const stages = stagesOf(lastStatement(command));
   if (!stages.length || !READ_STAGE.test(stages[0])) return false;
   return stages.slice(1).every((s) => RANGE_STAGE.test(s));
 }
@@ -475,14 +492,15 @@ export function compactToolResponse({
  * piped into `wc -l` or `sort | uniq -c` passes through untouched.
  */
 export function isShellSearchCommand(command) {
-  const statement =
-    String(command ?? '')
-      .split(/\|\||&&|;/)
-      .map((s) => s.trim())
-      .filter((s) => s && !/^(cd|Set-Location|sl|pushd|Push-Location)\s+\S+$/i.test(s))
-      .pop() ?? '';
-  const first = statement.split('|')[0].trim().replace(/^\$[\w:]+\s*=\s*/, '').replace(/^\(+/, '');
-  return /^(grep|egrep|fgrep|rg|ag|git\s+(?:-C\s+\S+\s+)?grep|Select-String|sls|findstr)\b/i.test(first);
+  // Any stage, not only the first: `git ls-files | xargs grep -n X` and
+  // PowerShell's `Get-ChildItem -Recurse | Select-String X` print the same
+  // `path:N:text`. Grouping is lossless and leaves non-hit lines alone, so a
+  // stage that searches its input (`cat a | grep x`) costs nothing.
+  return stagesOf(lastStatement(command)).some((stage) =>
+    /^(?:xargs\s+(?:-\S+\s+)*)?(grep|egrep|fgrep|rg|ag|git\s+(?:-C\s+\S+\s+)?grep|Select-String|sls|findstr)\b/i.test(
+      stage
+    )
+  );
 }
 
 /** Below this a Grep result is left exactly as it is. */
