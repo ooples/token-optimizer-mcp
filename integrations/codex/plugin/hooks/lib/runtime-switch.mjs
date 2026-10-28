@@ -23,6 +23,16 @@
  *                                       version; pure modules (PURE_MODULES)
  *                                       come from current; the user is told ONCE
  *                                       to restart to finish updating
+ *   current OLDER than the state       state restored from its `.schema<N>.bak`
+ *                                       (all files, verified), then switch; else
+ *                                       stateful hooks stay on the version the
+ *                                       state was written by, and the note is
+ *                                       shown once
+ *
+ * OLDER CODE NEVER READS NEWER STATE. Not current, not this copy on a fallback:
+ * when no code on the state's schema is installed any more, the state is moved
+ * aside (`.quarantine`) and the hooks start it afresh; when even that fails the
+ * hook does not run (INERT_HOOK).
  *
  * ONE VERSION PER TOOL CALL. Pre-tool records the version it resolved under the
  * call's tool_use_id and post-tool reuses it, so an update landing between the
@@ -106,6 +116,12 @@ export const MIGRATIONS = Object.freeze({});
  * names stable across versions.
  */
 export const PURE_MODULES = Object.freeze(['output-compact.mjs']);
+
+/**
+ * What importForHook returns when no code may run the hook (see selfMayRun):
+ * shaped like the adapter module, so an entry calling run() on it does nothing.
+ */
+export const INERT_HOOK = Object.freeze({ run: async () => undefined });
 
 /** Import errors that happen before a module evaluates. */
 const LOAD_FAILURES = new Set(['ERR_MODULE_NOT_FOUND', 'MODULE_NOT_FOUND', 'ERR_UNSUPPORTED_DIR_IMPORT', 'ERR_INVALID_URL', 'ENOENT']);
@@ -396,9 +412,138 @@ export function migrateSession(sessionId, migrations, from, to, env = process.en
   }
 }
 
+/** A session's state files: `<session>.json` and its agents' `<session>-<12 hex>.json`. */
+function sessionStateFiles(root, safe) {
+  const agent = new RegExp(`^${safe}-[a-f0-9]{12}\\.json$`);
+  return readdirSync(root).filter((name) => name === `${safe}.json` || agent.test(name));
+}
+
+/** Runs `fn` holding the session's migration lock; false when another hook holds it. */
+function withSessionLock(root, safe, fn) {
+  const lock = join(root, `${safe}.migrate.lock`);
+  try {
+    mkdirSync(root, { recursive: true, mode: 0o700 });
+    mkdirSync(lock);
+  } catch {
+    return false;
+  }
+  try {
+    return fn();
+  } catch {
+    return false;
+  } finally {
+    rmSync(lock, { recursive: true, force: true });
+  }
+}
+
+/**
+ * Undoes a migration for a runtime on the older schema `to`: every state file
+ * of the session goes back to its `<file>.schema<to>.bak`. All files or none,
+ * and only when EVERY file has such a backup -- a file written after the
+ * migration has no older form to return to. Each backup must parse, each
+ * restored file is read back and compared, and any failure puts the newer
+ * files back as they were. The backups are removed once restored.
+ */
+export function restoreSession(sessionId, to, env = process.env) {
+  const root = stateRoot(env);
+  const safe = SAFE(sessionId) || 'default';
+  if (!existsSync(root)) return true;
+  return withSessionLock(root, safe, () => {
+    const plan = sessionStateFiles(root, safe).map((name) => {
+      const path = join(root, name);
+      return { path, backup: `${path}.schema${to}.bak` };
+    });
+    if (!plan.every(({ backup }) => existsSync(backup))) return false;
+    const older = plan.map(({ backup }) => readFileSync(backup, 'utf8'));
+    for (const text of older) JSON.parse(text);
+    const newer = plan.map(({ path }) => readFileSync(path, 'utf8'));
+    try {
+      plan.forEach(({ path }, i) => {
+        writeAtomic(path, older[i]);
+        if (readFileSync(path, 'utf8') !== older[i]) throw new Error(`restore of ${path} did not verify`);
+      });
+    } catch {
+      plan.forEach(({ path }, i) => {
+        try {
+          writeAtomic(path, newer[i]);
+        } catch {
+          // Left as restored; the record still names the newer schema, so no
+          // older hook is sent to it.
+        }
+      });
+      return false;
+    }
+    for (const { backup } of plan) {
+      try {
+        unlinkSync(backup);
+      } catch {
+        // A stale backup is only used when a newer schema is undone again.
+      }
+    }
+    return true;
+  });
+}
+
+/**
+ * Moves a session's state files aside as `<file>.schema<schema>.quarantine`, so
+ * code on another schema starts that session's hook state afresh instead of
+ * misreading it. All or none.
+ */
+export function quarantineSession(sessionId, schema, env = process.env) {
+  const root = stateRoot(env);
+  const safe = SAFE(sessionId) || 'default';
+  if (!existsSync(root)) return true;
+  return withSessionLock(root, safe, () => {
+    const moved = [];
+    try {
+      for (const name of sessionStateFiles(root, safe)) {
+        const path = join(root, name);
+        const aside = `${path}.schema${schema}.quarantine`;
+        renameSync(path, aside);
+        moved.push({ path, aside });
+      }
+      return true;
+    } catch {
+      for (const { path, aside } of moved) {
+        try {
+          renameSync(aside, path);
+        } catch {
+          // Stays aside: missing state is read as a fresh session.
+        }
+      }
+      return false;
+    }
+  });
+}
+
 /** The note shown once to a session pinned to its own version. */
 export const RESTART_NOTE =
   'token-optimizer was updated while this session was running; output compaction already uses the new version. Restart the session to finish updating.';
+
+/** The note shown once when the installed runtime is older than this session's state. */
+export const DOWNGRADE_NOTE =
+  'token-optimizer was rolled back while this session was running; this session keeps the version its state was written by, or starts its hook state afresh. Restart the session to finish.';
+
+/**
+ * Whether THIS copy may run the session's stateful hooks: only when the state
+ * is on this copy's schema. Otherwise the state is quarantined first, and when
+ * even that fails the hook must not run at all. Never throws.
+ */
+export function selfMayRun(sessionId, env = process.env) {
+  try {
+    const record = sessionId ? sessionRecord(sessionId, env) : null;
+    if (!record || !Number.isInteger(record.schema) || record.schema === STATE_SCHEMA) return true;
+    if (!quarantineSession(sessionId, record.schema, env)) return false;
+    writeAtomic(sessionRecordPath(sessionId, env), {
+      ...record,
+      schema: STATE_SCHEMA,
+      quarantinedFrom: record.schema,
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Decides which runtime runs this hook. Never throws.
@@ -416,20 +561,22 @@ export async function resolveHook({
 }) {
   const started = now();
   const self = { hooksDir: selfDir, version: ownVersion(selfDir, env), mode: 'self', note: null, pure: null };
+  let sessionId = null;
   try {
     const timeoutMs = event === 'session-start' || event === 'stop' || event === 'precompact' ? 250 : 1500;
     const payload = parsePayload(await takeStdin({ timeoutMs }));
-    const sessionId = payload?.session_id ?? payload?.sessionId ?? payload?.conversation_id ?? null;
+    sessionId = payload?.session_id ?? payload?.sessionId ?? payload?.conversation_id ?? null;
     const toolUseId = payload?.tool_use_id ?? payload?.toolUseId ?? null;
 
     if (event === 'session-start') {
       recordSessionStart(sessionId, { version: self.version, schema: STATE_SCHEMA, hooksDir: selfDir }, env);
       return self;
     }
-    if (!hotUpdateEnabled(env) || !sessionId) return self;
+    if (!sessionId) return self;
+    const enabled = hotUpdateEnabled(env);
 
     // The second half of a call runs where the first half ran.
-    if (toolUseId && event === 'post-tool') {
+    if (enabled && toolUseId && event === 'post-tool') {
       const path = callRecordPath(sessionId, toolUseId, env);
       const recorded = readJson(path);
       try {
@@ -438,48 +585,79 @@ export async function resolveHook({
         // No record: pre-tool did not run for this call, or did not switch.
       }
       if (recorded?.hooksDir && runtimeFiles(recorded.hooksDir, entryFile).every((f) => existsSync(f)))
-        return { ...self, ...recorded, note: null };
+        return { ...self, ...recorded, note: null, sessionId };
     }
 
-    const session =
-      sessionRecord(sessionId, env) ||
-      recordSessionStart(sessionId, { version: self.version, schema: STATE_SCHEMA, hooksDir: selfDir }, env);
-    const deadline = Number(env.TOKEN_OPTIMIZER_HOOK_DEADLINE_MS) > 0 ? Number(env.TOKEN_OPTIMIZER_HOOK_DEADLINE_MS) : 4200;
-    const budget = Math.min(
-      Number(env.TOKEN_OPTIMIZER_RESOLVE_BUDGET_MS) > 0 ? Number(env.TOKEN_OPTIMIZER_RESOLVE_BUDGET_MS) : RESOLVE_BUDGET_MS,
-      Math.max(0, deadline / 4 - (now() - started))
-    );
-    const current = await resolveCurrent({ entryRel, entryFile, env, budgetMs: budget });
-    let choice = self;
-    if (current && current.version !== self.version) {
-      const sessionSchema = Number.isInteger(session?.schema) ? session.schema : STATE_SCHEMA;
-      if (current.schema === sessionSchema) {
-        choice = { hooksDir: current.hooksDir, version: current.version, mode: 'current', note: null, pure: null };
-      } else {
-        let migrated = false;
-        if (current.migratesFrom.includes(sessionSchema)) {
+    // Off (by env, or under jest) a session without a record is left alone:
+    // nothing switched it, so its state is on this copy's schema.
+    let session = sessionRecord(sessionId, env);
+    if (!session && !enabled) return self;
+    session ||= recordSessionStart(sessionId, { version: self.version, schema: STATE_SCHEMA, hooksDir: selfDir }, env);
+    const stateSchema = Number.isInteger(session?.schema) ? session.schema : STATE_SCHEMA;
+    const saveRecord = (fields) => {
+      session = { ...session, ...fields };
+      writeAtomic(sessionRecordPath(sessionId, env), session);
+    };
+
+    let current = null;
+    if (enabled) {
+      const deadline = Number(env.TOKEN_OPTIMIZER_HOOK_DEADLINE_MS) > 0 ? Number(env.TOKEN_OPTIMIZER_HOOK_DEADLINE_MS) : 4200;
+      const budget = Math.min(
+        Number(env.TOKEN_OPTIMIZER_RESOLVE_BUDGET_MS) > 0 ? Number(env.TOKEN_OPTIMIZER_RESOLVE_BUDGET_MS) : RESOLVE_BUDGET_MS,
+        Math.max(0, deadline / 4 - (now() - started))
+      );
+      current = await resolveCurrent({ entryRel, entryFile, env, budgetMs: budget });
+      if (current && current.version !== self.version && current.schema > stateSchema && current.migratesFrom.includes(stateSchema)) {
+        current.migrate = async () => {
           const module = await within(
             import(pathToFileURL(join(current.hooksDir, 'lib', 'runtime-switch.mjs')).href),
             Math.max(0, budget - (now() - started)),
             null
           );
-          migrated = Boolean(module) && migrateSession(sessionId, module.MIGRATIONS, sessionSchema, current.schema, env);
-          if (migrated)
-            writeAtomic(sessionRecordPath(sessionId, env), {
-              ...session,
-              schema: current.schema,
-              version: current.version,
-              migratedFrom: sessionSchema,
-            });
-        }
-        if (migrated) {
-          choice = { hooksDir: current.hooksDir, version: current.version, mode: 'current', note: null, pure: null };
-        } else {
-          const note = session?.noted ? null : RESTART_NOTE;
-          if (note) writeAtomic(sessionRecordPath(sessionId, env), { ...session, noted: true });
-          choice = { ...self, mode: 'pinned', note, pure: current.hooksDir };
-        }
+          return Boolean(module) && migrateSession(sessionId, module.MIGRATIONS, stateSchema, current.schema, env);
+        };
       }
+    }
+    // What would run the hook: current when it names another version, else this copy.
+    const target =
+      current && current.version !== self.version
+        ? { hooksDir: current.hooksDir, version: current.version, schema: current.schema, mode: 'current' }
+        : { hooksDir: selfDir, version: self.version, schema: STATE_SCHEMA, mode: 'self' };
+    const run = (t, note = null) => ({ hooksDir: t.hooksDir, version: t.version, mode: t.mode, note, pure: null });
+
+    let choice;
+    if (target.schema === stateSchema) {
+      choice = target.mode === 'self' ? self : run(target);
+    } else if (target.schema > stateSchema && current?.migrate && (await current.migrate())) {
+      saveRecord({ schema: target.schema, version: target.version, hooksDir: target.hooksDir, migratedFrom: stateSchema });
+      choice = run(target);
+    } else if (target.schema < stateSchema && restoreSession(sessionId, target.schema, env)) {
+      // Older code never reads newer state: the state goes back to the form the
+      // migration started from, or the hook does not run on this target.
+      saveRecord({ schema: target.schema, version: target.version, hooksDir: target.hooksDir, restoredFrom: stateSchema });
+      choice = run(target);
+    } else {
+      // The stateful hooks need code on the state's schema.
+      const note = session?.noted ? null : target.schema < stateSchema ? DOWNGRADE_NOTE : RESTART_NOTE;
+      const pure = current ? current.hooksDir : null;
+      if (stateSchema === STATE_SCHEMA) {
+        choice = { ...self, mode: 'pinned', note, pure };
+      } else if (
+        session?.hooksDir &&
+        session.hooksDir !== selfDir &&
+        session.version &&
+        runtimeFiles(session.hooksDir, entryFile).every((file) => existsSync(file))
+      ) {
+        choice = { hooksDir: session.hooksDir, version: session.version, mode: 'pinned', note, pure };
+      } else if (quarantineSession(sessionId, stateSchema, env)) {
+        // No code on the state's schema is left: the hooks start this
+        // session's state afresh on the target.
+        saveRecord({ schema: target.schema, version: target.version, hooksDir: target.hooksDir, quarantinedFrom: stateSchema });
+        choice = run(target, note);
+      } else {
+        choice = { ...self, mode: 'inert', note, pure: null };
+      }
+      if (note) saveRecord({ noted: true });
     }
     if (toolUseId && event === 'pre-tool' && choice.mode !== 'self') {
       try {
@@ -493,9 +671,10 @@ export async function resolveHook({
         // Unrecorded: post-tool resolves for itself, as it did before.
       }
     }
-    return choice;
+    return { ...choice, sessionId };
   } catch {
-    return self;
+    // Even here, this copy runs the hook only on state of its own schema.
+    return selfMayRun(sessionId, env) ? { ...self, sessionId } : { ...self, mode: 'inert', sessionId };
   }
 }
 
@@ -516,6 +695,9 @@ export async function applyResolution(choice, { budgetMs = RESOLVE_BUDGET_MS } =
     globalThis.__tokenOptimizerPure = pure;
   }
   if (choice.note) installNote(choice.note);
+  // No code on the session's state schema can run it, and the state could not
+  // be moved aside: the hook stays out of the call rather than misread state.
+  if (choice.mode === 'inert') return null;
   return choice.hooksDir;
 }
 
@@ -557,9 +739,10 @@ export async function importForHook({ here, entryRel, event, module, env = proce
   const selfDir = dirname(fileURLToPath(here));
   const own = () => import(pathToFileURL(join(selfDir, ...module.split('/'))).href);
   let chosen = selfDir;
+  let choice = null;
   const priorVersion = process.env.TOKEN_OPTIMIZER_VERSION;
   try {
-    const choice = await resolveHook({
+    choice = await resolveHook({
       hooksDir: selfDir,
       entryRel,
       entryFile: module.startsWith('impl/') ? module : null,
@@ -568,8 +751,9 @@ export async function importForHook({ here, entryRel, event, module, env = proce
     });
     chosen = await applyResolution(choice);
   } catch {
-    chosen = selfDir;
+    chosen = selfMayRun(choice?.sessionId ?? null, env) ? selfDir : null;
   }
+  if (chosen === null) return INERT_HOOK;
   if (chosen === selfDir) return own();
   try {
     return await import(pathToFileURL(join(chosen, ...module.split('/'))).href);
@@ -579,6 +763,8 @@ export async function importForHook({ here, entryRel, event, module, env = proce
     // the hook RUNS is the hook's own, and running it a second time from this
     // copy could write a second answer to stdout.
     if (!LOAD_FAILURES.has(error?.code) && !(error instanceof SyntaxError)) throw error;
+    // This copy may be older than the state the chosen runtime was picked for.
+    if (!selfMayRun(choice?.sessionId ?? null, env)) return INERT_HOOK;
     globalThis.__tokenOptimizerPure = undefined;
     if (priorVersion === undefined) delete process.env.TOKEN_OPTIMIZER_VERSION;
     else process.env.TOKEN_OPTIMIZER_VERSION = priorVersion;
