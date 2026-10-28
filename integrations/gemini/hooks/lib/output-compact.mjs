@@ -208,17 +208,85 @@ export function selectWithinBudget(text, budget) {
   return { text: out.join('\n'), dropped };
 }
 
-/** A command whose output IS the content of a file: an edit may need it byte-exact. */
+/**
+ * A stage that prints a file's content. `git show` only as `<rev>:<path>`: a
+ * bare `git show <commit>` prints a commit and its diff, which is a log.
+ */
+const READ_STAGE =
+  /^(cat|type|head|tail|less|more|bat|nl|Get-Content|gc)\b|^sed\s+-n\b|^git\s+show\s+(?:-\S+\s+)*(?:[^\s:-][^\s:]*)?:\S|^git\s+cat-file\s+-p\b|^awk\s+'NR/i;
+/** A stage that only narrows its input to a line range, so a read stays a read. */
+const RANGE_STAGE =
+  /^(head|tail|nl|cat\s+-n)\b|^sed\s+-n\s+['"]?\d+(,\d+)?p['"]?\s*$|^(Select-Object|select)\s+(-(First|Last|Skip|Index)\s+[\d,.]+\s*)+$|^awk\s+'NR/i;
+
+/**
+ * A command whose output IS the content of a file: an edit may need it byte-exact.
+ *
+ * JUDGED BY THE STAGE THAT PRODUCES THE OUTPUT, not the last one. This used to
+ * test only the final pipeline stage, so `grep -rn X . | head -200`,
+ * `git log | head -100` and `dotnet test | tail -60` all counted as file reads
+ * and passed byte-exact up to READ_EXACT_BYTES -- a search, a log and a test run
+ * treated as source an edit is built from. Replayed over the local transcripts
+ * (bench/field/compaction-replay.mjs) that was 87 outputs over 6 KB and ~207k
+ * tokens let through whole. A pipeline is a read only when its FIRST stage
+ * reads and every later stage merely cuts a line range out of it.
+ */
 export function isReadLikeCommand(command) {
-  const first =
+  const statement =
     String(command ?? '')
-      .split(/\|\||&&|;|\|/)
-      .map((s) => s.trim().replace(/^(?:cd\s+\S+\s*)$/, ''))
-      .filter(Boolean)
+      .split(/\|\||&&|;/)
+      .map((s) => s.trim())
+      .filter((s) => s && !/^(cd|Set-Location|sl|pushd|Push-Location)\s+\S+$/i.test(s))
       .pop() ?? '';
-  return /^(cat|type|head|tail|less|more|bat|nl|Get-Content|gc)\b|^sed\s+-n\b|^git\s+(show|cat-file\s+-p)\b|^awk\s+'NR/.test(
-    first
+  const stages = statement
+    .split('|')
+    .map((s) =>
+      s
+        .trim()
+        // PowerShell `$x = Get-Content f` and `(Get-Content f)[0..80]` read the same.
+        .replace(/^\$[\w:]+\s*=\s*/, '')
+        .replace(/^\(+/, '')
+    )
+    .filter(Boolean);
+  if (!stages.length || !READ_STAGE.test(stages[0])) return false;
+  return stages.slice(1).every((s) => RANGE_STAGE.test(s));
+}
+
+/** A build or test run's output is compacted from this size, not OUTPUT_COMPACT_MIN_BYTES. */
+export const BUILD_LOG_MIN_BYTES = 2000;
+/** What a compacted build/test log under OUTPUT_COMPACT_MIN_BYTES keeps besides its verdict lines. */
+export const BUILD_LOG_BUDGET_BYTES = 1200;
+
+/**
+ * A command that builds or runs tests, in any statement of it.
+ *
+ * WHY A LOWER THRESHOLD FOR THESE. Replayed over the local transcripts
+ * (bench/field/compaction-replay.mjs), 2,968 build/test results came to 408k
+ * tokens and 6 KB caught only 17 of them: an MSBuild, jest or pytest run piped
+ * through `tail -60` lands at 2-6 KB and is mostly restore/compile progress
+ * around one verdict line -- which an agent re-reads on every later call.
+ */
+export function isBuildOrTestCommand(command) {
+  const text = String(command ?? '');
+  // A build script is named by path (`pwsh -File C:\b\build.ps1`), so it matches anywhere.
+  if (/(^|[\s\\/'"])build\.(ps1|sh|cmd)(\s|['"]|$)/i.test(text)) return true;
+  return /(^|[\s;&|(])(dotnet\s+(build|test|msbuild|pack|publish)|msbuild|npm(\.cmd)?\s+(test|t|run\s+[\w:-]*(build|test|lint|check|typecheck)[\w:-]*)|npx(\.cmd)?\s+(tsc|jest|eslint|vitest)|jest|vitest|tsc|pytest|python\s+-m\s+pytest|cargo\s+(build|test|check|clippy)|go\s+(build|test|vet)|mvn|gradlew?|ctest|cmake\s+--build|make)(\s|$)/i.test(
+    text
   );
+}
+
+/**
+ * Bytes selectWithinBudget spends on verdicts: every signal/summary line and
+ * the two lines it keeps after each.
+ */
+function verdictBytes(text) {
+  const lines = String(text).split('\n');
+  const keep = new Set();
+  lines.forEach((l, i) => {
+    if (SIGNAL.test(l) || SUMMARY.test(l)) for (const j of [i, i + 1, i + 2]) if (j < lines.length) keep.add(j);
+  });
+  let n = 0;
+  for (const j of keep) n += bytes(lines[j]) + 1;
+  return n;
 }
 
 /**
@@ -234,7 +302,17 @@ export function compactText(
 ) {
   const source = String(text ?? '');
   const size = bytes(source);
-  if (size < OUTPUT_COMPACT_MIN_BYTES) return null;
+  if (size < OUTPUT_COMPACT_MIN_BYTES) {
+    // Only a build/test log is compacted below the general floor, and only
+    // around its verdict. Selection spends up to a quarter of the budget on the
+    // tail before it reaches the verdict lines, so the budget is sized for the
+    // verdicts to fit after that: a small budget cuts progress noise, never a
+    // failure line.
+    if (size < BUILD_LOG_MIN_BYTES || !isBuildOrTestCommand(command) || isReadLikeCommand(command))
+      return null;
+    const verdicts = verdictBytes(collapseCarriageReturns(stripAnsi(source)));
+    budget = Math.min(budget, BUILD_LOG_BUDGET_BYTES + Math.ceil(verdicts / 0.75));
+  }
   const readLike = isReadLikeCommand(command);
   if (readLike && size <= READ_EXACT_BYTES) return null;
   // A read is cut, never folded: folding would change lines an edit must match.
@@ -315,10 +393,16 @@ export function compactToolResponse({
   if (tool === 'Bash' || tool === 'PowerShell') {
     if (response.isImage) return null;
     const command = String(input?.command ?? '');
-    const out = compactText(response.stdout, { command });
+    // A shell search prints the same `path:line:text` the Grep tool does, and
+    // gets the same lossless grouping first (see isShellSearchCommand).
+    const grouped =
+      typeof response.stdout === 'string' && isShellSearchCommand(command)
+        ? groupGrepByFile(response.stdout)
+        : null;
+    const out = compactText(grouped ?? response.stdout, { command: grouped ? '' : command });
     const err = compactText(response.stderr, { command: '' });
-    if (!out && !err) return null;
-    const replaced = { ...response };
+    if (!out && !err) return grouped ? { ...response, stdout: grouped } : null;
+    const replaced = grouped ? { ...response, stdout: grouped } : { ...response };
     for (const [key, done] of [
       ['stdout', out],
       ['stderr', err],
@@ -359,6 +443,27 @@ export function compactToolResponse({
     };
   }
   return null;
+}
+
+/**
+ * A shell command whose output is search hits: the last statement starts with
+ * grep/rg/ag/git grep/Select-String/findstr, whatever it is piped into.
+ *
+ * WHY. Agents search through the shell far more than through the Grep tool:
+ * 4,234 shell searches for 1.50M tokens in the local transcripts against a
+ * handful of Grep calls, and grouping applied to none of them. Grouping only
+ * rewrites lines shaped `path:N:` (and their `path-N-` context), so a search
+ * piped into `wc -l` or `sort | uniq -c` passes through untouched.
+ */
+export function isShellSearchCommand(command) {
+  const statement =
+    String(command ?? '')
+      .split(/\|\||&&|;/)
+      .map((s) => s.trim())
+      .filter((s) => s && !/^(cd|Set-Location|sl|pushd|Push-Location)\s+\S+$/i.test(s))
+      .pop() ?? '';
+  const first = statement.split('|')[0].trim().replace(/^\$[\w:]+\s*=\s*/, '').replace(/^\(+/, '');
+  return /^(grep|egrep|fgrep|rg|ag|git\s+(?:-C\s+\S+\s+)?grep|Select-String|sls|findstr)\b/i.test(first);
 }
 
 /** Below this a Grep result is left exactly as it is. */
