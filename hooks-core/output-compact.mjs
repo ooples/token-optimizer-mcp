@@ -266,6 +266,15 @@ export function selectWithinBudget(text, budget) {
 const READ_STAGE =
   /^(cat|type|head|tail|less|more|bat|nl|Get-Content|gc)\b|^sed\s+-n\b|^git\s+show\s+(?:-\S+\s+)*(?:[^\s:-][^\s:]*)?:\S|^git\s+cat-file\s+-p\b|^awk\s+(-F\s*('[^']*'|"[^"]*"|\S+)\s+)?'(NR|\{)/i;
 /**
+ * A stage that prints a document someone wrote for the agent to act on: an
+ * issue or pull request body and its comments. Read like a file, byte-exact up
+ * to READ_EXACT_BYTES. Selected like a log, these were cut to their "signal"
+ * lines -- 119 lines of two issue bodies an agent had been asked to implement
+ * were folded away, and it had to read the artifact back to see the request.
+ */
+const DOCUMENT_STAGE = /^gh\s+(?:issue|pr)\s+view\b/i;
+
+/**
  * A stage that narrows its input to line ranges or reformats every line
  * (numbering, `cut -c`, an `awk` action with no pattern), so a read stays a
  * read: `sed -n 9990,10340p f | cat -n | awk '{...print}' | cut -c1-200` is a
@@ -307,7 +316,14 @@ function lastStatementStages(command) {
 function statementStages(command) {
   return shellStatements(command)
     .filter((stages) => !(stages.length === 1 && /^(cd|Set-Location|sl|pushd|Push-Location)\s+\S+$/i.test(stages[0])))
-    .map((stages) => stages.map((s) => s.replace(/^\$[\w:]+\s*=\s*/, '').replace(/^\(+/, '')).filter(Boolean));
+    .map((stages) =>
+      stages
+        // A loop or conditional body's first word is a keyword, not the program:
+        // `for n in 1 2; do gh issue view $n; done` runs `gh issue view`.
+        .map((s) => s.replace(/^(?:do|then|else|elif)\s+/, ''))
+        .map((s) => s.replace(/^\$[\w:]+\s*=\s*/, '').replace(/^\(+/, ''))
+        .filter(Boolean)
+    );
 }
 
 /**
@@ -331,7 +347,7 @@ export function isReadLikeCommand(command) {
   return statementStages(command).some(
     (stages) =>
       stages.length > 0 &&
-      READ_STAGE.test(stages[0]) &&
+      (READ_STAGE.test(stages[0]) || DOCUMENT_STAGE.test(stages[0])) &&
       !LOG_TARGET.test(stages[0]) &&
       !writesStdout(stages[0]) &&
       stages.slice(1).every(isRangeStage)

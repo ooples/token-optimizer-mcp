@@ -124,6 +124,18 @@ describe('a read is judged by the stage that produces the output', () => {
       expect(isReadLikeCommand(command)).toBe(true);
   });
 
+  test('an issue or PR body is read like a file, also inside a loop', () => {
+    for (const command of [
+      'gh issue view 542 --json body,comments --jq .body',
+      'gh pr view 535 -R ooples/token-optimizer-mcp',
+      "for n in 538 542; do echo \"## $n\"; gh issue view $n --json body --jq .body; done",
+      'for n in 1 2; do gh pr view $n; done',
+    ])
+      expect(isReadLikeCommand(command)).toBe(true);
+    for (const command of ['gh pr list --state open', 'gh pr checks 535', 'gh run view 1 --log-failed'])
+      expect(isReadLikeCommand(command)).toBe(false);
+  });
+
   test('a cat that writes a file, or reads a task log, is not a read', () => {
     for (const command of [
       "cat > probe.py <<'EOF'\nimport sys\nhead = sys.argv[1]\nEOF\npython probe.py",
