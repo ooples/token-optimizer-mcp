@@ -51,9 +51,26 @@ export function turnsSoFar(state) {
  */
 export function outlineRead({ sessionId, filePath, offset, limit, state }) {
   if (!filePath) return null;
-  if (offset != null || limit != null) return null;
-
   const target = join(outlineDir(), `${recordKey(sessionId || '', filePath)}.outline.txt`);
+  const missed = join(outlineDir(), `${recordKey(sessionId || '', '')}.outline-missed`);
+
+  if (offset != null || limit != null) {
+    // A PAGED READ OF A FILE THIS SESSION WAS GIVEN AN OUTLINE OF says the
+    // outline did not answer, and from then on the session gets whole files.
+    // Measured 2026-10-30 on two long porting sessions: 22 of 29 outlines were
+    // followed by paged reads of the same file, usually covering all of it, so
+    // the outlines saved 21k tokens and cost about 25 extra calls. Stopping at
+    // the first such read keeps all but ~3 of those calls off.
+    if (existsSync(target)) {
+      try {
+        writeFileSync(missed, '', { flag: 'a', mode: 0o600 });
+      } catch {
+        // Nowhere to write: outlines simply continue.
+      }
+    }
+    return null;
+  }
+  if (existsSync(missed)) return null;
   const found = substitutionFor(filePath, {
     turnsSoFar: turnsSoFar(state),
     alreadyRead: existsSync(target),
