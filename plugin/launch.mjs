@@ -101,6 +101,12 @@ const REFRESH_INTERVAL_MS = numericEnv(
 // After a FAILED refresh, the next attempt is due this soon rather than a whole interval later.
 const REFRESH_RETRY_MS = numericEnv('TOKEN_OPTIMIZER_REFRESH_RETRY_MS', 15 * 60 * 1000);
 
+// How often a RUNNING launcher asks whether a refresh is due. The throttle above still decides; this
+// only gives it a chance to. Without it a refresh ran at launch alone, and sessions here run for
+// days: measured 2026-10-30, 7.6.0 reached the runtime 39.5 h after it was published and 7.7.1
+// 12 h after, both at the next launch. 0 disables it.
+const REFRESH_RECHECK_MS = numericEnv('TOKEN_OPTIMIZER_REFRESH_RECHECK_MS', 30 * 60 * 1000);
+
 // How long a launch waits for the plugin's own version to install before serving what it has.
 // Claude Code gives an MCP server about 30 s to answer. Measured 2026-09-17 on Windows: a real
 // install of 7.0.1 took ~20 s and a cold server start up to 6 s, so 15 s keeps a margin; a slower
@@ -925,6 +931,25 @@ function spawnBackgroundRefresh() {
   }
 }
 
+/**
+ * Re-check, every REFRESH_RECHECK_MS while the server runs, whether a background refresh is due.
+ *
+ * Each tick is one stat of the throttle files; the registry is asked only when the refresh interval
+ * has passed, exactly as at launch. The serving process is untouched -- a refresh installs into a new
+ * versions/<v> dir and flips `current`, which the hooks and the NEXT launch pick up. The timer is
+ * unref'd, so it never keeps the launcher alive after its server exits.
+ */
+export function startPeriodicRefresh({
+  intervalMs = REFRESH_RECHECK_MS,
+  refresh = spawnBackgroundRefresh,
+  every = setInterval,
+} = {}) {
+  if (!(intervalMs > 0) || PINNED_VERSION) return null;
+  const timer = every(refresh, intervalMs);
+  timer?.unref?.();
+  return timer;
+}
+
 /** Spawn the server, forwarding stdio, signals, and exit code. */
 function runServer(entry) {
   // Announce which runtime this shim is serving BEFORE the server starts, so a
@@ -941,6 +966,7 @@ function runServer(entry) {
     stdio: 'inherit',
     env: process.env,
   });
+  startPeriodicRefresh();
   const forward = (sig) => {
     try {
       child.kill(sig);

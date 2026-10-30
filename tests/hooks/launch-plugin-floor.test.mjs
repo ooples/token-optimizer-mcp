@@ -12,7 +12,7 @@
  * version is under test control. LAUNCH_UNDER_TEST points the suite at another shim (the control arm).
  */
 
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import {
   chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync,
 } from 'node:fs';
@@ -316,4 +316,84 @@ describe('#394 a failed refresh does not silence retries', () => {
     expect(r.status).toBe(0);
     expect(r.stderr).not.toMatch(/DEP0190/);
   });
+});
+
+describe('a running launcher picks up a release without a relaunch', () => {
+  // Observed 2026-10-30: the refresh ran at launch only, and sessions here run for days, so 7.6.0
+  // reached the runtime 39.5 h after it was published and 7.7.1 12 h after.
+
+  /** A server that stays up, as a real one does for the whole session. */
+  function seedLongRunningVersion(version, ms) {
+    seedVersion(version);
+    writeFileSync(join(runtime, 'versions', version, PACKAGE_DIR, 'server.js'), `setTimeout(() => {}, ${ms});\n`);
+  }
+
+  function launchDetached(shim, env) {
+    const path = pathWithFakeNpm();
+    return spawn(process.execPath, [shim], {
+      stdio: 'ignore',
+      env: {
+        ...process.env,
+        [path.key]: path.value,
+        TOKEN_OPTIMIZER_RUNTIME: runtime,
+        TOKEN_OPTIMIZER_VERSION: '',
+        FAKE_NPM_LOG: npmLog,
+        npm_config_cache: join(root, 'empty-npm-cache'),
+        FAKE_NPM_LATEST: '7.0.1',
+        FAKE_NPM_AVAILABLE: '7.0.1',
+        // Not due at launch (the stamp is fresh), due 1.5 s later.
+        TOKEN_OPTIMIZER_REFRESH_INTERVAL_MS: '1500',
+        ...env,
+      },
+    });
+  }
+
+  async function stop(child) {
+    if (child.exitCode === null) child.kill();
+    await new Promise((resolve) => (child.exitCode !== null ? resolve() : child.once('exit', resolve)));
+  }
+
+  test('the refresh falls due while the server runs and installs the release', async () => {
+    seedLongRunningVersion('6.0.2', 15_000);
+    setCurrent('6.0.2');
+    const child = launchDetached(pluginWith(null), { TOKEN_OPTIMIZER_REFRESH_RECHECK_MS: '300' });
+    try {
+      expect(await waitFor(() => readCurrent() === '7.0.1', 12_000)).toBe(true);
+      // The same launcher is still serving: nothing restarted to get here.
+      expect(child.exitCode).toBeNull();
+    } finally {
+      await stop(child);
+    }
+  }, SPAWN_AND_WAIT_MS);
+
+  test('with the re-check off, only a launch refreshes (the previous behaviour)', async () => {
+    seedLongRunningVersion('6.0.2', 15_000);
+    setCurrent('6.0.2');
+    const child = launchDetached(pluginWith(null), { TOKEN_OPTIMIZER_REFRESH_RECHECK_MS: '0' });
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 4000));
+      expect(child.exitCode).toBeNull();
+      expect(readCurrent()).toBe('6.0.2');
+      expect(npmCalls()).toHaveLength(0);
+    } finally {
+      await stop(child);
+    }
+  }, SPAWN_AND_WAIT_MS);
+
+  test('a pinned version never refreshes, however long it runs', async () => {
+    seedLongRunningVersion('6.0.2', 15_000);
+    setCurrent('6.0.2');
+    const child = launchDetached(pluginWith(null), {
+      TOKEN_OPTIMIZER_VERSION: '6.0.2',
+      TOKEN_OPTIMIZER_REFRESH_RECHECK_MS: '300',
+    });
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 4000));
+      expect(child.exitCode).toBeNull();
+      expect(readCurrent()).toBe('6.0.2');
+      expect(npmCalls()).toHaveLength(0);
+    } finally {
+      await stop(child);
+    }
+  }, SPAWN_AND_WAIT_MS);
 });
