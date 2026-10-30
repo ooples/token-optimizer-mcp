@@ -101,6 +101,12 @@ const REFRESH_INTERVAL_MS = numericEnv(
 // After a FAILED refresh, the next attempt is due this soon rather than a whole interval later.
 const REFRESH_RETRY_MS = numericEnv('TOKEN_OPTIMIZER_REFRESH_RETRY_MS', 15 * 60 * 1000);
 
+// How often a RUNNING launcher asks whether a refresh is due. The throttle above still decides; this
+// only gives it a chance to. Without it a refresh ran at launch alone, and sessions here run for
+// days: measured 2026-10-30, 7.6.0 reached the runtime 39.5 h after it was published and 7.7.1
+// 12 h after, both at the next launch. 0 disables it.
+const REFRESH_RECHECK_MS = numericEnv('TOKEN_OPTIMIZER_REFRESH_RECHECK_MS', 30 * 60 * 1000);
+
 // How long a launch waits for the plugin's own version to install before serving what it has.
 // Claude Code gives an MCP server about 30 s to answer. Measured 2026-09-17 on Windows: a real
 // install of 7.0.1 took ~20 s and a cold server start up to 6 s, so 15 s keeps a margin; a slower
@@ -925,6 +931,58 @@ function spawnBackgroundRefresh() {
   }
 }
 
+/**
+ * Re-check, every REFRESH_RECHECK_MS while the server runs, whether a background refresh is due.
+ *
+ * Each tick is one stat of the throttle files; the registry is asked only when the refresh interval
+ * has passed, exactly as at launch. The serving process is untouched -- a refresh installs into a new
+ * versions/<v> dir and flips `current`, which the hooks and the NEXT launch pick up. The timer is
+ * unref'd, so it never keeps the launcher alive after its server exits.
+ */
+export function startPeriodicRefresh({
+  intervalMs = REFRESH_RECHECK_MS,
+  refresh = spawnBackgroundRefresh,
+  every = setInterval,
+} = {}) {
+  if (!(intervalMs > 0) || PINNED_VERSION) return null;
+  const timer = every(refresh, boundedDelay(intervalMs));
+  timer?.unref?.();
+  return timer;
+}
+
+// The longest delay a Node timer honours. Above it Node fires after 1 ms instead,
+// so an interval of a month became a stat every millisecond and, while a refresh
+// was due, a child spawn per tick (review, #537).
+export const MAX_TIMER_MS = 2 ** 31 - 1;
+
+/** A delay Node will actually wait: capped at MAX_TIMER_MS, never the 1 ms fallback. */
+export function boundedDelay(ms) {
+  return Math.min(ms, MAX_TIMER_MS);
+}
+
+// How often a live launcher re-stamps its active marker. Well under the 30-day age
+// past which activeVersions() distrusts a marker.
+const MARKER_RENEW_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Keep this launcher's active marker fresh for as long as it serves.
+ *
+ * activeVersions() distrusts a marker older than 30 days, to bound pid reuse: a
+ * recycled pid would otherwise pin a version forever. A launcher that really is
+ * alive that long lost its protection, and once periodic refreshes installed
+ * enough newer versions, the pruner could delete the runtime it was serving --
+ * lazy-loaded modules then failed for the rest of the session (review, #537).
+ * Renewal comes from the live process itself, which a recycled pid never does,
+ * so the pid-reuse bound still holds. Its own timer, so disabling the refresh
+ * re-check does not disable it.
+ */
+export function startMarkerRenewal(version, { every = setInterval, renew = registerActiveVersion } = {}) {
+  if (!version) return null;
+  const timer = every(() => renew(version), MARKER_RENEW_MS);
+  timer?.unref?.();
+  return timer;
+}
+
 // Where a native crash of the server is recorded, for the hooks' SessionStart notice to read.
 // The name is shared with hooks-core/server-crash.mjs.
 const SERVER_CRASH_FILE = join(RUNTIME, '.server-crash.json');
@@ -999,6 +1057,7 @@ function runServer(entry) {
     : null;
   if (served) {
     registerActiveVersion(served);
+    startMarkerRenewal(served);
     process.on('exit', unregisterActiveVersion);
   }
 
@@ -1006,6 +1065,7 @@ function runServer(entry) {
     stdio: 'inherit',
     env: process.env,
   });
+  startPeriodicRefresh();
   const forward = (sig) => {
     try {
       child.kill(sig);
