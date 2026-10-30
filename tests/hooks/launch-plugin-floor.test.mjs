@@ -341,11 +341,21 @@ describe('a running launcher picks up a release without a relaunch', () => {
         npm_config_cache: join(root, 'empty-npm-cache'),
         FAKE_NPM_LATEST: '7.0.1',
         FAKE_NPM_AVAILABLE: '7.0.1',
-        // Not due at launch (the stamp is fresh), due 1.5 s later.
-        TOKEN_OPTIMIZER_REFRESH_INTERVAL_MS: '1500',
+        // Never due by elapsed time within a test: `makeDue` ages the stamp once the
+        // launcher is up, so launch-time timing cannot decide either outcome.
+        TOKEN_OPTIMIZER_REFRESH_INTERVAL_MS: String(6 * 60 * 60 * 1000),
         ...env,
       },
     });
+  }
+
+  /** Wait until this launcher is serving, then make a refresh due. */
+  async function makeDue(child) {
+    const marker = join(runtime, 'active', `${child.pid}.json`);
+    expect(await waitFor(() => existsSync(marker), 10_000)).toBe(true);
+    // Launch is over, and it saw a fresh stamp: no launch-time refresh ran.
+    expect(npmCalls()).toHaveLength(0);
+    writeFileSync(join(runtime, '.last-refresh'), String(Date.now() - 7 * 60 * 60 * 1000));
   }
 
   async function stop(child) {
@@ -358,6 +368,7 @@ describe('a running launcher picks up a release without a relaunch', () => {
     setCurrent('6.0.2');
     const child = launchDetached(pluginWith(null), { TOKEN_OPTIMIZER_REFRESH_RECHECK_MS: '300' });
     try {
+      await makeDue(child);
       expect(await waitFor(() => readCurrent() === '7.0.1', 12_000)).toBe(true);
       // The same launcher is still serving: nothing restarted to get here.
       expect(child.exitCode).toBeNull();
@@ -371,6 +382,7 @@ describe('a running launcher picks up a release without a relaunch', () => {
     setCurrent('6.0.2');
     const child = launchDetached(pluginWith(null), { TOKEN_OPTIMIZER_REFRESH_RECHECK_MS: '0' });
     try {
+      await makeDue(child);
       await new Promise((resolve) => setTimeout(resolve, 4000));
       expect(child.exitCode).toBeNull();
       expect(readCurrent()).toBe('6.0.2');

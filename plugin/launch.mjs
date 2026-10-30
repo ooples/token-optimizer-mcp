@@ -945,7 +945,40 @@ export function startPeriodicRefresh({
   every = setInterval,
 } = {}) {
   if (!(intervalMs > 0) || PINNED_VERSION) return null;
-  const timer = every(refresh, intervalMs);
+  const timer = every(refresh, boundedDelay(intervalMs));
+  timer?.unref?.();
+  return timer;
+}
+
+// The longest delay a Node timer honours. Above it Node fires after 1 ms instead,
+// so an interval of a month became a stat every millisecond and, while a refresh
+// was due, a child spawn per tick (review, #537).
+export const MAX_TIMER_MS = 2 ** 31 - 1;
+
+/** A delay Node will actually wait: capped at MAX_TIMER_MS, never the 1 ms fallback. */
+export function boundedDelay(ms) {
+  return Math.min(ms, MAX_TIMER_MS);
+}
+
+// How often a live launcher re-stamps its active marker. Well under the 30-day age
+// past which activeVersions() distrusts a marker.
+const MARKER_RENEW_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Keep this launcher's active marker fresh for as long as it serves.
+ *
+ * activeVersions() distrusts a marker older than 30 days, to bound pid reuse: a
+ * recycled pid would otherwise pin a version forever. A launcher that really is
+ * alive that long lost its protection, and once periodic refreshes installed
+ * enough newer versions, the pruner could delete the runtime it was serving --
+ * lazy-loaded modules then failed for the rest of the session (review, #537).
+ * Renewal comes from the live process itself, which a recycled pid never does,
+ * so the pid-reuse bound still holds. Its own timer, so disabling the refresh
+ * re-check does not disable it.
+ */
+export function startMarkerRenewal(version, { every = setInterval, renew = registerActiveVersion } = {}) {
+  if (!version) return null;
+  const timer = every(() => renew(version), MARKER_RENEW_MS);
   timer?.unref?.();
   return timer;
 }
@@ -959,6 +992,7 @@ function runServer(entry) {
     : null;
   if (served) {
     registerActiveVersion(served);
+    startMarkerRenewal(served);
     process.on('exit', unregisterActiveVersion);
   }
 
