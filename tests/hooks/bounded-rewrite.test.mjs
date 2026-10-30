@@ -877,6 +877,8 @@ describe('commands whose point is to change the shell itself', () => {
   it.each([
     // An assignment ATTACHED to a command never outlived that command anyway.
     ['CI=1 npm test'],
+    // A `; cd` inside a quoted argument is data, not a statement.
+    ["npm test -- -t 'stops; cd away'"],
     // And the words must be matched as commands, not found anywhere: these two
     // contain `cd` and `export` and mutate nothing.
     ['make cdrom'],

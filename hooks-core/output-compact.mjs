@@ -22,6 +22,7 @@
  * the signal a debug loop exists to carry.
  */
 import { capture, artifactPath } from './expand.mjs';
+import { shellStages, shellStatements } from './shell-split.mjs';
 
 /** Below this an output is left exactly as it is. */
 export const OUTPUT_COMPACT_MIN_BYTES = 6000;
@@ -217,34 +218,17 @@ const RANGE_STAGE =
   /^(head|tail|nl|more|cat\s+-n)\b|^sed\s+-n\s+['"]?\d+(,\d+)?p['"]?\s*$|^(Select-Object|select)\s+(-(First|Last|Skip|Index)\s+\(?[\d,.]+\)?\s*)+$|^awk\s+'NR/i;
 
 /**
- * The statement whose output the command ends with, cd/Set-Location skipped.
- * Newlines separate statements too: the PowerShell tool and multi-line Bash
- * calls put `cd x` and the read on separate lines. A line ending in `|`, a
- * PowerShell backtick or a shell backslash continues onto the next one.
+ * The pipeline stages of the statement the command's output ends with,
+ * cd/Set-Location skipped: the PowerShell tool and multi-line Bash calls put
+ * `cd x` and the read on separate lines. `$x = ` and a leading `(` are dropped,
+ * since PowerShell `$x = Get-Content f` and `(Get-Content f)[0..80]` read the same.
  */
-function lastStatement(command) {
-  return (
-    String(command ?? '')
-      .replace(/\|[ \t]*\r?\n\s*/g, '| ')
-      .replace(/[`\\][ \t]*\r?\n\s*/g, ' ')
-      .split(/\|\||&&|;|\r?\n/)
-      .map((s) => s.trim())
-      .filter((s) => s && !/^(cd|Set-Location|sl|pushd|Push-Location)\s+\S+$/i.test(s))
-      .pop() ?? ''
+function lastStatementStages(command) {
+  const statements = shellStatements(command).filter(
+    (stages) => !(stages.length === 1 && /^(cd|Set-Location|sl|pushd|Push-Location)\s+\S+$/i.test(stages[0]))
   );
-}
-
-/** The pipeline stages of one statement; `$x = ` and leading `(` dropped. */
-function stagesOf(statement) {
-  return statement
-    .split('|')
-    .map((s) =>
-      s
-        .trim()
-        // PowerShell `$x = Get-Content f` and `(Get-Content f)[0..80]` read the same.
-        .replace(/^\$[\w:]+\s*=\s*/, '')
-        .replace(/^\(+/, '')
-    )
+  return (statements.pop() ?? [])
+    .map((s) => s.replace(/^\$[\w:]+\s*=\s*/, '').replace(/^\(+/, ''))
     .filter(Boolean);
 }
 
@@ -261,7 +245,7 @@ function stagesOf(statement) {
  * reads and every later stage merely cuts a line range out of it.
  */
 export function isReadLikeCommand(command) {
-  const stages = stagesOf(lastStatement(command));
+  const stages = lastStatementStages(command);
   if (!stages.length || !READ_STAGE.test(stages[0])) return false;
   return stages.slice(1).every((s) => RANGE_STAGE.test(s));
 }
@@ -289,11 +273,9 @@ export function isBuildOrTestCommand(command) {
   // the command: `grep make notes.txt`, `cat a | grep jest` and
   // `git commit -m "make it work"` print searches and text, and the build
   // budget would fold them lossily.
-  return String(command ?? '')
-    .split(/\|\||&&|;|\||\n/)
+  return shellStages(command)
     .map((s) =>
       s
-        .trim()
         // `FOO=1 npm test`, `$env:X='1'`, `(dotnet test)`, `& "C:\b\build.ps1"`.
         .replace(/^(?:[A-Za-z_]\w*=\S*\s+)+/, '')
         .replace(/^[(&]+\s*/, '')
@@ -494,7 +476,7 @@ export function isShellSearchCommand(command) {
   // PowerShell's `Get-ChildItem -Recurse | Select-String X` print the same
   // `path:N:text`. Grouping is lossless and leaves non-hit lines alone, so a
   // stage that searches its input (`cat a | grep x`) costs nothing.
-  return stagesOf(lastStatement(command)).some((stage) =>
+  return lastStatementStages(command).some((stage) =>
     /^(?:xargs\s+(?:-\S+\s+)*)?(grep|egrep|fgrep|rg|ag|git\s+(?:-C\s+\S+\s+)?grep|Select-String|sls|findstr)\b/i.test(
       stage
     )

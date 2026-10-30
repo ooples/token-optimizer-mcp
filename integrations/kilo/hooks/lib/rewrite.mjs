@@ -23,6 +23,7 @@
  * command runs, which is also the only way it can reach the failing test runs a
  * debug loop is made of.
  */
+import { shellStages } from './shell-split.mjs';
 
 /**
  * Default bound, in bytes.
@@ -200,11 +201,14 @@ function isAssignmentOnly(segment) {
   return tokens.length > 0 && tokens.every((token) => /^[A-Za-z_]\w*=/.test(token));
 }
 
-/** Each segment of a command line, as written. */
+/**
+ * Each segment of a command line, as written. Split outside quotes
+ * (shell-split.mjs): `grep 'a;cd b' f` is one segment, and `2>&1` is not a
+ * background `&`.
+ */
 function splitSegments(command) {
-  return String(command)
-    .split(/\|\||&&|[;|&\n]/)
-    .map((segment) => segment.trim().replace(/^[({]+\s*/, '').trim())
+  return shellStages(command, { background: true })
+    .map((segment) => segment.replace(/^[({]+\s*/, '').trim())
     .filter(Boolean);
 }
 

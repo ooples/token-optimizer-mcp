@@ -117,6 +117,24 @@ describe('a read is judged by the stage that produces the output', () => {
     expect(isReadLikeCommand('git cat-file -p HEAD:src/a.ts')).toBe(true);
   });
 
+  test('an operator inside quotes does not split the command', () => {
+    // A quote-blind split made these the statement `NR<=60' src/a.cs` or
+    // `40,60p' src/a.cs`: not a read, so the file was folded like a log.
+    for (const command of [
+      "awk 'NR>=10 && NR<=60' src/a.cs",
+      "sed -n '1,20p;40,60p' src/a.cs",
+      "awk 'NR>=10 && NR<=60' src/a.cs | cat -n",
+      "cat 'notes; draft.md'",
+      'cd C:\\repo\ngit show "HEAD:src/a b.cs"',
+    ]) {
+      expect(isReadLikeCommand(command)).toBe(true);
+    }
+    expect(isShellSearchCommand("echo 'a | grep b'")).toBe(false);
+    expect(isBuildOrTestCommand("git commit -m 'fix; dotnet test passes'")).toBe(false);
+    const source = Array.from({ length: 300 }, (_, i) => `    var x${i} = Compute(${i});`).join('\n');
+    expect(compactText(source, { command: "awk 'NR>=1 && NR<=300' src/A.cs" })).toBeNull();
+  });
+
   test('an 8 KB search piped into head is compacted; the same bytes from cat are not', () => {
     const hits = [...Array(160).keys()].map((i) => `src/mod${i % 9}/file${i}.ts:${i + 1}:  const v${i} = compute(${i}); // TODO`).join('\n');
     expect(Buffer.byteLength(hits)).toBeGreaterThan(OUTPUT_COMPACT_MIN_BYTES);
