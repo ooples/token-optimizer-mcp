@@ -43,6 +43,9 @@ export function shellStatements(command, { background = false } = {}) {
     stages = [];
   };
 
+  // Heredoc terminators waiting for the end of the current line, in order.
+  const heredocs = [];
+
   for (let i = 0; i < text.length; i++) {
     const c = text[i];
     const next = text[i + 1];
@@ -61,6 +64,15 @@ export function shellStatements(command, { background = false } = {}) {
       current += c;
       continue;
     }
+    // A `#` THAT STARTS A WORD begins a comment (bash and PowerShell), which runs
+    // to the end of the line. Without this an apostrophe in `# the API's tests`
+    // opened a quote that never closed, and every later statement -- a `cd` the
+    // rewriter must see -- was swallowed into it. Mid-word (`a#b`, `$#`,
+    // `${#x}`) and quoted (`'x/y#frag'`) it stays literal.
+    if (c === '#' && (i === 0 || /[\s;&|(]/.test(text[i - 1]))) {
+      while (i + 1 < text.length && text[i + 1] !== '\n' && text[i + 1] !== '\r') i++;
+      continue;
+    }
     if ((c === '\\' || c === '`') && (next === '\n' || (next === '\r' && text[i + 2] === '\n'))) {
       i += next === '\r' ? 2 : 1;
       current += ' ';
@@ -69,6 +81,36 @@ export function shellStatements(command, { background = false } = {}) {
     if (c === '\\' && next !== undefined) {
       current += c + next;
       i++;
+      continue;
+    }
+    // A HEREDOC BODY IS DATA, NOT STATEMENTS. Its lines were scanned as commands,
+    // so a Python body line `head = x` read as a file read, and an apostrophe or
+    // `#` in the body broke the parse of everything after it. The operator is
+    // kept in its stage (`cat > f <<'EOF'`); the body, up to the terminator
+    // line, is skipped when its line starts. `<<<` is a herestring, not this.
+    if (c === '<' && next === '<' && text[i + 2] !== '<') {
+      const m = /^<<(-?)\s*(?:'([^']+)'|"([^"]+)"|\\?([A-Za-z_][\w.-]*))/.exec(text.slice(i));
+      if (m) {
+        heredocs.push({ word: m[2] ?? m[3] ?? m[4], tabs: m[1] === '-' });
+        current += m[0];
+        i += m[0].length - 1;
+        continue;
+      }
+    }
+    if (c === '\n' && heredocs.length) {
+      let at = i + 1;
+      for (const { word, tabs } of heredocs.splice(0)) {
+        while (at < text.length) {
+          let end = text.indexOf('\n', at);
+          if (end === -1) end = text.length;
+          let body = text.slice(at, end).replace(/\r$/, '');
+          if (tabs) body = body.replace(/^\t+/, '');
+          at = end + 1;
+          if (body === word) break;
+        }
+      }
+      endStatement();
+      i = at - 1;
       continue;
     }
     if (c === '\r' && next === '\n') continue;

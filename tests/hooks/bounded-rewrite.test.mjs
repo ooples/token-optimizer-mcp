@@ -808,6 +808,22 @@ describe('a command that only STARTS by changing the shell', () => {
     ).not.toThrow();
   });
 
+  it('a comment with an apostrophe does not hide the cd after it', () => {
+    // The apostrophe in `API's` opened a quote that never closed, so the `cd`
+    // was read as part of the comment and wrapped inside the subshell, where
+    // it no longer moves the caller's working directory.
+    const original = "# Run the API's tests\ncd /tmp && echo ran";
+    const bounded = boundedRewrite(original);
+    expect(bounded).not.toBeNull();
+    expect(bounded.command.indexOf('cd /tmp')).toBeLessThan(bounded.command.indexOf('('));
+    expect(() =>
+      execFileSync(BASH, ['-n', '-c', bounded.command], { stdio: 'pipe' })
+    ).not.toThrow();
+    const bare = run(`${original}\npwd`).stdout.trim().split('\n').pop();
+    const after = run(`${bounded.command}\npwd`).stdout.trim().split('\n').pop();
+    expect(after).toBe(bare);
+  });
+
   it('leaves the working directory where the unbounded command would', () => {
     // The whole reason these were refused: this client's Bash tool persists the
     // cwd between calls, and a `cd` inside the subshell would not.

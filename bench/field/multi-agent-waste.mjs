@@ -58,7 +58,7 @@ const JSON_OUT = opt('--json');
 const SINCE = opt('--since');
 /** --until <ISO>: records before this instant only, so a live transcript gives a fixed corpus. */
 const UNTIL = opt('--until');
-/** --verbs: also print the first two words of unclassified shell commands, by size. */
+/** --verbs: also print the program name (first word) of unclassified shell commands, by size. */
 const VERBS = args.includes('--verbs') ? new Map() : null;
 
 /** Every transcript under ROOT, main sessions and their subagents. */
@@ -157,9 +157,20 @@ export function classify(name, input = {}) {
     if (/^git\s+grep\b|^(Select-String|sls|findstr)\b/i.test(cmd)) return { pattern: 'search', key: null };
     if (/^git\s+(diff|show|log)\b/.test(cmd)) return { pattern: 'git:diff-log', key: cmd };
     if (/^(grep|rg|find|ls|dir|Get-ChildItem)\b/.test(cmd)) return { pattern: 'search', key: null };
-    return { pattern: 'shell:other', key: null, verb: cmd.split(/\s+/).slice(0, 2).join(' ').replace(/[^\w .:-]/g, '').slice(0, 24) };
+    return { pattern: 'shell:other', key: null, verb: programName(cmd) };
   }
   return { pattern: `tool:${n}`, key: null };
+}
+
+/**
+ * The program a command runs, or `(other)`. ONE WORD, AND ONLY A PLAIN NAME: the
+ * second word was an argument (`export API_TOKEN=...`, `node /home/u/app.js`),
+ * and a first word that is a path or an assignment is not a program name either.
+ * Keeps --verbs inside the header's promise that nothing here prints a command.
+ */
+export function programName(cmd) {
+  const first = String(cmd).trim().split(/\s+/)[0] ?? '';
+  return /^[A-Za-z][\w.-]{0,23}$/.test(first) ? first : '(other)';
 }
 
 /** Folds one transcript into per-pattern rows. */

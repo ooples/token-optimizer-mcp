@@ -63,7 +63,9 @@ def arm_router(text):
         value = getattr(result, attr, None)
         if isinstance(value, str):
             return value
-    return text
+    # NOT the input. Returning the text unchanged scored an API we no longer
+    # recognise as "HeadRoom removed nothing", which is a claim about them.
+    raise TypeError("ContentRouter result has none of compressed/content/text/output")
 
 
 def arm_crusher(text):
@@ -105,16 +107,43 @@ def visible_share(raw_signal, out):
 
 
 def theirs(text):
-    """Their best (smallest) arm. An arm that raises is a no-op, never a drop."""
-    best_name, best = "none", text
+    """Their best (smallest) arm, and the arms that raised on this input.
+
+    An arm that raises is a no-op for THIS input, never a drop -- but it is
+    counted and reported, so a mid-run failure cannot quietly score as
+    "HeadRoom removed nothing".
+    """
+    best_name, best, errors = "none", text, []
     for name, fn in ARMS:
         try:
             out = fn(text)
-        except Exception:  # noqa: BLE001 -- a failing arm scores as unchanged
+        except Exception:  # noqa: BLE001 -- scored as unchanged, but counted
+            errors.append(name)
             continue
         if isinstance(out, str) and len(out) < len(best):
             best_name, best = name, out
-    return best_name, best
+    return best_name, best, errors
+
+
+def probe_arms():
+    """Fail fast: every arm must run once before the pool starts.
+
+    Without this a missing or incompatible headroom package made all three arms
+    raise on every input, and the report showed HeadRoom removing 0% with no
+    warning at all.
+    """
+    import importlib.metadata
+
+    version = importlib.metadata.version("headroom-ai")
+    sample = "\n".join("src/a%d.py:%d: error: name 'x' is not defined" % (i, i) for i in range(40))
+    for name, fn in ARMS:
+        try:
+            out = fn(sample)
+        except Exception as exc:  # noqa: BLE001
+            raise SystemExit("HeadRoom arm %s failed on the probe (headroom-ai %s): %r" % (name, version, exc))
+        if not isinstance(out, str):
+            raise SystemExit("HeadRoom arm %s returned %s, not text" % (name, type(out).__name__))
+    return version
 
 
 def score(line):
@@ -123,7 +152,7 @@ def score(line):
         return None
     raw = item["text"]
     ours = item["out"] if item.get("out") is not None else raw
-    arm, their = theirs(raw)
+    arm, their, errors = theirs(raw)
     sig = signal_lines(raw)
     return {
         "pattern": item["pattern"],
@@ -131,6 +160,7 @@ def score(line):
         "ours": tokens(ours),
         "theirs": tokens(their),
         "arm": arm,
+        "errors": errors,
         "ours_exact": ours == raw,
         "theirs_exact": their == raw,
         "signal": len(sig),
@@ -146,6 +176,8 @@ def main():
     out_json = sys.argv[sys.argv.index("--json") + 1] if "--json" in sys.argv else None
     workers = int(sys.argv[sys.argv.index("--workers") + 1]) if "--workers" in sys.argv else 4
 
+    version = probe_arms()
+    print("headroom-ai %s" % version)
     with open(path, encoding="utf-8") as handle:
         lines = [line for line in handle if line.strip()]
     with Pool(workers) as pool:
@@ -156,7 +188,7 @@ def main():
         for key in (s["pattern"], "TOTAL"):
             row = rows.setdefault(
                 key,
-                {"pattern": key, "n": 0, "raw": 0, "ours": 0, "theirs": 0, "arms": {},
+                {"pattern": key, "n": 0, "raw": 0, "ours": 0, "theirs": 0, "arms": {}, "arm_errors": {},
                  "reads": 0, "ours_exact": 0, "theirs_exact": 0,
                  "signal_n": 0, "ours_signal": 0.0, "theirs_signal": 0.0},
             )
@@ -165,6 +197,8 @@ def main():
             row["ours"] += s["ours"]
             row["theirs"] += s["theirs"]
             row["arms"][s["arm"]] = row["arms"].get(s["arm"], 0) + 1
+            for name in s["errors"]:
+                row["arm_errors"][name] = row["arm_errors"].get(name, 0) + 1
             if s["pattern"] == "read:shell":
                 row["reads"] += 1
                 row["ours_exact"] += s["ours_exact"]
@@ -191,6 +225,9 @@ def main():
             fmt(r["ours"]), pct(r["raw"] - r["ours"], r["raw"]),
             fmt(r["theirs"]), pct(r["raw"] - r["theirs"], r["raw"]),
             exact, signal))
+    total = rows.get("TOTAL", {})
+    print("\nbest arm per result: %s" % json.dumps(total.get("arms", {})))
+    print("arm errors (results on which an arm raised): %s" % json.dumps(total.get("arm_errors", {})))
     if out_json:
         with open(out_json, "w", encoding="utf-8") as handle:
             json.dump(list(rows.values()), handle, indent=2)

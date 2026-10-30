@@ -333,6 +333,7 @@ export function isReadLikeCommand(command) {
       stages.length > 0 &&
       READ_STAGE.test(stages[0]) &&
       !LOG_TARGET.test(stages[0]) &&
+      !writesStdout(stages[0]) &&
       stages.slice(1).every(isRangeStage)
   );
 }
@@ -343,7 +344,19 @@ export function isReadLikeCommand(command) {
  * progress and dropped the failure at the end; as a log it is selected around
  * its verdict lines instead.
  */
-const LOG_TARGET = /\.(log|out|err|trx)['"]?(\s|$)/i;
+// `.output` is where Claude Code writes a background task's stdout.
+const LOG_TARGET = /\.(log|out|output|err|trx)['"]?(\s|$)/i;
+
+/**
+ * A stage whose stdout goes to a file prints nothing: `cat > f <<'EOF'` writes
+ * f, so it is not a read, and the output of whatever runs next is not file
+ * content. 550 recorded commands of this shape kept ~106k tokens byte-exact.
+ * Quoted text is ignored (`sed 's/a>b/'`), and so are `2>`, `2>&1` and `>&2`.
+ */
+function writesStdout(stage) {
+  const bare = stage.replace(/'[^']*'|"(?:\\.|[^"\\])*"/g, '');
+  return /(?:^|[^0-9>])>>?(?!&)\s*\S/.test(bare);
+}
 
 /** A build or test run's output is compacted from this size, not OUTPUT_COMPACT_MIN_BYTES. */
 export const BUILD_LOG_MIN_BYTES = 2000;

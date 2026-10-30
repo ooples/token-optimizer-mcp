@@ -124,6 +124,22 @@ describe('a read is judged by the stage that produces the output', () => {
       expect(isReadLikeCommand(command)).toBe(true);
   });
 
+  test('a cat that writes a file, or reads a task log, is not a read', () => {
+    for (const command of [
+      "cat > probe.py <<'EOF'\nimport sys\nhead = sys.argv[1]\nEOF\npython probe.py",
+      'cat > out.txt <<EOF\ncat a.cs\nEOF\ndotnet test',
+      'cat src/a.ts > copy.ts; npm test',
+      'cat "C:/Temp/claude/x/tasks/b1.output"; gh pr list --state all -L 4',
+    ])
+      expect(isReadLikeCommand(command)).toBe(false);
+    for (const command of [
+      'cat src/a.ts 2>&1',
+      'cat src/a.ts 2>/dev/null | head -40',
+      "sed -n 's/a>b/c/p' src/a.ts",
+    ])
+      expect(isReadLikeCommand(command)).toBe(true);
+  });
+
   test('a multi-line command is judged by its last line, CRLF or LF, continuations joined', () => {
     for (const command of [
       'cd C:\\repo\nGet-Content src\\A.cs',

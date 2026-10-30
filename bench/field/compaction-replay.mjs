@@ -57,6 +57,20 @@ export function responseText(tool, response) {
 }
 
 /**
+ * Whether the hook compacted this response when it was recorded.
+ *
+ * THE NOTICE'S POSITION, NOT ITS TEXT. The compactor appends its notice as the
+ * last line of stdout (or Grep content), so only there does it mean anything:
+ * a recorded `cat hooks-core/output-compact.mjs` contains the same literal in
+ * the middle of the source, and was skipped as if already compacted.
+ */
+export function wasCompacted(tool, response) {
+  const text = tool === 'Grep' ? response?.content : response?.stdout;
+  const last = String(text ?? '').trimEnd().split('\n').pop() ?? '';
+  return last.startsWith(MARK) && /; full (?:output|text): Read .+\]$/.test(last);
+}
+
+/**
  * One recorded call through the compactor. Returns null for a call this harness
  * does not replay (another tool, or a response without the hook's shape).
  */
@@ -65,7 +79,7 @@ export function replayCall({ tool, input, response, dir, compactToolResponse = t
   if (tool === 'Grep' ? typeof response?.content !== 'string' : typeof response?.stdout !== 'string')
     return null;
   const before = responseText(tool, response);
-  if (before.includes(MARK))
+  if (wasCompacted(tool, response))
     return { before: before.length, after: before.length, recorded: true, text: before };
   const replaced = compactToolResponse({ tool, input, response, dir, sessionId: 'replay' });
   const after = replaced ? responseText(tool, replaced) : before;

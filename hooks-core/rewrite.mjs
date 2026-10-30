@@ -148,6 +148,10 @@ function hoistablePrefix(command) {
   for (let i = 0; i < parts.length; i += 2) {
     const segment = parts[i].trim().replace(/^[({]+\s*/, '').trim();
     if (!segment) break;
+    // A COMMENT LINE is inert, so it neither ends the hoistable front nor
+    // becomes its last part: `taken` moves only past a real mutation, and the
+    // prefix therefore never ends inside a comment that would swallow the join.
+    if (segment.startsWith('#') && parts[i + 1] === '\n') continue;
     if (!isStateMutating(segment)) break;
     // A `(` opens a group the split cannot see the end of; leave it alone.
     if (/^[({]/.test(parts[i].trim())) return null;
