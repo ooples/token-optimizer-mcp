@@ -53,7 +53,11 @@ export function turnsSoFar(state) {
  */
 export function outlineRead({ sessionId, filePath, offset, limit, state }) {
   if (!filePath) return null;
-  const target = join(outlineDir(), `${recordKey(sessionId || '', filePath)}.outline.txt`);
+  // KEYED ON THE CANONICAL PATH, as outlineShell keys it. Read hands over
+  // `C:\x\a.ts` and the shell side canonicalises to `C:/x/a.ts`, so on Windows
+  // the record this module calls "shared" between a cat and a Read never was,
+  // and a ranged shell read could not find the outline a Read had served.
+  const target = join(outlineDir(), `${recordKey(sessionId || '', canonicalPath(filePath))}.outline.txt`);
   const missed = join(outlineDir(), `${recordKey(sessionId || '', '')}.outline-missed`);
 
   if (offset != null || limit != null) {
@@ -96,6 +100,49 @@ export function outlineRead({ sessionId, filePath, offset, limit, state }) {
   }
 }
 
+// A command that prints part of a file rather than all of it.
+const RANGED_READ =
+  /\bsed\s+(?:-\w+\s+)*-n\b|\bawk\b[^|;&]*\bNR\b|(?:^|[|;&]\s*)(?:head|tail)\b|\bSelect-Object\b[^|;&]*-(?:First|Last|Skip|Index)\b|\bGet-Content\b[^|;&]*-(?:TotalCount|Tail|Head)\b/i;
+
+/**
+ * A SHELL read of part of a file this session was given an outline of ends
+ * outlining too, exactly as a paged Read does. Agents page through files with
+ * `sed -n 'A,Bp'`, `awk 'NR>=A'`, `head`/`tail` and `Select-Object` at least as
+ * often as with Read offsets -- one porting session did nothing else -- and
+ * those reads never reach outlineRead, so the session went on paying for an
+ * outline and then the file, file after file.
+ *
+ * Every word of the command that names a file this session has an outline
+ * record for is checked; the command itself is never changed.
+ */
+function noteRangedShellRead({ sessionId, command, cwd }) {
+  if (typeof command !== 'string' || !RANGED_READ.test(command)) return;
+  const words = command
+    .split(/[\s|;&<>()]+/)
+    .map((w) => w.replace(/^['"]|['"]$/g, ''))
+    .filter((w) => w && !w.startsWith('-') && /[\\/.]/.test(w))
+    .slice(0, 24);
+  for (const word of words) {
+    let path;
+    try {
+      path = canonicalPath(word, cwd);
+    } catch {
+      continue;
+    }
+    const target = join(outlineDir(), `${recordKey(sessionId || '', path)}.outline.txt`);
+    if (!existsSync(target)) continue;
+    try {
+      writeFileSync(join(outlineDir(), `${recordKey(sessionId || '', '')}.outline-missed`), '', {
+        flag: 'a',
+        mode: 0o600,
+      });
+    } catch {
+      // Nowhere to write: outlines simply continue.
+    }
+    return;
+  }
+}
+
 /** What the model is told when its read is answered with an outline. */
 export function readNotice(displayPath, found) {
   return (
@@ -119,6 +166,7 @@ export function readNotice(displayPath, found) {
  * command, not a cheaper one.
  */
 export function outlineShell({ sessionId, command, cwd, shell, state }) {
+  noteRangedShellRead({ sessionId, command, cwd });
   if (shell !== 'powershell' && shell !== 'posix') return null;
   const dump = wholeFileDump(command, cwd);
   if (!dump) return null;

@@ -13,7 +13,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
-import { outlineRead } from '../../hooks-core/outline-rewrite.mjs';
+import { outlineRead, outlineShell } from '../../hooks-core/outline-rewrite.mjs';
 
 let workspace;
 let sessionId;
@@ -64,6 +64,33 @@ describe('outlines stop once the session pages through an outlined file', () => 
     const a = source('a.ts');
     expect(read(a, { offset: 1, limit: 50 })).toBeNull();
     expect(read(a)).not.toBeNull();
+  });
+
+  test.each([
+    (p) => `sed -n '1,200p' ${p}`,
+    (p) => `awk 'NR>=10 && NR<=90' "${p}"`,
+    (p) => `head -n 120 ${p}`,
+    (p) => `Get-Content ${p} | Select-Object -Skip 40 -First 80`,
+    (p) => `cd somewhere; sed -n 5,9p ${p} | cat -n`,
+  ])('a ranged SHELL read of an outlined file ends outlining too: %#', (shape) => {
+    const a = source('a.ts');
+    expect(read(a)).not.toBeNull();
+    outlineShell({ sessionId, command: shape(a), cwd: workspace, shell: 'posix', state });
+    expect(read(source('b.ts'))).toBeNull();
+  });
+
+  test('a Read outline and a cat of the same file share one record', () => {
+    // Asking twice means the outline did not answer: the second whole read,
+    // through either tool, gets the file.
+    const a = source('a.ts');
+    expect(read(a)).not.toBeNull();
+    expect(outlineShell({ sessionId, command: `cat ${a}`, cwd: workspace, shell: 'posix', state })).toBeNull();
+  });
+
+  test('a ranged shell read of a file never outlined changes nothing', () => {
+    const a = source('a.ts');
+    outlineShell({ sessionId, command: `sed -n '1,200p' ${a}`, cwd: workspace, shell: 'posix', state });
+    expect(read(source('b.ts'))).not.toBeNull();
   });
 
   test('another session keeps its outlines', () => {
