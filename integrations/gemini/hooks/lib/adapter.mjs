@@ -116,6 +116,7 @@ import { beginHookInvocation, noteHookOutput } from './observability.mjs';
 import { registerProject, registeredProjects } from './projects.mjs';
 import { runStopHarvest } from './stop-harvest.mjs';
 import { applyQuietEnv } from './quiet-env.mjs';
+import { serverCrashNotice } from './server-crash.mjs';
 import { compactToolResponse, outputCompactEnabled } from './output-compact.mjs';
 import { repeatResponse, repeatsEnabled } from './repeats.mjs';
 import { recordOnBoard } from './blackboard.mjs';
@@ -1350,6 +1351,8 @@ async function runHook(clientName, event, invocation) {
         ),
       },
     ];
+    const crashed = serverCrashNotice();
+    if (crashed) blocks.push({ id: 'server-crash', volatility: 0, text: crashed });
     // Reduce at the source before anything runs: quiet defaults for the tools
     // the agent will call, through the env file Claude Code sources for every
     // later Bash call (quiet-env.mjs). A no-op for clients without one.

@@ -24,7 +24,7 @@ unchanged into clients with different event contracts.
 | OpenCode           | `opencode/opencode.json`            | `AGENTS.md`                 | shared-engine plugin bridge                |
 | Kilo               | `kilo/kilo.jsonc`                   | Kilo rule                   | shared-engine plugin bridge                |
 
-Prerequisite: Node.js 22 or newer so `npx` can launch the server. The first
+Prerequisite: Node.js 22.14.0 or newer so `npx` can launch the server. The first
 launch downloads the package; later launches use the local npm cache.
 
 ## Codex
