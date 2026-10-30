@@ -962,3 +962,72 @@ export function toolSearchOutcomesFromTranscript(transcriptPath, options = {}) {
   const list = (map) => [...map].map(([name, at]) => ({ name, at }));
   return { missed: list(missed), loaded: list(loaded) };
 }
+
+/** A failed MCP server entry names this package's server. */
+const OPTIMIZER_SERVER = /token[-_]?optimizer/i;
+
+/**
+ * Whether the host reported THIS PACKAGE'S MCP SERVER as failed to connect.
+ *
+ * Claude Code records it in the `deferred_tools_delta` attachment as
+ * `failedMcpServers: [{name: 'plugin:token-optimizer:token-optimizer',
+ * errorCode: 'CONNECTION_CLOSED', ...}]`. That is the most direct absence
+ * evidence a session gets, and it arrives before any call: without it, the
+ * hooks kept advertising smart_grep and wiki_write for a whole session in which
+ * neither could be reached, because the model -- reading the same notice --
+ * never tried them, so no failed call or search ever proved them missing.
+ *
+ * A later delta that lists optimizer tools again (`addedNames` or
+ * `readdedNames`) is a reconnect, e.g. after `/reload-plugins`, and is
+ * reported as `restored` only when it follows a failure in the scanned tail or
+ * the caller's state already holds one -- so a healthy session's own
+ * announcement never reads as a successful call, which would stop a later
+ * tool-search miss from counting (#484). A server still `pending` proves
+ * nothing either way and is skipped.
+ *
+ * @returns {{failed: Array<{name: string, at: number}>, restored: Array<{name: string, at: number}>}}
+ */
+export function serverFailuresFromTranscript(transcriptPath, options = {}) {
+  const { scanBytes = ABSENCE_SCAN_BYTES() } = options || {};
+  const none = { failed: [], restored: [] };
+  if (!transcriptPath) return none;
+  const text = readTail(transcriptPath, scanBytes);
+  if (!text || !text.includes('deferred_tools_delta')) return none;
+
+  let failedAt = 0;
+  const restored = new Map();
+  for (const line of text.split('\n')) {
+    if (!line.includes('deferred_tools_delta')) continue;
+    let entry;
+    try {
+      entry = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    const delta = entry.attachment;
+    if (delta?.type !== 'deferred_tools_delta') continue;
+    const at = Date.parse(entry.timestamp || '') || 0;
+    const failed =
+      Array.isArray(delta.failedMcpServers) &&
+      delta.failedMcpServers.some((server) =>
+        OPTIMIZER_SERVER.test(String(server?.name || ''))
+      );
+    if (failed) {
+      failedAt = Math.max(failedAt, at || 1);
+      continue;
+    }
+    for (const qualified of [
+      ...(Array.isArray(delta.addedNames) ? delta.addedNames : []),
+      ...(Array.isArray(delta.readdedNames) ? delta.readdedNames : []),
+    ]) {
+      const name = optimizerToolName(qualified);
+      if (name) restored.set(name, Math.max(restored.get(name) || 0, at || 1));
+    }
+  }
+  return {
+    failed: failedAt > 0 ? HOOK_MCP_TOOLS.map((name) => ({ name, at: failedAt })) : [],
+    restored: [...restored]
+      .filter(([, at]) => at > failedAt || failedAt === 0)
+      .map(([name, at]) => ({ name, at })),
+  };
+}
