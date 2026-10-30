@@ -175,6 +175,30 @@ describe('the hooks stop advertising a server that never connected', () => {
     expect(output).not.toContain('wiki_write');
   });
 
+  test('a re-announcement does not revive a tool a search could not load (#484)', () => {
+    // No server failure: the tool was announced, the search for it came back
+    // empty, and a later delta lists it again. It must stay absent.
+    const search = {
+      type: 'assistant',
+      timestamp: T0,
+      message: {
+        role: 'assistant',
+        content: [
+          { type: 'server_tool_use', id: 's1', name: 'tool_search_tool_regex', input: { pattern: 'wiki_write', limit: 5 } },
+          {
+            type: 'tool_search_tool_result',
+            tool_use_id: 's1',
+            content: { type: 'tool_search_tool_search_result', tool_references: [] },
+          },
+        ],
+      },
+    };
+    const path = transcript([delta(T0, { added: [QUALIFIED] }), search, delta(T1, { readded: [QUALIFIED] })]);
+    const hookEnv = env();
+    expect(edit('unloadable', path, hookEnv)).not.toContain('wiki_write');
+    expect(stateOf(hookEnv, 'unloadable').optimizerToolAbsentAt?.wiki_write).toBe(Date.parse(T0));
+  });
+
   test('a reconnect after the failure brings the guidance back', () => {
     const path = transcript([
       delta(T0, { failed: [PLUGIN_SERVER] }),
