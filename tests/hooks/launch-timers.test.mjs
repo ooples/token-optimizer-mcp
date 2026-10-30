@@ -8,13 +8,31 @@
  *   refresh re-check.
  */
 
-import { describe, expect, test } from '@jest/globals';
-import {
-  MAX_TIMER_MS,
-  boundedDelay,
-  startMarkerRenewal,
-  startPeriodicRefresh,
-} from '../../plugin/launch.mjs';
+import { beforeAll, describe, expect, test } from '@jest/globals';
+
+let MAX_TIMER_MS, boundedDelay, startMarkerRenewal, startPeriodicRefresh;
+
+// IMPORTED, NOT RUN. A static import executes launch.mjs's main(), which would
+// install packages and start a server inside the Jest worker. The pin is read at
+// import time and makes startPeriodicRefresh a no-op, so an inherited one is
+// cleared for the import and both are restored after it.
+beforeAll(async () => {
+  const saved = {
+    only: process.env.TOKEN_OPTIMIZER_LAUNCH_IMPORT_ONLY,
+    pin: process.env.TOKEN_OPTIMIZER_VERSION,
+  };
+  process.env.TOKEN_OPTIMIZER_LAUNCH_IMPORT_ONLY = '1';
+  delete process.env.TOKEN_OPTIMIZER_VERSION;
+  try {
+    ({ MAX_TIMER_MS, boundedDelay, startMarkerRenewal, startPeriodicRefresh } = await import(
+      '../../plugin/launch.mjs'
+    ));
+  } finally {
+    if (saved.only === undefined) delete process.env.TOKEN_OPTIMIZER_LAUNCH_IMPORT_ONLY;
+    else process.env.TOKEN_OPTIMIZER_LAUNCH_IMPORT_ONLY = saved.only;
+    if (saved.pin !== undefined) process.env.TOKEN_OPTIMIZER_VERSION = saved.pin;
+  }
+});
 
 /** A setInterval stand-in that records what it was asked to schedule. */
 function recorder() {
