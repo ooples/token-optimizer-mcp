@@ -86,10 +86,17 @@ describe('disabled', () => {
     expect(existsSync(dir) ? readdirSync(dir) : []).toEqual([]);
   });
 
-  test('still returns a usable id, so callers that chain on it do not break', () => {
-    const id = withDisabled('1', () => putNode(dir, fileNode('/tmp/a.ts')));
-    expect(typeof id).toBe('string');
-    expect(id.length).toBeGreaterThan(0);
+  test('returns no id for a node it did not store, and chaining on that does not break', () => {
+    // #542: an id used to come back whether or not anything was stored, so a
+    // caller could not tell a stored node from a discarded one. Switched off,
+    // nothing is stored, so there is no id -- and the caller that chains it
+    // into an edge (indexFile does) gets false back, not a throw.
+    const chained = withDisabled('1', () => {
+      const id = putNode(dir, fileNode('/tmp/a.ts'));
+      return { id, edge: putEdge(dir, id, 'contains', 'symbol:x') };
+    });
+    expect(chained).toEqual({ id: null, edge: false });
+    expect(existsSync(dir) ? readdirSync(dir) : []).toEqual([]);
   });
 
   test('reads as empty even when a populated graph is sitting there', () => {
