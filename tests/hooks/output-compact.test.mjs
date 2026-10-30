@@ -179,8 +179,22 @@ describe('a read is judged by the stage that produces the output', () => {
     ]) {
       expect(isReadLikeCommand(command)).toBe(true);
     }
-    // A pattern awk filters like grep: not a read.
+    // A read with lines REMOVED or reformatted is still the file's text: the
+    // recorded shapes, 32 of them folded before.
+    for (const command of [
+      'sed -n 52,340p src/Swin.cs | cat -n | grep -v "^\\s*[0-9]*\\s*///"',
+      'sed -n 869,1000p Plan.cs | grep -v "^\\s*$" | cut -c1-170 | head -120',
+      "sed -n 9700,9815p Plan.cs | cat -n | sed 's/^ *\\([0-9]*\\)\\t/\\1: /' | awk -F': ' '{printf \"%d: %s\\n\", $1+9699, $2}'",
+      'Get-Content t.mjs -TotalCount 140 | ForEach-Object -Begin {$i=1} -Process {"{0,4}: {1}" -f $i++, $_}',
+      'Get-Content a.cs | Select-String -NotMatch "^\\s*//"',
+    ]) {
+      expect(isReadLikeCommand(command)).toBe(true);
+    }
+    // A pattern awk or a positive grep filters like a search: not a read.
     expect(isReadLikeCommand("cat a.cs | awk '/ERROR/'")).toBe(false);
+    expect(isReadLikeCommand('cat a.cs | grep -n Compute')).toBe(false);
+    expect(isReadLikeCommand('cat a.cs | grep -E "x|v"')).toBe(false);
+    expect(isReadLikeCommand('cat a.cs | Select-String Compute')).toBe(false);
     // A log file is not an edit target: selected around its verdicts, not cut head-first.
     const log = ciLog();
     const out = compactText(log, { command: 'cat ci-logs/ledger.log' });

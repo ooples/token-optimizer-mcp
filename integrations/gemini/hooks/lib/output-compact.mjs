@@ -266,16 +266,34 @@ export function selectWithinBudget(text, budget) {
  * bare `git show <commit>` prints a commit and its diff, which is a log.
  */
 const READ_STAGE =
-  /^(cat|type|head|tail|less|more|bat|nl|Get-Content|gc)\b|^sed\s+-n\b|^git\s+show\s+(?:-\S+\s+)*(?:[^\s:-][^\s:]*)?:\S|^git\s+cat-file\s+-p\b|^awk\s+'(NR|\{)/i;
+  /^(cat|type|head|tail|less|more|bat|nl|Get-Content|gc)\b|^sed\s+-n\b|^git\s+show\s+(?:-\S+\s+)*(?:[^\s:-][^\s:]*)?:\S|^git\s+cat-file\s+-p\b|^awk\s+(-F\s*('[^']*'|"[^"]*"|\S+)\s+)?'(NR|\{)/i;
 /**
  * A stage that narrows its input to line ranges or reformats every line
  * (numbering, `cut -c`, an `awk` action with no pattern), so a read stays a
  * read: `sed -n 9990,10340p f | cat -n | awk '{...print}' | cut -c1-200` is a
  * numbered view of a file an edit is built from, not a log. An awk PATTERN
- * (`awk '/x/'`) filters like grep and is not here.
+ * (`awk '/x/'`) filters like grep and is not here. Also kept: a substitution
+ * (`sed 's/^/    /'`), a per-line ForEach-Object, and an INVERSE grep -- the
+ * recorded shape is `sed -n 40,270p X.cs | grep -v <doc-comment pattern>`, a
+ * file read with its blank or comment lines removed; 32 such reads were folded
+ * before this was here.
  */
 const RANGE_STAGE =
-  /^(head|tail|nl|more|cat\s+-n)\b|^sed\s+-n\s+['"]?\d+(,\d+)?p(;\d+(,\d+)?p)*['"]?\s*$|^(Select-Object|select)\s+(-(First|Last|Skip|Index)\s+\(?[\d,.]+\)?\s*)+$|^awk\s+'(NR|\{)|^cut\s+-c\s*\d*-?\d*\s*$/i;
+  /^(head|tail|nl|more|cat\s+-n)\b|^sed\s+-n\s+['"]?\d+(,\d+)?p(;\d+(,\d+)?p)*['"]?\s*$|^(Select-Object|select)\s+(-(First|Last|Skip|Index)\s+\(?[\d,.]+\)?\s*)+$|^awk\s+(-F\s*('[^']*'|"[^"]*"|\S+)\s+)?'(NR|\{)|^cut\s+-c\s*\d*-?\d*\s*$|^sed\s+(-E\s+)?['"]s(.).*\2['"]\s*$|^(ForEach-Object|%)\s*(-Begin\s*\{[^}]*\}\s*-Process\s*)?\{/i;
+
+/** `grep -v X` / `grep -vE X` / `Select-String -NotMatch X`: drops lines, never adds any. */
+function isInverseFilter(stage) {
+  const words = stage.split(/\s+/);
+  if (/^Select-String$|^sls$/i.test(words[0])) return words.some((w) => /^-NotMatch$/i.test(w));
+  if (words[0] !== 'grep') return false;
+  for (const w of words.slice(1)) {
+    if (!w.startsWith('-')) return false;
+    if (/^-[A-Za-z]*v[A-Za-z]*$/.test(w)) return true;
+  }
+  return false;
+}
+
+const isRangeStage = (stage) => RANGE_STAGE.test(stage) || isInverseFilter(stage);
 
 /**
  * The pipeline stages of the statement the command's output ends with,
@@ -317,7 +335,7 @@ export function isReadLikeCommand(command) {
       stages.length > 0 &&
       READ_STAGE.test(stages[0]) &&
       !LOG_TARGET.test(stages[0]) &&
-      stages.slice(1).every((s) => RANGE_STAGE.test(s))
+      stages.slice(1).every(isRangeStage)
   );
 }
 
