@@ -64,6 +64,9 @@ const home = (env = process.env) => env.TOKEN_OPTIMIZER_HOME || join(homedir(), 
 export function storeRoot(dir) {
   let at = canonicalPath(dir);
   for (let i = 0; i < 6 && at; i++) {
+    // A MOVED store (`<home>/projects/<id>/store`) is its own root: walking on
+    // would reach the home `.token-optimizer` and give every moved store one id.
+    if (basename(at) === 'store' && basename(dirname(dirname(at))) === 'projects') return at;
     if (basename(at) === '.token-optimizer') return at;
     const up = dirname(at);
     if (up === at) break;
@@ -78,6 +81,10 @@ export function storeRoot(dir) {
  */
 export function storeId(dir, platform = process.platform) {
   const root = storeRoot(dir);
+  // A moved store keeps the id it was migrated under, so its maintenance
+  // record, leases and spool are the same ones before and after the move.
+  const moved = /\/projects\/([0-9a-f]{16})\/store$/.exec(root);
+  if (moved) return moved[1];
   const key = platform === 'win32' || platform === 'darwin' ? root.toLowerCase() : root;
   return createHash('sha256').update(key).digest('hex').slice(0, 16);
 }
@@ -189,6 +196,28 @@ function spoolBytes(id, env) {
     // No spool yet.
   }
   return total;
+}
+
+/** The tombstone left at `<root>/.token-optimizer` by a migration, or null. */
+export function readTombstone(root) {
+  const path = join(root, '.token-optimizer');
+  try {
+    if (!statSync(path).isFile()) return null;
+    return JSON.parse(readFileSync(path, 'utf8'));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Where a project's store lives: `<root>/.token-optimizer`, or wherever its
+ * tombstone says it moved. Every path into a project store is built from this,
+ * so after a migration upgraded writers follow the move instead of failing
+ * against the fence. One stat in the common case (no tombstone).
+ */
+export function projectStore(root) {
+  const tomb = readTombstone(root);
+  return tomb && typeof tomb.movedTo === 'string' ? tomb.movedTo : join(root, '.token-optimizer');
 }
 
 /** A path inside the store, relative to its root (`wiki/graph.jsonl`), for the spool. */

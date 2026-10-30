@@ -12,6 +12,7 @@
     "token-optimizer-install-client": "./scripts/install-client-hooks.mjs",
     "token-optimizer-uninstall": "./scripts/uninstall.mjs",
     "token-optimizer-doctor": "./scripts/doctor.mjs",
+    "token-optimizer-storage": "./scripts/storage.mjs",
     "token-optimizer-learn": "./dist/learn/cli.js",
     "token-optimizer-update": "./dist/update/cli.js",
     "token-optimizer-rollout": "./dist/rollout/cli.js",

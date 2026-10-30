@@ -27,7 +27,7 @@ import { canonicalPath, isFsSafePath } from './paths.mjs';
 import { flagOn } from './flags.mjs';
 import { ignoreSelf } from './ignore-self.mjs';
 import { accepted, persisted, queued, rejected, withRids } from './store-write.mjs';
-import { spool, storeRelative, withWriteLease } from './maintenance.mjs';
+import { projectStore, spool, storeRelative, withWriteLease } from './maintenance.mjs';
 
 /**
  * Schema version stamped on every record.
@@ -119,7 +119,8 @@ export const EDGE_KINDS = [
 
 /** Resolves the graph directory for a project. Configurable, per the design. */
 export function wikiDir(cwd) {
-  return process.env.TOKEN_OPTIMIZER_WIKI_DIR || join(cwd || process.cwd(), '.token-optimizer', 'wiki');
+  // Through projectStore: a migrated store is followed to where it moved (#542).
+  return process.env.TOKEN_OPTIMIZER_WIKI_DIR || join(projectStore(cwd || process.cwd()), 'wiki');
 }
 
 /**

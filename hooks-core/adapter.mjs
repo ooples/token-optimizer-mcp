@@ -114,6 +114,7 @@ import { beginHookInvocation, noteHookOutput } from './observability.mjs';
 import { registerProject, registeredProjects } from './projects.mjs';
 import { runStopHarvest } from './stop-harvest.mjs';
 import { applyQuietEnv } from './quiet-env.mjs';
+import { resumeIfDue } from './migrate.mjs';
 import { compactToolResponse, outputCompactEnabled } from './output-compact.mjs';
 import { repeatResponse, repeatsEnabled } from './repeats.mjs';
 import { recordOnBoard } from './blackboard.mjs';
@@ -1354,6 +1355,10 @@ async function runHook(clientName, event, invocation) {
     applyQuietEnv();
     const cwd = raw.cwd || raw.working_directory || process.cwd();
     const root = projectRootFor(join(cwd, '__session__'), cwd);
+    // Finish a store migration a crash interrupted, or a refused one whose
+    // blockers may have cleared, before the store is used (#542).
+    const migrated = resumeIfDue(root || cwd);
+    if (migrated) blocks.push({ id: 'storage', volatility: 4, text: migrated });
     registerProject({ root, graphDir: wikiDir(root), client: clientName });
     if (features.retrieval) {
       try {

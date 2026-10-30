@@ -35,7 +35,7 @@ import {
   existsSync,
 } from 'node:fs';
 import { rejected } from './store-write.mjs';
-import { withWriteLease } from './maintenance.mjs';
+import { projectStore, withWriteLease } from './maintenance.mjs';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { canonicalPath, isFsSafePath } from './paths.mjs';
@@ -53,8 +53,7 @@ const limit = () => {
   return Number.isFinite(raw) && raw > 0 ? raw : 262_144;
 };
 
-const storeDir = (projectRoot) =>
-  join(projectRoot, '.token-optimizer', 'authored');
+const storeDir = (projectRoot) => join(projectStore(projectRoot), 'authored');
 
 /** One file per authored path, named by a digest so no path escapes the store. */
 const recordPath = (projectRoot, filePath) =>

@@ -1,0 +1,365 @@
+/**
+ * #542 part 3: moving a project store, and every way that can go wrong.
+ *
+ * The acceptance criteria this file covers, by name:
+ *  - an uncooperative LEGACY writer: refused by the offline check while it
+ *    runs, and blocked by the filesystem fence (ENOTDIR) after cutover;
+ *  - an enumeration that cannot be completed is a blocker, not an all-clear;
+ *  - competing migrators are serialized;
+ *  - injected failures (disk full, EACCES) at every step roll back with the
+ *    source intact;
+ *  - a process KILLED at every step is recovered -- rolled back before
+ *    publish, completed after -- with no acknowledged record lost or
+ *    duplicated;
+ *  - spooled writes are replayed once, deduplicated by rid;
+ *  - gc deletes the backup only after re-validating the moved store.
+ * Power loss is not simulated and not claimed.
+ */
+
+import { afterEach, beforeEach, describe, expect, test } from '@jest/globals';
+import { spawn, spawnSync } from 'node:child_process';
+import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { hostname, tmpdir } from 'node:os';
+import { pathToFileURL } from 'node:url';
+import { gc, migrate, recover, offlineBlockers, readTombstone, restore, resumeIfDue, tokenOptimizerProcesses } from '../../hooks-core/migrate.mjs';
+import { readState, storeId } from '../../hooks-core/maintenance.mjs';
+
+const ROOT = process.cwd();
+const mod = (name) => pathToFileURL(join(ROOT, 'hooks-core', name)).href;
+
+let work;
+let repo;
+let env;
+let id;
+
+const quiet = () => ({ complete: true, found: [] });
+
+beforeEach(() => {
+  work = mkdtempSync(join(tmpdir(), 'store-migrate-'));
+  repo = join(work, 'repo');
+  env = { TOKEN_OPTIMIZER_HOME: join(work, 'home') };
+  mkdirSync(join(repo, '.git', 'info'), { recursive: true });
+  const wiki = join(repo, '.token-optimizer', 'wiki');
+  mkdirSync(join(wiki, 'artifacts'), { recursive: true });
+  writeFileSync(join(wiki, 'graph.jsonl'), '{"t":"n","id":"file:a","rid":"aaaaaaaaaaaaaaaa"}\n');
+  writeFileSync(join(wiki, 'metrics.jsonl'), '{"kind":"read","id":"m1","rid":"m1"}\n');
+  writeFileSync(join(wiki, 'artifacts', 'x.txt'), 'artifact body');
+  mkdirSync(join(repo, '.token-optimizer', 'ucr'), { recursive: true });
+  writeFileSync(join(repo, '.token-optimizer', 'ucr', 'index.json'), '{}');
+  id = storeId(join(repo, '.token-optimizer'));
+});
+afterEach(() => rmSync(work, { recursive: true, force: true }));
+
+const graphOf = (dir) => readFileSync(join(dir, 'wiki', 'graph.jsonl'), 'utf8');
+
+describe('a clean migration', () => {
+  test('moves every file, leaves a tombstone, keeps a backup, and hides both from git', () => {
+    const result = migrate(repo, { env, processes: quiet });
+    expect(result.ok).toBe(true);
+    const tomb = readTombstone(repo);
+    expect(tomb).toMatchObject({ storeId: id, movedTo: result.report.movedTo });
+    expect(statSync(join(repo, '.token-optimizer')).isFile()).toBe(true);
+    expect(graphOf(tomb.movedTo)).toContain('file:a');
+    expect(readFileSync(join(tomb.movedTo, 'ucr', 'index.json'), 'utf8')).toBe('{}');
+    expect(existsSync(result.report.backup)).toBe(true);
+    const exclude = readFileSync(join(repo, '.git', 'info', 'exclude'), 'utf8');
+    expect(exclude).toContain('/.token-optimizer\n');
+    expect(exclude).toContain('/.token-optimizer.migrated-*');
+    expect(readState(id, env).state).toBe('normal');
+  });
+
+  test('upgraded writers follow the tombstone afterwards', () => {
+    migrate(repo, { env, processes: quiet });
+    const r = spawnSync(
+      process.execPath,
+      ['--input-type=module', '-e', `
+        import * as wiki from ${JSON.stringify(mod('wiki.mjs'))};
+        const dir = wiki.wikiDir(${JSON.stringify(repo)});
+        process.stdout.write(JSON.stringify({ dir, w: wiki.writeNode(dir, { kind: 'file', key: '/after.ts' }) }));`],
+      { encoding: 'utf8', env: { ...process.env, ...env } }
+    );
+    const out = JSON.parse(r.stdout);
+    expect(out.w.outcome).toBe('persisted');
+    expect(out.dir.replace(/\\/g, '/')).toContain('/projects/');
+    expect(graphOf(readTombstone(repo).movedTo)).toContain('after.ts');
+  });
+
+  test('a legacy writer is blocked by the fence: its append fails with ENOTDIR', () => {
+    migrate(repo, { env, processes: quiet });
+    // What 7.7.1 does: mkdir the store and append, catching nothing new.
+    expect(() => mkdirSync(join(repo, '.token-optimizer', 'wiki'), { recursive: true })).toThrow();
+    expect(() => appendFileSync(join(repo, '.token-optimizer', 'wiki', 'graph.jsonl'), 'x\n')).toThrow(/ENOTDIR|ENOENT|EEXIST/);
+  });
+});
+
+describe('the offline check', () => {
+  test('a running legacy writer refuses the migration and changes nothing', () => {
+    const legacy = () => ({ complete: true, found: [{ pid: 4242, version: '7.7.1', command: 'node .../token-optimizer/7.7.1/hooks/post-tool.mjs' }] });
+    const result = migrate(repo, { env, processes: legacy });
+    expect(result.ok).toBe(false);
+    expect(result.blockers[0]).toMatch(/pid 4242 runs token-optimizer 7\.7\.1/);
+    expect(statSync(join(repo, '.token-optimizer')).isDirectory()).toBe(true);
+    expect(JSON.parse(readFileSync(join(work, 'home', 'projects', id, 'intent.json'), 'utf8')).blockers).toHaveLength(1);
+  });
+
+  test('an incomplete process list is a blocker, not an all-clear', () => {
+    expect(offlineBlockers({ complete: false, reason: 'running in a container' })).toEqual(['running in a container']);
+    const result = migrate(repo, { env, processes: () => ({ complete: false, reason: 'process list unreadable: EPERM', found: [] }) });
+    expect(result).toMatchObject({ ok: false, blockers: ['process list unreadable: EPERM'] });
+  });
+
+  test('only node processes running a token-optimizer script are writers', () => {
+    const table = [
+      '101\t"C:\\Program Files\\nodejs\\node.exe" C:\\Users\\u\\.token-optimizer\\runtime\\versions\\7.7.1\\node_modules\\@ooples\\token-optimizer-mcp\\dist\\server\\index.js',
+      '102\tnode C:/Users/u/.claude/plugins/cache/token-optimizer/token-optimizer/7.8.0/hooks/post-tool.mjs',
+      '103\t"C:\\Program Files\\Git\\bin\\bash.exe" -c "cd ~/source/repos/token-optimizer-mcp && npm test"',
+      '104\tbash -c node "${CLAUDE_PLUGIN_ROOT}/hooks/post-tool.mjs" # token-optimizer',
+      '105\tvim token-optimizer-notes.md',
+    ].join('\n');
+    const r = tokenOptimizerProcesses({ run: () => table, platform: 'win32' });
+    expect(r.complete).toBe(true);
+    expect(r.found.map((p) => [p.pid, p.version])).toEqual([
+      [101, '7.7.1'],
+      [102, '7.8.0'],
+    ]);
+    expect(offlineBlockers(r)).toEqual([expect.stringMatching(/pid 101 runs token-optimizer 7\.7\.1/)]);
+  });
+
+  test('a process list that cannot be read is incomplete', () => {
+    const r = tokenOptimizerProcesses({
+      run: () => {
+        throw Object.assign(new Error('denied'), { code: 'EPERM' });
+      },
+      platform: 'linux',
+    });
+    expect(r).toMatchObject({ complete: false, reason: expect.stringContaining('EPERM') });
+  });
+
+  test('a process whose version cannot be read counts as legacy', () => {
+    expect(offlineBlockers({ complete: true, found: [{ pid: 7, version: null }] })[0]).toMatch(/unknown version/);
+    expect(offlineBlockers({ complete: true, found: [{ pid: 7, version: '7.8.0' }] })).toEqual([]);
+  });
+});
+
+describe('coordination', () => {
+  test('a second migrator is refused while one is in progress', () => {
+    mkdirSync(join(work, 'home', 'projects', id), { recursive: true });
+    writeFileSync(join(work, 'home', 'projects', id, 'maintenance.json'), JSON.stringify({ state: 'draining' }));
+    expect(migrate(repo, { env, processes: quiet })).toMatchObject({ ok: false, blockers: ['store is already draining'] });
+  });
+
+  test('a writer that never releases its lease times the drain out, and the store reopens', async () => {
+    const child = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 20000)']);
+    try {
+      mkdirSync(join(work, 'home', 'projects', id, 'leases'), { recursive: true });
+      writeFileSync(join(work, 'home', 'projects', id, 'leases', `${child.pid}-1.lease`), '');
+      const result = migrate(repo, { env, processes: quiet, drainTimeoutMs: 300 });
+      expect(result).toMatchObject({ ok: false, state: 'normal' });
+      expect(result.blockers[0]).toMatch(/drain/);
+      expect(statSync(join(repo, '.token-optimizer')).isDirectory()).toBe(true);
+    } finally {
+      child.kill();
+    }
+  });
+
+  test('a legacy append that lands in the moved directory mid-copy is copied too', () => {
+    // A write opened before the fence rename still lands in the renamed
+    // directory. The first copy misses it; the re-hash sees the change and
+    // copies again.
+    const result = migrate(repo, {
+      env,
+      processes: quiet,
+      faultAt: (at, info) => {
+        if (at === 'copied' && info.attempt === 1)
+          appendFileSync(join(info.staged, 'wiki', 'graph.jsonl'), '{"t":"n","id":"file:inflight"}\n');
+      },
+    });
+    expect(result.ok).toBe(true);
+    expect(graphOf(result.report.movedTo)).toContain('file:inflight');
+  });
+
+  test('spooled writes are replayed once, deduplicated by rid', () => {
+    const spool = join(work, 'home', 'spool', id);
+    mkdirSync(spool, { recursive: true });
+    writeFileSync(
+      join(spool, '1.jsonl'),
+      [
+        { file: 'wiki/graph.jsonl', record: { t: 'n', id: 'file:a', rid: 'aaaaaaaaaaaaaaaa' } },
+        { file: 'wiki/graph.jsonl', record: { t: 'n', id: 'file:new', rid: 'bbbbbbbbbbbbbbbb' } },
+        { file: 'wiki/graph.jsonl', record: { t: 'n', id: 'file:new', rid: 'bbbbbbbbbbbbbbbb' } },
+        { file: '../../escape.jsonl', record: { rid: 'cccccccccccccccc' } },
+      ].map((e) => JSON.stringify(e)).join('\n') + '\n'
+    );
+    const result = migrate(repo, { env, processes: quiet });
+    expect(result.report).toMatchObject({ replayed: 1, duplicates: 2 });
+    const graph = graphOf(result.report.movedTo);
+    expect(graph.match(/file:a/g)).toHaveLength(1);
+    expect(graph.match(/file:new/g)).toHaveLength(1);
+    expect(existsSync(spool)).toBe(false);
+    expect(existsSync(join(work, 'home', 'escape.jsonl'))).toBe(false);
+  });
+});
+
+describe('injected failures roll back with the source intact', () => {
+  test.each([
+    ['fence', 'EACCES'],
+    ['copy', 'ENOSPC'],
+    ['publish', 'ENOSPC'],
+    ['tombstone', 'EACCES'],
+  ])('%s fails with %s', (step, code) => {
+    const fault = (at) => {
+      if (at === step) throw Object.assign(new Error(`${code}: injected at ${at}`), { code });
+    };
+    const before = graphOf(join(repo, '.token-optimizer'));
+    const result = migrate(repo, { env, processes: quiet, faultAt: fault });
+    expect(result).toMatchObject({ ok: false, state: 'normal' });
+    expect(result.blockers[0]).toContain(code);
+    expect(statSync(join(repo, '.token-optimizer')).isDirectory()).toBe(true);
+    expect(graphOf(join(repo, '.token-optimizer'))).toBe(before);
+    expect(existsSync(join(work, 'home', 'projects', id, 'store'))).toBe(false);
+    expect(readdirSync(repo).filter((n) => n.startsWith('.token-optimizer.'))).toEqual([]);
+  });
+});
+
+describe('a migrator killed at any step is recovered', () => {
+  // The child dies at the step with process.exit, which runs no cleanup: the
+  // same as kill -9 from the store's point of view.
+  test.each(['fence', 'copy', 'publish', 'tombstone', 'replay', 'backup'])('killed at %s', (step) => {
+    mkdirSync(join(work, 'home', 'spool', id), { recursive: true });
+    writeFileSync(
+      join(work, 'home', 'spool', id, '1.jsonl'),
+      `${JSON.stringify({ file: 'wiki/graph.jsonl', record: { t: 'n', id: 'file:spooled', rid: 'dddddddddddddddd' } })}\n`
+    );
+    const r = spawnSync(
+      process.execPath,
+      ['--input-type=module', '-e', `
+        import { migrate } from ${JSON.stringify(mod('migrate.mjs'))};
+        migrate(${JSON.stringify(repo)}, {
+          processes: () => ({ complete: true, found: [] }),
+          faultAt: (at) => { if (at === ${JSON.stringify(step)}) process.exit(137); },
+        });
+        process.exit(0);`],
+      { encoding: 'utf8', env: { ...process.env, ...env } }
+    );
+    expect(r.status).toBe(137);
+
+    recover(repo, { env });
+    expect(readState(id, env).state).toBe('normal');
+
+    const tomb = readTombstone(repo);
+    const live = tomb?.movedTo ?? join(repo, '.token-optimizer');
+    const graph = graphOf(live);
+    // Nothing acknowledged is lost, and nothing is doubled.
+    expect(graph.match(/file:a"/g)).toHaveLength(1);
+    expect(readFileSync(join(live, 'wiki', 'metrics.jsonl'), 'utf8')).toContain('"m1"');
+    if (tomb) {
+      expect(graph.match(/file:spooled/g)).toHaveLength(1);
+      expect(readdirSync(repo).some((n) => n.startsWith('.token-optimizer.migrated-'))).toBe(true);
+    } else {
+      expect(statSync(join(repo, '.token-optimizer')).isDirectory()).toBe(true);
+      expect(existsSync(join(work, 'home', 'projects', id, 'store'))).toBe(false);
+    }
+    expect(readdirSync(repo).filter((n) => n.startsWith('.token-optimizer.migrating-'))).toEqual([]);
+  });
+});
+
+describe('session start finishes what was left', () => {
+  const legacy = () => ({ complete: true, found: [{ pid: 4242, version: '7.7.1' }] });
+
+  test('nothing pending costs nothing and says nothing', () => {
+    expect(resumeIfDue(repo, { env, processes: () => { throw new Error('must not enumerate'); } })).toBeNull();
+  });
+
+  test('a refused migration completes once its blockers clear', () => {
+    expect(migrate(repo, { env, processes: legacy }).ok).toBe(false);
+    // Still blocked at the next session start: still nothing.
+    expect(resumeIfDue(repo, { env, processes: legacy })).toBeNull();
+    expect(statSync(join(repo, '.token-optimizer')).isDirectory()).toBe(true);
+    // The legacy session has ended.
+    const notice = resumeIfDue(repo, { env, processes: quiet });
+    expect(notice).toMatch(/moved this project's graph to .*as requested earlier/);
+    expect(readTombstone(repo)?.movedTo).toBeTruthy();
+    expect(existsSync(join(work, 'home', 'projects', id, 'intent.json'))).toBe(false);
+  });
+
+  test('a migration whose owner died is recovered, and the session is told', () => {
+    mkdirSync(join(work, 'home', 'projects', id), { recursive: true });
+    writeFileSync(
+      join(work, 'home', 'projects', id, 'maintenance.json'),
+      JSON.stringify({ state: 'draining', owner: { pid: 999999, host: hostname() } })
+    );
+    expect(resumeIfDue(repo, { env, processes: quiet })).toMatch(/rolled back an interrupted store migration/);
+    expect(readState(id, env).state).toBe('normal');
+  });
+
+  test('a live owner is left alone', () => {
+    mkdirSync(join(work, 'home', 'projects', id), { recursive: true });
+    writeFileSync(
+      join(work, 'home', 'projects', id, 'maintenance.json'),
+      JSON.stringify({ state: 'draining', owner: { pid: process.pid, host: hostname() } })
+    );
+    expect(resumeIfDue(repo, { env, processes: quiet })).toBeNull();
+    expect(readState(id, env).state).toBe('draining');
+  });
+});
+
+describe('restore: the same move in reverse', () => {
+  test('brings the store back with writes made after the move', () => {
+    const { report } = migrate(repo, { env, processes: quiet });
+    appendFileSync(join(report.movedTo, 'wiki', 'graph.jsonl'), '{"t":"n","id":"file:after-move","rid":"eeeeeeeeeeeeeeee"}\n');
+    const back = restore(repo, { env, processes: quiet });
+    expect(back.ok).toBe(true);
+    expect(statSync(join(repo, '.token-optimizer')).isDirectory()).toBe(true);
+    expect(graphOf(join(repo, '.token-optimizer'))).toContain('file:after-move');
+    expect(readTombstone(repo)).toBeNull();
+    expect(existsSync(back.report.movedStoreKept)).toBe(true);
+    expect(readState(id, env).state).toBe('normal');
+  });
+
+  test('a running legacy writer refuses the restore', () => {
+    migrate(repo, { env, processes: quiet });
+    const legacy = () => ({ complete: true, found: [{ pid: 4242, version: '7.7.1' }] });
+    expect(restore(repo, { env, processes: legacy })).toMatchObject({ ok: false });
+    expect(readTombstone(repo)?.movedTo).toBeTruthy();
+  });
+
+  test.each(['copy', 'swap'])('a restore killed at %s is recovered at the next session start', (step) => {
+    migrate(repo, { env, processes: quiet });
+    const r = spawnSync(
+      process.execPath,
+      ['--input-type=module', '-e', `
+        import { restore } from ${JSON.stringify(mod('migrate.mjs'))};
+        restore(${JSON.stringify(repo)}, {
+          processes: () => ({ complete: true, found: [] }),
+          faultAt: (at) => { if (at === ${JSON.stringify(step)}) process.exit(137); },
+        });`],
+      { encoding: 'utf8', env: { ...process.env, ...env } }
+    );
+    expect(r.status).toBe(137);
+    expect(resumeIfDue(repo, { env, processes: quiet })).toMatch(/interrupted restore/);
+    expect(readState(id, env).state).toBe('normal');
+    // Either way, exactly one live store, holding the original record once.
+    const tomb = readTombstone(repo);
+    const live = tomb?.movedTo ?? join(repo, '.token-optimizer');
+    expect(graphOf(live).match(/file:a"/g)).toHaveLength(1);
+    expect(readdirSync(repo).filter((n) => n.includes('.restoring-'))).toEqual([]);
+  });
+});
+
+describe('gc', () => {
+  test('deletes the backup only after the moved store re-validates', () => {
+    const { report } = migrate(repo, { env, processes: quiet });
+    appendFileSync(join(report.movedTo, 'wiki', 'graph.jsonl'), '{"t":"n","id":"file:later"}\n');
+    expect(gc(repo, { env })).toMatchObject({ ok: true, removed: [expect.stringMatching(/^\.token-optimizer\.migrated-/)] });
+    expect(existsSync(report.backup)).toBe(false);
+  });
+
+  test('refuses when the moved store lost a file', () => {
+    const { report } = migrate(repo, { env, processes: quiet });
+    rmSync(join(report.movedTo, 'wiki', 'artifacts', 'x.txt'));
+    const result = gc(repo, { env });
+    expect(result).toMatchObject({ ok: false, missing: ['wiki/artifacts/x.txt'] });
+    expect(existsSync(report.backup)).toBe(true);
+  });
+});
