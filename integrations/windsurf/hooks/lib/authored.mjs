@@ -34,6 +34,7 @@ import {
   statSync,
   existsSync,
 } from 'node:fs';
+import { rejected } from './store-write.mjs';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { canonicalPath, isFsSafePath } from './paths.mjs';
@@ -113,8 +114,10 @@ export function recordAuthoredContent(projectRoot, sessionId, filePath, content)
     const tmp = `${target}.tmp-${process.pid}-${Date.now()}`;
     writeFileSync(tmp, record, { mode: 0o600 });
     renameSync(tmp, target);
-  } catch {
-    /* the write landed; the record is an optimization */
+  } catch (error) {
+    // The user's write landed; this record is an optimization -- but a lost
+    // one is reported, not hidden (#542).
+    rejected({ store: projectRoot, op: 'authored-write', file: filePath, error });
   }
 }
 

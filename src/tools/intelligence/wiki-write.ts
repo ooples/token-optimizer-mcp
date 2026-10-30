@@ -17,7 +17,24 @@
  * concluded; the harvest, when enabled, catches what it forgot to record.
  */
 
+import { existsSync } from 'node:fs';
 import { loadHooksCore } from './hooks-core-loader.js';
+
+/**
+ * Why nothing was written, told truthfully (#542).
+ *
+ * This said "no anchor resolved to a file on disk" for every empty result. When
+ * the STORE rejected the write, the anchors' file nodes were not written either,
+ * so the graph check above found none and blamed the anchors -- sending the
+ * caller to fix paths that were fine. The anchors are checked on disk instead,
+ * and a write the store refused is named as such.
+ */
+function refusalReason(anchors: string[]): string {
+  const onDisk = anchors.some((a) => existsSync(a.split('#')[0]));
+  return onDisk
+    ? 'the project store rejected the write; the reason is on stderr and in ~/.token-optimizer/write-failures.jsonl'
+    : 'no anchor resolved to a file on disk, so the finding was refused';
+}
 
 export interface WikiWriteOptions {
   /** The claim itself. What was concluded, in a sentence someone can act on. */
@@ -297,9 +314,7 @@ export async function wikiWrite(
       keys,
       unresolvedAnchors,
       project,
-      error: keys.length
-        ? undefined
-        : 'no anchor resolved to a file on disk, so the finding was refused',
+      error: keys.length ? undefined : refusalReason(anchors),
     };
   } catch (error) {
     return {

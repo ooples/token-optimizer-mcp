@@ -41,6 +41,7 @@ import {
   statSync,
   unlinkSync,
 } from 'node:fs';
+import { rejected } from './store-write.mjs';
 import { join } from 'node:path';
 import { record, readMetrics } from './metrics.mjs';
 import { putNode, putEdge, nodeId } from './wiki.mjs';
@@ -119,9 +120,20 @@ export function capture(dir, text, meta = {}) {
   if (!body) return null;
 
   const ref = digest(body);
-  const path = join(artifactDir(dir), `${ref}.txt`);
+  // A REF IS RETURNED ONLY FOR AN ARTIFACT THAT EXISTS. Every caller prints
+  // "full output: Read <path>" for the ref it gets back, and then removes the
+  // output it folded -- so a ref to a file that was never written lost the
+  // output for good. A failure to create the directory or the file is reported
+  // and returns null, and every caller leaves the output whole on null (#542).
+  let path = join(dir, 'artifacts', `${ref}.txt`);
   if (!existsSync(path)) {
-    writeFileSync(path, body, { mode: 0o600 });
+    try {
+      path = join(artifactDir(dir), `${ref}.txt`);
+      writeFileSync(path, body, { mode: 0o600 });
+    } catch (error) {
+      rejected({ store: dir, op: 'artifact-write', file: path, error });
+      return null;
+    }
     // Amortised off the digest rather than run on every capture, and deterministic rather than
     // sampled at random: roughly one write in sixty-four pays for a readdir.
     if (parseInt(ref.slice(0, 2), 16) < 4) sweepArtifacts(artifactDir(dir));

@@ -26,6 +26,7 @@ import { createHash } from 'node:crypto';
 import { canonicalPath, isFsSafePath } from './paths.mjs';
 import { flagOn } from './flags.mjs';
 import { ignoreSelf } from './ignore-self.mjs';
+import { accepted, persisted, queued, rejected, withRids } from './store-write.mjs';
 
 /**
  * Schema version stamped on every record.
@@ -730,6 +731,8 @@ export function withBatchedWrites(dir, fn) {
     return fn();
   } finally {
     openBatch = null;
+    // The writes inside the batch were told `queued`; this flush is where they
+    // persist or are rejected, and a rejection is reported here.
     if (batch.records.length) appendAll(dir, batch.records);
     for (const record of batch.snapshots) appendSnapshot(dir, record);
   }
@@ -756,13 +759,13 @@ export function logWriteCycles() {
 }
 
 function appendAll(dir, records) {
-  if (!records.length) return true;
+  if (!records.length) return persisted();
   // A batch for a DIFFERENT directory is not ours to hold: a session touching
   // two checkouts writes to two graphs, and buffering one into the other's
   // flush would put a file node in the wrong project's graph.
   if (openBatch && openBatch.dir === dir) {
-    openBatch.records.push(...records);
-    return true;
+    openBatch.records.push(...withRids(records));
+    return queued('batched');
   }
   try {
     // 0o700 AND an explicit chmod. `recursive: true` applies the mode only to
@@ -783,7 +786,7 @@ function appendAll(dir, records) {
     // ONE appendFileSync for the whole group, inside ONE lock: a caller that
     // needs several records to be observed together cannot get that by looping,
     // because every iteration is a separate crash point.
-    const payload = records.map((record) => JSON.stringify(record) + '\n').join('');
+    const payload = withRids(records).map((record) => JSON.stringify(record) + '\n').join('');
     withLock(dir, () => {
       appendFileSync(logPath(dir), payload);
       compactIfWasteful(dir);
@@ -792,11 +795,11 @@ function appendAll(dir, records) {
     // throw below leaves the count where it was. What this reports is appends
     // that reached the disk.
     writeCycles += 1;
-    return true;
-  } catch {
+    return persisted();
+  } catch (error) {
     // The graph is an optimization. Failing to write one must never fail the
-    // user's tool call, so this is swallowed and reported only via metrics.
-    return false;
+    // user's tool call -- but it is no longer reported as a success (#542).
+    return rejected({ store: dir, op: 'graph-append', file: logPath(dir), error });
   }
 }
 
@@ -810,14 +813,28 @@ function append(dir, record) {
  * LAST record for an id, so re-observing a file with a new hash is how an
  * update is expressed. There is no in-place mutation anywhere in this store.
  */
-export function putNode(dir, { kind, key, ...rest }) {
+export function putNode(dir, node) {
+  const written = writeNode(dir, node);
+  return accepted(written) ? written.id : null;
+}
+
+/**
+ * Records a node and says what became of it: `{ id, outcome, reason? }`.
+ *
+ * putNode returns the id ONLY when the node was persisted or queued, and null
+ * otherwise. It used to return the id whatever happened -- including after the
+ * write had failed or the graph was switched off -- so a caller could not tell
+ * a stored node from a discarded one (#542). Callers that chain on the id
+ * (indexFile mints a file node, then edges symbols to it) pass the null on,
+ * and putEdge writes no edge to a node that was never written.
+ */
+export function writeNode(dir, { kind, key, ...rest }) {
   if (!NODE_KINDS.includes(kind)) throw new Error(`unknown node kind: ${kind}`);
   const id = nodeId(kind, key);
-  // DEGRADES, NEVER THROWS. The id is still computed and returned, so callers
-  // that chain on it -- indexFile mints a file node then edges symbols to it --
-  // keep working and simply persist nothing. Returning undefined here would
-  // turn a measurement switch into a crash.
-  if (wikiDisabled()) return id;
+  // NEVER THROWS when switched off: a measurement switch must not become a
+  // crash. It is still `rejected`, because nothing was written.
+  if (wikiDisabled())
+    return { id, ...rejected({ store: dir, op: 'graph-node', reason: 'graph disabled', quiet: true }) };
   // `rest` is spread FIRST so it can never override the bookkeeping fields.
   // Spreading it after `id` let a caller passing a whole existing node back in
   // -- which curate.mjs does on every pin, retire and correct -- carry a stale
@@ -830,22 +847,34 @@ export function putNode(dir, { kind, key, ...rest }) {
   // SEPARATE RECORD, so `load()` can skip the bytes rather than parse and drop
   // them. Written after the node: a torn write then loses a snapshot, which
   // degrades to the ordinary redirect, rather than losing the node itself.
-  appendAll(dir, records);
+  const outcome = appendAll(dir, records);
   // Written AFTER the node and to a different file: a failure here costs a
-  // snapshot, which degrades to the ordinary redirect, never the node.
-  if (typeof snapshot === 'string' && snapshot) {
+  // snapshot, which degrades to the ordinary redirect, never the node. Only a
+  // node that was accepted gets one.
+  if (accepted(outcome) && typeof snapshot === 'string' && snapshot) {
     appendSnapshot(dir, { t: 's', v: GRAPH_VERSION, id, snapshot, at });
   }
-  return id;
+  return { id, ...outcome };
 }
 
 /** Records an edge. */
 export function putEdge(dir, from, edge, to) {
+  return accepted(writeEdge(dir, from, edge, to));
+}
+
+/** Records an edge and says what became of it. */
+export function writeEdge(dir, from, edge, to) {
   if (!EDGE_KINDS.includes(edge)) throw new Error(`unknown edge kind: ${edge}`);
   // The kind check stays ABOVE the gate: a disabled graph should not turn a
   // programming error into silence, or the bug reappears when it is re-enabled.
-  if (wikiDisabled()) return;
-  append(dir, { t: 'e', v: GRAPH_VERSION, from, edge, to, at: Date.now() });
+  if (wikiDisabled())
+    return rejected({ store: dir, op: 'graph-edge', reason: 'graph disabled', quiet: true });
+  // AN EDGE TO A NODE THAT WAS NEVER WRITTEN is not written either. putNode
+  // returns null for a rejected node, and a dangling edge naming `null` would
+  // be stored and folded as if it meant something.
+  if (!from || !to)
+    return rejected({ store: dir, op: 'graph-edge', reason: 'endpoint was not written', quiet: true });
+  return append(dir, { t: 'e', v: GRAPH_VERSION, from, edge, to, at: Date.now() });
 }
 
 /**
@@ -885,7 +914,7 @@ export function putNodeWithEdges(dir, { kind, key, ...rest }, edges = []) {
   // bookkeeping fields.
   records.push({ ...rest, t: 'n', v: GRAPH_VERSION, id, kind, key: canonicalKey(kind, key), at });
 
-  return appendAll(dir, records) ? id : null;
+  return accepted(appendAll(dir, records)) ? id : null;
 }
 
 /**
@@ -899,12 +928,15 @@ export function putNodeWithEdges(dir, { kind, key, ...rest }, edges = []) {
 function appendSnapshot(dir, record) {
   if (openBatch && openBatch.dir === dir) {
     openBatch.snapshots.push(record);
-    return;
+    return queued('batched');
   }
   try {
     appendFileSync(snapshotsPath(dir), JSON.stringify(record) + '\n');
-  } catch {
-    /* the node is already durable; the snapshot is an optimization */
+    return persisted();
+  } catch (error) {
+    // The node is already durable; the snapshot is an optimization -- but a
+    // lost one is reported, not hidden (#542).
+    return rejected({ store: dir, op: 'snapshot-append', file: snapshotsPath(dir), error });
   }
 }
 

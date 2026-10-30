@@ -67,6 +67,24 @@ describe('active-model semantic finding contract', () => {
     expect(result.error).toMatch(/evidence is required/i);
   });
 
+  it('names a store that rejected the write, not the anchors (#542)', async () => {
+    // A FILE where the graph directory should be: every append fails ENOTDIR.
+    const blocker = join(workspace, 'blocker');
+    writeFileSync(blocker, 'fixture');
+    process.env.TOKEN_OPTIMIZER_WIKI_DIR = join(blocker, 'graph');
+    const result = await wikiWrite({
+      claim: 'The verifier requires the project runner.',
+      anchors: [anchor],
+      evidence: 'Ran the suite directly and it failed with a clear error.',
+      applicability: 'When running project verification.',
+      confidenceLabel: 'probable',
+      projectRoot: workspace,
+    } as never);
+    expect(result.success).toBe(false);
+    expect(result.written).toBe(0);
+    expect(result.error).toMatch(/store rejected the write/);
+    expect(result.error).not.toMatch(/no anchor resolved/);
+  });
 });
 
 /**
