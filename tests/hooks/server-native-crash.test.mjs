@@ -9,12 +9,11 @@
  * what to change while that Node version is still the one running.
  */
 
-import { afterEach, beforeEach, describe, expect, test } from '@jest/globals';
+import { afterEach, beforeAll, beforeEach, describe, expect, test } from '@jest/globals';
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { isNativeCrash } from '../../plugin/launch.mjs';
 import { serverCrashNotice } from '../../hooks-core/server-crash.mjs';
 
 const ROOT = process.cwd();
@@ -23,6 +22,20 @@ const SESSION_START = join(ROOT, 'plugin', 'hooks', 'session-start.mjs');
 const PACKAGE_DIR = join('node_modules', '@ooples', 'token-optimizer-mcp');
 
 let runtime;
+let isNativeCrash;
+
+// IMPORTED, NOT RUN: a static import of launch.mjs executes main() inside the
+// Jest worker. TOKEN_OPTIMIZER_LAUNCH_IMPORT_ONLY is set for the import only.
+beforeAll(async () => {
+  const saved = process.env.TOKEN_OPTIMIZER_LAUNCH_IMPORT_ONLY;
+  process.env.TOKEN_OPTIMIZER_LAUNCH_IMPORT_ONLY = '1';
+  try {
+    ({ isNativeCrash } = await import('../../plugin/launch.mjs'));
+  } finally {
+    if (saved === undefined) delete process.env.TOKEN_OPTIMIZER_LAUNCH_IMPORT_ONLY;
+    else process.env.TOKEN_OPTIMIZER_LAUNCH_IMPORT_ONLY = saved;
+  }
+});
 
 beforeEach(() => {
   runtime = mkdtempSync(join(tmpdir(), 'to-crash-'));
@@ -75,6 +88,8 @@ describe('isNativeCrash', () => {
     [null, 'SIGSEGV', true],
     [139, null, true], // 128 + SIGSEGV through a shell
     [1, null, false], // a thrown JavaScript error
+    [4294967295, null, false], // process.exit(-1) on Windows
+    [3221226505, null, true], // 0xC0000409, stack buffer overrun
     [0, null, false],
     [null, 'SIGTERM', false], // the host shutting the server down
   ])('code %p signal %p -> %p', (code, signal, expected) => {

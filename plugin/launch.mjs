@@ -945,7 +945,10 @@ export function isNativeCrash(code, signal) {
   if (signal) return /^SIG(SEGV|BUS|ILL|ABRT)$/.test(signal);
   if (code == null) return false;
   const unsigned = code >>> 0;
-  return unsigned >= 0xc0000000 || code === 134 || code === 135 || code === 132 || code === 139;
+  // NTSTATUS errors only: 0xC0000000-0xCFFFFFFF. `process.exit(-1)` arrives as
+  // 0xFFFFFFFF and is an ordinary exit, not a crash.
+  const ntstatus = unsigned >= 0xc0000000 && unsigned <= 0xcfffffff;
+  return ntstatus || code === 134 || code === 135 || code === 132 || code === 139;
 }
 
 /**
