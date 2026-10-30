@@ -143,7 +143,38 @@ def probe_arms():
             raise SystemExit("HeadRoom arm %s failed on the probe (headroom-ai %s): %r" % (name, version, exc))
         if not isinstance(out, str):
             raise SystemExit("HeadRoom arm %s returned %s, not text" % (name, type(out).__name__))
+    probe_text_model(version)
     return version
+
+
+def warm_worker():
+    """Load the text model in this worker before its first scored result."""
+    arm_router("The build finished and every test passed. " * 60)
+
+
+def probe_text_model(version):
+    """The router's PROSE path must actually run, not fall back to passthrough.
+
+    Without the [ml] extra the Kompress model never loads, and ContentRouter
+    returns plain text unchanged WITHOUT raising -- so every arm passed the probe
+    above, `arm_errors` stayed empty, and prose scored as "HeadRoom removed 0%",
+    understating them on every issue body and log line of English. Checked by
+    outcome: a long repetitive paragraph must come back shorter. The model is
+    also warmed here, once per worker, so the first scored result does not pay
+    its load or fall back while it is still loading.
+    """
+    from headroom.transforms.content_router import ContentRouter, ContentRouterConfig
+
+    cfg = ContentRouterConfig()
+    cfg.enable_code_aware = True
+    prose = "The build finished and every test in the suite passed on the first attempt. " * 120
+    result = ContentRouter(cfg).compress(prose, context="", question=None)
+    if not result.savings_percentage > 0:
+        raise SystemExit(
+            "HeadRoom's text model did not run (headroom-ai %s, strategy %s, 0%% saved on prose). "
+            "Install headroom-ai[ml]==%s; a comparison without it understates HeadRoom."
+            % (version, result.strategy_used, version)
+        )
 
 
 def score(line):
@@ -180,7 +211,8 @@ def main():
     print("headroom-ai %s" % version)
     with open(path, encoding="utf-8") as handle:
         lines = [line for line in handle if line.strip()]
-    with Pool(workers) as pool:
+    # Each worker loads the text model itself; warmed before it scores anything.
+    with Pool(workers, initializer=warm_worker) as pool:
         scored = [s for s in pool.imap(score, lines, chunksize=16) if s is not None]
 
     rows = OrderedDict()

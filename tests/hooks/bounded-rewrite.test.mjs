@@ -824,6 +824,18 @@ describe('a command that only STARTS by changing the shell', () => {
     expect(after).toBe(bare);
   });
 
+  it.each([["cd /tmp # it's here\necho ran"], ['cd /tmp # note && echo ran']])(
+    'a trailing comment on the cd never breaks the command: %j',
+    (command) => {
+      const bounded = boundedRewrite(command);
+      if (bounded === null) return;
+      expect(() =>
+        execFileSync(BASH, ['-n', '-c', bounded.command], { stdio: 'pipe' })
+      ).not.toThrow();
+      expect(run(bounded.command).stdout).toContain('ran');
+    }
+  );
+
   it('leaves the working directory where the unbounded command would', () => {
     // The whole reason these were refused: this client's Bash tool persists the
     // cwd between calls, and a `cd` inside the subshell would not.

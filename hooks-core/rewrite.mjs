@@ -153,6 +153,10 @@ function hoistablePrefix(command) {
     // prefix therefore never ends inside a comment that would swallow the join.
     if (segment.startsWith('#') && parts[i + 1] === '\n') continue;
     if (!isStateMutating(segment)) break;
+    // A TRAILING COMMENT on a mutation (`cd x # note`) would swallow the `;`
+    // the join appends and the wrapper after it, turning a working command into
+    // a syntax error. Not hoisted; the command then runs unbounded.
+    if (/(^|\s)#/.test(segment)) return null;
     // A `(` opens a group the split cannot see the end of; leave it alone.
     if (/^[({]/.test(parts[i].trim())) return null;
     taken = i + 2;

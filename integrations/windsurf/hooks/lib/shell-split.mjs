@@ -90,7 +90,15 @@ export function shellStatements(command, { background = false } = {}) {
     // `#` in the body broke the parse of everything after it. The operator is
     // kept in its stage (`cat > f <<'EOF'`); the body, up to the terminator
     // line, is skipped when its line starts. `<<<` is a herestring, not this.
-    if (c === '<' && next === '<' && text[i + 2] !== '<') {
+    // A herestring is consumed whole: stepping over only its first `<` left the
+    // second one looking like the start of a heredoc (`<< "$x"`), and every
+    // later line was skipped while waiting for a terminator that never came.
+    if (c === '<' && next === '<' && text[i + 2] === '<') {
+      current += '<<<';
+      i += 2;
+      continue;
+    }
+    if (c === '<' && next === '<') {
       const m = /^<<(-?)\s*(?:'([^']+)'|"([^"]+)"|\\?([A-Za-z_][\w.-]*))/.exec(text.slice(i));
       if (m) {
         heredocs.push({ word: m[2] ?? m[3] ?? m[4], tabs: m[1] === '-' });

@@ -45,6 +45,10 @@ describe('shellStatements', () => {
     expect(shellStatements('grep x <<< "a;b"; ls')).toEqual([['grep x <<< "a;b"'], ['ls']]);
   });
 
+  test('a herestring followed by more lines does not hide them', () => {
+    expect(shellStatements('wc -l <<< "$x"\ncat src/a.ts')).toEqual([['wc -l <<< "$x"'], ['cat src/a.ts']]);
+  });
+
   test.each([
     ['echo a#b', [['echo a#b']]],
     ["curl 'https://x/y#frag'", [["curl 'https://x/y#frag'"]]],
