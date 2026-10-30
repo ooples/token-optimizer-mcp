@@ -33,9 +33,16 @@ export function serverCrashNotice(env = process.env, node = process.versions.nod
   }
   if (!record || record.node !== node) return null;
   const exit = typeof record.exit === 'string' ? record.exit.slice(0, 16) : 'a native crash';
+  // THE REMEDY ONLY WHERE IT IS KNOWN. Any native crash is recorded -- an
+  // out-of-memory abort, a different binding -- and telling the user to
+  // upgrade a Node that is already new enough would send them the wrong way.
+  const [major, minor] = String(node).split('.').map(Number);
+  const remedy =
+    major === 22 && minor < 14
+      ? 'Its SQLite binding needs Node 22.14.0 or newer. Tell the user once: upgrading Node restores the server.'
+      : 'Tell the user once; the launcher logged the details to the MCP server log.';
   return (
-    `The token-optimizer MCP server crashed at startup (${exit}) under Node ${node}, ` +
-    `so its tools are unavailable in this session. Its SQLite binding needs Node ` +
-    `22.14.0 or newer. Tell the user once: upgrading Node restores the server.`
+    `The token-optimizer MCP server crashed in native code (${exit}) under Node ${node}, ` +
+    `so its tools are unavailable in this session. ${remedy}`
   );
 }

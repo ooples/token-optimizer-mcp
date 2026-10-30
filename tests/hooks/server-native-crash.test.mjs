@@ -82,6 +82,22 @@ describe('isNativeCrash', () => {
   });
 });
 
+describe('the remedy is named only where it applies', () => {
+  test('Node 22 below 22.14 is told to upgrade', () => {
+    const notice = serverCrashNotice({ TOKEN_OPTIMIZER_RUNTIME: runtime }, '22.2.0');
+    expect(notice).toBeNull(); // no record yet
+    writeFileSync(crashFile(), JSON.stringify({ node: '22.2.0', exit: '0xC0000005' }));
+    expect(serverCrashNotice({ TOKEN_OPTIMIZER_RUNTIME: runtime }, '22.2.0')).toContain('22.14.0');
+  });
+
+  test('a crash on a Node that is already new enough names no upgrade', () => {
+    writeFileSync(crashFile(), JSON.stringify({ node: '22.23.4', exit: '0xC0000409' }));
+    const notice = serverCrashNotice({ TOKEN_OPTIMIZER_RUNTIME: runtime }, '22.23.4');
+    expect(notice).toContain('0xC0000409');
+    expect(notice).not.toContain('22.14.0');
+  });
+});
+
 describe('the launcher records a native crash', () => {
   test('a crashing server leaves a record with the Node version and a named cause', () => {
     seedServer('9.9.9', NATIVE_CRASH);
@@ -127,13 +143,12 @@ describe('SessionStart names the crash', () => {
     seedServer('9.9.9', NATIVE_CRASH);
     launch();
     const out = sessionStart();
-    expect(out).toContain('MCP server crashed at startup');
-    expect(out).toContain('22.14.0');
+    expect(out).toContain('MCP server crashed in native code');
   });
 
   test('a crash under another Node version says nothing', () => {
     writeFileSync(crashFile(), JSON.stringify({ node: '22.2.0-other', exit: '0xC0000005' }));
-    expect(sessionStart()).not.toContain('crashed at startup');
+    expect(sessionStart()).not.toContain('crashed in native code');
     expect(serverCrashNotice({ TOKEN_OPTIMIZER_RUNTIME: runtime }, '22.2.0-other')).toContain(
       '0xC0000005'
     );

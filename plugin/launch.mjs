@@ -929,6 +929,12 @@ function spawnBackgroundRefresh() {
 // The name is shared with hooks-core/server-crash.mjs.
 const SERVER_CRASH_FILE = join(RUNTIME, '.server-crash.json');
 
+/** Node releases whose better-sqlite3 13 binding crashes opening a database (bisected, win32-x64). */
+export function nodeBelowSqliteFloor(version) {
+  const [major, minor] = String(version).split('.').map(Number);
+  return major === 22 && minor < 14;
+}
+
 /**
  * Whether a server exit was a crash in native code rather than a JavaScript error.
  *
@@ -958,8 +964,10 @@ function noteServerExit(code, signal, served) {
       const exit = signal || `0x${(code >>> 0).toString(16).toUpperCase()}`;
       log(
         `server crashed in native code (${exit}) under Node ${process.versions.node} on ` +
-          `${process.platform}-${process.arch}. Its SQLite binding needs Node 22.14.0 or newer; ` +
-          `upgrade Node to restore the server.`
+          `${process.platform}-${process.arch}.` +
+          (nodeBelowSqliteFloor(process.versions.node)
+            ? ' Its SQLite binding needs Node 22.14.0 or newer; upgrade Node to restore the server.'
+            : '')
       );
       atomicWrite(
         SERVER_CRASH_FILE,
