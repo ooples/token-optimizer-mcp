@@ -17,7 +17,7 @@
  * concluded; the harvest, when enabled, catches what it forgot to record.
  */
 
-import { existsSync } from 'node:fs';
+import { access } from 'node:fs/promises';
 import { loadHooksCore } from './hooks-core-loader.js';
 
 /**
@@ -29,8 +29,16 @@ import { loadHooksCore } from './hooks-core-loader.js';
  * caller to fix paths that were fine. The anchors are checked on disk instead,
  * and a write the store refused is named as such.
  */
-function refusalReason(anchors: string[]): string {
-  const onDisk = anchors.some((a) => existsSync(a.split('#')[0]));
+async function refusalReason(anchors: string[]): Promise<string> {
+  const exists = await Promise.all(
+    anchors.map((a) =>
+      access(a.split('#')[0]).then(
+        () => true,
+        () => false
+      )
+    )
+  );
+  const onDisk = exists.some(Boolean);
   return onDisk
     ? 'the project store rejected the write; the reason is on stderr and in ~/.token-optimizer/write-failures.jsonl'
     : 'no anchor resolved to a file on disk, so the finding was refused';
@@ -314,7 +322,7 @@ export async function wikiWrite(
       keys,
       unresolvedAnchors,
       project,
-      error: keys.length ? undefined : refusalReason(anchors),
+      error: keys.length ? undefined : await refusalReason(anchors),
     };
   } catch (error) {
     return {
