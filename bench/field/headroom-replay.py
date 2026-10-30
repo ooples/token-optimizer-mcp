@@ -148,33 +148,57 @@ def probe_arms():
 
 
 def warm_worker():
-    """Load the text model in this worker before its first scored result."""
-    arm_router("The build finished and every test passed. " * 60)
+    """Load the text model in this worker before its first scored result.
+
+    SYNCHRONOUSLY. The router loads Kompress on a background thread and passes
+    text through unchanged until it is ready; measured on Windows, that thread
+    had not finished after 600 s, while the synchronous load took 18 s.
+    """
+    from headroom.transforms import kompress_compressor
+
+    kompress_compressor._load_kompress(kompress_compressor.HF_MODEL_ID)
 
 
 def probe_text_model(version):
-    """The router's PROSE path must actually run, not fall back to passthrough.
+    """HeadRoom's text model must be loaded and ready, not falling back.
 
-    Without the [ml] extra the Kompress model never loads, and ContentRouter
-    returns plain text unchanged WITHOUT raising -- so every arm passed the probe
-    above, `arm_errors` stayed empty, and prose scored as "HeadRoom removed 0%",
-    understating them on every issue body and log line of English. Checked by
-    outcome: a long repetitive paragraph must come back shorter. The model is
-    also warmed here, once per worker, so the first scored result does not pay
-    its load or fall back while it is still loading.
+    Without it ContentRouter returns prose unchanged WITHOUT raising -- every arm
+    passed the probe above, `arm_errors` stayed empty, and prose scored as
+    "HeadRoom removed 0%", understating them on every issue body and paragraph
+    of English. Readiness is what is checked, not a saving on a sample: Kompress
+    rightly saves nothing on a repeated sentence, and 2.6% on a real issue body.
+
+    Seen on Windows with headroom-ai 0.42.0: the [ml] extra installs no
+    sentencepiece/tiktoken, and the pinned ModernBERT tokenizer revision cannot
+    be instantiated; `pip install sentencepiece tiktoken` and HEADROOM_HF_PIN=off
+    (their documented switch) load it.
     """
     from headroom.transforms.content_router import ContentRouter, ContentRouterConfig
 
+    try:
+        warm_worker()
+    except Exception as exc:  # noqa: BLE001
+        raise SystemExit(
+            "HeadRoom's text model failed to load (headroom-ai %s): %s: %s. Install "
+            "headroom-ai[ml]==%s plus sentencepiece and tiktoken, and set HEADROOM_HF_PIN=off "
+            "if the pinned tokenizer revision cannot be built. A comparison without the "
+            "model understates HeadRoom." % (version, type(exc).__name__, str(exc)[:200], version)
+        )
     cfg = ContentRouterConfig()
     cfg.enable_code_aware = True
-    prose = "The build finished and every test in the suite passed on the first attempt. " * 120
-    result = ContentRouter(cfg).compress(prose, context="", question=None)
-    if not result.savings_percentage > 0:
+    kompress = ContentRouter(cfg)._get_kompress()
+    if kompress is None or not kompress.is_ready():
         raise SystemExit(
-            "HeadRoom's text model did not run (headroom-ai %s, strategy %s, 0%% saved on prose). "
-            "Install headroom-ai[ml]==%s; a comparison without it understates HeadRoom."
-            % (version, result.strategy_used, version)
+            "HeadRoom's text model is not ready (headroom-ai %s); refusing to score a "
+            "comparison that would understate HeadRoom." % version
         )
+    print("headroom text model: %s ready" % kompress_model_name())
+
+
+def kompress_model_name():
+    from headroom.transforms import kompress_compressor
+
+    return kompress_compressor.HF_MODEL_ID
 
 
 def score(line):

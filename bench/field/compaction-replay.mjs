@@ -65,9 +65,15 @@ export function responseText(tool, response) {
  * the middle of the source, and was skipped as if already compacted.
  */
 export function wasCompacted(tool, response) {
-  const text = tool === 'Grep' ? response?.content : response?.stdout;
-  const last = String(text ?? '').trimEnd().split('\n').pop() ?? '';
-  return last.startsWith(MARK) && /; full (?:output|text): Read .+\]$/.test(last);
+  const endsInNotice = (text) => {
+    const last = String(text ?? '').trimEnd().split('\n').pop() ?? '';
+    return last.startsWith(MARK) && /; full (?:output|text): Read .+\]$/.test(last);
+  };
+  if (tool === 'Grep') return endsInNotice(response?.content);
+  // The compactor treats stdout and stderr separately and can compact either
+  // alone; a compacted stderr's original is gone just the same, so replaying it
+  // would score an already-cut text.
+  return endsInNotice(response?.stdout) || endsInNotice(response?.stderr);
 }
 
 /**

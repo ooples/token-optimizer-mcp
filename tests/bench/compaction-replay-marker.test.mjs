@@ -23,7 +23,8 @@ describe('wasCompacted', () => {
     expect(wasCompacted('Bash', { stdout: source })).toBe(false);
   });
 
-  test('the notice on stderr does not count', () => {
-    expect(wasCompacted('Bash', { stdout: 'ok\n', stderr: NOTICE })).toBe(false);
+  test('a compacted stderr counts: its original is gone too', () => {
+    expect(wasCompacted('Bash', { stdout: 'ok\n', stderr: `warn\n${NOTICE}\n` })).toBe(true);
+    expect(wasCompacted('Bash', { stdout: 'ok\n', stderr: `${NOTICE} -- quoted mid-line\nmore` })).toBe(false);
   });
 });
