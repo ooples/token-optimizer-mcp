@@ -25,6 +25,7 @@ import { canonicalPath, isFsSafePath } from './paths.mjs';
 import { flagOn } from './flags.mjs';
 import { ignoreSelf } from './ignore-self.mjs';
 import { accepted, persisted, queued, rejected, withRids } from './store-write.mjs';
+import { spool, storeRelative, withWriteLease } from './maintenance.mjs';
 
 /**
  * Schema version stamped on every record.
@@ -765,33 +766,15 @@ function appendAll(dir, records) {
     openBatch.records.push(...withRids(records));
     return queued('batched');
   }
+  const stamped = withRids(records);
   try {
-    // 0o700 AND an explicit chmod. `recursive: true` applies the mode only to
-    // directories it actually creates, and the process umask masks it further,
-    // so the mode argument alone does not guarantee the result -- which is how
-    // this shipped group- and world-readable while a test claimed otherwise.
-    // (That test asserted on POSIX bits and was skipped on Windows, so it never
-    // ran where it would have failed.)
-    const created = !existsSync(dir);
-    mkdirSync(dir, { recursive: true, mode: 0o700 });
-    try {
-      chmodSync(dir, 0o700);
-    } catch {
-      // Not POSIX, or not ours to chmod. The mkdir mode above still applies
-      // where it can, and failing here must not stop the write.
-    }
-    ignoreSelf(dir, { created });
-    // ONE appendFileSync for the whole group, inside ONE lock: a caller that
-    // needs several records to be observed together cannot get that by looping,
-    // because every iteration is a separate crash point.
-    const payload = withRids(records).map((record) => JSON.stringify(record) + '\n').join('');
-    withLock(dir, () => {
-      appendFileSync(logPath(dir), payload);
-      compactIfWasteful(dir);
-    });
-    // Counted here and not at the top: a buffered write returns above, and a
-    // throw below leaves the count where it was. What this reports is appends
-    // that reached the disk.
+    // UNDER A WRITE LEASE (#542): a store in maintenance is not written; the
+    // records go to its spool instead and are replayed after cutover.
+    const lease = withWriteLease(dir, () => appendGraph(dir, stamped));
+    if (!lease.admitted) return spool(dir, storeRelative(dir, logPath(dir)), stamped, lease.state);
+    // Counted here and not at the top: a buffered or spooled write returns
+    // above, and a throw leaves the count where it was. What this reports is
+    // appends that reached the disk.
     writeCycles += 1;
     return persisted();
   } catch (error) {
@@ -799,6 +782,33 @@ function appendAll(dir, records) {
     // user's tool call -- but it is no longer reported as a success (#542).
     return rejected({ store: dir, op: 'graph-append', file: logPath(dir), error });
   }
+}
+
+/** The append itself, run only once a lease has admitted it. */
+function appendGraph(dir, records) {
+  // 0o700 AND an explicit chmod. `recursive: true` applies the mode only to
+  // directories it actually creates, and the process umask masks it further,
+  // so the mode argument alone does not guarantee the result -- which is how
+  // this shipped group- and world-readable while a test claimed otherwise.
+  // (That test asserted on POSIX bits and was skipped on Windows, so it never
+  // ran where it would have failed.)
+  const created = !existsSync(dir);
+  mkdirSync(dir, { recursive: true, mode: 0o700 });
+  try {
+    chmodSync(dir, 0o700);
+  } catch {
+    // Not POSIX, or not ours to chmod. The mkdir mode above still applies
+    // where it can, and failing here must not stop the write.
+  }
+  ignoreSelf(dir, { created });
+  // ONE appendFileSync for the whole group, inside ONE lock: a caller that
+  // needs several records to be observed together cannot get that by looping,
+  // because every iteration is a separate crash point.
+  const payload = records.map((record) => JSON.stringify(record) + '\n').join('');
+  withLock(dir, () => {
+    appendFileSync(logPath(dir), payload);
+    compactIfWasteful(dir);
+  });
 }
 
 /** Records one line. The overwhelmingly common case, and unchanged. */
@@ -929,7 +939,10 @@ function appendSnapshot(dir, record) {
     return queued('batched');
   }
   try {
-    appendFileSync(snapshotsPath(dir), JSON.stringify(record) + '\n');
+    const lease = withWriteLease(dir, () =>
+      appendFileSync(snapshotsPath(dir), JSON.stringify(record) + '\n')
+    );
+    if (!lease.admitted) return spool(dir, storeRelative(dir, snapshotsPath(dir)), [record], lease.state);
     return persisted();
   } catch (error) {
     // The node is already durable; the snapshot is an optimization -- but a

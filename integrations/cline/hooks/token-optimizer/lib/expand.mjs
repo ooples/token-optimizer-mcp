@@ -44,6 +44,7 @@ import {
   unlinkSync,
 } from 'node:fs';
 import { rejected } from './store-write.mjs';
+import { withWriteLease } from './maintenance.mjs';
 import { join } from 'node:path';
 import { record, readMetrics } from './metrics.mjs';
 import { putNode, putEdge, nodeId } from './wiki.mjs';
@@ -130,8 +131,17 @@ export function capture(dir, text, meta = {}) {
   let path = join(dir, 'artifacts', `${ref}.txt`);
   if (!existsSync(path)) {
     try {
-      path = join(artifactDir(dir), `${ref}.txt`);
-      writeFileSync(path, body, { mode: 0o600 });
+      // UNDER A WRITE LEASE (#542). An artifact can be megabytes, so a store in
+      // maintenance does not spool one: the capture is refused and reported,
+      // and the caller leaves the output whole.
+      const lease = withWriteLease(dir, () => {
+        path = join(artifactDir(dir), `${ref}.txt`);
+        writeFileSync(path, body, { mode: 0o600 });
+      });
+      if (!lease.admitted) {
+        rejected({ store: dir, op: 'artifact-write', reason: `store is ${lease.state.state}` });
+        return null;
+      }
     } catch (error) {
       rejected({ store: dir, op: 'artifact-write', file: path, error });
       return null;

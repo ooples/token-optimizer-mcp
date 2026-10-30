@@ -28,6 +28,7 @@ import {
   closeSync,
 } from 'node:fs';
 import { rejected } from './store-write.mjs';
+import { spool, storeRelative, withWriteLease } from './maintenance.mjs';
 import { join } from 'node:path';
 import { createHash, randomBytes } from 'node:crypto';
 import { redact } from './redact.mjs';
@@ -247,12 +248,25 @@ export function record(dir, event) {
       at: event.at ?? Date.now(),
     };
     const line = JSON.stringify(complete) + '\n';
-    appendFileSync(metricsPath(dir), line);
-    // Balance-critical records go to their own log as well, so the windows on
-    // the firehose can never starve the measurement. Written SECOND: a torn
-    // write here costs a duplicate the reader dedupes, not a lost event.
-    if (BALANCE_KINDS.has(event.kind)) appendFileSync(balancePath(dir), line);
-    if (EVIDENCE_KINDS.has(event.kind)) appendFileSync(evidencePath(dir), line);
+    // UNDER A WRITE LEASE (#542). In maintenance the record is spooled for each
+    // log it belongs to and replayed after cutover; `id` is its dedupe key.
+    const lease = withWriteLease(dir, () => {
+      appendFileSync(metricsPath(dir), line);
+      // Balance-critical records go to their own log as well, so the windows on
+      // the firehose can never starve the measurement. Written SECOND: a torn
+      // write here costs a duplicate the reader dedupes, not a lost event.
+      if (BALANCE_KINDS.has(event.kind)) appendFileSync(balancePath(dir), line);
+      if (EVIDENCE_KINDS.has(event.kind)) appendFileSync(evidencePath(dir), line);
+    });
+    if (!lease.admitted) {
+      const record = { ...complete, rid: id };
+      const files = [metricsPath(dir)];
+      if (BALANCE_KINDS.has(event.kind)) files.push(balancePath(dir));
+      if (EVIDENCE_KINDS.has(event.kind)) files.push(evidencePath(dir));
+      for (const file of files) {
+        if (spool(dir, storeRelative(dir, file), [record], lease.state).outcome === 'rejected') return null;
+      }
+    }
     return complete;
   } catch (error) {
     // Metrics must never break a tool call -- and a lost record is reported,
