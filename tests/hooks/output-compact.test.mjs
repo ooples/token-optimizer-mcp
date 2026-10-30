@@ -64,6 +64,38 @@ describe('folding and selection', () => {
     expect(isDenseLine('{"a": "' + 'x'.repeat(500) + '"}')).toBe(false);
     expect(foldOutput(minified).text.length).toBeLessThan(400);
   });
+
+  test('a compiler error with a long path is dense but stays whole', () => {
+    // Recorded shape: the path leaves almost no spaces, and the message -- the part
+    // the model needs -- sits in the middle that elision would cut.
+    const path = '/home/runner/work/AiDotNet.Tensors/AiDotNet.Tensors/tests/AiDotNet.Tensors.Tests/Engines/BlasManaged/';
+    const error =
+      `##[error]${path}GotoGemmRoutingTests.cs(94,50): error CS0117: 'BitConverter' does not contain a definition for 'SingleToInt32Bits' [${path}${'x'.repeat(120)}.csproj::TargetFramework=net471]`;
+    expect(isDenseLine(error)).toBe(true);
+    expect(foldOutput(error).text).toBe(error);
+    const huge = 'error:' + 'x'.repeat(5000);
+    expect(foldOutput(huge).text.length).toBeLessThan(400);
+  });
+
+  test('one MSBuild diagnostic per target framework is kept once, with a count', () => {
+    // Recorded shape: a multi-targeted test project prints every analyzer error
+    // once per framework, so 8 distinct errors arrive as 32 lines.
+    const at = (n) => `C:\\repo\\tests\\T.Tests\\UnitTests\\WorkLogTests.cs(${160 + n},26): error xUnit1031: Test methods should not use blocking task operations`;
+    const lines = [];
+    for (let n = 0; n < 8; n++)
+      for (const tf of ['net471', 'net8.0', 'net9.0', 'net10.0'])
+        lines.push(`${at(n)} [C:\\repo\\tests\\T.Tests\\T.Tests.csproj::TargetFramework=${tf}]`);
+    const { text, folded } = foldOutput(lines.join('\n'));
+    expect(folded).toBe(24);
+    for (let n = 0; n < 8; n++) {
+      expect(text).toContain(at(n));
+      expect(text.split(at(n)).length - 1).toBe(1);
+    }
+    expect(text).toContain('[+3 more: same diagnostic in other projects/target frameworks]');
+    // Different errors on the same line are not merged.
+    const two = [`${at(0)} [a.csproj]`, `${at(0).replace('xUnit1031', 'CS0117')} [a.csproj]`].join('\n');
+    expect(foldOutput(two).text).toBe(two);
+  });
 });
 
 describe('a read is judged by the stage that produces the output', () => {
@@ -100,8 +132,10 @@ describe('a read is judged by the stage that produces the output', () => {
       'Get-Content src\\A.cs `\n  | Select-Object -Skip 10',
     ])
       expect(isReadLikeCommand(command)).toBe(true);
-    for (const command of ['cat a.ts\ndotnet test', 'cd /repo\r\ngrep -rn x src | head -50'])
+    for (const command of ['cat a.log\ndotnet test', 'cd /repo\r\ngrep -rn x src | head -50'])
       expect(isReadLikeCommand(command)).toBe(false);
+    // a.ts is in the output whatever runs after it: an edit may be built from it.
+    expect(isReadLikeCommand('cat a.ts\ndotnet test')).toBe(true);
   });
 
   test('a multi-line read keeps its exact text where a log would be folded', () => {
@@ -133,6 +167,35 @@ describe('a read is judged by the stage that produces the output', () => {
     expect(isBuildOrTestCommand("git commit -m 'fix; dotnet test passes'")).toBe(false);
     const source = Array.from({ length: 300 }, (_, i) => `    var x${i} = Compute(${i});`).join('\n');
     expect(compactText(source, { command: "awk 'NR>=1 && NR<=300' src/A.cs" })).toBeNull();
+  });
+
+  test('a file read anywhere in a compound command keeps the output exact', () => {
+    // Replayed corpus: 160 sub-24 KB reads were folded because only the last
+    // statement (a grep) or the last stage (a renumbering awk / cut) was judged.
+    for (const command of [
+      'cd C:/repo && cat src/a.cs; grep -n "Fact" tests/b.cs | head -40',
+      "sed -n 9990,10340p Plan.cs | cat -n | awk '{n=$1+9989; $1=\"\"; print n $0}' | cut -c1-200",
+      "awk '{printf \"%4d: %s\\n\", NR, $0}' a.cs | sed -n '505,660p;740,790p'",
+    ]) {
+      expect(isReadLikeCommand(command)).toBe(true);
+    }
+    // A pattern awk filters like grep: not a read.
+    expect(isReadLikeCommand("cat a.cs | awk '/ERROR/'")).toBe(false);
+    // A log file is not an edit target: selected around its verdicts, not cut head-first.
+    const log = ciLog();
+    const out = compactText(log, { command: 'cat ci-logs/ledger.log' });
+    expect(out.text).toContain('test_round_up FAILED');
+    expect(out.text).toContain('1 failed, 2411 passed');
+    const source = Array.from({ length: 300 }, (_, i) => `src/b.cs:${i + 1}:    var x${i} = Compute(${i});`).join('\n');
+    expect(Buffer.byteLength(source)).toBeGreaterThan(OUTPUT_COMPACT_MIN_BYTES);
+    expect(
+      compactToolResponse({
+        tool: 'Bash',
+        input: { command: 'cat src/a.cs; grep -rn Compute src/b.cs' },
+        response: { stdout: source, stderr: '' },
+        dir: mkdtempSync(join(root, 'read-')),
+      })
+    ).toBeNull();
   });
 
   test('an 8 KB search piped into head is compacted; the same bytes from cat are not', () => {

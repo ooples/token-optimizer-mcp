@@ -93,6 +93,9 @@ export function isDenseLine(line) {
   return spaces / line.length < 0.06;
 }
 
+/** Longest signal line kept whole even when dense; longer ones are elided like any other. */
+const SIGNAL_LINE_MAX = 2000;
+
 const elideDense = (line) =>
   `${line.slice(0, 160)}…[${line.length - 240} chars elided]…${line.slice(-80)}`;
 
@@ -119,6 +122,41 @@ function namesIn(lines, limit = 5) {
   };
 }
 
+/** `path(line,col): error|warning CODE: message [project::TargetFramework=x]` */
+const MSBUILD_DIAGNOSTIC = /\(\d{1,9},\d{1,9}\): (?:error|warning) [A-Za-z]{1,20}\d{1,9}:/;
+
+/** The line without its trailing ` [project...]`, or null when it has none. */
+function withoutProjectSuffix(line) {
+  const end = line.trimEnd();
+  const open = end.lastIndexOf(' [');
+  return end.endsWith(']') && open > 0 ? end.slice(0, open).trimEnd() : null;
+}
+
+/**
+ * MSBuild prints each diagnostic once per project and target framework, the
+ * copies differing only in the trailing `[project::TargetFramework=x]`. A
+ * multi-targeted build of 8 errors is 32 lines, and a budget that keeps every
+ * error line can still run out on the copies. Map: index of the first copy ->
+ * how many later copies it stands for; index of each later copy -> 0.
+ */
+function msbuildRepeats(lines) {
+  const first = new Map();
+  const repeats = new Map();
+  lines.forEach((line, i) => {
+    if (line.length > SIGNAL_LINE_MAX || !MSBUILD_DIAGNOSTIC.test(line)) return;
+    const key = withoutProjectSuffix(line);
+    if (key === null) return;
+    const at = first.get(key);
+    if (at === undefined) {
+      first.set(key, i);
+      return;
+    }
+    repeats.set(at, (repeats.get(at) ?? 0) + 1);
+    repeats.set(i, 0);
+  });
+  return repeats;
+}
+
 /**
  * Lossless-in-meaning reduction: progress redraws, colour, dense lines, and
  * blocks of the same line shape folded to examples plus a count.
@@ -133,14 +171,28 @@ export function foldOutput(text) {
   }
   const lastIndex = new Map();
   lines.forEach((l, i) => lastIndex.set(shapeOf(l), i));
+  const repeats = msbuildRepeats(lines);
   const seen = new Map();
   const out = [];
   let folded = 0;
   lines.forEach((line, i) => {
+    const r = repeats.get(i);
+    if (r === 0) {
+      folded++;
+      return;
+    }
+    if (r) {
+      out.push(`${line}  [+${r} more: same diagnostic in other projects/target frameworks]`);
+      return;
+    }
     const s = shapeOf(line);
     const n = counts.get(s) ?? 0;
     if (n < FOLD_MIN_REPEATS) {
-      out.push(isDenseLine(line) ? elideDense(line) : line);
+      // A compiler error with a long path has almost no spaces, so it reads as
+      // dense -- but its middle is the message. Signal lines stay whole unless
+      // they are genuinely huge (a minified bundle that happens to say "error").
+      const keepWhole = line.length <= SIGNAL_LINE_MAX && (SIGNAL.test(line) || SUMMARY.test(line));
+      out.push(isDenseLine(line) && !keepWhole ? elideDense(line) : line);
       return;
     }
     const k = (seen.get(s) ?? 0) + 1;
@@ -212,10 +264,16 @@ export function selectWithinBudget(text, budget) {
  * bare `git show <commit>` prints a commit and its diff, which is a log.
  */
 const READ_STAGE =
-  /^(cat|type|head|tail|less|more|bat|nl|Get-Content|gc)\b|^sed\s+-n\b|^git\s+show\s+(?:-\S+\s+)*(?:[^\s:-][^\s:]*)?:\S|^git\s+cat-file\s+-p\b|^awk\s+'NR/i;
-/** A stage that only narrows its input to a line range, so a read stays a read. */
+  /^(cat|type|head|tail|less|more|bat|nl|Get-Content|gc)\b|^sed\s+-n\b|^git\s+show\s+(?:-\S+\s+)*(?:[^\s:-][^\s:]*)?:\S|^git\s+cat-file\s+-p\b|^awk\s+'(NR|\{)/i;
+/**
+ * A stage that narrows its input to line ranges or reformats every line
+ * (numbering, `cut -c`, an `awk` action with no pattern), so a read stays a
+ * read: `sed -n 9990,10340p f | cat -n | awk '{...print}' | cut -c1-200` is a
+ * numbered view of a file an edit is built from, not a log. An awk PATTERN
+ * (`awk '/x/'`) filters like grep and is not here.
+ */
 const RANGE_STAGE =
-  /^(head|tail|nl|more|cat\s+-n)\b|^sed\s+-n\s+['"]?\d+(,\d+)?p['"]?\s*$|^(Select-Object|select)\s+(-(First|Last|Skip|Index)\s+\(?[\d,.]+\)?\s*)+$|^awk\s+'NR/i;
+  /^(head|tail|nl|more|cat\s+-n)\b|^sed\s+-n\s+['"]?\d+(,\d+)?p(;\d+(,\d+)?p)*['"]?\s*$|^(Select-Object|select)\s+(-(First|Last|Skip|Index)\s+\(?[\d,.]+\)?\s*)+$|^awk\s+'(NR|\{)|^cut\s+-c\s*\d*-?\d*\s*$/i;
 
 /**
  * The pipeline stages of the statement the command's output ends with,
@@ -224,12 +282,14 @@ const RANGE_STAGE =
  * since PowerShell `$x = Get-Content f` and `(Get-Content f)[0..80]` read the same.
  */
 function lastStatementStages(command) {
-  const statements = shellStatements(command).filter(
-    (stages) => !(stages.length === 1 && /^(cd|Set-Location|sl|pushd|Push-Location)\s+\S+$/i.test(stages[0]))
-  );
-  return (statements.pop() ?? [])
-    .map((s) => s.replace(/^\$[\w:]+\s*=\s*/, '').replace(/^\(+/, ''))
-    .filter(Boolean);
+  return statementStages(command).pop() ?? [];
+}
+
+/** Every statement's stages, cd/Set-Location statements dropped, `$x = ` and `(` stripped. */
+function statementStages(command) {
+  return shellStatements(command)
+    .filter((stages) => !(stages.length === 1 && /^(cd|Set-Location|sl|pushd|Push-Location)\s+\S+$/i.test(stages[0])))
+    .map((stages) => stages.map((s) => s.replace(/^\$[\w:]+\s*=\s*/, '').replace(/^\(+/, '')).filter(Boolean));
 }
 
 /**
@@ -243,12 +303,29 @@ function lastStatementStages(command) {
  * (bench/field/compaction-replay.mjs) that was 87 outputs over 6 KB and ~207k
  * tokens let through whole. A pipeline is a read only when its FIRST stage
  * reads and every later stage merely cuts a line range out of it.
+ *
+ * ANY STATEMENT, NOT ONLY THE LAST. Every statement's output reaches the model,
+ * so `cat a.cs; grep -n X b.cs | head` puts a.cs in context as surely as a bare
+ * `cat a.cs`. Judging only the trailing grep folded 160 sub-24 KB file reads in
+ * the replayed corpus as if they were search hits.
  */
 export function isReadLikeCommand(command) {
-  const stages = lastStatementStages(command);
-  if (!stages.length || !READ_STAGE.test(stages[0])) return false;
-  return stages.slice(1).every((s) => RANGE_STAGE.test(s));
+  return statementStages(command).some(
+    (stages) =>
+      stages.length > 0 &&
+      READ_STAGE.test(stages[0]) &&
+      !LOG_TARGET.test(stages[0]) &&
+      stages.slice(1).every((s) => RANGE_STAGE.test(s))
+  );
 }
+
+/**
+ * A read of a log file is not a read an edit is built from. Byte-exact up to
+ * READ_EXACT_BYTES and then cut head-first, `cat ci.log` kept 24 KB of
+ * progress and dropped the failure at the end; as a log it is selected around
+ * its verdict lines instead.
+ */
+const LOG_TARGET = /\.(log|out|err|trx)['"]?(\s|$)/i;
 
 /** A build or test run's output is compacted from this size, not OUTPUT_COMPACT_MIN_BYTES. */
 export const BUILD_LOG_MIN_BYTES = 2000;
@@ -410,9 +487,11 @@ export function compactToolResponse({
     if (response.isImage) return null;
     const command = String(input?.command ?? '');
     // A shell search prints the same `path:line:text` the Grep tool does, and
-    // gets the same lossless grouping first (see isShellSearchCommand).
+    // gets the same lossless grouping first (see isShellSearchCommand). Not
+    // when another statement reads a file: grouped output is compacted as a
+    // search, which would fold that file's lines (`cat a.cs; grep -n X b.cs`).
     const grouped =
-      typeof response.stdout === 'string' && isShellSearchCommand(command)
+      typeof response.stdout === 'string' && isShellSearchCommand(command) && !isReadLikeCommand(command)
         ? groupGrepByFile(response.stdout)
         : null;
     const out = compactText(grouped ?? response.stdout, { command: grouped ? '' : command });
@@ -503,6 +582,15 @@ const GREP_GROUP_HEADER = '[grouped by file: each path once, then its line:text]
  * before a file's first match is never mis-split; such a line passes verbatim.
  * Null when nothing would shrink by a tenth.
  */
+/**
+ * A "path" that is really the front of a clock time. `gh run view --log` piped
+ * into Select-String prints `job<TAB>step<TAB>2026-10-16T13:56:14Z ...`, which
+ * reads as path `...T13`, line 56 -- grouping it splits every timestamp and
+ * hides the log line behind a bogus header. A real path has no tab and does not
+ * end in an hour.
+ */
+const isClockPrefix = (path) => path.includes('\t') || /(?:^|\s|\d{2}T)\d{1,2}$/.test(path);
+
 export function groupGrepByFile(text) {
   const source = String(text ?? '');
   if (source.length < GREP_GROUP_MIN_CHARS) return null;
@@ -518,7 +606,7 @@ export function groupGrepByFile(text) {
     }
     // Bounded, so a long line is scanned in linear time (regex-linearity.test.mjs).
     const m = /^([^\n]{1,400}?):(\d{1,9}):/.exec(line);
-    if (m) {
+    if (m && !isClockPrefix(m[1])) {
       path = m[1];
       out.push(path, line.slice(path.length + 1));
       continue;
