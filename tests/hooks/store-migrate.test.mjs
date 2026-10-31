@@ -385,14 +385,18 @@ describe('session start finishes what was left', () => {
     expect(resumeIfDue(repo, { env, processes: quiet })).toBeNull();
   }, 90_000);
 
-  test('the background process does not hold the project directory open', () => {
+  test('the background process does not hold the project directory open', async () => {
     // On Windows a process locks its working directory: launched from the
     // project, the background migration made the project impossible to delete
-    // or rename (EBUSY) while it ran. Deleting it at once must succeed.
-    const legacy = () => ({ complete: true, found: [{ pid: 4242, version: '7.7.1' }] });
-    resumeIfDue(repo, { env, processes: legacy });
+    // or rename (EBUSY) while it ran. Deleting it at once must succeed. (The
+    // child sees the real process list, not a stub: what it decides does not
+    // matter here, only that it is not sitting in the project directory.)
+    resumeIfDue(repo, { env, processes: quiet });
     expect(() => rmSync(repo, { recursive: true })).not.toThrow();
-  });
+    // Let the child finish before the work directory is removed under it. With
+    // the project gone it has nothing to do and exits within about a second.
+    await new Promise((r) => setTimeout(r, 3000));
+  }, 90_000);
 
   test('a store the user placed by environment is never moved automatically', () => {
     const configured = { ...env, TOKEN_OPTIMIZER_WIKI_DIR: join(repo, '.token-optimizer', 'wiki') };

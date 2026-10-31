@@ -633,16 +633,44 @@ function migrateClaimed(
   // 5. Publish: one rename makes the new store authoritative.
   try {
     faultAt('publish');
-    if (existsSync(dest)) throw new Error(`a store already exists at ${dest}`);
-    // Recorded BEFORE the rename: a crash between it and CUTOVER leaves a
-    // `dest` that recovery can then prove this migration made, and remove.
-    setState(id, { state: READY, step: 'publish', root, generation, staged }, env);
-    renameSync(staging, dest);
+    if (existsSync(dest)) {
+      // THE PROJECT ALREADY HAS A PER-USER STORE (review): a release that keeps
+      // stores outside projects wrote one, then an older client recreated the
+      // in-repo store. Refusing here repeated the whole drain, fence and copy
+      // every hour only to fail, and left the per-user data hidden behind the
+      // in-repo store. The two are MERGED instead. The merge is idempotent, so
+      // a crash in it is completed by recovery, never rolled back.
+      setState(id, { state: READY, step: 'merging', root, generation, staged }, env);
+      mergeStore(staging, dest);
+      faultAt('merged');
+      rmSync(staging, { recursive: true, force: true });
+    } else {
+      // Recorded BEFORE the rename: a crash between it and CUTOVER leaves a
+      // `dest` that recovery can then prove this migration made, and remove.
+      setState(id, { state: READY, step: 'publish', root, generation, staged }, env);
+      renameSync(staging, dest);
+    }
     fsyncDir(dirname(dest));
     faultAt('renamed');
     // The manifest is what gc checks the backup against: the moved store's
     // files may legitimately change after the move, the backup's may not.
-    atomicJson(join(control, 'meta.json'), { root, storeId: id, movedAt: now().toISOString(), generation, manifest: hash });
+    // MERGED INTO, not replaced: the record also carries what other code put
+    // there -- the repository's first commit that lets a moved repository
+    // find its store again.
+    let previous = {};
+    try {
+      previous = JSON.parse(readFileSync(join(control, 'meta.json'), 'utf8'));
+    } catch {
+      // No record yet.
+    }
+    atomicJson(join(control, 'meta.json'), {
+      ...previous,
+      root,
+      storeId: id,
+      movedAt: now().toISOString(),
+      generation,
+      manifest: hash,
+    });
     setState(id, { state: CUTOVER, step: 'publish', root, generation, staged }, env);
     faultAt('tombstone');
     atomicJson(source, { movedTo: dest, storeId: id, since: now().toISOString(), by: PROTOCOL_VERSION });
@@ -691,6 +719,19 @@ export function recover(root, { env = process.env } = {}) {
     settleSpool(id, dest, env);
     return { recovered: true, state: NORMAL, completed: true };
   }
+  // KILLED WHILE MERGING into an existing per-user store: the merge is
+  // idempotent, so it is finished, and the move completed like any other.
+  const merging = state.generation && `${dest}.staging-${state.generation}`;
+  if (state.state === READY && state.step === 'merging' && merging && existsSync(merging) && existsSync(dest)) {
+    mergeStore(merging, dest);
+    rmSync(merging, { recursive: true, force: true });
+    atomicJson(source, { movedTo: dest, storeId: id, since: new Date().toISOString(), by: PROTOCOL_VERSION });
+    if (staged && existsSync(staged)) keepBackup(staged, id, state.generation, env);
+    excludeFromGit(root);
+    setState(id, { state: NORMAL, step: 'done', root, generation: state.generation, recovered: true }, env);
+    settleSpool(id, dest, env);
+    return { recovered: true, state: NORMAL, completed: true };
+  }
   // KILLED INSIDE PUBLISH, between the rename and CUTOVER: `dest` is this
   // migration's copy -- the step was recorded before the rename, and the
   // staging directory it was renamed from is gone. Anything else at `dest`
@@ -709,6 +750,69 @@ export function recover(root, { env = process.env } = {}) {
   setState(id, { state: NORMAL, step: 'rolled-back', root, generation: state.generation, recovered: true }, env);
   settleSpool(id, source, env);
   return { recovered: true, state: NORMAL, completed: false };
+}
+
+/**
+ * Merge the store copied to `src` into the existing store at `dest`.
+ *
+ * Append-only logs (`*.jsonl`) gain only the records `dest` lacks: by `rid`, or
+ * by the exact line for records an older release wrote without one. A graph
+ * record older than the copy `dest` already holds for its id is skipped, since
+ * the graph folds last-write-wins by position. Every other file (artifacts,
+ * which are content-addressed, rules, caches) is copied only where `dest` has
+ * none. Running it twice changes nothing the second time.
+ */
+function mergeStore(src, dest) {
+  const walk = (dir) =>
+    readdirSync(dir, { withFileTypes: true }).flatMap((entry) =>
+      entry.isDirectory() ? walk(join(dir, entry.name)) : entry.isFile() ? [join(dir, entry.name)] : []
+    );
+  for (const from of walk(src)) {
+    const rel = relative(src, from);
+    const to = join(dest, rel);
+    mkdirSync(dirname(to), { recursive: true, mode: 0o700 });
+    if (!rel.endsWith('.jsonl')) {
+      if (!existsSync(to)) copyFileSync(from, to);
+      continue;
+    }
+    const keys = new Set();
+    const latest = new Map();
+    let text = '';
+    try {
+      text = readFileSync(to, 'utf8');
+    } catch {
+      // Not in dest yet.
+    }
+    const note = (line, record) => {
+      keys.add(typeof record?.rid === 'string' && record.rid ? `rid:${record.rid}` : `line:${line}`);
+      if (typeof record?.id === 'string' && Number.isFinite(record?.at))
+        latest.set(record.id, Math.max(latest.get(record.id) ?? 0, record.at));
+    };
+    for (const line of text.split('\n')) {
+      if (!line.trim()) continue;
+      try {
+        note(line, JSON.parse(line));
+      } catch {
+        // A torn line carries nothing to match.
+      }
+    }
+    const add = [];
+    for (const line of readFileSync(from, 'utf8').split('\n')) {
+      if (!line.trim()) continue;
+      let record;
+      try {
+        record = JSON.parse(line);
+      } catch {
+        continue;
+      }
+      const key = typeof record?.rid === 'string' && record.rid ? `rid:${record.rid}` : `line:${line}`;
+      if (keys.has(key)) continue;
+      if (typeof record?.id === 'string' && Number.isFinite(record?.at) && (latest.get(record.id) ?? 0) > record.at) continue;
+      add.push(line);
+      note(line, record);
+    }
+    if (add.length) appendFileSync(to, `${text && !text.endsWith('\n') ? '\n' : ''}${add.join('\n')}\n`);
+  }
 }
 
 /**
@@ -940,7 +1044,7 @@ export function runDue(root, { env = process.env, processes = tokenOptimizerProc
   } else if (state.state === NORMAL && spoolPending(id, env)) {
     // A spool no maintenance is replaying: a writer outlived the final wait,
     // or the process died between reopening the store and replaying it.
-    settleSpool(id, projectStore(root), env);
+    settleSpool(id, projectStore(root, env), env);
   } else if (!tomb?.movedTo && state.state === NORMAL && retryDue(control) && !STORE_OVERRIDES.some((name) => env[name])) {
     let inRepo = false;
     try {

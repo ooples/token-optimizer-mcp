@@ -304,6 +304,19 @@ function newStoreDir(root, env) {
 /** The repository's first commit, or null when it is not a git repository. */
 function repositoryRootCommit(root) {
   try {
+    // THE REPOSITORY'S OWN TOP LEVEL ONLY (review). From a subdirectory -- or
+    // a project inside a dotfiles repository around the home directory -- git
+    // answers for the ENCLOSING repository, so unrelated roots shared its
+    // first commit and one project could adopt another's graph.
+    const top = execFileSync('git', ['rev-parse', '--show-toplevel'], {
+      cwd: root,
+      encoding: 'utf8',
+      timeout: 2000,
+      stdio: ['ignore', 'pipe', 'ignore'],
+      windowsHide: true,
+    }).trim();
+    const fold = (p) => (process.platform === 'win32' || process.platform === 'darwin' ? p.toLowerCase() : p);
+    if (!top || fold(canonicalPath(top)) !== fold(canonicalPath(root))) return null;
     const out = execFileSync('git', ['rev-list', '--max-parents=0', 'HEAD'], {
       cwd: root,
       encoding: 'utf8',
