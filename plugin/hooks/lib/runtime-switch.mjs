@@ -190,6 +190,13 @@ export function sessionRecord(sessionId, env = process.env) {
 /** Written at SessionStart, and lazily by the first hook of a session that predates this module. */
 export function recordSessionStart(sessionId, { version, schema = STATE_SCHEMA, hooksDir }, env = process.env) {
   if (!sessionId) return null;
+  // A RESUMED OR COMPACTED SESSION starts again with state that already exists,
+  // and the record says which schema that state is on. Overwriting it would
+  // claim a migration that never ran (or undo one that did), so an existing
+  // record is kept, whatever its schema: a lower one is then migrated forward
+  // by resolveHook, as on any other call.
+  const existing = sessionRecord(sessionId, env);
+  if (existing && Number.isInteger(existing.schema)) return existing;
   const record = { version, schema, hooksDir, startedAt: Date.now(), noted: false };
   try {
     writeAtomic(sessionRecordPath(sessionId, env), record);
@@ -660,7 +667,11 @@ export async function resolveHook({
       }
       if (note) saveRecord({ noted: true });
     }
-    if (toolUseId && event === 'pre-tool' && choice.mode !== 'self') {
+    // EVERY resolved mode is recorded, self included: a runtime installed
+    // between this call's pre-tool and its post-tool must not move the second
+    // half elsewhere. Only while enabled, since post-tool reads (and removes)
+    // the record only then.
+    if (enabled && toolUseId && event === 'pre-tool') {
       try {
         writeAtomic(callRecordPath(sessionId, toolUseId, env), {
           hooksDir: choice.hooksDir,

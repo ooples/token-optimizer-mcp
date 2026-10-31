@@ -140,16 +140,19 @@ ${versionStamp}// THE BUNDLED INVENTORY IS ASSERTED ONLY FOR AN ACTUAL PLUGIN IN
 // Install-time default: contributes names, never proof. See #469.
 process.env.TOKEN_OPTIMIZER_MCP_CAPABILITIES_BUNDLED ??= '${BUNDLED_MCP_CAPABILITIES}';
 // WHICH RUNTIME RUNS THIS HOOK: the installed one when its state schema allows,
-// else this copy (lib/runtime-switch.mjs). Any failure here runs this copy.
-let adapter = null;
+// else this copy (lib/runtime-switch.mjs). Only a switch that cannot be LOADED
+// falls back to this copy: once it has run, a throw from it runs no hook rather
+// than this copy's on state that may be on another schema.
+let importForHook = null;
 try {
-  const { importForHook } = await import('./lib/runtime-switch.mjs');
-  adapter = await importForHook({ here: import.meta.url, entryRel: '${dir}', event: '${event}', module: 'lib/adapter.mjs' });
+  ({ importForHook } = await import('./lib/runtime-switch.mjs'));
 } catch {
-  adapter = null;
+  importForHook = null;
 }
 try {
-  const { run } = adapter ?? (await import('./lib/adapter.mjs'));
+  const { run } = importForHook
+    ? await importForHook({ here: import.meta.url, entryRel: '${dir}', event: '${event}', module: 'lib/adapter.mjs' })
+    : await import('./lib/adapter.mjs');
   await run('${client}', '${event}');
 } catch (error) {
   try {

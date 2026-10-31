@@ -186,6 +186,15 @@ describe('current older than the session state: older code never reads newer sta
     return v3;
   }
 
+  test('a resumed session keeps the record of the state it already has', async () => {
+    const w = world();
+    const v3 = await migrated(w);
+    // SessionStart fires again on resume and compaction, from this (schema 1) copy.
+    await call(w, 'session-start');
+    expect(sessionRecord('sess-1', w.env)).toMatchObject({ schema: 2, version: '3.0.0', hooksDir: v3 });
+    expect((await call(w, 'pre-tool')).hooksDir).toBe(v3);
+  });
+
   test('a rollback to an older current restores every file from its backup, verified, then switches', async () => {
     const w = world();
     await migrated(w);
@@ -325,6 +334,52 @@ describe('one version per tool call', () => {
     // The record is consumed; a later call of its own resolves afresh.
     expect((await call(w, 'post-tool', { tool: 'toolu_d' })).hooksDir).toBe(v6);
     expect((await call(w, 'post-tool', { tool: 'toolu_e' })).hooksDir).toBe(v6);
+  });
+
+  test('a call whose pre-tool ran on this copy finishes on this copy, whatever is installed meanwhile', async () => {
+    const w = world();
+    await call(w, 'session-start');
+    expect((await call(w, 'pre-tool', { tool: 'toolu_s' })).mode).toBe('self');
+    const v7 = install(w, '7.0.0');
+    point(w, '7.0.0');
+    expect(await call(w, 'post-tool', { tool: 'toolu_s' })).toMatchObject({ mode: 'self', hooksDir: w.self });
+    expect((await call(w, 'post-tool', { tool: 'toolu_t' })).hooksDir).toBe(v7);
+  });
+});
+
+describe('the generated entry falls back only when the switch cannot load', () => {
+  // The real plugin post-tool entry, copied beside stand-in libraries, so what
+  // ran is visible: the adapter and the failure logger each write a file.
+  function entryWith(runtimeSwitch) {
+    const w = world();
+    const dir = join(w.base, 'entry');
+    mkdirSync(join(dir, 'lib'), { recursive: true });
+    writeFileSync(join(dir, 'post-tool.mjs'), readFileSync(join(ROOT, 'plugin', 'hooks', 'post-tool.mjs')));
+    const mark = (name) => JSON.stringify(join(dir, name));
+    writeFileSync(
+      join(dir, 'lib', 'adapter.mjs'),
+      `import { writeFileSync } from 'node:fs';\nexport async function run() { writeFileSync(${mark('adapter-ran')}, ''); }\n`
+    );
+    writeFileSync(
+      join(dir, 'lib', 'observability.mjs'),
+      `import { writeFileSync } from 'node:fs';\nexport function recordHookBootstrapFailure() { writeFileSync(${mark('failure-recorded')}, ''); }\n`
+    );
+    if (runtimeSwitch !== null) writeFileSync(join(dir, 'lib', 'runtime-switch.mjs'), runtimeSwitch);
+    const r = spawnSync(process.execPath, [join(dir, 'post-tool.mjs')], { input: '{}', encoding: 'utf8', timeout: 30_000 });
+    expect(r.status).toBe(0);
+    return { adapter: existsSync(join(dir, 'adapter-ran')), failure: existsSync(join(dir, 'failure-recorded')) };
+  }
+
+  test('a switch that cannot be loaded runs this copy', () => {
+    expect(entryWith(null)).toEqual({ adapter: true, failure: false });
+    expect(entryWith('export const importForHook = ;')).toEqual({ adapter: true, failure: false });
+  });
+
+  test('a switch that throws after loading runs no hook, and the failure is recorded', () => {
+    expect(entryWith("export async function importForHook() { throw new Error('resolution failed'); }\n")).toEqual({
+      adapter: false,
+      failure: true,
+    });
   });
 });
 
