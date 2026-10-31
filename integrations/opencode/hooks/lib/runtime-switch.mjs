@@ -468,17 +468,18 @@ function lockOwner(path) {
 
 /**
  * Moves a stale lock aside; true when the lock at `path` is gone. The rename
- * is checked against the owner that was judged stale, so a live lock that
- * replaced it in between is put back rather than broken.
+ * is checked against the lock that was judged stale, its owner and identity,
+ * so a live lock that replaced it in between is put back rather than broken.
  */
 function takeOverStaleLock(path) {
   const owner = lockOwner(path);
-  let age;
+  let judged;
   try {
-    age = Date.now() - statSync(path).mtimeMs;
+    judged = statSync(path);
   } catch {
     return true; // Released meanwhile.
   }
+  const age = Date.now() - judged.mtimeMs;
   const pid = Number(owner?.split('-')[0]);
   const dead = owner !== null && pid !== process.pid && !isPidAlive(pid);
   if (!dead && age <= LOCK_STALE_MS) return false;
@@ -488,7 +489,14 @@ function takeOverStaleLock(path) {
   } catch {
     return false; // Another hook took it over first.
   }
-  if (lockOwner(aside) !== owner) {
+  let moved = null;
+  try {
+    moved = statSync(aside);
+  } catch {
+    // Treated as a different lock below.
+  }
+  // The owner alone cannot tell two unowned locks apart; the directory's identity can.
+  if (lockOwner(aside) !== owner || moved?.ino !== judged.ino || moved?.birthtimeMs !== judged.birthtimeMs) {
     try {
       renameSync(aside, path);
     } catch {
