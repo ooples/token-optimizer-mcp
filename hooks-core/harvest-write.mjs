@@ -693,9 +693,11 @@ export function writeHarvested(
 
   const written = [];
   const storeRejected = [];
-  const anchorRejections = [];
   for (const finding of findings) {
     const resolved = [];
+    // PER FINDING: a rejection recorded while resolving one finding's anchors
+    // says nothing about the next finding's (review).
+    const anchorRejections = [];
     for (const anchor of finding.anchors || []) {
       const target = resolveAnchor(dir, anchor, projectRoot, anchorRejections);
       if (target && !resolved.includes(target)) resolved.push(target);
@@ -704,7 +706,6 @@ export function writeHarvested(
     // rejection, reported as one, not a finding with no anchors.
     if (!resolved.length && anchorRejections.length) {
       storeRejected.push({ key: null, ...anchorRejections[0] });
-      anchorRejections.length = 0;
     }
     // A claim about files that do not exist cannot be verified against
     // anything, so it is dropped rather than kept as unfalsifiable.
