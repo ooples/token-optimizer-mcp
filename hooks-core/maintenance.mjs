@@ -103,7 +103,9 @@ export function readState(id, env = process.env) {
   try {
     text = readFileSync(statePath(id, env), 'utf8');
   } catch (error) {
-    if (error?.code === 'ENOENT') return { state: NORMAL };
+    // ENOTDIR: a path component is a file, so no record can exist there
+    // (POSIX reports it; Windows reports ENOENT for the same layout).
+    if (error?.code === 'ENOENT' || error?.code === 'ENOTDIR') return { state: NORMAL };
     return { state: FAILED, reason: `state unreadable: ${error?.code || error}` };
   }
   try {
