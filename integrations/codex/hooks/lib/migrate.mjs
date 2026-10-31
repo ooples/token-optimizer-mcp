@@ -333,9 +333,16 @@ const ridOf = (record) => (typeof record?.rid === 'string' && record.rid ? recor
 /** Replay one spool directory into `dest`, skipping rids already present, then remove it. */
 function replaySpoolDir(dir, dest) {
   const seen = new Map();
+  // The newest `at` the destination holds per record id. The store reopens
+  // BEFORE the spool is replayed, so a writer can append a newer record for an
+  // id directly; the graph folds last-write-wins by position, and appending the
+  // older spooled record after it would bring the stale value back.
+  const latestIn = new Map();
   const ridsIn = (file) => {
     if (!seen.has(file)) {
       const rids = new Set();
+      const latest = new Map();
+      latestIn.set(file, latest);
       let text = '';
       try {
         text = readFileSync(join(dest, file), 'utf8');
@@ -347,8 +354,11 @@ function replaySpoolDir(dir, dest) {
       for (const line of text.split('\n')) {
         if (!line.trim()) continue;
         try {
-          const rid = ridOf(JSON.parse(line));
+          const record = JSON.parse(line);
+          const rid = ridOf(record);
           if (rid) rids.add(rid);
+          if (typeof record?.id === 'string' && Number.isFinite(record?.at))
+            latest.set(record.id, Math.max(latest.get(record.id) ?? 0, record.at));
         } catch {
           // A torn last line carries no usable rid.
         }
@@ -359,6 +369,7 @@ function replaySpoolDir(dir, dest) {
   };
   let replayed = 0;
   let duplicates = 0;
+  let superseded = 0;
   for (const name of readdirSync(dir).sort()) {
     for (const line of readFileSync(join(dir, name), 'utf8').split('\n')) {
       if (!line.trim()) continue;
@@ -376,14 +387,22 @@ function replaySpoolDir(dir, dest) {
         duplicates += 1;
         continue;
       }
+      const record = entry.record;
+      const latest = latestIn.get(file);
+      if (typeof record?.id === 'string' && Number.isFinite(record?.at) && (latest.get(record.id) ?? 0) > record.at) {
+        superseded += 1;
+        continue;
+      }
       mkdirSync(dirname(join(dest, file)), { recursive: true, mode: 0o700 });
-      appendFileSync(join(dest, file), `${JSON.stringify(entry.record)}\n`);
+      appendFileSync(join(dest, file), `${JSON.stringify(record)}\n`);
       if (rid) rids.add(rid);
+      if (typeof record?.id === 'string' && Number.isFinite(record?.at))
+        latest.set(record.id, Math.max(latest.get(record.id) ?? 0, record.at));
       replayed += 1;
     }
   }
   rmSync(dir, { recursive: true, force: true });
-  return { replayed, duplicates };
+  return { replayed, duplicates, superseded };
 }
 
 /**
@@ -433,12 +452,63 @@ function spoolPending(id, env) {
 }
 
 /**
+ * One migrator per store at a time (review). Two processes could both pass the
+ * `normal` check; the second one's failed fence rename then wrote `normal` while
+ * the first was still copying, and writers stopped spooling. The claim is an
+ * exclusively created file, taken before the state check and held across every
+ * return. A claim whose owner is a dead process on this host is stale.
+ */
+function withMigrationClaim(id, env, run) {
+  const claim = join(controlDir(id, env), 'migrate.claim');
+  mkdirSync(controlDir(id, env), { recursive: true, mode: 0o700 });
+  const busy = () => ({
+    ok: false,
+    state: readState(id, env).state,
+    blockers: ['another migration of this store is in progress'],
+  });
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      writeFileSync(claim, JSON.stringify({ pid: process.pid, host: hostname(), at: new Date().toISOString() }), {
+        flag: 'wx',
+        mode: 0o600,
+      });
+    } catch (error) {
+      if (error?.code !== 'EEXIST') throw error;
+      let owner = null;
+      try {
+        owner = JSON.parse(readFileSync(claim, 'utf8'));
+      } catch {
+        // Torn: being written right now, so not stale.
+      }
+      if (attempt === 0 && owner && !ownerAlive(owner)) {
+        rmSync(claim, { force: true });
+        continue;
+      }
+      return busy();
+    }
+    try {
+      return run();
+    } finally {
+      rmSync(claim, { force: true });
+    }
+  }
+  return busy();
+}
+
+/**
  * Migrate the store at `<root>/.token-optimizer` to the per-user store.
  *
  * Returns `{ ok: true, report }` or `{ ok: false, state, blockers }`. A refusal
  * before the fence changes nothing; a failure after it is rolled back.
  */
-export function migrate(
+export function migrate(root, options = {}) {
+  const canonical = canonicalPath(root);
+  return withMigrationClaim(storeId(join(canonical, '.token-optimizer')), options.env ?? process.env, () =>
+    migrateClaimed(canonical, options)
+  );
+}
+
+function migrateClaimed(
   root,
   {
     env = process.env,
@@ -746,8 +816,14 @@ export function resumeIfDue(root, { env = process.env, processes = tokenOptimize
  * move are kept, because the moved store is what is copied. The moved store is
  * kept as `store.restored-<generation>` until removed by hand.
  */
-export function restore(root, { env = process.env, processes = tokenOptimizerProcesses, now = () => new Date(), faultAt = () => {} } = {}) {
-  root = canonicalPath(root);
+export function restore(root, options = {}) {
+  const canonical = canonicalPath(root);
+  const tomb = readTombstone(canonical);
+  if (!tomb?.movedTo) return { ok: false, state: NORMAL, blockers: ['store has not been migrated'] };
+  return withMigrationClaim(tomb.storeId, options.env ?? process.env, () => restoreClaimed(canonical, options));
+}
+
+function restoreClaimed(root, { env = process.env, processes = tokenOptimizerProcesses, now = () => new Date(), faultAt = () => {} } = {}) {
   const marker = join(root, '.token-optimizer');
   const tomb = readTombstone(root);
   if (!tomb?.movedTo) return { ok: false, state: NORMAL, blockers: ['store has not been migrated'] };
