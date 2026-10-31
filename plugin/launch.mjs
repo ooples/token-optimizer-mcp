@@ -101,6 +101,12 @@ const REFRESH_INTERVAL_MS = numericEnv(
 // After a FAILED refresh, the next attempt is due this soon rather than a whole interval later.
 const REFRESH_RETRY_MS = numericEnv('TOKEN_OPTIMIZER_REFRESH_RETRY_MS', 15 * 60 * 1000);
 
+// How often a RUNNING launcher asks whether a refresh is due. The throttle above still decides; this
+// only gives it a chance to. Without it a refresh ran at launch alone, and sessions here run for
+// days: measured 2026-10-30, 7.6.0 reached the runtime 39.5 h after it was published and 7.7.1
+// 12 h after, both at the next launch. 0 disables it.
+const REFRESH_RECHECK_MS = numericEnv('TOKEN_OPTIMIZER_REFRESH_RECHECK_MS', 30 * 60 * 1000);
+
 // How long a launch waits for the plugin's own version to install before serving what it has.
 // Claude Code gives an MCP server about 30 s to answer. Measured 2026-09-17 on Windows: a real
 // install of 7.0.1 took ~20 s and a cold server start up to 6 s, so 15 s keeps a margin; a slower
@@ -925,6 +931,145 @@ function spawnBackgroundRefresh() {
   }
 }
 
+/**
+ * Re-check, every REFRESH_RECHECK_MS while the server runs, whether a background refresh is due.
+ *
+ * Each tick is one stat of the throttle files; the registry is asked only when the refresh interval
+ * has passed, exactly as at launch. The serving process is untouched -- a refresh installs into a new
+ * versions/<v> dir and flips `current`, which the hooks and the NEXT launch pick up. The timer is
+ * unref'd, so it never keeps the launcher alive after its server exits.
+ */
+export function startPeriodicRefresh({
+  intervalMs = REFRESH_RECHECK_MS,
+  refresh = spawnBackgroundRefresh,
+  every = setInterval,
+} = {}) {
+  if (!(intervalMs > 0) || PINNED_VERSION) return null;
+  const timer = every(refresh, boundedDelay(intervalMs));
+  timer?.unref?.();
+  return timer;
+}
+
+// The longest delay a Node timer honours. Above it Node fires after 1 ms instead,
+// so an interval of a month became a stat every millisecond and, while a refresh
+// was due, a child spawn per tick (review, #537).
+export const MAX_TIMER_MS = 2 ** 31 - 1;
+
+/** A delay Node will actually wait: capped at MAX_TIMER_MS, never the 1 ms fallback. */
+export function boundedDelay(ms) {
+  return Math.min(ms, MAX_TIMER_MS);
+}
+
+// How often a live launcher re-stamps its active marker. Well under the 30-day age
+// past which activeVersions() distrusts a marker.
+const MARKER_RENEW_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Keep this launcher's active marker fresh for as long as it serves.
+ *
+ * activeVersions() distrusts a marker older than 30 days, to bound pid reuse: a
+ * recycled pid would otherwise pin a version forever. A launcher that really is
+ * alive that long lost its protection, and once periodic refreshes installed
+ * enough newer versions, the pruner could delete the runtime it was serving --
+ * lazy-loaded modules then failed for the rest of the session (review, #537).
+ * Renewal comes from the live process itself, which a recycled pid never does,
+ * so the pid-reuse bound still holds. Its own timer, so disabling the refresh
+ * re-check does not disable it.
+ */
+export function startMarkerRenewal(version, { every = setInterval, renew = registerActiveVersion } = {}) {
+  if (!version) return null;
+  const timer = every(() => renew(version), MARKER_RENEW_MS);
+  timer?.unref?.();
+  return timer;
+}
+
+// Where a native crash of the server is recorded, for the hooks' SessionStart notice to read.
+// The name is shared with hooks-core/server-crash.mjs.
+const SERVER_CRASH_FILE = join(RUNTIME, '.server-crash.json');
+
+/** Node releases whose better-sqlite3 13 binding crashes opening a database (bisected, win32-x64). */
+export function nodeBelowSqliteFloor(version) {
+  const [major, minor] = String(version).split('.').map(Number);
+  return major === 22 && minor < 14;
+}
+
+/**
+ * Whether a server exit was a crash in native code rather than a JavaScript error.
+ *
+ * Windows reports an access violation as exit code 0xC0000005 with no signal; POSIX reports
+ * SIGSEGV / SIGBUS / SIGILL / SIGABRT, or 128 + the signal number when a shell sits between.
+ */
+export function isNativeCrash(code, signal) {
+  if (signal) return /^SIG(SEGV|BUS|ILL|ABRT)$/.test(signal);
+  if (code == null) return false;
+  const unsigned = code >>> 0;
+  // NTSTATUS errors only: 0xC0000000-0xCFFFFFFF. `process.exit(-1)` arrives as
+  // 0xFFFFFFFF and is an ordinary exit, not a crash.
+  // ...except 0xC000013A, STATUS_CONTROL_C_EXIT: a console process ended by
+  // Ctrl+C, which is the user stopping it, not a crash (review).
+  const ntstatus = unsigned >= 0xc0000000 && unsigned <= 0xcfffffff && unsigned !== 0xc000013a;
+  return ntstatus || code === 134 || code === 135 || code === 132 || code === 139;
+}
+
+/**
+ * Record a native crash, or clear the record after a clean exit.
+ *
+ * Claude Code shows a server that dies during startup only as "Connection closed", and the
+ * session's hooks keep advertising its tools. Measured 2026-10-30 on one Windows machine: every
+ * session for five weeks (38 failed starts, 0 calls) lost the server because better-sqlite3 13.0.3
+ * crashes with 0xC0000005 when it opens a database under Node 22.2.0 through 22.13.x; 22.14.0
+ * and later open it. The record carries the Node version, so the hooks can say what to change and
+ * stop saying it once Node is upgraded.
+ */
+function noteServerExit(code, signal, served) {
+  try {
+    if (isNativeCrash(code, signal)) {
+      const exit = signal || `0x${(code >>> 0).toString(16).toUpperCase()}`;
+      log(
+        `server crashed in native code (${exit}) under Node ${process.versions.node} on ` +
+          `${process.platform}-${process.arch}.` +
+          (nodeBelowSqliteFloor(process.versions.node)
+            ? ' Its SQLite binding needs Node 22.14.0 or newer; upgrade Node to restore the server.'
+            : '')
+      );
+      atomicWrite(
+        SERVER_CRASH_FILE,
+        JSON.stringify({
+          node: process.versions.node,
+          platform: `${process.platform}-${process.arch}`,
+          version: served,
+          exit,
+          at: new Date().toISOString(),
+        })
+      );
+    } else if (code === 0 && !signal) {
+      safeRm(SERVER_CRASH_FILE);
+    }
+  } catch {
+    // Diagnostics must never change how the launcher exits.
+  }
+}
+
+// How long a server must stay up before an earlier crash record is cleared.
+// The recorded crashes happened within about a second of launch, and the
+// SessionStart that reads the record runs at that same moment -- clearing at
+// spawn would erase the notice for exactly the session it was written for.
+export const CRASH_CLEAR_AFTER_MS = 15_000;
+
+/**
+ * A server that survives startup has replaced the one that crashed, so the
+ * crash record is cleared (review: a long-lived replacement never reaches the
+ * clean-exit branch). A later native crash writes a new record.
+ */
+export function clearCrashWhenSurvived(child, { after = CRASH_CLEAR_AFTER_MS, file = SERVER_CRASH_FILE } = {}) {
+  const timer = setTimeout(() => {
+    if (child.exitCode === null && child.signalCode === null) safeRm(file);
+  }, after);
+  timer.unref?.();
+  child.once?.('exit', () => clearTimeout(timer));
+  return timer;
+}
+
 /** Spawn the server, forwarding stdio, signals, and exit code. */
 function runServer(entry) {
   // Announce which runtime this shim is serving BEFORE the server starts, so a
@@ -934,6 +1079,7 @@ function runServer(entry) {
     : null;
   if (served) {
     registerActiveVersion(served);
+    startMarkerRenewal(served);
     process.on('exit', unregisterActiveVersion);
   }
 
@@ -941,6 +1087,8 @@ function runServer(entry) {
     stdio: 'inherit',
     env: process.env,
   });
+  clearCrashWhenSurvived(child);
+  startPeriodicRefresh();
   const forward = (sig) => {
     try {
       child.kill(sig);
@@ -952,6 +1100,7 @@ function runServer(entry) {
   process.on('SIGTERM', () => forward('SIGTERM'));
   process.on('SIGHUP', () => forward('SIGHUP'));
   child.on('exit', (code, signal) => {
+    noteServerExit(code, signal, served);
     if (signal) {
       // Re-raise so our exit reflects the child's signal death.
       process.kill(process.pid, signal);

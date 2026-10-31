@@ -21,6 +21,7 @@
  * command runs, which is also the only way it can reach the failing test runs a
  * debug loop is made of.
  */
+import { shellStages } from './shell-split.mjs';
 
 /**
  * Default bound, in bytes.
@@ -147,7 +148,15 @@ function hoistablePrefix(command) {
   for (let i = 0; i < parts.length; i += 2) {
     const segment = parts[i].trim().replace(/^[({]+\s*/, '').trim();
     if (!segment) break;
+    // A COMMENT LINE is inert, so it neither ends the hoistable front nor
+    // becomes its last part: `taken` moves only past a real mutation, and the
+    // prefix therefore never ends inside a comment that would swallow the join.
+    if (segment.startsWith('#') && parts[i + 1] === '\n') continue;
     if (!isStateMutating(segment)) break;
+    // A TRAILING COMMENT on a mutation (`cd x # note`) would swallow the `;`
+    // the join appends and the wrapper after it, turning a working command into
+    // a syntax error. Not hoisted; the command then runs unbounded.
+    if (/(^|\s)#/.test(segment)) return null;
     // A `(` opens a group the split cannot see the end of; leave it alone.
     if (/^[({]/.test(parts[i].trim())) return null;
     taken = i + 2;
@@ -198,11 +207,14 @@ function isAssignmentOnly(segment) {
   return tokens.length > 0 && tokens.every((token) => /^[A-Za-z_]\w*=/.test(token));
 }
 
-/** Each segment of a command line, as written. */
+/**
+ * Each segment of a command line, as written. Split outside quotes
+ * (shell-split.mjs): `grep 'a;cd b' f` is one segment, and `2>&1` is not a
+ * background `&`.
+ */
 function splitSegments(command) {
-  return String(command)
-    .split(/\|\||&&|[;|&\n]/)
-    .map((segment) => segment.trim().replace(/^[({]+\s*/, '').trim())
+  return shellStages(command, { background: true })
+    .map((segment) => segment.replace(/^[({]+\s*/, '').trim())
     .filter(Boolean);
 }
 

@@ -976,3 +976,97 @@ export function toolSearchOutcomesFromTranscript(transcriptPath, options = {}) {
   const list = (map) => [...map].map(([name, at]) => ({ name, at }));
   return { missed: list(missed), loaded: list(loaded) };
 }
+
+/**
+ * The names this package's server is registered under, EXACTLY. Every
+ * installer writes the key `token-optimizer`; the Claude Code plugin's server is
+ * `plugin:token-optimizer:token-optimizer`. A substring match let any server
+ * whose name merely contains the words -- `token-optimizer-proxy`, someone
+ * else's `my-token-optimizer` -- mark every optimizer tool absent (review).
+ */
+const OPTIMIZER_SERVERS = new Set(['token-optimizer', 'plugin:token-optimizer:token-optimizer']);
+
+/**
+ * The qualified tool-name prefixes those servers produce:
+ * `mcp__token-optimizer__smart_grep` and
+ * `mcp__plugin_token-optimizer_token-optimizer__smart_grep`. A reconnect is
+ * recognised only from these, so a foreign server announcing a tool that
+ * happens to share a name cannot restore an optimizer tool (review).
+ */
+const OPTIMIZER_TOOL_PREFIXES = ['mcp__token-optimizer__', 'mcp__plugin_token-optimizer_token-optimizer__'];
+
+const isOptimizerServer = (name) => OPTIMIZER_SERVERS.has(String(name || '').trim().toLowerCase());
+const ownToolName = (qualified) => {
+  const text = String(qualified || '');
+  const prefix = OPTIMIZER_TOOL_PREFIXES.find((p) => text.toLowerCase().startsWith(p));
+  if (!prefix) return null;
+  // EXACTLY a tool name after the prefix. optimizerToolName matches by suffix,
+  // so a server named `token-optimizer__other` announcing
+  // `mcp__token-optimizer__other__wiki_write` would otherwise pass (review).
+  const rest = text.slice(prefix.length).toLowerCase();
+  return HOOK_MCP_TOOLS.find((name) => name === rest) ?? null;
+};
+
+/**
+ * Whether the host reported THIS PACKAGE'S MCP SERVER as failed to connect.
+ *
+ * Claude Code records it in the `deferred_tools_delta` attachment as
+ * `failedMcpServers: [{name: 'plugin:token-optimizer:token-optimizer',
+ * errorCode: 'CONNECTION_CLOSED', ...}]`. That is the most direct absence
+ * evidence a session gets, and it arrives before any call: without it, the
+ * hooks kept advertising smart_grep and wiki_write for a whole session in which
+ * neither could be reached, because the model -- reading the same notice --
+ * never tried them, so no failed call or search ever proved them missing.
+ *
+ * A later delta that lists optimizer tools again (`addedNames` or
+ * `readdedNames`) is a reconnect, e.g. after `/reload-plugins`, and is
+ * reported as `restored` only when it follows a failure in the scanned tail or
+ * the caller's state already holds one -- so a healthy session's own
+ * announcement never reads as a successful call, which would stop a later
+ * tool-search miss from counting (#484). A server still `pending` proves
+ * nothing either way and is skipped.
+ *
+ * @returns {{failed: Array<{name: string, at: number}>, restored: Array<{name: string, at: number}>}}
+ */
+export function serverFailuresFromTranscript(transcriptPath, options = {}) {
+  const { scanBytes = ABSENCE_SCAN_BYTES() } = options || {};
+  const none = { failed: [], restored: [] };
+  if (!transcriptPath) return none;
+  const text = readTail(transcriptPath, scanBytes);
+  if (!text || !text.includes('deferred_tools_delta')) return none;
+
+  let failedAt = 0;
+  const restored = new Map();
+  for (const line of text.split('\n')) {
+    if (!line.includes('deferred_tools_delta')) continue;
+    let entry;
+    try {
+      entry = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    const delta = entry.attachment;
+    if (delta?.type !== 'deferred_tools_delta') continue;
+    const at = Date.parse(entry.timestamp || '') || 0;
+    const failed =
+      Array.isArray(delta.failedMcpServers) &&
+      delta.failedMcpServers.some((server) => isOptimizerServer(server?.name));
+    if (failed) {
+      failedAt = Math.max(failedAt, at || 1);
+      continue;
+    }
+    for (const qualified of [
+      ...(Array.isArray(delta.addedNames) ? delta.addedNames : []),
+      ...(Array.isArray(delta.readdedNames) ? delta.readdedNames : []),
+    ]) {
+      const name = ownToolName(qualified);
+      if (name) restored.set(name, Math.max(restored.get(name) || 0, at || 1));
+    }
+  }
+  return {
+    failed: failedAt > 0 ? HOOK_MCP_TOOLS.map((name) => ({ name, at: failedAt })) : [],
+    restored: [...restored]
+      .filter(([, at]) => at > failedAt || failedAt === 0)
+      .map(([name, at]) => ({ name, at })),
+  };
+}

@@ -89,6 +89,7 @@ import {
   absentToolsFromTranscript,
   archive,
   isArchived,
+  serverFailuresFromTranscript,
   toolSearchOutcomesFromTranscript,
   turnEvidence,
 } from './transcript.mjs';
@@ -117,6 +118,7 @@ import { registerProject, registeredProjects } from './projects.mjs';
 import { runStopHarvest } from './stop-harvest.mjs';
 import { applyQuietEnv } from './quiet-env.mjs';
 import { resumeIfDue } from './migrate.mjs';
+import { serverCrashNotice } from './server-crash.mjs';
 import { compactToolResponse, outputCompactEnabled } from './output-compact.mjs';
 import { repeatResponse, repeatsEnabled } from './repeats.mjs';
 import { recordOnBoard } from './blackboard.mjs';
@@ -893,6 +895,27 @@ function gradeObservedTools(state, event, payload, raw) {
     for (const { name, at } of searched.loaded) {
       markOptimizerToolOk(state, name, at);
     }
+    // THE HOST SAYS THE SERVER NEVER CONNECTED. Every optimizer tool is absent
+    // from that instant, even one that answered earlier: the server died. A
+    // reconnect revokes only an absence THE FAILURE caused, and only when it
+    // comes later: a tool a search could not load (#484) stays absent however
+    // often the host re-announces it, and a healthy session's own announcement
+    // never poses as a successful call.
+    const server = serverFailuresFromTranscript(transcriptPath);
+    for (const { name, at } of server.failed) {
+      markOptimizerToolAbsent(state, name, at);
+      state.optimizerServerFailedAt = Math.max(
+        Number(state.optimizerServerFailedAt) || 0,
+        at
+      );
+    }
+    const failedAt = Number(state?.optimizerServerFailedAt) || 0;
+    for (const { name, at } of server.restored) {
+      const absentAt = Number(state?.optimizerToolAbsentAt?.[name]) || 0;
+      if (failedAt > 0 && absentAt <= failedAt && at > failedAt) {
+        markOptimizerToolOk(state, name, at);
+      }
+    }
     // And the event itself, for the ten clients that do report a failed call.
     if (event === 'post-tool') {
       // THE NAME THE HOST SENT, not the normalised one: normalisation maps
@@ -1351,6 +1374,8 @@ async function runHook(clientName, event, invocation) {
         ),
       },
     ];
+    const crashed = serverCrashNotice();
+    if (crashed) blocks.push({ id: 'server-crash', volatility: 0, text: crashed });
     // Reduce at the source before anything runs: quiet defaults for the tools
     // the agent will call, through the env file Claude Code sources for every
     // later Bash call (quiet-env.mjs). A no-op for clients without one.
