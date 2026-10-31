@@ -773,8 +773,10 @@ function appendAll(dir, records) {
   try {
     // UNDER A WRITE LEASE (#542): a store in maintenance is not written; the
     // records go to its spool instead and are replayed after cutover.
-    const lease = withWriteLease(dir, () => appendGraph(dir, stamped));
-    if (!lease.admitted) return spool(dir, storeRelative(dir, logPath(dir)), stamped, lease.state);
+    const lease = withWriteLease(dir, () => appendGraph(dir, stamped), undefined, {
+      queue: (state) => spool(dir, storeRelative(dir, logPath(dir)), stamped, state),
+    });
+    if (!lease.admitted) return lease.value;
     // Counted here and not at the top: a buffered or spooled write returns
     // above, and a throw leaves the count where it was. What this reports is
     // appends that reached the disk.
@@ -948,10 +950,10 @@ function appendSnapshot(dir, record) {
     return queued('batched');
   }
   try {
-    const lease = withWriteLease(dir, () =>
-      appendFileSync(snapshotsPath(dir), JSON.stringify(record) + '\n')
-    );
-    if (!lease.admitted) return spool(dir, storeRelative(dir, snapshotsPath(dir)), [record], lease.state);
+    const lease = withWriteLease(dir, () => appendFileSync(snapshotsPath(dir), JSON.stringify(record) + '\n'), undefined, {
+      queue: (state) => spool(dir, storeRelative(dir, snapshotsPath(dir)), [record], state),
+    });
+    if (!lease.admitted) return lease.value;
     return persisted();
   } catch (error) {
     // The node is already durable; the snapshot is an optimization -- but a

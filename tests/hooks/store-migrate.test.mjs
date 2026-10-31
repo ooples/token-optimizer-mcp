@@ -222,6 +222,51 @@ describe('coordination', () => {
     expect(existsSync(spool)).toBe(false);
     expect(existsSync(join(work, 'home', 'escape.jsonl'))).toBe(false);
   });
+
+  test('a metrics rid (base36-hex) already in the store is a duplicate, not replayed again', () => {
+    // nextId() in metrics.mjs makes `<base36>-<hex>`; a hex-only match missed it.
+    writeFileSync(join(repo, '.token-optimizer', 'wiki', 'metrics.jsonl'), '{"kind":"read","id":"1z-0a1b2c3d","rid":"1z-0a1b2c3d"}\n');
+    const spool = join(work, 'home', 'spool', id);
+    mkdirSync(spool, { recursive: true });
+    writeFileSync(
+      join(spool, '1.jsonl'),
+      `${JSON.stringify({ file: 'wiki/metrics.jsonl', record: { kind: 'read', id: '1z-0a1b2c3d', rid: '1z-0a1b2c3d' } })}\n`
+    );
+    const result = migrate(repo, { env, processes: quiet });
+    expect(result.report).toMatchObject({ replayed: 0, duplicates: 1 });
+    expect(readFileSync(join(result.report.movedTo, 'wiki', 'metrics.jsonl'), 'utf8').match(/1z-0a1b2c3d","rid/g)).toHaveLength(1);
+  });
+
+  test('a spool left after the store reopened is replayed at the next session start', () => {
+    const { report } = migrate(repo, { env, processes: quiet });
+    // A writer that outlived the final wait spools into a fresh directory.
+    const spool = join(work, 'home', 'spool', id);
+    mkdirSync(spool, { recursive: true });
+    writeFileSync(
+      join(spool, '9.jsonl'),
+      `${JSON.stringify({ file: 'wiki/graph.jsonl', record: { t: 'n', id: 'file:straggler', rid: 'ffffffffffffffff' } })}\n`
+    );
+    expect(resumeIfDue(repo, { env, processes: quiet })).toBeNull();
+    expect(graphOf(report.movedTo).match(/file:straggler/g)).toHaveLength(1);
+    expect(existsSync(spool)).toBe(false);
+  });
+
+  test('a fence left by an interrupted migration is not reported as already moved', () => {
+    const r = spawnSync(
+      process.execPath,
+      ['--input-type=module', '-e', `
+        import { migrate } from ${JSON.stringify(mod('migrate.mjs'))};
+        migrate(${JSON.stringify(repo)}, {
+          processes: () => ({ complete: true, found: [] }),
+          faultAt: (at) => { if (at === 'copy') process.exit(137); },
+        });`],
+      { encoding: 'utf8', env: { ...process.env, ...env } }
+    );
+    expect(r.status).toBe(137);
+    const result = migrate(repo, { env, processes: quiet });
+    expect(result.ok).toBe(false);
+    expect(result.blockers[0]).toMatch(/interrupted migration.*recover/);
+  });
 });
 
 describe('injected failures roll back with the source intact', () => {
@@ -248,7 +293,10 @@ describe('injected failures roll back with the source intact', () => {
 describe('a migrator killed at any step is recovered', () => {
   // The child dies at the step with process.exit, which runs no cleanup: the
   // same as kill -9 from the store's point of view.
-  test.each(['fence', 'copy', 'publish', 'tombstone', 'replay', 'backup'])('killed at %s', (step) => {
+  // `renamed` is the window inside publish: the copy already renamed into
+  // place, CUTOVER not yet recorded. Rolling back must remove that copy, or
+  // every later migrate refuses with "a store already exists".
+  test.each(['fence', 'copy', 'publish', 'renamed', 'tombstone', 'replay', 'backup'])('killed at %s', (step) => {
     mkdirSync(join(work, 'home', 'spool', id), { recursive: true });
     writeFileSync(
       join(work, 'home', 'spool', id, '1.jsonl'),
@@ -394,6 +442,16 @@ describe('restore: the same move in reverse', () => {
     expect(graphOf(live).match(/file:a"/g)).toHaveLength(1);
     expect(readdirSync(repo).filter((n) => n.includes('.restoring-'))).toEqual([]);
   });
+
+  test('a swap that fails after removing the tombstone puts it back', () => {
+    const { report } = migrate(repo, { env, processes: quiet });
+    const fault = (at) => {
+      if (at === 'tombstone-removed') throw Object.assign(new Error('EACCES: injected'), { code: 'EACCES' });
+    };
+    expect(restore(repo, { env, processes: quiet, faultAt: fault })).toMatchObject({ ok: false, state: 'normal' });
+    expect(readTombstone(repo)).toMatchObject({ movedTo: report.movedTo, storeId: id });
+    expect(graphOf(report.movedTo)).toContain('file:a');
+  });
 });
 
 describe('gc', () => {
@@ -409,6 +467,22 @@ describe('gc', () => {
     rmSync(join(report.movedTo, 'wiki', 'artifacts', 'x.txt'));
     const result = gc(repo, { env });
     expect(result).toMatchObject({ ok: false, missing: ['wiki/artifacts/x.txt'] });
+    expect(existsSync(report.backup)).toBe(true);
+  });
+
+  test('a file rewritten in the moved store since the move does not block it', () => {
+    const { report } = migrate(repo, { env, processes: quiet });
+    writeFileSync(join(report.movedTo, 'ucr', 'index.json'), '{"rebuilt":true}');
+    expect(gc(repo, { env })).toMatchObject({ ok: true });
+    expect(existsSync(report.backup)).toBe(false);
+  });
+
+  test('a backup file that differs from what was copied blocks it', () => {
+    const { report } = migrate(repo, { env, processes: quiet });
+    // A late write into the backup that the copy never saw.
+    writeFileSync(join(report.backup, 'ucr', 'index.json'), '{"late":true}');
+    writeFileSync(join(report.movedTo, 'ucr', 'index.json'), '{"rebuilt":true}');
+    expect(gc(repo, { env })).toMatchObject({ ok: false, missing: ['ucr/index.json'] });
     expect(existsSync(report.backup)).toBe(true);
   });
 });

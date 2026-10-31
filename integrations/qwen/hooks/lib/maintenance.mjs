@@ -141,8 +141,15 @@ let leaseCounter = 0;
  * `{ admitted: false, state }` when the store is in maintenance and the caller
  * must spool. If the lease itself cannot be created the write is not admitted:
  * a migrator could not see it, so it must not touch the store.
+ *
+ * `queue(state)`, when given, runs in place of `write` while the store is in
+ * maintenance, STILL UNDER THE LEASE, and its result is `value`. That is what
+ * makes a spool append safe against the final replay: the migrator returns the
+ * store to normal, waits for the leases held at that moment, and only then
+ * detaches the spool -- so no append admitted under maintenance can land after
+ * it. A queue run after the lease is dropped could.
  */
-export function withWriteLease(dir, write, env = process.env) {
+export function withWriteLease(dir, write, env = process.env, { queue = null } = {}) {
   const id = storeId(dir);
   const leases = leaseDir(id, env);
   const lease = join(leases, `${process.pid}-${(leaseCounter += 1)}.lease`);
@@ -160,11 +167,14 @@ export function withWriteLease(dir, write, env = process.env) {
     if (!existsSync(controlDir(id, env)) && readState(id, env).state === NORMAL) {
       return { admitted: true, value: write(), id, unleased: true };
     }
-    return { admitted: false, state: { state: FAILED, reason: `lease: ${error?.code || error}` }, id };
+    // No lease to hold: the queue runs bare. Its spool lives under the same
+    // home the lease could not be created in, so it is normally refused too.
+    const state = { state: FAILED, reason: `lease: ${error?.code || error}` };
+    return { admitted: false, state, id, value: queue?.(state) };
   }
   try {
     const state = readState(id, env);
-    if (state.state !== NORMAL) return { admitted: false, state, id };
+    if (state.state !== NORMAL) return { admitted: false, state, id, value: queue?.(state) };
     return { admitted: true, value: write(), id };
   } finally {
     try {
