@@ -13,6 +13,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { record } from '../../hooks-core/metrics.mjs';
 import { recordAuthoredContent } from '../../hooks-core/authored.mjs';
+import { projectStore } from '../../hooks-core/maintenance.mjs';
 
 let root;
 beforeEach(() => {
@@ -43,7 +44,8 @@ describe('a store directory ignores itself (#500)', () => {
   it('for the authored-content store', () => {
     const file = join(root, 'src', 'a.ts');
     recordAuthoredContent(root, 'session-1', file, 'export const a = 1;\n');
-    const dir = join(root, '.token-optimizer', 'authored');
+    // Wherever the store for `root` lives (outside the project since #538).
+    const dir = join(projectStore(root), 'authored');
     expect(existsSync(dir)).toBe(true);
     expect(ignoresEverything(dir)).toBe(true);
   });

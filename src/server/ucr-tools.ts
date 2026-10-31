@@ -11,10 +11,20 @@ async function runtime(): Promise<any> {
   );
 }
 
-function runtimeRoot(): string {
-  return process.env.TOKEN_OPTIMIZER_UCR_DIR
+// Resolved once per tool call (runUcrTool), so the synchronous helpers below
+// share the one location hooks-core decides.
+let resolvedRoot: string | null = null;
+
+async function resolveRuntimeRoot(): Promise<string> {
+  resolvedRoot = process.env.TOKEN_OPTIMIZER_UCR_DIR
     ? path.resolve(process.env.TOKEN_OPTIMIZER_UCR_DIR)
-    : path.join(projectStore(process.cwd()), 'ucr');
+    : path.join(await projectStore(process.cwd()), 'ucr');
+  return resolvedRoot;
+}
+
+function runtimeRoot(): string {
+  if (!resolvedRoot) throw new Error('UCR root used before it was resolved');
+  return resolvedRoot;
 }
 
 function writeActiveGuardIndex(ucr: any, events: any[]): void {
@@ -269,7 +279,7 @@ function writer(runtimeModule: any, args: any, sequence: number) {
 
 export async function runUcrTool(name: string, args: any): Promise<any> {
   const ucr = await runtime();
-  const store = new ucr.EventStore(runtimeRoot());
+  const store = new ucr.EventStore(await resolveRuntimeRoot());
   const current = store.read().events;
   const create = writer(ucr, args, current.length);
 

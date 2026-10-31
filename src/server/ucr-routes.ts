@@ -13,14 +13,14 @@ async function runtime(): Promise<any> {
   );
 }
 
-function root(): string {
+async function root(): Promise<string> {
   return process.env.TOKEN_OPTIMIZER_UCR_DIR
     ? path.resolve(process.env.TOKEN_OPTIMIZER_UCR_DIR)
-    : path.join(projectStore(process.cwd()), 'ucr');
+    : path.join(await projectStore(process.cwd()), 'ucr');
 }
 
-function releaseEvidence(ucr: any): any {
-  const file = path.join(root(), 'release-evidence.json');
+async function releaseEvidence(ucr: any): Promise<any> {
+  const file = path.join(await root(), 'release-evidence.json');
   const readOptional = (candidate: string) => {
     try {
       return existsSync(candidate)
@@ -98,10 +98,10 @@ export function registerUcrRoutes(app: Express): void {
   app.get('/api/ucr/status', async (_req: Request, res: Response) => {
     try {
       const ucr = await runtime();
-      const store = new ucr.EventStore(root());
+      const store = new ucr.EventStore(await root());
       const replay = store.read();
       const graph = ucr.rebuildGraph(replay.events);
-      const evidence = releaseEvidence(ucr);
+      const evidence = await releaseEvidence(ucr);
       const metricSources = evidence.evidenceIndex?.derived?.sources || {};
       const metrics = evidence.metrics || {};
       const metricNames = [
@@ -205,7 +205,7 @@ export function registerUcrRoutes(app: Express): void {
   app.get('/api/ucr/evidence', async (_req: Request, res: Response) => {
     try {
       const ucr = await runtime();
-      return res.json(releaseEvidence(ucr));
+      return res.json(await releaseEvidence(ucr));
     } catch (error) {
       return res.status(500).json({
         error: error instanceof Error ? error.message : String(error),

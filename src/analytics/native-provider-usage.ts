@@ -170,6 +170,14 @@ function recentFiles(
     }
     for (const entry of entries) {
       const filePath = path.join(current, entry.name);
+      // Copies of a store's data kept by migration (#542/#538) -- the backup,
+      // an in-progress copy, a store kept after a restore -- hold the same
+      // evidence again; walking them used up the per-client file budget.
+      if (
+        entry.isDirectory() &&
+        /^(?:backup-|store\.(?:staging|restored)-)/.test(entry.name)
+      )
+        continue;
       if (entry.isDirectory()) pending.push(filePath);
       else if (entry.isFile() && accept(filePath)) {
         try {
@@ -243,10 +251,13 @@ async function readHookUsageFile(
   return records;
 }
 
-function hookEvidenceFiles(home: string, sinceMs: number): string[] {
+export function hookEvidenceFiles(home: string, sinceMs: number): string[] {
   const roots = [
     path.join(home, '.token-optimizer', 'wiki'),
     path.join(home, '.token-optimizer', 'unrooted'),
+    // Every project store kept outside its repository (#538), including ones
+    // migrated after the registry recorded their old in-repo path.
+    path.join(home, '.token-optimizer', 'projects'),
   ];
   const registry = path.join(home, '.token-optimizer', 'projects.jsonl');
   if (fs.existsSync(registry)) {

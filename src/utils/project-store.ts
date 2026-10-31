@@ -1,28 +1,28 @@
 /**
- * Where a project's store lives: `<root>/.token-optimizer`, or wherever the
- * tombstone a migration left there says it moved (#542).
+ * Where a project's store lives, as hooks-core/maintenance.mjs decides it.
  *
- * The TypeScript twin of `projectStore` in hooks-core/maintenance.mjs, for the
- * server paths that build a store path synchronously. After a migration,
- * `<root>/.token-optimizer` is a FILE, and a path built under it fails with
- * ENOTDIR; following the tombstone is what keeps these writers working.
+ * NOT A SECOND COPY OF THE RULE. The store's location depends on its tombstone,
+ * whether an in-repo store still exists, and an id hashed from the canonical
+ * path (case-folded on Windows and macOS). A TypeScript re-implementation would
+ * have to reproduce canonicalPath exactly to land in the same directory, and a
+ * one-character difference would split a project's data across two stores.
+ * The server loads the one implementation instead.
  */
-import { readFileSync, statSync } from 'node:fs';
-import { join } from 'node:path';
+import { loadHooksCore } from '../tools/intelligence/hooks-core-loader.js';
 
-export function projectStore(root: string): string {
-  const marker = join(root, '.token-optimizer');
-  try {
-    // eslint-disable-next-line n/no-sync -- one stat on a synchronous path builder
-    if (statSync(marker).isFile()) {
-      // eslint-disable-next-line n/no-sync -- the tombstone is a few hundred bytes
-      const tomb = JSON.parse(readFileSync(marker, 'utf8')) as {
-        movedTo?: unknown;
-      };
-      if (typeof tomb.movedTo === 'string') return tomb.movedTo;
-    }
-  } catch {
-    // No store yet, or not a tombstone: the in-repo path.
-  }
-  return marker;
+export async function projectStore(root: string): Promise<string> {
+  const maintenance = await loadHooksCore<{
+    projectStore: (root: string) => string;
+  }>('maintenance.mjs');
+  return maintenance.projectStore(root);
+}
+
+/** The project root a per-user store belongs to, or null. */
+export async function storeProjectRoot(
+  storeDir: string
+): Promise<string | null> {
+  const maintenance = await loadHooksCore<{
+    storeProjectRoot: (dir: string) => string | null;
+  }>('maintenance.mjs');
+  return maintenance.storeProjectRoot(storeDir);
 }

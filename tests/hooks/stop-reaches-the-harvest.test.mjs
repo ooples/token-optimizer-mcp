@@ -28,6 +28,7 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync 
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { readFileSync } from 'node:fs';
+import { projectStore } from '../../hooks-core/maintenance.mjs';
 
 const NL = String.fromCharCode(10);
 const ROOT = process.cwd();
@@ -133,7 +134,8 @@ describe('the registered Stop entry', () => {
     const result = runStop();
     expect(result.status).toBe(0);
 
-    const graph = join(work, '.token-optimizer', 'wiki');
+    // Where the store for `work` lives (outside the repository since #538).
+    const graph = join(projectStore(work), 'wiki');
     expect(existsSync(graph)).toBe(true);
     const archived = readdirSync(graph).filter((f) => f.includes('transcript'));
     expect(archived.length).toBeGreaterThan(0);

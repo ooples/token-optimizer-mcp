@@ -24,6 +24,7 @@ import {
   recordAuthoredContent,
   authoredContentFor,
 } from '../../hooks-core/authored.mjs';
+import { projectStore } from '../../hooks-core/maintenance.mjs';
 
 let dir;
 const CONTENT = 'export const a = 1;\n'.repeat(20);
@@ -95,7 +96,7 @@ describe('it never throws, because a hook must not break a tool call', () => {
   test('a corrupt record is a miss, not a crash', () => {
     writeFileSync(file(), CONTENT);
     recordAuthoredContent(dir, 's-1', file(), CONTENT);
-    const store = join(dir, '.token-optimizer', 'authored');
+    const store = join(projectStore(dir), 'authored');
     for (const name of readdirSync(store)) {
       writeFileSync(join(store, name), '{not json');
     }
