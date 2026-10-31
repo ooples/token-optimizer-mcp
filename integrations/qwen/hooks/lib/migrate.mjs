@@ -58,6 +58,7 @@ import {
   READY,
   controlDir,
   liveLeases,
+  movedStoreDir,
   readState,
   readTombstone,
   spoolDir,
@@ -74,10 +75,12 @@ export { readTombstone };
 export const PROTOCOL_VERSION = 'write-leases/1';
 
 const DRAIN_TIMEOUT_MS = 30_000;
+// How often session start retries a migration that was blocked.
+const RETRY_INTERVAL_MS = 60 * 60 * 1000;
 const COPY_ATTEMPTS = 3;
 
 /** Where a store lives once migrated. */
-export const movedStoreDir = (id, env = process.env) => join(controlDir(id, env), 'store');
+export { movedStoreDir };
 
 function atomicJson(path, value) {
   mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
@@ -286,7 +289,7 @@ function excludeFromGit(root) {
     return null;
   }
   const exclude = join(gitDir, 'info', 'exclude');
-  const lines = ['/.token-optimizer', '/.token-optimizer.migrated-*'];
+  const lines = ['/.token-optimizer'];
   try {
     const have = existsSync(exclude) ? readFileSync(exclude, 'utf8') : '';
     const missing = lines.filter((l) => !have.split(/\r?\n/).includes(l));
@@ -475,8 +478,7 @@ export function migrate(
   faultAt('replay');
   const replay = replaySpool(id, dest, env);
   faultAt('backup');
-  const backup = `${source}.migrated-${generation}`;
-  renameSync(staged, backup);
+  const backup = keepBackup(staged, id, generation, env);
   const excluded = excludeFromGit(root);
   rmSync(join(control, 'intent.json'), { force: true });
   setState(id, { state: NORMAL, step: 'done', root, generation }, env);
@@ -502,7 +504,7 @@ export function recover(root, { env = process.env } = {}) {
   const dest = movedStoreDir(id, env);
   if (state.state === CUTOVER || (tomb?.movedTo && existsSync(dest))) {
     replaySpool(id, dest, env);
-    if (staged && existsSync(staged)) renameSync(staged, `${source}.migrated-${state.generation}`);
+    if (staged && existsSync(staged)) keepBackup(staged, id, state.generation, env);
     if (!tomb?.movedTo) atomicJson(source, { movedTo: dest, storeId: id, since: new Date().toISOString(), by: PROTOCOL_VERSION });
     excludeFromGit(root);
     setState(id, { state: NORMAL, step: 'done', root, generation: state.generation, recovered: true }, env);
@@ -519,15 +521,47 @@ export function recover(root, { env = process.env } = {}) {
   return { recovered: true, state: NORMAL, completed: false };
 }
 
+/**
+ * Keep the pre-migration store as a backup OUTSIDE the project (#538).
+ *
+ * Beside the repository it stayed in the project until `gc` -- and for an
+ * installed plugin that is a permanent extra change to the bundle whose
+ * fingerprint the move exists to stop disturbing. It goes to the store's
+ * control directory instead. A rename across volumes fails (EXDEV), so the
+ * backup is then copied, checked byte for byte, and the original removed.
+ */
+function keepBackup(staged, id, generation, env) {
+  const backup = join(controlDir(id, env), `backup-${generation}`);
+  try {
+    renameSync(staged, backup);
+  } catch (error) {
+    if (error?.code !== 'EXDEV') throw error;
+    copyTree(staged, backup);
+    if (!sameTree(treeHash(staged), treeHash(backup))) throw new Error('backup copy does not match the store');
+    rmSync(staged, { recursive: true, force: true });
+  }
+  return backup;
+}
+
+/** Every migration backup kept for a store. */
+function backupsOf(id, env) {
+  const control = controlDir(id, env);
+  try {
+    return readdirSync(control)
+      .filter((name) => name.startsWith('backup-'))
+      .map((name) => ({ name, path: join(control, name) }));
+  } catch {
+    return [];
+  }
+}
+
 /** Delete a migration backup, but only after re-validating the moved store against it. */
 export function gc(root, { env = process.env } = {}) {
   root = canonicalPath(root);
   const tomb = readTombstone(root);
   if (!tomb?.movedTo) return { ok: false, reason: 'store has not been migrated' };
-  const backups = readdirSync(root).filter((n) => n.startsWith('.token-optimizer.migrated-'));
   const removed = [];
-  for (const name of backups) {
-    const backup = join(root, name);
+  for (const { name, path: backup } of backupsOf(tomb.storeId, env)) {
     const moved = treeHash(tomb.movedTo);
     const missing = Object.entries(treeHash(backup)).filter(([file, sum]) => {
       // Append-only logs may have grown since: every original byte must still
@@ -573,7 +607,16 @@ export function resumeIfDue(root, { env = process.env, processes = tokenOptimize
     const tomb = readTombstone(root);
     const id = tomb?.storeId ?? storeId(source);
     const control = controlDir(id, env);
-    if (!existsSync(control)) return null;
+    // AN IN-REPO STORE IS MIGRATED AUTOMATICALLY (#538): a session start that
+    // finds one is the request. Anything else with no control directory has
+    // nothing to finish.
+    let inRepo = false;
+    try {
+      inRepo = !tomb && statSync(source).isDirectory();
+    } catch {
+      inRepo = false;
+    }
+    if (!existsSync(control) && !inRepo) return null;
     const state = readState(id, env);
     // FIRST, an interrupted move in either direction -- a restore leaves the
     // tombstone in place until its last step, so this comes before the check
@@ -588,12 +631,28 @@ export function resumeIfDue(root, { env = process.env, processes = tokenOptimize
         ? `token-optimizer finished moving this project's graph to ${movedStoreDir(id, env)} after an interrupted migration. Tell the user once.`
         : `token-optimizer rolled back an interrupted store migration; the graph is unchanged in ${source}. Tell the user once.`;
     }
-    if (tomb?.movedTo) return null;
-    if (!existsSync(join(control, 'intent.json')) || state.state !== NORMAL) return null;
+    if (tomb?.movedTo || !inRepo || state.state !== NORMAL) return null;
+    // A BLOCKED MIGRATION IS RETRIED AT MOST HOURLY. The offline check lists
+    // processes, about a second on Windows, and a long-lived older session can
+    // keep it blocked for days; every session start must not pay for that.
+    const intentPath = join(control, 'intent.json');
+    try {
+      const intent = JSON.parse(readFileSync(intentPath, 'utf8'));
+      if (Date.now() - Date.parse(intent.lastTry || intent.requested || 0) < RETRY_INTERVAL_MS) return null;
+    } catch {
+      // No intent yet: this session start is the first request.
+    }
     const result = migrate(root, { env, processes });
-    return result.ok
-      ? `token-optimizer moved this project's graph to ${result.report.movedTo}, as requested earlier; the old store is kept as ${result.report.backup} until \`token-optimizer-storage gc\`. Tell the user once.`
-      : null;
+    if (!result.ok) {
+      try {
+        const intent = JSON.parse(readFileSync(intentPath, 'utf8'));
+        atomicJson(intentPath, { ...intent, lastTry: new Date().toISOString() });
+      } catch {
+        // migrate records the intent itself when it refuses; nothing to add.
+      }
+      return null;
+    }
+    return `token-optimizer moved this project's graph out of the repository, to ${result.report.movedTo}; the old store is kept as ${result.report.backup} until \`token-optimizer-storage gc\`. Tell the user once.`;
   } catch {
     // Session start must never fail because of a migration.
     return null;

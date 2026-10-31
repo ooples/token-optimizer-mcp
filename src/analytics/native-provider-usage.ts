@@ -247,6 +247,9 @@ function hookEvidenceFiles(home: string, sinceMs: number): string[] {
   const roots = [
     path.join(home, '.token-optimizer', 'wiki'),
     path.join(home, '.token-optimizer', 'unrooted'),
+    // Every project store kept outside its repository (#538), including ones
+    // migrated after the registry recorded their old in-repo path.
+    path.join(home, '.token-optimizer', 'projects'),
   ];
   const registry = path.join(home, '.token-optimizer', 'projects.jsonl');
   if (fs.existsSync(registry)) {

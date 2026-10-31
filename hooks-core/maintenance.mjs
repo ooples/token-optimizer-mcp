@@ -38,6 +38,7 @@ import {
   readdirSync,
   statSync,
   unlinkSync,
+  writeFileSync,
 } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { homedir } from 'node:os';
@@ -215,9 +216,58 @@ export function readTombstone(root) {
  * so after a migration upgraded writers follow the move instead of failing
  * against the fence. One stat in the common case (no tombstone).
  */
-export function projectStore(root) {
+export function projectStore(root, env = process.env) {
+  const inRepo = join(root, '.token-optimizer');
   const tomb = readTombstone(root);
-  return tomb && typeof tomb.movedTo === 'string' ? tomb.movedTo : join(root, '.token-optimizer');
+  if (tomb && typeof tomb.movedTo === 'string') return tomb.movedTo;
+  // THE OPTIMIZER'S OWN DIRECTORIES keep their layout: the unrooted bucket is
+  // `<home>/unrooted/.token-optimizer`, and redirecting it would move it to a
+  // second place every reader of the unrooted graph would miss.
+  const base = canonicalPath(home(env));
+  const at = canonicalPath(root);
+  if (at === base || at.toLowerCase().startsWith(`${base.toLowerCase()}/`)) return inRepo;
+  // AN EXISTING IN-REPO STORE is used until it is migrated (session start does
+  // that once no older writer runs), so nothing it holds goes missing meanwhile.
+  try {
+    if (statSync(inRepo).isDirectory()) return inRepo;
+  } catch {
+    // None: a new store.
+  }
+  // A NEW STORE IS NEVER CREATED INSIDE THE PROJECT (#538). Writing there
+  // changed the fingerprint of whatever the directory was -- an installed
+  // Codex plugin's bundle, which then demanded hook re-approval after every
+  // read -- and put machine-local agent output in the user's tree.
+  return newStoreDir(root, env);
+}
+
+/** The per-user store for `root`, with the record that names its project. */
+function newStoreDir(root, env) {
+  const id = storeId(join(root, '.token-optimizer'));
+  const dir = movedStoreDir(id, env);
+  const meta = join(controlDir(id, env), 'meta.json');
+  try {
+    if (!existsSync(meta)) {
+      mkdirSync(controlDir(id, env), { recursive: true, mode: 0o700 });
+      writeFileSync(meta, JSON.stringify({ root: canonicalPath(root), storeId: id, createdAt: new Date().toISOString() }));
+    }
+  } catch {
+    // The record names the project for dashboards; a store works without it.
+  }
+  return dir;
+}
+
+/** Where a project's store lives outside its repository. */
+export const movedStoreDir = (id, env = process.env) => join(controlDir(id, env), 'store');
+
+/** The project root a per-user store belongs to, from its record, or null. */
+export function storeProjectRoot(storeDir) {
+  const m = /^(.*)[\\/]store(?:[\\/].*)?$/.exec(String(storeDir || ''));
+  if (!m) return null;
+  try {
+    return JSON.parse(readFileSync(join(m[1], 'meta.json'), 'utf8')).root ?? null;
+  } catch {
+    return null;
+  }
 }
 
 /** A path inside the store, relative to its root (`wiki/graph.jsonl`), for the spool. */

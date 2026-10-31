@@ -36,6 +36,7 @@ interface GraphModules {
   projects: any;
   lexical: any;
   consolidate: any;
+  maintenance: any;
 }
 
 let cached: GraphModules | null = null;
@@ -52,6 +53,7 @@ async function modules(): Promise<GraphModules | null> {
       projects,
       lexical,
       consolidate,
+      maintenance,
     ] = await Promise.all([
       import(coreUrl('wiki.mjs')),
       import(coreUrl('curate.mjs')),
@@ -61,6 +63,7 @@ async function modules(): Promise<GraphModules | null> {
       import(coreUrl('projects.mjs')),
       import(coreUrl('lexical.mjs')),
       import(coreUrl('consolidate.mjs')),
+      import(coreUrl('maintenance.mjs')),
     ]);
     cached = {
       wiki,
@@ -71,6 +74,7 @@ async function modules(): Promise<GraphModules | null> {
       projects,
       lexical,
       consolidate,
+      maintenance,
     };
     return cached;
   } catch {
@@ -110,11 +114,14 @@ function pathKey(value: string): string {
   return path.resolve(value).replaceAll('\\', '/').toLowerCase();
 }
 
-function inferredProjectName(dir: string): string {
+function inferredProjectName(dir: string, maintenance?: any): string {
   const parent = path.dirname(dir);
-  return path.basename(parent) === '.token-optimizer'
-    ? path.basename(path.dirname(parent))
-    : path.basename(process.cwd());
+  if (path.basename(parent) === '.token-optimizer')
+    return path.basename(path.dirname(parent));
+  // A store outside the repository (#538) is named by the project its record
+  // names, not by the `store` directory it sits in.
+  const root = maintenance?.storeProjectRoot?.(parent);
+  return root ? path.basename(root) : path.basename(process.cwd());
 }
 
 function graphSources(mods: GraphModules): GraphSource[] {
@@ -135,7 +142,9 @@ function graphSources(mods: GraphModules): GraphSource[] {
       }
     : {
         id: 'current',
-        name: inferredProjectName(currentDir) || 'Current project',
+        name:
+          inferredProjectName(currentDir, mods.maintenance) ||
+          'Current project',
         dir: currentDir,
         current: true,
         shared: false,
