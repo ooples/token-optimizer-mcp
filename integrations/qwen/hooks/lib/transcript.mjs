@@ -24,6 +24,8 @@ import {
 } from 'node:fs';
 import { join } from 'node:path';
 import { redact } from './redact.mjs';
+import { withWriteLease } from './maintenance.mjs';
+import { rejected } from './store-write.mjs';
 import {
   HOOK_MCP_TOOLS,
   isToolAbsentMessage,
@@ -134,6 +136,16 @@ function turnsFromLines(lines) {
  * function always did.
  */
 export function archive(dir, transcriptPath, { sessionId } = {}) {
+  // UNDER A WRITE LEASE (#542). The archive is a copy of the client's own
+  // transcript, so a store in maintenance does not spool it: it is refused and
+  // reported, and the next archive after cutover rewrites it in full.
+  const lease = withWriteLease(dir, () => archiveUnleased(dir, transcriptPath, { sessionId }));
+  if (lease.admitted) return lease.value;
+  rejected({ store: dir, op: 'transcript-archive', reason: `store is ${lease.state.state}` });
+  return 0;
+}
+
+function archiveUnleased(dir, transcriptPath, { sessionId } = {}) {
   const root = transcriptDir(dir);
   const file = join(root, `${safeName(sessionId)}.jsonl`);
   try {

@@ -157,6 +157,43 @@ describe('every writer honours maintenance', () => {
     expect(existsSync(join(wiki, 'artifacts'))).toBe(false);
   });
 
+  test('the transcript archive, rules and routing memo are not written, and are reported', () => {
+    // A rule to revert, so the rules write is really attempted.
+    mkdirSync(wiki, { recursive: true });
+    writeFileSync(join(wiki, 'rules.json'), JSON.stringify({ version: 1, rules: [{ id: 'r1', detector: 'd' }] }));
+    const rulesBefore = readFileSync(join(wiki, 'rules.json'), 'utf8');
+    setState({ state: 'cutover' });
+    const transcriptFile = join(work, 'session.jsonl');
+    writeFileSync(
+      transcriptFile,
+      `${JSON.stringify({ type: 'user', message: { role: 'user', content: 'hello' }, timestamp: new Date().toISOString() })}\n`
+    );
+    const script = `
+      import * as transcript from ${JSON.stringify(mod('transcript.mjs'))};
+      import * as remedy from ${JSON.stringify(mod('remedy.mjs'))};
+      import * as routing from ${JSON.stringify(mod('routing.mjs'))};
+      const archived = transcript.archive(${JSON.stringify(wiki)}, ${JSON.stringify(transcriptFile)}, { sessionId: 's1' });
+      let rules = 'written';
+      try { remedy.revertRemedy(${JSON.stringify(wiki)}, 'r1'); } catch (e) { rules = e.code || e.message; }
+      routing.cachedRoutingBriefing(${JSON.stringify(wiki)}, ${JSON.stringify(transcriptFile)});
+      process.stdout.write(JSON.stringify({ archived, rules }));
+    `;
+    const env = {};
+    for (const [k, v] of Object.entries(process.env)) if (!k.startsWith('TOKEN_OPTIMIZER_')) env[k] = v;
+    const r = spawnSync(process.execPath, ['--input-type=module', '-e', script], {
+      encoding: 'utf8',
+      timeout: 30_000,
+      env: { ...env, TOKEN_OPTIMIZER_HOME: home },
+    });
+    expect(r.status).toBe(0);
+    expect(JSON.parse(r.stdout).archived).toBe(0);
+    expect(r.stderr).toMatch(/transcript-archive rejected.*store is cutover/);
+    expect(existsSync(join(wiki, 'transcripts'))).toBe(false);
+    expect(JSON.parse(r.stdout).rules).toBe('ESTOREMAINT');
+    expect(readFileSync(join(wiki, 'rules.json'), 'utf8')).toBe(rulesBefore);
+    expect(existsSync(join(wiki, 'routing-brief.json'))).toBe(false);
+  });
+
   test('the wiki and authored stores of one repository are one store', () => {
     expect(storeId(join(store, 'authored'))).toBe(id);
   });
