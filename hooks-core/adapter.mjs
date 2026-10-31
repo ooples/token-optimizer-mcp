@@ -87,6 +87,7 @@ import {
   absentToolsFromTranscript,
   archive,
   isArchived,
+  serverFailuresFromTranscript,
   toolSearchOutcomesFromTranscript,
   turnEvidence,
 } from './transcript.mjs';
@@ -889,6 +890,27 @@ function gradeObservedTools(state, event, payload, raw) {
     }
     for (const { name, at } of searched.loaded) {
       markOptimizerToolOk(state, name, at);
+    }
+    // THE HOST SAYS THE SERVER NEVER CONNECTED. Every optimizer tool is absent
+    // from that instant, even one that answered earlier: the server died. A
+    // reconnect revokes only an absence THE FAILURE caused, and only when it
+    // comes later: a tool a search could not load (#484) stays absent however
+    // often the host re-announces it, and a healthy session's own announcement
+    // never poses as a successful call.
+    const server = serverFailuresFromTranscript(transcriptPath);
+    for (const { name, at } of server.failed) {
+      markOptimizerToolAbsent(state, name, at);
+      state.optimizerServerFailedAt = Math.max(
+        Number(state.optimizerServerFailedAt) || 0,
+        at
+      );
+    }
+    const failedAt = Number(state?.optimizerServerFailedAt) || 0;
+    for (const { name, at } of server.restored) {
+      const absentAt = Number(state?.optimizerToolAbsentAt?.[name]) || 0;
+      if (failedAt > 0 && absentAt <= failedAt && at > failedAt) {
+        markOptimizerToolOk(state, name, at);
+      }
     }
     // And the event itself, for the ten clients that do report a failed call.
     if (event === 'post-tool') {
