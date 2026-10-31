@@ -895,7 +895,7 @@ export function writeEdge(dir, from, edge, to) {
  * is inert. The reverse order has no such property. A torn final line is
  * discarded by `load()`, which skips unparseable records by design.
  */
-export function putNodeWithEdges(dir, { kind, key, ...rest }, edges = []) {
+export function writeNodeWithEdges(dir, { kind, key, ...rest }, edges = []) {
   if (!NODE_KINDS.includes(kind)) throw new Error(`unknown node kind: ${kind}`);
 
   const id = nodeId(kind, key);
@@ -912,7 +912,13 @@ export function putNodeWithEdges(dir, { kind, key, ...rest }, edges = []) {
   // bookkeeping fields.
   records.push({ ...rest, t: 'n', v: GRAPH_VERSION, id, kind, key: canonicalKey(kind, key), at });
 
-  return accepted(appendAll(dir, records)) ? id : null;
+  return { id, ...appendAll(dir, records) };
+}
+
+/** putNodeWithEdges' id when the group was accepted, else null. */
+export function putNodeWithEdges(dir, node, edges = []) {
+  const written = writeNodeWithEdges(dir, node, edges);
+  return accepted(written) ? written.id : null;
 }
 
 /**
