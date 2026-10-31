@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.8.0](https://github.com/ooples/token-optimizer-mcp/compare/v7.7.1...v7.8.0) (2026-10-31)
+
+
+### Features
+
+* **hooks:** measured multi-agent token waste and the top three compaction fixes ([#535](https://github.com/ooples/token-optimizer-mcp/issues/535)) ([9be0782](https://github.com/ooples/token-optimizer-mcp/commit/9be07821fb36e0baafb90675d15c3f5cdf645ff6))
+* **store:** maintenance mode, migration and recovery for project stores ([#545](https://github.com/ooples/token-optimizer-mcp/issues/545)) ([7dfd412](https://github.com/ooples/token-optimizer-mcp/commit/7dfd41239cf13ef9801b96f090ea5ebdc49bdd12))
+* **store:** report every store write as persisted, queued or rejected ([#543](https://github.com/ooples/token-optimizer-mcp/issues/543)) ([bfb2624](https://github.com/ooples/token-optimizer-mcp/commit/bfb262491d28bae06fa039245f6a92aeb824403d))
+
+
+### Bug Fixes
+
+* **hooks:** stop advertising optimizer tools when the host reports the server failed ([#539](https://github.com/ooples/token-optimizer-mcp/issues/539)) ([7f6a6d2](https://github.com/ooples/token-optimizer-mcp/commit/7f6a6d2ed716bdb57275e05a78c75e1e77649fbe))
+* **hooks:** stop outlining whole reads once a session pages through an outline ([#541](https://github.com/ooples/token-optimizer-mcp/issues/541)) ([d77857c](https://github.com/ooples/token-optimizer-mcp/commit/d77857c68b13b7913cd5985328c0ca5319aeb2d6))
+* **launch:** let a running launcher refresh the runtime when one is due ([#537](https://github.com/ooples/token-optimizer-mcp/issues/537)) ([e328c77](https://github.com/ooples/token-optimizer-mcp/commit/e328c77971189507a2b2fe3735ffe8e3ad5c210b))
+* **launch:** name a native server crash instead of losing the server silently ([#540](https://github.com/ooples/token-optimizer-mcp/issues/540)) ([a01bc57](https://github.com/ooples/token-optimizer-mcp/commit/a01bc57eab2699afa1e67b81002df71715434eba))
+
 ## [7.7.1](https://github.com/ooples/token-optimizer-mcp/compare/v7.7.0...v7.7.1) (2026-10-26)
 
 
