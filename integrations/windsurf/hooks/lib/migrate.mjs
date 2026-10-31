@@ -46,9 +46,10 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { createHash } from 'node:crypto';
-import { execFileSync } from 'node:child_process';
-import { dirname, isAbsolute, join, relative } from 'node:path';
-import { hostname } from 'node:os';
+import { execFileSync, spawn } from 'node:child_process';
+import { dirname, isAbsolute, join, relative, resolve as resolvePath } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { hostname, tmpdir } from 'node:os';
 import { canonicalPath } from './paths.mjs';
 import {
   CUTOVER,
@@ -58,6 +59,7 @@ import {
   READY,
   controlDir,
   liveLeases,
+  movedStoreDir,
   projectStore,
   readState,
   readTombstone,
@@ -75,10 +77,12 @@ export { readTombstone };
 export const PROTOCOL_VERSION = 'write-leases/1';
 
 const DRAIN_TIMEOUT_MS = 30_000;
+// How often session start retries a migration that was blocked.
+const RETRY_INTERVAL_MS = 60 * 60 * 1000;
 const COPY_ATTEMPTS = 3;
 
 /** Where a store lives once migrated. */
-export const movedStoreDir = (id, env = process.env) => join(controlDir(id, env), 'store');
+export { movedStoreDir };
 
 function atomicJson(path, value) {
   mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
@@ -314,7 +318,7 @@ function excludeFromGit(root) {
     return null;
   }
   const exclude = join(gitDir, 'info', 'exclude');
-  const lines = ['/.token-optimizer', '/.token-optimizer.migrated-*'];
+  const lines = ['/.token-optimizer'];
   try {
     const have = existsSync(exclude) ? readFileSync(exclude, 'utf8') : '';
     const missing = lines.filter((l) => !have.split(/\r?\n/).includes(l));
@@ -627,24 +631,59 @@ function migrateClaimed(
   }
 
   // 5. Publish: one rename makes the new store authoritative.
+  // Whether `dest` was created by this migration. After a MERGE it holds the
+  // project's earlier per-user data too, and a rollback must never remove it.
+  let createdDest = false;
   try {
     faultAt('publish');
-    if (existsSync(dest)) throw new Error(`a store already exists at ${dest}`);
-    // Recorded BEFORE the rename: a crash between it and CUTOVER leaves a
-    // `dest` that recovery can then prove this migration made, and remove.
-    setState(id, { state: READY, step: 'publish', root, generation, staged }, env);
-    renameSync(staging, dest);
+    if (existsSync(dest)) {
+      // THE PROJECT ALREADY HAS A PER-USER STORE (review): a release that keeps
+      // stores outside projects wrote one, then an older client recreated the
+      // in-repo store. Refusing here repeated the whole drain, fence and copy
+      // every hour only to fail, and left the per-user data hidden behind the
+      // in-repo store. The two are MERGED instead. The merge is idempotent, so
+      // a crash in it is completed by recovery, never rolled back.
+      setState(id, { state: READY, step: 'merging', root, generation, staged }, env);
+      mergeStore(staging, dest);
+      faultAt('merged');
+      rmSync(staging, { recursive: true, force: true });
+    } else {
+      // Recorded BEFORE the rename: a crash between it and CUTOVER leaves a
+      // `dest` that recovery can then prove this migration made, and remove.
+      setState(id, { state: READY, step: 'publish', root, generation, staged }, env);
+      renameSync(staging, dest);
+      createdDest = true;
+    }
     fsyncDir(dirname(dest));
     faultAt('renamed');
     // The manifest is what gc checks the backup against: the moved store's
     // files may legitimately change after the move, the backup's may not.
-    atomicJson(join(control, 'meta.json'), { root, storeId: id, movedAt: now().toISOString(), generation, manifest: hash });
+    // MERGED INTO, not replaced: the record also carries what other code put
+    // there -- the repository's first commit that lets a moved repository
+    // find its store again.
+    let previous = {};
+    try {
+      previous = JSON.parse(readFileSync(join(control, 'meta.json'), 'utf8'));
+    } catch {
+      // No record yet.
+    }
+    atomicJson(join(control, 'meta.json'), {
+      ...previous,
+      root,
+      storeId: id,
+      movedAt: now().toISOString(),
+      generation,
+      manifest: hash,
+    });
     setState(id, { state: CUTOVER, step: 'publish', root, generation, staged }, env);
     faultAt('tombstone');
     atomicJson(source, { movedTo: dest, storeId: id, since: now().toISOString(), by: PROTOCOL_VERSION });
   } catch (error) {
     return fail('publish', error, () => {
-      if (existsSync(dest) && !existsSync(staging)) renameSync(dest, staging);
+      // ONLY A DESTINATION THIS MIGRATION CREATED is taken back (review).
+      // After a merge, `dest` is the project's existing per-user store plus
+      // the merged records: it stays, and a retry merges again (idempotently).
+      if (createdDest && existsSync(dest) && !existsSync(staging)) renameSync(dest, staging);
       rmSync(staging, { recursive: true, force: true });
       unfence();
     });
@@ -653,8 +692,7 @@ function migrateClaimed(
   // 6. Keep the source as a backup, reopen the store, then replay what
   // upgraded writers spooled. Reopening comes FIRST: see settleSpool.
   faultAt('backup');
-  const backup = `${source}.migrated-${generation}`;
-  renameSync(staged, backup);
+  const backup = keepBackup(staged, id, generation, env);
   const excluded = excludeFromGit(root);
   rmSync(join(control, 'intent.json'), { force: true });
   faultAt('replay');
@@ -681,8 +719,21 @@ export function recover(root, { env = process.env } = {}) {
   const staged = state.staged || (state.generation && `${source}.migrating-${state.generation}`);
   const dest = movedStoreDir(id, env);
   if (state.state === CUTOVER || (tomb?.movedTo && existsSync(dest))) {
-    if (staged && existsSync(staged)) renameSync(staged, `${source}.migrated-${state.generation}`);
+    if (staged && existsSync(staged)) keepBackup(staged, id, state.generation, env);
     if (!tomb?.movedTo) atomicJson(source, { movedTo: dest, storeId: id, since: new Date().toISOString(), by: PROTOCOL_VERSION });
+    excludeFromGit(root);
+    setState(id, { state: NORMAL, step: 'done', root, generation: state.generation, recovered: true }, env);
+    settleSpool(id, dest, env);
+    return { recovered: true, state: NORMAL, completed: true };
+  }
+  // KILLED WHILE MERGING into an existing per-user store: the merge is
+  // idempotent, so it is finished, and the move completed like any other.
+  const merging = state.generation && `${dest}.staging-${state.generation}`;
+  if (state.state === READY && state.step === 'merging' && merging && existsSync(merging) && existsSync(dest)) {
+    mergeStore(merging, dest);
+    rmSync(merging, { recursive: true, force: true });
+    atomicJson(source, { movedTo: dest, storeId: id, since: new Date().toISOString(), by: PROTOCOL_VERSION });
+    if (staged && existsSync(staged)) keepBackup(staged, id, state.generation, env);
     excludeFromGit(root);
     setState(id, { state: NORMAL, step: 'done', root, generation: state.generation, recovered: true }, env);
     settleSpool(id, dest, env);
@@ -708,12 +759,120 @@ export function recover(root, { env = process.env } = {}) {
   return { recovered: true, state: NORMAL, completed: false };
 }
 
+/**
+ * Merge the store copied to `src` into the existing store at `dest`.
+ *
+ * Append-only logs (`*.jsonl`) gain only the records `dest` lacks: by `rid`, or
+ * by the exact line for records an older release wrote without one. A graph
+ * record older than the copy `dest` already holds for its id is skipped, since
+ * the graph folds last-write-wins by position. Every other file (artifacts,
+ * which are content-addressed, rules, caches) is copied only where `dest` has
+ * none. Running it twice changes nothing the second time.
+ */
+function mergeStore(src, dest) {
+  const walk = (dir) =>
+    readdirSync(dir, { withFileTypes: true }).flatMap((entry) =>
+      entry.isDirectory() ? walk(join(dir, entry.name)) : entry.isFile() ? [join(dir, entry.name)] : []
+    );
+  for (const from of walk(src)) {
+    const rel = relative(src, from);
+    const to = join(dest, rel);
+    mkdirSync(dirname(to), { recursive: true, mode: 0o700 });
+    if (!rel.endsWith('.jsonl')) {
+      if (!existsSync(to)) copyFileSync(from, to);
+      continue;
+    }
+    const keys = new Set();
+    const latest = new Map();
+    let text = '';
+    try {
+      text = readFileSync(to, 'utf8');
+    } catch {
+      // Not in dest yet.
+    }
+    const note = (line, record) => {
+      keys.add(typeof record?.rid === 'string' && record.rid ? `rid:${record.rid}` : `line:${line}`);
+      if (typeof record?.id === 'string' && Number.isFinite(record?.at))
+        latest.set(record.id, Math.max(latest.get(record.id) ?? 0, record.at));
+    };
+    for (const line of text.split('\n')) {
+      if (!line.trim()) continue;
+      try {
+        note(line, JSON.parse(line));
+      } catch {
+        // A torn line carries nothing to match.
+      }
+    }
+    const add = [];
+    for (const line of readFileSync(from, 'utf8').split('\n')) {
+      if (!line.trim()) continue;
+      let record;
+      try {
+        record = JSON.parse(line);
+      } catch {
+        continue;
+      }
+      const key = typeof record?.rid === 'string' && record.rid ? `rid:${record.rid}` : `line:${line}`;
+      if (keys.has(key)) continue;
+      if (typeof record?.id === 'string' && Number.isFinite(record?.at) && (latest.get(record.id) ?? 0) > record.at) continue;
+      add.push(line);
+      note(line, record);
+    }
+    if (add.length) appendFileSync(to, `${text && !text.endsWith('\n') ? '\n' : ''}${add.join('\n')}\n`);
+  }
+}
+
+/**
+ * Keep the pre-migration store as a backup OUTSIDE the project (#538).
+ *
+ * Beside the repository it stayed in the project until `gc` -- and for an
+ * installed plugin that is a permanent extra change to the bundle whose
+ * fingerprint the move exists to stop disturbing. It goes to the store's
+ * control directory instead. A rename across volumes fails (EXDEV), so the
+ * backup is then copied, checked byte for byte, and the original removed.
+ */
+function keepBackup(staged, id, generation, env) {
+  const backup = join(controlDir(id, env), `backup-${generation}`);
+  // A HALF-COPIED BACKUP from an interrupted cross-volume copy would make every
+  // later rename fail and wedge recovery. The staged store is still the
+  // original, so the partial copy is discarded and made again.
+  if (existsSync(staged) && existsSync(backup)) rmSync(backup, { recursive: true, force: true });
+  try {
+    renameSync(staged, backup);
+  } catch (error) {
+    if (error?.code !== 'EXDEV') throw error;
+    copyTree(staged, backup);
+    if (!sameTree(treeHash(staged), treeHash(backup))) throw new Error('backup copy does not match the store');
+    rmSync(staged, { recursive: true, force: true });
+  }
+  return backup;
+}
+
+/** Every migration backup kept for a store. */
+function backupsOf(id, env) {
+  const control = controlDir(id, env);
+  try {
+    return readdirSync(control)
+      .filter((name) => name.startsWith('backup-'))
+      .map((name) => ({ name, path: join(control, name) }));
+  } catch {
+    return [];
+  }
+}
+
 /** Delete a migration backup, but only after re-validating the moved store against it. */
 export function gc(root, { env = process.env } = {}) {
   root = canonicalPath(root);
   const tomb = readTombstone(root);
   if (!tomb?.movedTo) return { ok: false, reason: 'store has not been migrated' };
-  const backups = readdirSync(root).filter((n) => n.startsWith('.token-optimizer.migrated-'));
+  // Backups kept outside the project (#538), and any an earlier release left
+  // beside it.
+  const backups = [
+    ...backupsOf(tomb.storeId, env),
+    ...readdirSync(root)
+      .filter((n) => n.startsWith('.token-optimizer.migrated-'))
+      .map((name) => ({ name, path: join(root, name) })),
+  ];
   let meta = {};
   try {
     meta = JSON.parse(readFileSync(join(controlDir(tomb.storeId, env), 'meta.json'), 'utf8'));
@@ -721,12 +880,11 @@ export function gc(root, { env = process.env } = {}) {
     // No manifest: every file is held to the moved store's contents instead.
   }
   const removed = [];
-  for (const name of backups) {
-    const backup = join(root, name);
+  for (const { name, path: backup } of backups) {
     // The manifest proves what the copy received. A backup file still matching
     // it was copied, so the moved store only has to still HAVE it: a rules or
     // index file rewritten since the move is not data missing from the move.
-    const manifest = name === `.token-optimizer.migrated-${meta.generation}` && meta.manifest ? meta.manifest : {};
+    const manifest = meta.generation && name.endsWith(meta.generation) && meta.manifest ? meta.manifest : {};
     const moved = treeHash(tomb.movedTo);
     const missing = Object.entries(treeHash(backup)).filter(([file, sum]) => {
       if (!moved[file]) return true;
@@ -770,40 +928,173 @@ function ownerAlive(owner) {
  * Returns a one-line notice for the session, or null. Costs one stat when there
  * is nothing to do; enumerates processes only when an intent is pending.
  */
-export function resumeIfDue(root, { env = process.env, processes = tokenOptimizerProcesses } = {}) {
+export function resumeIfDue(root, { env = process.env, processes = tokenOptimizerProcesses, background = true } = {}) {
   try {
     root = canonicalPath(root);
     const source = join(root, '.token-optimizer');
     const tomb = readTombstone(root);
     const id = tomb?.storeId ?? storeId(source);
     const control = controlDir(id, env);
-    if (!existsSync(control)) return null;
-    const state = readState(id, env);
-    // FIRST, an interrupted move in either direction -- a restore leaves the
-    // tombstone in place until its last step, so this comes before the check
-    // that a moved store needs nothing.
-    if (state.state !== NORMAL && !ownerAlive(state.owner)) {
-      const done = recover(root, { env });
-      if (state.direction === 'restore')
-        return done.completed
-          ? `token-optimizer finished moving this project's graph back into ${source} after an interrupted restore. Tell the user once.`
-          : `token-optimizer rolled back an interrupted restore; the graph stays in ${movedStoreDir(id, env)}. Tell the user once.`;
-      return done.completed
-        ? `token-optimizer finished moving this project's graph to ${movedStoreDir(id, env)} after an interrupted migration. Tell the user once.`
-        : `token-optimizer rolled back an interrupted store migration; the graph is unchanged in ${source}. Tell the user once.`;
+    // AN IN-REPO STORE IS MIGRATED AUTOMATICALLY (#538): a session start that
+    // finds one is the request. Anything else with no control directory has
+    // nothing to finish.
+    let inRepo = false;
+    try {
+      inRepo = !tomb && statSync(source).isDirectory();
+    } catch {
+      inRepo = false;
     }
-    // A spool no maintenance is replaying: a writer outlived the final wait, or
-    // the process died between reopening the store and replaying it.
-    if (state.state === NORMAL && spoolPending(id, env)) settleSpool(id, projectStore(root), env);
-    if (tomb?.movedTo) return null;
-    if (!existsSync(join(control, 'intent.json')) || state.state !== NORMAL) return null;
-    const result = migrate(root, { env, processes });
-    return result.ok
-      ? `token-optimizer moved this project's graph to ${result.report.movedTo}, as requested earlier; the old store is kept as ${result.report.backup} until \`token-optimizer-storage gc\`. Tell the user once.`
-      : null;
+    if (!existsSync(control) && !inRepo) return null;
+    // A LOCATION THE USER CONFIGURED is theirs. With a store directory set by
+    // environment, the in-repo store is what they pointed at -- moving it would
+    // pull it out from under their configuration (and from under this very
+    // session, which reads it next).
+    if (inRepo && STORE_OVERRIDES.some((name) => env[name])) inRepo = false;
+
+    // What a background run finished since the last session start, said once.
+    const notice = takeNotice(control);
+    const state = readState(id, env);
+    const recoverable = state.state !== NORMAL && !ownerAlive(state.owner);
+    const spooled = state.state === NORMAL && spoolPending(id, env);
+    const wanted = !tomb?.movedTo && inRepo && state.state === NORMAL && retryDue(control);
+    if (!recoverable && !spooled && !wanted) return notice;
+
+    // NOT IN THE HOOK (review of #546). A migration copies and hashes the
+    // whole store, and recovery may wait up to 30 s for writers' leases; the
+    // Codex hooks have 5 s. Killed by the hook timeout mid-copy, a migration was
+    // rolled back and retried hourly, for ever. The work runs in a detached
+    // process that outlives the hook, under the same claim as any migration.
+    if (background) {
+      launchBackground(root, env);
+      return notice;
+    }
+    return runDue(root, { env, processes }) ?? notice;
   } catch {
     // Session start must never fail because of a migration.
     return null;
+  }
+}
+
+/** Environment settings that place a store where the user chose. */
+const STORE_OVERRIDES = ['TOKEN_OPTIMIZER_WIKI_DIR', 'TOKEN_OPTIMIZER_UCR_DIR'];
+
+/** Is an automatic migration attempt due? At most hourly while it stays blocked. */
+function retryDue(control) {
+  try {
+    const intent = JSON.parse(readFileSync(join(control, 'intent.json'), 'utf8'));
+    return Date.now() - Date.parse(intent.lastTry || intent.requested || 0) >= RETRY_INTERVAL_MS;
+  } catch {
+    return true;
+  }
+}
+
+/** Record that an attempt was made now, so the next is an hour away. */
+function markTried(control, root) {
+  try {
+    let intent = { root };
+    try {
+      intent = JSON.parse(readFileSync(join(control, 'intent.json'), 'utf8'));
+    } catch {
+      // First attempt.
+    }
+    atomicJson(join(control, 'intent.json'), { ...intent, lastTry: new Date().toISOString() });
+  } catch {
+    // Without the mark the next session start simply tries again.
+  }
+}
+
+/** Leave a one-line notice for the next session start. */
+function leaveNotice(control, text) {
+  try {
+    atomicJson(join(control, 'notice.json'), { text, at: new Date().toISOString() });
+  } catch {
+    // The work is done either way; only the message is lost.
+  }
+}
+
+/** Read and remove the pending notice, if any. */
+function takeNotice(control) {
+  const path = join(control, 'notice.json');
+  try {
+    const { text } = JSON.parse(readFileSync(path, 'utf8'));
+    rmSync(path, { force: true });
+    return typeof text === 'string' ? text : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Do whatever is due for `root`, synchronously: recover an interrupted move,
+ * replay a stray spool, or attempt the automatic migration. Returns the notice
+ * for the user, or null. The background process runs this; tests call it
+ * directly with `background: false`.
+ */
+export function runDue(root, { env = process.env, processes = tokenOptimizerProcesses } = {}) {
+  root = canonicalPath(root);
+  const source = join(root, '.token-optimizer');
+  const tomb = readTombstone(root);
+  const id = tomb?.storeId ?? storeId(source);
+  const control = controlDir(id, env);
+  const state = readState(id, env);
+  let text = null;
+  if (state.state !== NORMAL && !ownerAlive(state.owner)) {
+    const done = recover(root, { env });
+    if (state.direction === 'restore')
+      text = done.completed
+        ? `token-optimizer finished moving this project's graph back into ${source} after an interrupted restore. Tell the user once.`
+        : `token-optimizer rolled back an interrupted restore; the graph stays in ${movedStoreDir(id, env)}. Tell the user once.`;
+    else
+      text = done.completed
+        ? `token-optimizer finished moving this project's graph to ${movedStoreDir(id, env)} after an interrupted migration. Tell the user once.`
+        : `token-optimizer rolled back an interrupted store migration; the graph is unchanged in ${source}. Tell the user once.`;
+  } else if (state.state === NORMAL && spoolPending(id, env)) {
+    // A spool no maintenance is replaying: a writer outlived the final wait,
+    // or the process died between reopening the store and replaying it.
+    settleSpool(id, projectStore(root, env), env);
+  } else if (!tomb?.movedTo && state.state === NORMAL && retryDue(control) && !STORE_OVERRIDES.some((name) => env[name])) {
+    let inRepo = false;
+    try {
+      inRepo = statSync(source).isDirectory();
+    } catch {
+      inRepo = false;
+    }
+    if (inRepo) {
+      markTried(control, root);
+      const result = migrate(root, { env, processes });
+      if (result.ok && !result.report.alreadyMoved)
+        text = `token-optimizer moved this project's graph out of the repository, to ${result.report.movedTo}; the old store is kept as ${result.report.backup} until \`token-optimizer-storage gc\`. Tell the user once.`;
+    }
+  }
+  if (text) leaveNotice(control, text);
+  return text;
+}
+
+/** Start `runDue` for `root` in a detached process that outlives this hook. */
+function launchBackground(root, env) {
+  try {
+    const child = spawn(process.execPath, [fileURLToPath(import.meta.url), '--run-due', root], {
+      // NOT THE PROJECT'S DIRECTORY. A process holds its working directory
+      // open, and on Windows that locks it: the user could not delete or
+      // rename their project while the background migration ran (EBUSY).
+      cwd: tmpdir(),
+      detached: true,
+      stdio: 'ignore',
+      windowsHide: true,
+      env: { ...process.env, ...env },
+    });
+    child.unref();
+  } catch {
+    // Not launched: the next session start tries again.
+  }
+}
+
+// `node migrate.mjs --run-due <root>`: the background half of resumeIfDue.
+if (process.argv[2] === '--run-due' && process.argv[3] && fileURLToPath(import.meta.url) === resolvePath(process.argv[1])) {
+  try {
+    runDue(process.argv[3]);
+  } catch {
+    // Nothing to report to: the next session start retries.
   }
 }
 

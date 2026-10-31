@@ -26,6 +26,7 @@ import {
 } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { projectStore } from '../../hooks-core/maintenance.mjs';
 
 const NL = String.fromCharCode(10);
 const ROOT = process.cwd();
@@ -96,7 +97,8 @@ describe('PreCompact reaches the harvest', () => {
     const result = runPreCompact();
     expect(result.status).toBe(0);
 
-    const graph = join(work, '.token-optimizer', 'wiki');
+    // Where the store for `work` lives (outside the repository since #538).
+    const graph = join(projectStore(work), 'wiki');
     expect(existsSync(graph)).toBe(true);
     expect(readdirSync(graph).filter((f) => f.includes('transcript')).length).toBeGreaterThan(0);
   });

@@ -37,8 +37,11 @@ import {
   readFileSync,
   readdirSync,
   statSync,
+  renameSync,
   unlinkSync,
+  writeFileSync,
 } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { homedir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
@@ -227,9 +230,164 @@ export function readTombstone(root) {
  * so after a migration upgraded writers follow the move instead of failing
  * against the fence. One stat in the common case (no tombstone).
  */
-export function projectStore(root) {
+export function projectStore(root, env = process.env) {
+  const inRepo = join(root, '.token-optimizer');
   const tomb = readTombstone(root);
-  return tomb && typeof tomb.movedTo === 'string' ? tomb.movedTo : join(root, '.token-optimizer');
+  if (tomb && typeof tomb.movedTo === 'string') return tomb.movedTo;
+  // MID-MIGRATION the store's path is a fence FILE. Readers are pointed at the
+  // staged copy, which holds exactly the store's data until the move publishes;
+  // writers never reach it, because every write takes a lease and the store is
+  // in maintenance, so they spool. Without this, a session starting while its
+  // store was being moved read nothing at all.
+  if (tomb && tomb.state === 'migrating' && typeof tomb.generation === 'string') {
+    const staged = `${inRepo}.migrating-${tomb.generation}`;
+    try {
+      if (statSync(staged).isDirectory()) return staged;
+    } catch {
+      // Published or rolled back meanwhile: the in-repo path, as below.
+    }
+  }
+  // THE OPTIMIZER'S OWN DIRECTORIES keep their layout: the unrooted bucket is
+  // `<home>/unrooted/.token-optimizer`, and redirecting it would move it to a
+  // second place every reader of the unrooted graph would miss.
+  const base = canonicalPath(home(env));
+  const at = canonicalPath(root);
+  if (at === base || at.toLowerCase().startsWith(`${base.toLowerCase()}/`)) return inRepo;
+  // AN EXISTING IN-REPO STORE is used until it is migrated (session start does
+  // that once no older writer runs), so nothing it holds goes missing meanwhile.
+  try {
+    if (statSync(inRepo).isDirectory()) return inRepo;
+  } catch {
+    // None: a new store.
+  }
+  // A NEW STORE IS NEVER CREATED INSIDE THE PROJECT (#538). Writing there
+  // changed the fingerprint of whatever the directory was -- an installed
+  // Codex plugin's bundle, which then demanded hook re-approval after every
+  // read -- and put machine-local agent output in the user's tree.
+  return newStoreDir(root, env);
+}
+
+/** The per-user store for `root`, with the record that names its project. */
+function newStoreDir(root, env) {
+  const id = storeId(join(root, '.token-optimizer'));
+  const dir = movedStoreDir(id, env);
+  const meta = join(controlDir(id, env), 'meta.json');
+  try {
+    if (!existsSync(meta)) {
+      // Writable first: where the record cannot be kept (a sandbox that may
+      // not write the home directory), every hook call would otherwise spawn
+      // git again, since the missing record is what triggers this.
+      mkdirSync(join(home(env), 'projects'), { recursive: true, mode: 0o700 });
+      const rootCommit = repositoryRootCommit(root);
+      // A REPOSITORY MOVED TO A NEW PATH keeps its graph. An in-repo store
+      // travelled with its directory; one keyed by path would not, so a store
+      // whose recorded root no longer exists, for the same repository (its
+      // first commit), is adopted here instead of starting empty. Only an
+      // orphan is adopted: a clone that still exists at its old path keeps its
+      // own store.
+      if (rootCommit && adoptOrphanedStore(id, root, rootCommit, env)) return dir;
+      mkdirSync(controlDir(id, env), { recursive: true, mode: 0o700 });
+      // EXCLUSIVE: two hooks starting on a new project at once must not have
+      // the second overwrite the first's record (and an adoption it recorded).
+      writeFileSync(
+        meta,
+        JSON.stringify({ root: canonicalPath(root), storeId: id, rootCommit, createdAt: new Date().toISOString() }),
+        { flag: 'wx' }
+      );
+    }
+  } catch {
+    // The record names the project for dashboards; a store works without it.
+  }
+  return dir;
+}
+
+/** The repository's first commit, or null when it is not a git repository. */
+function repositoryRootCommit(root) {
+  try {
+    // THE REPOSITORY'S OWN TOP LEVEL ONLY (review). From a subdirectory -- or
+    // a project inside a dotfiles repository around the home directory -- git
+    // answers for the ENCLOSING repository, so unrelated roots shared its
+    // first commit and one project could adopt another's graph.
+    const top = execFileSync('git', ['rev-parse', '--show-toplevel'], {
+      cwd: root,
+      encoding: 'utf8',
+      timeout: 2000,
+      stdio: ['ignore', 'pipe', 'ignore'],
+      windowsHide: true,
+    }).trim();
+    const fold = (p) => (process.platform === 'win32' || process.platform === 'darwin' ? p.toLowerCase() : p);
+    if (!top || fold(canonicalPath(top)) !== fold(canonicalPath(root))) return null;
+    const out = execFileSync('git', ['rev-list', '--max-parents=0', 'HEAD'], {
+      cwd: root,
+      encoding: 'utf8',
+      timeout: 2000,
+      stdio: ['ignore', 'pipe', 'ignore'],
+      windowsHide: true,
+    });
+    // A repository with several roots (merged histories) is identified by the
+    // smallest, so every clone agrees on it.
+    const roots = out.split(/\s+/).filter((h) => /^[0-9a-f]{40,64}$/.test(h)).sort();
+    return roots[0] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** Move an orphaned store of the same repository to `id`. True when adopted. */
+function adoptOrphanedStore(id, root, rootCommit, env) {
+  const projects = join(home(env), 'projects');
+  let names = [];
+  try {
+    names = readdirSync(projects);
+  } catch {
+    return false;
+  }
+  for (const name of names) {
+    if (name === id) continue;
+    const metaPath = join(projects, name, 'meta.json');
+    let meta;
+    try {
+      meta = JSON.parse(readFileSync(metaPath, 'utf8'));
+    } catch {
+      continue;
+    }
+    // GONE, NOT UNREACHABLE. A repository on an unplugged drive or an
+    // unmounted share also "does not exist"; adopting its store would take it
+    // from that repository the next time the drive is back. Only a root whose
+    // parent directory is present and which itself is not, was moved or deleted.
+    if (meta.rootCommit !== rootCommit || !meta.root || existsSync(meta.root) || !existsSync(dirname(meta.root)))
+      continue;
+    // A store in maintenance is never moved from under its migrator.
+    if (readState(name, env).state !== NORMAL) continue;
+    try {
+      renameSync(join(projects, name), controlDir(id, env));
+      writeFileSync(
+        join(controlDir(id, env), 'meta.json'),
+        JSON.stringify({ ...meta, root: canonicalPath(root), storeId: id, adoptedFrom: { storeId: name, root: meta.root } })
+      );
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  return false;
+}
+
+/** Where a project's store lives outside its repository. */
+export const movedStoreDir = (id, env = process.env) => join(controlDir(id, env), 'store');
+
+/** The project root a per-user store belongs to, from its record, or null. */
+export function storeProjectRoot(storeDir) {
+  // The per-user layout exactly: `<home>/projects/<16 hex>/store[/...]`. A
+  // looser pattern took the LAST `store` segment, which a store's own
+  // subdirectories can contain.
+  const m = /^(.*[\\/]projects[\\/][0-9a-f]{16})[\\/]store(?:[\\/]|$)/.exec(String(storeDir || ''));
+  if (!m) return null;
+  try {
+    return JSON.parse(readFileSync(join(m[1], 'meta.json'), 'utf8')).root ?? null;
+  } catch {
+    return null;
+  }
 }
 
 /** A path inside the store, relative to its root (`wiki/graph.jsonl`), for the spool. */

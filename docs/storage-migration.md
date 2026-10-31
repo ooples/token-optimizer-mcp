@@ -38,7 +38,7 @@ Processes whose code takes write leases don't need to be stopped. They take a sh
 | fence | `<repo>/.token-optimizer` renamed aside; a fence file put in its place; test write must fail | rename undone |
 | copy | every file copied and flushed to disk; the source is re-checked, and copied again if a late write changed it; the copy must match byte for byte | copy deleted, rename undone |
 | publish | the copy becomes `~/.token-optimizer/projects/<id>/store/` in one rename; the fence file becomes a **tombstone** pointing there | copy deleted, rename undone |
-| finish | held writes added to the new store; the original kept as `<repo>/.token-optimizer.migrated-<date>/` | — |
+| finish | held writes added to the new store; the original kept as `~/.token-optimizer/projects/<id>/backup-<date>/`, outside the repository | — |
 
 **If the process doing the move is killed at any step,** the next session start, or `token-optimizer-storage recover`, finishes it:
 - **before publish:** the move is undone, and the store is exactly where it was;
@@ -49,8 +49,8 @@ No record that was written is lost or added twice. The test suite kills the proc
 ## After the move
 
 - **The tombstone stays.** `<repo>/.token-optimizer` is now a small file saying where the store went. Up-to-date clients follow it, and older ones are kept out by it, so don't delete it while any client without write leases might still run on this machine. It also records the store's id, so if you move or rename the repository folder, it still finds its store.
-- **git doesn't see the tombstone or the backup.** `/.token-optimizer` and `/.token-optimizer.migrated-*` are added to this clone's own `.git/info/exclude`, which is never committed, so `git status` stays clean.
-- **The backup stays until you remove it.** `token-optimizer-storage gc` first checks that every file in the backup is also in the new store. Logs that have grown since the move are fine, as long as their original contents are still there at the start. Other files that were rewritten since the move are fine too, as long as the backup still holds exactly what the move copied; a backup file that changed after the copy blocks `gc`, because the new store never received those bytes. If the check passes, it deletes the backup; if not, it refuses and lists what's missing.
+- **The tombstone is the only thing left in the repository.** The backup is kept outside it, and `/.token-optimizer` is added to this clone's own `.git/info/exclude`, which is never committed, so `git status` stays clean. For an installed plugin, the move is the last change token-optimizer ever makes to its folder.
+- **The backup stays until you remove it.** `token-optimizer-storage gc` first checks that every file in the backup is also in the new store. Logs that have grown since the move are fine, as long as their original contents are still there at the start. If the check passes, it deletes the backup; if not, it refuses and lists what's missing.
 
 ## Rolling back
 

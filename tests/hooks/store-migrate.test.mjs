@@ -65,7 +65,10 @@ describe('a clean migration', () => {
     expect(existsSync(result.report.backup)).toBe(true);
     const exclude = readFileSync(join(repo, '.git', 'info', 'exclude'), 'utf8');
     expect(exclude).toContain('/.token-optimizer\n');
-    expect(exclude).toContain('/.token-optimizer.migrated-*');
+    // Nothing but the tombstone is left in the repository (#538): the backup
+    // lives in the store's control directory.
+    expect(readdirSync(repo).filter((n) => n.startsWith('.token-optimizer'))).toEqual(['.token-optimizer']);
+    expect(result.report.backup.replace(/\\/g, '/')).toContain(`/projects/${id}/backup-`);
     expect(readState(id, env).state).toBe('normal');
   });
 
@@ -243,7 +246,7 @@ describe('coordination', () => {
       join(spool, '9.jsonl'),
       `${JSON.stringify({ file: 'wiki/graph.jsonl', record: { t: 'n', id: 'file:straggler', rid: 'ffffffffffffffff' } })}\n`
     );
-    expect(resumeIfDue(repo, { env, processes: quiet })).toBeNull();
+    expect(resumeIfDue(repo, { env, processes: quiet, background: false })).toBeNull();
     expect(graphOf(report.movedTo).match(/file:straggler/g)).toHaveLength(1);
     expect(existsSync(spool)).toBe(false);
   });
@@ -323,7 +326,8 @@ describe('a migrator killed at any step is recovered', () => {
     expect(readFileSync(join(live, 'wiki', 'metrics.jsonl'), 'utf8')).toContain('"m1"');
     if (tomb) {
       expect(graph.match(/file:spooled/g)).toHaveLength(1);
-      expect(readdirSync(repo).some((n) => n.startsWith('.token-optimizer.migrated-'))).toBe(true);
+      expect(readdirSync(join(work, 'home', 'projects', id)).some((n) => n.startsWith('backup-'))).toBe(true);
+      expect(readdirSync(repo).filter((n) => n.startsWith('.token-optimizer'))).toEqual(['.token-optimizer']);
     } else {
       expect(statSync(join(repo, '.token-optimizer')).isDirectory()).toBe(true);
       expect(existsSync(join(work, 'home', 'projects', id, 'store'))).toBe(false);
@@ -336,17 +340,112 @@ describe('session start finishes what was left', () => {
   const legacy = () => ({ complete: true, found: [{ pid: 4242, version: '7.7.1' }] });
 
   test('nothing pending costs nothing and says nothing', () => {
-    expect(resumeIfDue(repo, { env, processes: () => { throw new Error('must not enumerate'); } })).toBeNull();
+    // A repository with no in-repo store and no control directory.
+    const empty = join(work, 'empty-repo');
+    mkdirSync(empty, { recursive: true });
+    expect(resumeIfDue(empty, { env, processes: () => { throw new Error('must not enumerate'); } })).toBeNull();
+  });
+
+  test('an existing in-repo store is migrated at session start without being asked (#538)', () => {
+    const notice = resumeIfDue(repo, { env, processes: quiet, background: false });
+    expect(notice).toMatch(/moved this project's graph out of the repository/);
+    expect(readTombstone(repo)?.movedTo).toBeTruthy();
+  });
+
+  test('session start only launches the work; it finishes in the background and is reported next time', async () => {
+    // A hook has seconds (Codex: 5). Session start must return at once and
+    // leave the copy to a detached process -- here with the real process list,
+    // so give it a repository nothing on this machine is writing to.
+    const started = Date.now();
+    expect(resumeIfDue(repo, { env, processes: quiet })).toBeNull();
+    expect(Date.now() - started).toBeLessThan(1500);
+    // The detached process finishes the move...
+    // ...or, when an older token-optimizer process really is running on this
+    // machine, refuses and records why. Either outcome proves the detached
+    // process ran; neither is reached if it never started.
+    const intent = join(work, 'home', 'projects', id, 'intent.json');
+    const refused = () => {
+      try {
+        return JSON.parse(readFileSync(intent, 'utf8')).blockers?.length > 0;
+      } catch {
+        return false;
+      }
+    };
+    const deadline = Date.now() + 60_000;
+    while (!readTombstone(repo)?.movedTo && !refused() && Date.now() < deadline)
+      await new Promise((r) => setTimeout(r, 200));
+    const moved = readTombstone(repo)?.movedTo;
+    if (!moved) {
+      expect(refused()).toBe(true);
+      expect(statSync(join(repo, '.token-optimizer')).isDirectory()).toBe(true);
+      return;
+    }
+    // The next session start says what happened, once.
+    expect(resumeIfDue(repo, { env, processes: quiet })).toMatch(/moved this project's graph out of the repository/);
+    expect(resumeIfDue(repo, { env, processes: quiet })).toBeNull();
+  }, 90_000);
+
+  test('the background process does not hold the project directory open', async () => {
+    // On Windows a process locks its working directory: launched from the
+    // project, the background migration made the project impossible to delete
+    // or rename (EBUSY) while it ran. Deleting it at once must succeed. (The
+    // child sees the real process list, not a stub: what it decides does not
+    // matter here, only that it is not sitting in the project directory.)
+    resumeIfDue(repo, { env, processes: quiet });
+    expect(() => rmSync(repo, { recursive: true })).not.toThrow();
+    // Let the child finish before the work directory is removed under it. With
+    // the project gone it has nothing to do and exits within about a second.
+    await new Promise((r) => setTimeout(r, 3000));
+  }, 90_000);
+
+  test('a store the user placed by environment is never moved automatically', () => {
+    const configured = { ...env, TOKEN_OPTIMIZER_WIKI_DIR: join(repo, '.token-optimizer', 'wiki') };
+    expect(resumeIfDue(repo, { env: configured, processes: quiet, background: false })).toBeNull();
+    expect(statSync(join(repo, '.token-optimizer')).isDirectory()).toBe(true);
+  });
+
+  test('mid-migration, readers are pointed at the staged copy, not the fence', async () => {
+    const { projectStore } = await import('../../hooks-core/maintenance.mjs');
+    let seen = null;
+    let graph = null;
+    migrate(repo, {
+      env,
+      processes: quiet,
+      faultAt: (at) => {
+        if (at !== 'copy') return;
+        // Read while the fence is up, as a session starting now would.
+        seen = projectStore(repo, env);
+        graph = readFileSync(join(seen, 'wiki', 'graph.jsonl'), 'utf8');
+      },
+    });
+    expect(seen).toMatch(/\.token-optimizer\.migrating-/);
+    expect(graph).toContain('file:a');
+  });
+
+  test('a blocked automatic migration is retried at most hourly', () => {
+    let calls = 0;
+    const counting = () => {
+      calls += 1;
+      return legacy();
+    };
+    expect(resumeIfDue(repo, { env, processes: counting, background: false })).toBeNull();
+    expect(resumeIfDue(repo, { env, processes: counting, background: false })).toBeNull();
+    expect(calls).toBe(1);
+    expect(statSync(join(repo, '.token-optimizer')).isDirectory()).toBe(true);
   });
 
   test('a refused migration completes once its blockers clear', () => {
     expect(migrate(repo, { env, processes: legacy }).ok).toBe(false);
     // Still blocked at the next session start: still nothing.
-    expect(resumeIfDue(repo, { env, processes: legacy })).toBeNull();
+    expect(resumeIfDue(repo, { env, processes: legacy, background: false })).toBeNull();
     expect(statSync(join(repo, '.token-optimizer')).isDirectory()).toBe(true);
-    // The legacy session has ended.
-    const notice = resumeIfDue(repo, { env, processes: quiet });
-    expect(notice).toMatch(/moved this project's graph to .*as requested earlier/);
+    // The legacy session has ended, and an hour has passed since the last try.
+    const intentPath = join(work, 'home', 'projects', id, 'intent.json');
+    const intent = JSON.parse(readFileSync(intentPath, 'utf8'));
+    const hourAgo = new Date(Date.now() - 61 * 60 * 1000).toISOString();
+    writeFileSync(intentPath, JSON.stringify({ ...intent, requested: hourAgo, lastTry: hourAgo }));
+    const notice = resumeIfDue(repo, { env, processes: quiet, background: false });
+    expect(notice).toMatch(/moved this project's graph out of the repository/);
     expect(readTombstone(repo)?.movedTo).toBeTruthy();
     expect(existsSync(join(work, 'home', 'projects', id, 'intent.json'))).toBe(false);
   });
@@ -357,7 +456,7 @@ describe('session start finishes what was left', () => {
       join(work, 'home', 'projects', id, 'maintenance.json'),
       JSON.stringify({ state: 'draining', owner: { pid: 999999, host: hostname() } })
     );
-    expect(resumeIfDue(repo, { env, processes: quiet })).toMatch(/rolled back an interrupted store migration/);
+    expect(resumeIfDue(repo, { env, processes: quiet, background: false })).toMatch(/rolled back an interrupted store migration/);
     expect(readState(id, env).state).toBe('normal');
   });
 
@@ -367,7 +466,7 @@ describe('session start finishes what was left', () => {
       join(work, 'home', 'projects', id, 'maintenance.json'),
       JSON.stringify({ state: 'draining', owner: { pid: process.pid, host: hostname() } })
     );
-    expect(resumeIfDue(repo, { env, processes: quiet })).toBeNull();
+    expect(resumeIfDue(repo, { env, processes: quiet, background: false })).toBeNull();
     expect(readState(id, env).state).toBe('draining');
   });
 });
@@ -405,7 +504,7 @@ describe('restore: the same move in reverse', () => {
       { encoding: 'utf8', env: { ...process.env, ...env } }
     );
     expect(r.status).toBe(137);
-    expect(resumeIfDue(repo, { env, processes: quiet })).toMatch(/interrupted restore/);
+    expect(resumeIfDue(repo, { env, processes: quiet, background: false })).toMatch(/interrupted restore/);
     expect(readState(id, env).state).toBe('normal');
     // Either way, exactly one live store, holding the original record once.
     const tomb = readTombstone(repo);
@@ -429,7 +528,7 @@ describe('gc', () => {
   test('deletes the backup only after the moved store re-validates', () => {
     const { report } = migrate(repo, { env, processes: quiet });
     appendFileSync(join(report.movedTo, 'wiki', 'graph.jsonl'), '{"t":"n","id":"file:later"}\n');
-    expect(gc(repo, { env })).toMatchObject({ ok: true, removed: [expect.stringMatching(/^\.token-optimizer\.migrated-/)] });
+    expect(gc(repo, { env })).toMatchObject({ ok: true, removed: [expect.stringMatching(/^backup-/)] });
     expect(existsSync(report.backup)).toBe(false);
   });
 

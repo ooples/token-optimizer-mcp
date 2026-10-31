@@ -24,6 +24,7 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 import { load, nodeId } from '../../hooks-core/wiki.mjs';
 import { canonicalPath } from '../../hooks-core/paths.mjs';
+import { projectStore } from '../../hooks-core/maintenance.mjs';
 
 const WORKER = join(process.cwd(), 'hooks-core', 'harvest-worker.mjs');
 const SESSION = 's-subdir-root';
@@ -133,8 +134,10 @@ describe('harvest worker run from a repository subdirectory', () => {
     });
     expect(r.status).toBe(0);
 
-    const repoGraph = join(project, '.token-optimizer', 'wiki');
-    const strayGraph = join(subdir, '.token-optimizer', 'wiki');
+    // Wherever the store for each directory lives (outside the repository
+    // since #538), resolved the same way the worker resolves it.
+    const repoGraph = join(projectStore(project), 'wiki');
+    const strayGraph = join(projectStore(subdir), 'wiki');
 
     // The graph belongs to the repository, not to whichever directory the
     // session happened to start in.

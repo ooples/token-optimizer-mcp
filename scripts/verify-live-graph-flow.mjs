@@ -23,7 +23,10 @@ const projectA = join(temp, 'project-a');
 const projectB = join(temp, 'project-b');
 const shared = join(temp, 'shared');
 const state = join(temp, 'state');
-const wikiA = join(projectA, '.token-optimizer', 'wiki');
+const home = join(temp, 'home');
+// Resolved once the isolated home is set (see main): project stores live
+// outside the project, under TOKEN_OPTIMIZER_HOME, since #538.
+let wikiA = null;
 const anchor = join(projectA, 'src', 'test-runner.mjs');
 const claim =
   'Run this ESM suite with npm test instead of bare npx jest, because bare Jest can skip the configured ESM test path.';
@@ -33,6 +36,7 @@ const originalEnv = {
   registry: process.env.TOKEN_OPTIMIZER_PROJECT_REGISTRY,
   state: process.env.TOKEN_OPTIMIZER_STATE_DIR,
   holdout: process.env.TOKEN_OPTIMIZER_HOLDOUT,
+  home: process.env.TOKEN_OPTIMIZER_HOME,
 };
 
 let dashboard = null;
@@ -132,6 +136,11 @@ async function main() {
   process.env.TOKEN_OPTIMIZER_PROJECT_REGISTRY = join(temp, 'projects.jsonl');
   process.env.TOKEN_OPTIMIZER_STATE_DIR = state;
   process.env.TOKEN_OPTIMIZER_HOLDOUT = '0';
+  // ISOLATED: project stores are created under the home store, so without
+  // this the flow wrote into the real ~/.token-optimizer of whoever ran it.
+  process.env.TOKEN_OPTIMIZER_HOME = home;
+  const { projectStore } = await import('../hooks-core/maintenance.mjs');
+  wikiA = join(projectStore(projectA), 'wiki');
 
   // This is the implementation behind the MCP wiki_write tool. The caller is
   // the working model; no second semantic model or transcript RAG step exists.
@@ -347,6 +356,7 @@ try {
   restoreEnv('TOKEN_OPTIMIZER_PROJECT_REGISTRY', originalEnv.registry);
   restoreEnv('TOKEN_OPTIMIZER_STATE_DIR', originalEnv.state);
   restoreEnv('TOKEN_OPTIMIZER_HOLDOUT', originalEnv.holdout);
+  restoreEnv('TOKEN_OPTIMIZER_HOME', originalEnv.home);
   try {
     rmSync(temp, { recursive: true, force: true });
   } catch {
