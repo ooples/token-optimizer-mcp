@@ -553,3 +553,62 @@ describe('every entry point goes through the resolver', () => {
     expect(JSON.parse(readFileSync(out, 'utf8'))).toEqual({ client: 'claude-code', event: 'post-tool', raw: payload });
   });
 });
+
+describe('a lock or call record left by a killed hook', () => {
+  const MIGRATE = '{ 1: { to: 2, migrateSessionState: (s) => ({ ...s, migrated: true }) } }';
+  const lockOf = (w) => join(w.env.TOKEN_OPTIMIZER_STATE_DIR, 'sess-1.migrate.lock');
+
+  async function pendingMigration(w) {
+    await call(w, 'session-start');
+    writeFileSync(join(w.env.TOKEN_OPTIMIZER_STATE_DIR, 'sess-1.json'), JSON.stringify({ edits: 3 }));
+    install(w, '3.0.0', { schema: 2, migrations: MIGRATE });
+    point(w, '3.0.0');
+  }
+
+  test('a lock whose owner process is gone is taken over', async () => {
+    const w = world();
+    await pendingMigration(w);
+    const dead = spawnSync(process.execPath, ['-e', ''], { windowsHide: true }).pid;
+    mkdirSync(lockOf(w));
+    writeFileSync(join(lockOf(w), 'owner'), `${dead}-1-abc`);
+    expect(await call(w, 'pre-tool')).toMatchObject({ mode: 'current', version: '3.0.0' });
+    expect(sessionRecord('sess-1', w.env)).toMatchObject({ schema: 2 });
+    expect(existsSync(lockOf(w))).toBe(false);
+    expect(readdirSync(w.env.TOKEN_OPTIMIZER_STATE_DIR).some((f) => f.includes('.stale-'))).toBe(false);
+  });
+
+  test('a lock with no owner is taken over once it is older than any hook runs', async () => {
+    const w = world();
+    await pendingMigration(w);
+    mkdirSync(lockOf(w));
+    const old = Date.now() / 1000 - 10 * 60;
+    utimesSync(lockOf(w), old, old);
+    expect(await call(w, 'pre-tool')).toMatchObject({ mode: 'current', version: '3.0.0' });
+    expect(sessionRecord('sess-1', w.env)).toMatchObject({ schema: 2 });
+  });
+
+  test('a recent lock held by a live process still holds', async () => {
+    const w = world();
+    await pendingMigration(w);
+    mkdirSync(lockOf(w));
+    writeFileSync(join(lockOf(w), 'owner'), `${process.ppid}-1-abc`);
+    expect((await call(w, 'pre-tool')).mode).not.toBe('current');
+    expect(sessionRecord('sess-1', w.env).schema).toBe(STATE_SCHEMA);
+    expect(readFileSync(join(lockOf(w), 'owner'), 'utf8')).toBe(`${process.ppid}-1-abc`);
+  });
+
+  test('a resumed session start prunes call records whose post-tool never ran', async () => {
+    const w = world();
+    await call(w, 'session-start');
+    const calls = join(w.env.TOKEN_OPTIMIZER_STATE_DIR, 'runtime-calls');
+    mkdirSync(calls, { recursive: true });
+    const orphan = join(calls, 'orphan.json');
+    writeFileSync(orphan, '{}');
+    const old = Date.now() / 1000 - 2 * 24 * 60 * 60;
+    utimesSync(orphan, old, old);
+    // The session record exists already: this start is a resume.
+    expect(sessionRecord('sess-1', w.env)).toBeTruthy();
+    await call(w, 'session-start');
+    expect(existsSync(orphan)).toBe(false);
+  });
+});

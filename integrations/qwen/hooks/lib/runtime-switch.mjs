@@ -195,12 +195,14 @@ export function recordSessionStart(sessionId, { version, schema = STATE_SCHEMA, 
   // claim a migration that never ran (or undo one that did), so an existing
   // record is kept, whatever its schema: a lower one is then migrated forward
   // by resolveHook, as on any other call.
+  // Pruned on every start, resumed ones included: a store only resumed
+  // sessions use would otherwise keep its orphaned call records for good.
+  pruneCallRecords(env);
   const existing = sessionRecord(sessionId, env);
   if (existing && Number.isInteger(existing.schema)) return existing;
   const record = { version, schema, hooksDir, startedAt: Date.now(), noted: false };
   try {
     writeAtomic(sessionRecordPath(sessionId, env), record);
-    pruneCallRecords(env);
   } catch {
     // Without a record the next hook writes one; nothing breaks.
   }
@@ -382,14 +384,9 @@ export function migrateSession(sessionId, migrations, from, to, env = process.en
     schema = step.to;
     if (steps.length > 32) return false;
   }
-  const lock = join(root, `${safe}.migrate.lock`);
-  try {
-    mkdirSync(root, { recursive: true, mode: 0o700 });
-    mkdirSync(lock);
-  } catch {
-    // Another hook is migrating, or the root is unwritable: stay pinned this call.
-    return false;
-  }
+  // Another hook is migrating, or the root is unwritable: stay pinned this call.
+  const lock = takeSessionLock(root, safe);
+  if (!lock) return false;
   const done = [];
   try {
     const files = readdirSync(root).filter(
@@ -416,8 +413,96 @@ export function migrateSession(sessionId, migrations, from, to, env = process.en
     }
     return false;
   } finally {
-    rmSync(lock, { recursive: true, force: true });
+    releaseSessionLock(lock);
   }
+}
+
+/** A lock older than this was left by a killed hook: a migration takes milliseconds. */
+const LOCK_STALE_MS = 2 * 60 * 1000;
+
+/**
+ * Takes the session's migration lock: a directory holding its owner's token.
+ * A lock whose owner is gone -- its pid is dead, or it is older than any hook
+ * runs -- is taken over; otherwise a hook killed while holding it would pin
+ * the session to its old copy for good. Returns the held lock, or null.
+ */
+function takeSessionLock(root, safe) {
+  const path = join(root, `${safe}.migrate.lock`);
+  const token = `${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      mkdirSync(root, { recursive: true, mode: 0o700 });
+      mkdirSync(path);
+    } catch (error) {
+      if (error?.code !== 'EEXIST' || attempt > 0 || !takeOverStaleLock(path)) return null;
+      continue;
+    }
+    try {
+      writeFileSync(join(path, 'owner'), token, { mode: 0o600 });
+    } catch {
+      // Without an owner the lock still goes stale by age.
+    }
+    return { path, token };
+  }
+  return null;
+}
+
+/** Signal 0 only checks the pid exists; EPERM means it does, under another user. */
+function isPidAlive(pid) {
+  if (!Number.isInteger(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return error?.code === 'EPERM';
+  }
+}
+
+function lockOwner(path) {
+  try {
+    return readFileSync(join(path, 'owner'), 'utf8');
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Moves a stale lock aside; true when the lock at `path` is gone. The rename
+ * is checked against the owner that was judged stale, so a live lock that
+ * replaced it in between is put back rather than broken.
+ */
+function takeOverStaleLock(path) {
+  const owner = lockOwner(path);
+  let age;
+  try {
+    age = Date.now() - statSync(path).mtimeMs;
+  } catch {
+    return true; // Released meanwhile.
+  }
+  const pid = Number(owner?.split('-')[0]);
+  const dead = owner !== null && pid !== process.pid && !isPidAlive(pid);
+  if (!dead && age <= LOCK_STALE_MS) return false;
+  const aside = `${path}.stale-${process.pid}-${Math.random().toString(16).slice(2)}`;
+  try {
+    renameSync(path, aside);
+  } catch {
+    return false; // Another hook took it over first.
+  }
+  if (lockOwner(aside) !== owner) {
+    try {
+      renameSync(aside, path);
+    } catch {
+      // Its owner's release finds no lock of its own and removes nothing.
+    }
+    return false;
+  }
+  rmSync(aside, { recursive: true, force: true });
+  return true;
+}
+
+/** Removes the lock only while it is still this hook's: a takeover may have replaced it. */
+function releaseSessionLock({ path, token }) {
+  if (lockOwner(path) === token) rmSync(path, { recursive: true, force: true });
 }
 
 /** A session's state files: `<session>.json` and its agents' `<session>-<12 hex>.json`. */
@@ -428,19 +513,14 @@ function sessionStateFiles(root, safe) {
 
 /** Runs `fn` holding the session's migration lock; false when another hook holds it. */
 function withSessionLock(root, safe, fn) {
-  const lock = join(root, `${safe}.migrate.lock`);
-  try {
-    mkdirSync(root, { recursive: true, mode: 0o700 });
-    mkdirSync(lock);
-  } catch {
-    return false;
-  }
+  const lock = takeSessionLock(root, safe);
+  if (!lock) return false;
   try {
     return fn();
   } catch {
     return false;
   } finally {
-    rmSync(lock, { recursive: true, force: true });
+    releaseSessionLock(lock);
   }
 }
 
