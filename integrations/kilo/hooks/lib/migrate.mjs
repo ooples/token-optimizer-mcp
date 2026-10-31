@@ -631,6 +631,9 @@ function migrateClaimed(
   }
 
   // 5. Publish: one rename makes the new store authoritative.
+  // Whether `dest` was created by this migration. After a MERGE it holds the
+  // project's earlier per-user data too, and a rollback must never remove it.
+  let createdDest = false;
   try {
     faultAt('publish');
     if (existsSync(dest)) {
@@ -649,6 +652,7 @@ function migrateClaimed(
       // `dest` that recovery can then prove this migration made, and remove.
       setState(id, { state: READY, step: 'publish', root, generation, staged }, env);
       renameSync(staging, dest);
+      createdDest = true;
     }
     fsyncDir(dirname(dest));
     faultAt('renamed');
@@ -676,7 +680,10 @@ function migrateClaimed(
     atomicJson(source, { movedTo: dest, storeId: id, since: now().toISOString(), by: PROTOCOL_VERSION });
   } catch (error) {
     return fail('publish', error, () => {
-      if (existsSync(dest) && !existsSync(staging)) renameSync(dest, staging);
+      // ONLY A DESTINATION THIS MIGRATION CREATED is taken back (review).
+      // After a merge, `dest` is the project's existing per-user store plus
+      // the merged records: it stays, and a retry merges again (idempotently).
+      if (createdDest && existsSync(dest) && !existsSync(staging)) renameSync(dest, staging);
       rmSync(staging, { recursive: true, force: true });
       unfence();
     });

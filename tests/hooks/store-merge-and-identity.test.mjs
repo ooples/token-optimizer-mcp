@@ -103,6 +103,27 @@ describe('an in-repo store beside an existing per-user store', () => {
     expect(ids.filter((x) => x === 'file:legacy')).toHaveLength(1);
   });
 
+  test('an error after the merge rolls back without deleting the per-user store', () => {
+    // E.g. ENOSPC writing meta.json, thrown in the same process after the merge.
+    const result = migrate(repo, {
+      env,
+      processes: quiet,
+      faultAt: (at) => {
+        if (at === 'renamed') throw Object.assign(new Error('ENOSPC: no space left'), { code: 'ENOSPC' });
+      },
+    });
+    expect(result.ok).toBe(false);
+    // The per-user store survives with its own records...
+    expect(graph().some((r) => r.id === 'file:only-new')).toBe(true);
+    // ...the in-repo store is back where it was...
+    expect(statSync(join(repo, '.token-optimizer')).isDirectory()).toBe(true);
+    // ...and a retry merges again without duplicating anything.
+    expect(migrate(repo, { env, processes: quiet }).ok).toBe(true);
+    const ids = graph().map((r) => r.id);
+    expect(ids.filter((x) => x === 'file:only-old')).toHaveLength(1);
+    expect(ids.filter((x) => x === 'file:only-new')).toHaveLength(1);
+  });
+
   test("the migration keeps the store record's other fields", () => {
     const control = join(work, 'home', 'projects', id);
     writeFileSync(join(control, 'meta.json'), JSON.stringify({ root: repo, storeId: id, rootCommit: 'abc123' }));
