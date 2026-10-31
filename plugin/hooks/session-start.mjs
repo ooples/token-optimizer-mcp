@@ -53,6 +53,7 @@ import {
   noteHookOutput,
   writeHookEvent,
 } from './lib/observability.mjs';
+import { resolveHook } from './lib/runtime-switch.mjs';
 
 // THE BUNDLED INVENTORY IS ASSERTED ONLY FOR AN ACTUAL PLUGIN INSTALL.
 //
@@ -177,6 +178,18 @@ try {
   applyQuietEnv();
 } catch {
   // Optional, like every optimization here.
+}
+// THE SESSION'S BASELINE RUNTIME: the version and state schema this session
+// starts on, which every later hook compares `<runtime>/current` against
+// (runtime-switch.mjs). It also takes the payload off stdin and hands it on.
+try {
+  await resolveHook({
+    hooksDir: dirname(fileURLToPath(import.meta.url)),
+    entryRel: 'plugin/hooks',
+    event: 'session-start',
+  });
+} catch {
+  // Without a record the first tool call writes one.
 }
 const input = await readPayloadResult({ timeoutMs: 250 });
 const payload = input.payload || {};

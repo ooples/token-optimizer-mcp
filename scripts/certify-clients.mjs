@@ -16,6 +16,7 @@ const PACKAGED_SURFACES = {
   'claude-code': [
     'plugin/hooks/hooks.json',
     'plugin/hooks/pretooluse-router.mjs',
+    'plugin/hooks/impl/pretooluse-router.mjs',
     'plugin/hooks/stop.mjs',
   ],
   codex: [
@@ -73,7 +74,7 @@ const PACKAGED_SURFACES = {
 };
 
 const ENFORCEMENT_SURFACES = {
-  'claude-code': 'plugin/hooks/pretooluse-router.mjs',
+  'claude-code': 'plugin/hooks/impl/pretooluse-router.mjs',
   codex: 'integrations/codex/hooks/pre-tool.mjs',
   copilot: 'integrations/copilot/.github/hooks/pre-tool.mjs',
   gemini: 'integrations/gemini/hooks/pre-tool.mjs',
