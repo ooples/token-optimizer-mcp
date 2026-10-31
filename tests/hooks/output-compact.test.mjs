@@ -13,6 +13,9 @@ import {
   foldOutput,
   isDenseLine,
   isReadLikeCommand,
+  isBuildOrTestCommand,
+  isShellSearchCommand,
+  BUILD_LOG_MIN_BYTES,
   selectWithinBudget,
   OUTPUT_COMPACT_MIN_BYTES,
 } from '../../hooks-core/output-compact.mjs';
@@ -60,6 +63,188 @@ describe('folding and selection', () => {
     expect(isDenseLine(minified)).toBe(true);
     expect(isDenseLine('{"a": "' + 'x'.repeat(500) + '"}')).toBe(false);
     expect(foldOutput(minified).text.length).toBeLessThan(400);
+  });
+
+  test('a compiler error with a long path is dense but stays whole', () => {
+    // Recorded shape: the path leaves almost no spaces, and the message -- the part
+    // the model needs -- sits in the middle that elision would cut.
+    const path = '/home/runner/work/AiDotNet.Tensors/AiDotNet.Tensors/tests/AiDotNet.Tensors.Tests/Engines/BlasManaged/';
+    const error =
+      `##[error]${path}GotoGemmRoutingTests.cs(94,50): error CS0117: 'BitConverter' does not contain a definition for 'SingleToInt32Bits' [${path}${'x'.repeat(120)}.csproj::TargetFramework=net471]`;
+    expect(isDenseLine(error)).toBe(true);
+    expect(foldOutput(error).text).toBe(error);
+    const huge = 'error:' + 'x'.repeat(5000);
+    expect(foldOutput(huge).text.length).toBeLessThan(400);
+  });
+
+  test('one MSBuild diagnostic per target framework is kept once, with a count', () => {
+    // Recorded shape: a multi-targeted test project prints every analyzer error
+    // once per framework, so 8 distinct errors arrive as 32 lines.
+    const at = (n) => `C:\\repo\\tests\\T.Tests\\UnitTests\\WorkLogTests.cs(${160 + n},26): error xUnit1031: Test methods should not use blocking task operations`;
+    const lines = [];
+    for (let n = 0; n < 8; n++)
+      for (const tf of ['net471', 'net8.0', 'net9.0', 'net10.0'])
+        lines.push(`${at(n)} [C:\\repo\\tests\\T.Tests\\T.Tests.csproj::TargetFramework=${tf}]`);
+    const { text, folded } = foldOutput(lines.join('\n'));
+    expect(folded).toBe(24);
+    for (let n = 0; n < 8; n++) {
+      expect(text).toContain(at(n));
+      expect(text.split(at(n)).length - 1).toBe(1);
+    }
+    expect(text).toContain('[+3 more: same diagnostic in other projects/target frameworks]');
+    // Different errors on the same line are not merged.
+    const two = [`${at(0)} [a.csproj]`, `${at(0).replace('xUnit1031', 'CS0117')} [a.csproj]`].join('\n');
+    expect(foldOutput(two).text).toBe(two);
+  });
+});
+
+describe('a read is judged by the stage that produces the output', () => {
+  test('a search, a log or a test run piped into head/tail is not a file read', () => {
+    for (const command of [
+      'grep -rn TODO src | head -200',
+      'git log --oneline | head -100',
+      'dotnet test 2>&1 | tail -60',
+      'cd repo && git grep -n Foo | head -n 300',
+      'Select-String -Path src\\*.cs -Pattern Foo | Select-Object -First 200',
+    ])
+      expect(isReadLikeCommand(command)).toBe(false);
+  });
+
+  test('a read narrowed to a line range is still a read', () => {
+    for (const command of [
+      'cat src/a.ts | head -50',
+      "sed -n '1,80p' core.py | nl",
+      'Get-Content src\\A.cs | Select-Object -Skip 100 -First 80',
+      '(Get-Content src\\A.cs)[10..50]',
+      'cd src; Get-Content a.txt',
+      'git show HEAD:src/a.ts | head -40',
+      'Get-Content src\\A.cs | Select-Object -Index (10..20)',
+      'type notes.txt | more',
+    ])
+      expect(isReadLikeCommand(command)).toBe(true);
+  });
+
+  test('an issue or PR body is read like a file, also inside a loop', () => {
+    for (const command of [
+      'gh issue view 542 --json body,comments --jq .body',
+      'gh pr view 535 -R ooples/token-optimizer-mcp',
+      "for n in 538 542; do echo \"## $n\"; gh issue view $n --json body --jq .body; done",
+      'for n in 1 2; do gh pr view $n; done',
+    ])
+      expect(isReadLikeCommand(command)).toBe(true);
+    for (const command of ['gh pr list --state open', 'gh pr checks 535', 'gh run view 1 --log-failed'])
+      expect(isReadLikeCommand(command)).toBe(false);
+  });
+
+  test('a cat that writes a file, or reads a task log, is not a read', () => {
+    for (const command of [
+      "cat > probe.py <<'EOF'\nimport sys\nhead = sys.argv[1]\nEOF\npython probe.py",
+      'cat > out.txt <<EOF\ncat a.cs\nEOF\ndotnet test',
+      'cat src/a.ts > copy.ts; npm test',
+      'cat "C:/Temp/claude/x/tasks/b1.output"; gh pr list --state all -L 4',
+    ])
+      expect(isReadLikeCommand(command)).toBe(false);
+    for (const command of [
+      'cat src/a.ts 2>&1',
+      'cat src/a.ts 2>/dev/null | head -40',
+      "sed -n 's/a>b/c/p' src/a.ts",
+    ])
+      expect(isReadLikeCommand(command)).toBe(true);
+  });
+
+  test('a multi-line command is judged by its last line, CRLF or LF, continuations joined', () => {
+    for (const command of [
+      'cd C:\\repo\nGet-Content src\\A.cs',
+      'cd /repo\r\ncat src/a.ts',
+      '$p = "src\\A.cs"\r\nGet-Content $p |\r\n  Select-Object -First 80',
+      'Get-Content src\\A.cs `\n  | Select-Object -Skip 10',
+    ])
+      expect(isReadLikeCommand(command)).toBe(true);
+    for (const command of ['cat a.log\ndotnet test', 'cd /repo\r\ngrep -rn x src | head -50'])
+      expect(isReadLikeCommand(command)).toBe(false);
+    // a.ts is in the output whatever runs after it: an edit may be built from it.
+    expect(isReadLikeCommand('cat a.ts\ndotnet test')).toBe(true);
+  });
+
+  test('a multi-line read keeps its exact text where a log would be folded', () => {
+    const source = Array.from({ length: 300 }, (_, i) => `    var x${i} = Compute(${i});`).join('\n');
+    expect(compactText(source, { command: 'cd C:\\repo\nGet-Content src\\A.cs' })).toBeNull();
+    expect(compactText(source, { command: 'cd C:\\repo\nGet-Process' })).not.toBeNull();
+  });
+
+  test('git show of a commit prints a diff, not a file', () => {
+    expect(isReadLikeCommand('git show HEAD~2')).toBe(false);
+    expect(isReadLikeCommand('git show --stat abc123')).toBe(false);
+    expect(isReadLikeCommand('git show abc123:src/a.ts')).toBe(true);
+    expect(isReadLikeCommand('git cat-file -p HEAD:src/a.ts')).toBe(true);
+  });
+
+  test('an operator inside quotes does not split the command', () => {
+    // A quote-blind split made these the statement `NR<=60' src/a.cs` or
+    // `40,60p' src/a.cs`: not a read, so the file was folded like a log.
+    for (const command of [
+      "awk 'NR>=10 && NR<=60' src/a.cs",
+      "sed -n '1,20p;40,60p' src/a.cs",
+      "awk 'NR>=10 && NR<=60' src/a.cs | cat -n",
+      "cat 'notes; draft.md'",
+      'cd C:\\repo\ngit show "HEAD:src/a b.cs"',
+    ]) {
+      expect(isReadLikeCommand(command)).toBe(true);
+    }
+    expect(isShellSearchCommand("echo 'a | grep b'")).toBe(false);
+    expect(isBuildOrTestCommand("git commit -m 'fix; dotnet test passes'")).toBe(false);
+    const source = Array.from({ length: 300 }, (_, i) => `    var x${i} = Compute(${i});`).join('\n');
+    expect(compactText(source, { command: "awk 'NR>=1 && NR<=300' src/A.cs" })).toBeNull();
+  });
+
+  test('a file read anywhere in a compound command keeps the output exact', () => {
+    // Replayed corpus: 160 sub-24 KB reads were folded because only the last
+    // statement (a grep) or the last stage (a renumbering awk / cut) was judged.
+    for (const command of [
+      'cd C:/repo && cat src/a.cs; grep -n "Fact" tests/b.cs | head -40',
+      "sed -n 9990,10340p Plan.cs | cat -n | awk '{n=$1+9989; $1=\"\"; print n $0}' | cut -c1-200",
+      "awk '{printf \"%4d: %s\\n\", NR, $0}' a.cs | sed -n '505,660p;740,790p'",
+    ]) {
+      expect(isReadLikeCommand(command)).toBe(true);
+    }
+    // A read with lines REMOVED or reformatted is still the file's text: the
+    // recorded shapes, 32 of them folded before.
+    for (const command of [
+      'sed -n 52,340p src/Swin.cs | cat -n | grep -v "^\\s*[0-9]*\\s*///"',
+      'sed -n 869,1000p Plan.cs | grep -v "^\\s*$" | cut -c1-170 | head -120',
+      "sed -n 9700,9815p Plan.cs | cat -n | sed 's/^ *\\([0-9]*\\)\\t/\\1: /' | awk -F': ' '{printf \"%d: %s\\n\", $1+9699, $2}'",
+      'Get-Content t.mjs -TotalCount 140 | ForEach-Object -Begin {$i=1} -Process {"{0,4}: {1}" -f $i++, $_}',
+      'Get-Content a.cs | Select-String -NotMatch "^\\s*//"',
+    ]) {
+      expect(isReadLikeCommand(command)).toBe(true);
+    }
+    // A pattern awk or a positive grep filters like a search: not a read.
+    expect(isReadLikeCommand("cat a.cs | awk '/ERROR/'")).toBe(false);
+    expect(isReadLikeCommand('cat a.cs | grep -n Compute')).toBe(false);
+    expect(isReadLikeCommand('cat a.cs | grep -E "x|v"')).toBe(false);
+    expect(isReadLikeCommand('cat a.cs | Select-String Compute')).toBe(false);
+    // A log file is not an edit target: selected around its verdicts, not cut head-first.
+    const log = ciLog();
+    const out = compactText(log, { command: 'cat ci-logs/ledger.log' });
+    expect(out.text).toContain('test_round_up FAILED');
+    expect(out.text).toContain('1 failed, 2411 passed');
+    const source = Array.from({ length: 300 }, (_, i) => `src/b.cs:${i + 1}:    var x${i} = Compute(${i});`).join('\n');
+    expect(Buffer.byteLength(source)).toBeGreaterThan(OUTPUT_COMPACT_MIN_BYTES);
+    expect(
+      compactToolResponse({
+        tool: 'Bash',
+        input: { command: 'cat src/a.cs; grep -rn Compute src/b.cs' },
+        response: { stdout: source, stderr: '' },
+        dir: mkdtempSync(join(root, 'read-')),
+      })
+    ).toBeNull();
+  });
+
+  test('an 8 KB search piped into head is compacted; the same bytes from cat are not', () => {
+    const hits = [...Array(160).keys()].map((i) => `src/mod${i % 9}/file${i}.ts:${i + 1}:  const v${i} = compute(${i}); // TODO`).join('\n');
+    expect(Buffer.byteLength(hits)).toBeGreaterThan(OUTPUT_COMPACT_MIN_BYTES);
+    expect(compactText(hits, { command: 'grep -rn TODO src | head -200' })).not.toBeNull();
+    expect(compactText(hits, { command: 'cat notes.txt | head -200' })).toBeNull();
   });
 });
 
@@ -139,5 +324,89 @@ describe('the Claude Code PostToolUse hook', () => {
         tool_name: 'Bash', tool_input: { command: 'python -m pytest -q' }, tool_response: { stdout: ciLog(), stderr: '' } }),
     });
     expect(r.stdout.includes('updatedToolOutput')).toBe(false);
+  });
+});
+
+/** A 2-6 KB MSBuild run: restore/compile progress around its errors and summary. */
+const smallBuildLog = (errors = 1) => {
+  const lines = ['  Determining projects to restore...', '  All projects are up-to-date for restore.'];
+  for (let i = 0; i < 40; i++) lines.push(`  AiDotNet.Module${i} -> C:\\repo\\src\\Module${i}\\bin\\Debug\\net8.0\\AiDotNet.Module${i}.dll`);
+  for (let e = 0; e < errors; e++)
+    lines.push(`C:\\repo\\src\\Layers\\Dense${e}.cs(41,17): error CS0103: The name 'weights${e}' does not exist in the current context [C:\\repo\\src\\AiDotNet.csproj]`);
+  lines.push('', 'Build FAILED.', '', '    0 Warning(s)', `    ${errors} Error(s)`, '', 'Time Elapsed 00:00:41.27');
+  return lines.join('\n');
+};
+
+describe('build and test logs are compacted from 2 KB, around their verdict', () => {
+  test('recognises build/test commands in any statement, and nothing else', () => {
+    for (const c of ['dotnet build src/A.csproj 2>&1 | tail -60', 'cd repo && npm test', 'FOO=1 npm test', './gradlew build', 'git status && make', 'npm.cmd run build', 'npx jest tests/a', 'python -m pytest -q', 'pwsh -File C:\\b\\build.ps1 -Project x', 'cargo test'])
+      expect(isBuildOrTestCommand(c)).toBe(true);
+    for (const c of ['git status', 'cat build.log', 'grep -rn dotnet .', 'ls testdata', 'grep make notes.txt', 'cat a.txt | grep jest', 'git commit -m "fix: make it work"', 'echo make sure', 'grep -n x build.ps1', 'rg -n tsc src'])
+      expect(isBuildOrTestCommand(c)).toBe(false);
+  });
+
+  test('a search under the general floor is never folded for naming a build word', () => {
+    const notes = Array.from({ length: 70 }, (_, i) => `note ${i}: remember to make the release notes mention item ${i}`).join('\n');
+    for (const command of ['grep make notes.txt', 'cat notes.txt | grep jest', 'git log --oneline | grep tsc'])
+      expect(compactText(notes, { command })).toBeNull();
+  });
+
+  test('a 4 KB build log keeps every error and the summary, in under half the size', () => {
+    const log = smallBuildLog();
+    expect(Buffer.byteLength(log)).toBeGreaterThan(BUILD_LOG_MIN_BYTES);
+    expect(Buffer.byteLength(log)).toBeLessThan(OUTPUT_COMPACT_MIN_BYTES);
+    const out = compactText(log, { command: 'dotnet build src/AiDotNet.csproj' });
+    expect(out).not.toBeNull();
+    for (const must of ["error CS0103: The name 'weights0'", 'Build FAILED.', '1 Error(s)', 'Time Elapsed'])
+      expect(out.text).toContain(must);
+    expect(Buffer.byteLength(out.text)).toBeLessThan(Buffer.byteLength(log) / 2);
+  });
+
+  test('no error line is dropped however many there are, below the general floor', () => {
+    const log = smallBuildLog(12);
+    expect(Buffer.byteLength(log)).toBeLessThan(OUTPUT_COMPACT_MIN_BYTES);
+    const out = compactText(log, { command: 'dotnet build' });
+    const kept = out ? out.text : log;
+    for (let e = 0; e < 12; e++) expect(kept).toContain(`'weights${e}' does not exist`);
+  });
+
+  test('the same 4 KB from a command that is not a build stays whole', () => {
+    expect(compactText(smallBuildLog(), { command: 'cat build-output.txt' })).toBeNull();
+    expect(compactText(smallBuildLog(), { command: 'git log -p' })).toBeNull();
+  });
+});
+
+describe("shell searches get the Grep tool's lossless grouping", () => {
+  const hits = [
+    ...[...Array(30).keys()].map((i) => `src/AiDotNet/NeuralNetworks/Layers/DenseLayer.cs:${100 + i}:    var w${i} = Engine.MatMul(x, weights);`),
+    ...[...Array(20).keys()].map((i) => `src/AiDotNet/NeuralNetworks/Layers/ConvLayer.cs:${10 + i}:    var y${i} = Engine.Conv2D(x, kernel);`),
+  ].join('\n');
+
+  test('recognises shell search commands', () => {
+    for (const c of [
+      'grep -rn Engine src',
+      'cd repo && git grep -n MatMul | head -200',
+      'rg -n Conv2D',
+      'Select-String -Path src\\*.cs -Pattern Engine',
+      'git -C repo grep -n x',
+      'Get-ChildItem -Recurse -Filter *.cs | Select-String Engine',
+      'git ls-files | xargs -r grep -n Engine',
+      'cd C:\\repo\r\nrg -n Conv2D',
+    ])
+      expect(isShellSearchCommand(c)).toBe(true);
+    for (const c of ['git log --grep fix', 'cat a.txt', 'dotnet test', 'echo grep'])
+      expect(isShellSearchCommand(c)).toBe(false);
+  });
+
+  test('a 4 KB grep -rn result is grouped by file with every line number and line kept', () => {
+    const out = compactToolResponse({ tool: 'Bash', input: { command: 'grep -rn Engine src | head -100' }, response: { stdout: hits, stderr: '' }, dir: root });
+    expect(out).not.toBeNull();
+    expect(out.stdout.length).toBeLessThan(hits.length * 0.75);
+    expect(out.stdout.split('\n').filter((l) => l === 'src/AiDotNet/NeuralNetworks/Layers/DenseLayer.cs')).toHaveLength(1);
+    for (const line of hits.split('\n')) expect(out.stdout).toContain(line.slice(line.indexOf('.cs:') + 4));
+  });
+
+  test('the same bytes from a command that is not a search are left alone', () => {
+    expect(compactToolResponse({ tool: 'Bash', input: { command: 'cat hits.txt' }, response: { stdout: hits, stderr: '' }, dir: root })).toBeNull();
   });
 });
