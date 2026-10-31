@@ -302,8 +302,24 @@ export function writeHookEvent(event) {
   }
 }
 
+/**
+ * WHERE A HOOK'S TIME WENT: milliseconds from the entry's start to each named
+ * point. hook.completed carried one total, so when hooks on one machine ran
+ * for minutes for weeks (2026-10) nothing could say which part was slow. The
+ * runtime switch marks `resolved` through the same global
+ * before this module is loaded.
+ */
+export function markHookPhase(name, now = Date.now()) {
+  const origin = globalThis.__tokenOptimizerHookStartedAt;
+  if (!Number.isFinite(origin)) return;
+  (globalThis.__tokenOptimizerPhases ??= {})[name] = Math.max(0, now - origin);
+}
+
 export function beginHookInvocation(client, event, options = {}) {
   const started = Date.now();
+  // An entry without the runtime switch starts its clock here.
+  globalThis.__tokenOptimizerHookStartedAt ??= started;
+  markHookPhase('begun', started);
   const invocationId = randomUUID();
   let ended = false;
   let outcome = 'success';
@@ -354,6 +370,7 @@ export function beginHookInvocation(client, event, options = {}) {
     process.removeListener('exit', onExit);
     process.removeListener('uncaughtException', onUncaughtException);
     process.removeListener('unhandledRejection', onUnhandledRejection);
+    markHookPhase('completed');
     writeHookEvent({
       level:
         nextOutcome === 'failure' || nextOutcome === 'timeout'
@@ -370,6 +387,7 @@ export function beginHookInvocation(client, event, options = {}) {
       hookEvent: event,
       processId: process.pid,
       ...dimensions,
+      phasesMs: { ...(globalThis.__tokenOptimizerPhases ?? {}) },
       error: errorFields(nextError),
     });
   };
@@ -434,9 +452,11 @@ export function beginHookInvocation(client, event, options = {}) {
       );
       dimensions.payloadBytes = payloadBytes;
       dimensions.inputStatus = 'ok';
+      markHookPhase('input');
       if (sessionId) traceId = hash(sessionId, 32);
     },
     noteInput(status, payloadBytes = null) {
+      markHookPhase('input');
       dimensions.inputStatus = status;
       dimensions.payloadBytes = payloadBytes;
       if (status === 'timeout') {
@@ -452,6 +472,7 @@ export function beginHookInvocation(client, event, options = {}) {
       reason = nextReason;
     },
     noteOutput(output, outputBytes = null) {
+      markHookPhase('output');
       dimensions.outputBytes =
         outputBytes ?? Buffer.byteLength(JSON.stringify(output), 'utf8');
       if (!output || typeof output !== 'object' || Array.isArray(output)) {

@@ -51,6 +51,8 @@ import {
   manifestSize,
 } from './manifest.mjs';
 import { mcpClientsSeen } from './metrics.mjs';
+import { NODE_FLOOR, nodeBelowFloor } from './node-floor.mjs';
+import { SLOW_P90_MS, recentToolHookLatency } from './hook-latency.mjs';
 
 /**
  * Bytes as a person reads them.
@@ -1153,6 +1155,42 @@ export function checklist({ root, settingsPath, install }) {
         : `${resolved.method} -- hooks from ${hooksDir}`
     )
   );
+
+  // THE HOOKS RUN UNDER THE `node` ON PATH, which is the one running this
+  // check. Below the floor, hook calls have taken minutes each (node-floor.mjs).
+  const node = process.versions.node;
+  checks.push(
+    nodeBelowFloor(node)
+      ? bad(
+          'Node meets the supported floor',
+          `Node ${node} is below ${NODE_FLOOR}: hook calls can stall tool calls for minutes`,
+          `install Node ${NODE_FLOOR} or newer, then restart the client`
+        )
+      : ok('Node meets the supported floor', `Node ${node} (floor ${NODE_FLOOR})`)
+  );
+
+  // A HOOK THAT ENDS LATE STILL ENDS IN SUCCESS, so the lifecycle summary
+  // called hooks with a p90 of 84 s healthy. Judge the latency itself, and
+  // name the phase the slow runs spent their time in.
+  const latency = recentToolHookLatency();
+  if (latency.p90Ms !== null || latency.killed > 0) {
+    const p90 = latency.p90Ms === null ? 'n/a' : `${latency.p90Ms} ms`;
+    const detail =
+      `p90 ${p90} over the last ${latency.runs} tool-call hooks; ${latency.killed} killed by the host's timeout` +
+      (latency.slowestPhase
+        ? `; slow runs spent most time ${latency.slowestPhase.name} (median ${latency.slowestPhase.ms} ms)`
+        : '');
+    const slow = (latency.p90Ms !== null && latency.p90Ms > SLOW_P90_MS) || latency.killed > 1;
+    checks.push(
+      slow
+        ? warn(
+            'tool-call hooks are fast',
+            detail,
+            `upgrade Node if it is below ${NODE_FLOOR}; otherwise attach the output of \`npx token-optimizer-diagnostics\` to an issue`
+          )
+        : ok('tool-call hooks are fast', detail)
+    );
+  }
 
   const router = join(hooksDir, entries.preTool);
   const sessionStart = join(hooksDir, entries.sessionStart);

@@ -861,6 +861,9 @@ function installNote(note) {
  */
 export async function importForHook({ here, entryRel, event, module, env = process.env }) {
   globalThis.__tokenOptimizerHookStartedAt ??= Date.now();
+  // Where the time went (observability.mjs markHookPhase); written directly,
+  // as this module loads before observability.mjs.
+  globalThis.__tokenOptimizerPhases = {};
   const selfDir = dirname(fileURLToPath(here));
   const own = () => import(pathToFileURL(join(selfDir, ...module.split('/'))).href);
   let chosen = selfDir;
@@ -878,6 +881,7 @@ export async function importForHook({ here, entryRel, event, module, env = proce
   } catch {
     chosen = selfMayRun(choice?.sessionId ?? null, env) ? selfDir : null;
   }
+  globalThis.__tokenOptimizerPhases.resolved = Date.now() - globalThis.__tokenOptimizerHookStartedAt;
   if (chosen === null) return INERT_HOOK;
   if (chosen === selfDir) return own();
   try {
