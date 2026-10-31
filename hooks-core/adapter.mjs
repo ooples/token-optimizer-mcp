@@ -115,6 +115,7 @@ import { beginHookInvocation, noteHookOutput } from './observability.mjs';
 import { registerProject, registeredProjects } from './projects.mjs';
 import { runStopHarvest } from './stop-harvest.mjs';
 import { applyQuietEnv } from './quiet-env.mjs';
+import { resumeIfDue } from './migrate.mjs';
 import { serverCrashNotice } from './server-crash.mjs';
 import { compactToolResponse, outputCompactEnabled } from './output-compact.mjs';
 import { repeatResponse, repeatsEnabled } from './repeats.mjs';
@@ -1336,8 +1337,6 @@ async function runHook(clientName, event, invocation) {
   const features = featuresForArm();
 
   if (event === 'session-start') {
-    if (!features.routing && !features.retrieval && !features.harvest)
-      process.exit(0);
     // Some hook hosts invoke SessionStart without closing stdin. Waiting the
     // full pre-tool timeout would turn optional context into a five-second
     // startup tax; lifecycle payloads are tiny and arrive immediately when
@@ -1346,6 +1345,16 @@ async function runHook(clientName, event, invocation) {
     const raw = input.payload || {};
     invocation.bind(raw, null, input.bytes);
     if (input.status !== 'ok') invocation.noteInput(input.status, input.bytes);
+    const cwd = raw.cwd || raw.working_directory || process.cwd();
+    const root = projectRootFor(join(cwd, '__session__'), cwd);
+    // Finish a store migration a crash interrupted, or a refused one whose
+    // blockers may have cleared, before the store is used (#542). BEFORE the
+    // feature gate: a store left fenced must be recovered in every arm, the
+    // baseline included -- which then exits without saying so, because the
+    // baseline arm injects nothing.
+    const migrated = resumeIfDue(root || cwd);
+    if (!features.routing && !features.retrieval && !features.harvest)
+      process.exit(0);
     const toolEvidence = optimizerToolEvidence(raw);
     const sessionId = raw.session_id ?? raw.sessionId ?? raw.conversation_id;
     if (sessionId && toolEvidence.proven) {
@@ -1377,8 +1386,7 @@ async function runHook(clientName, event, invocation) {
     // the agent will call, through the env file Claude Code sources for every
     // later Bash call (quiet-env.mjs). A no-op for clients without one.
     applyQuietEnv();
-    const cwd = raw.cwd || raw.working_directory || process.cwd();
-    const root = projectRootFor(join(cwd, '__session__'), cwd);
+    if (migrated) blocks.push({ id: 'storage', volatility: 4, text: migrated });
     registerProject({ root, graphDir: wikiDir(root), client: clientName });
     if (features.retrieval) {
       try {

@@ -39,6 +39,7 @@ import {
   statSync,
 } from 'node:fs';
 import { rejected } from './store-write.mjs';
+import { spool, storeRelative, withWriteLease } from './maintenance.mjs';
 import { join } from 'node:path';
 import { invalidateChangedAnchors, invalidateOnWrite } from './staleness.mjs';
 import { canonicalPath, isFsSafePath, resolvableCandidates } from './paths.mjs';
@@ -432,17 +433,22 @@ export function queueInvalidation(dir, { path, before, after, at } = {}) {
       // No queue yet, which is the normal case.
     }
 
-    mkdirSync(dir, { recursive: true });
-    appendFileSync(
-      file,
-      `${JSON.stringify({
-        path: canonicalPath(path),
-        ...(diffable ? { before, after } : {}),
-        at: at ?? Date.now(),
-      })}\n`,
-      'utf8'
+    const record = {
+      path: canonicalPath(path),
+      ...(diffable ? { before, after } : {}),
+      at: at ?? Date.now(),
+    };
+    // UNDER A WRITE LEASE (#542); spooled while the store is in maintenance.
+    const lease = withWriteLease(
+      dir,
+      () => {
+        mkdirSync(dir, { recursive: true });
+        appendFileSync(file, `${JSON.stringify(record)}\n`, 'utf8');
+      },
+      undefined,
+      { queue: (state) => spool(dir, storeRelative(dir, file), [record], state).outcome !== 'rejected' }
     );
-    return true;
+    return lease.admitted || lease.value;
   } catch (error) {
     rejected({ store: dir, op: 'pending-append', file: queuePath(dir), error });
     return false;

@@ -35,6 +35,7 @@
  */
 
 import { readFileSync, writeFileSync, mkdirSync, statSync } from 'node:fs';
+import { withWriteLease } from './maintenance.mjs';
 import { join } from 'node:path';
 
 /** Episodes of a (shape, model) pair before its measurement outvotes the heuristic. */
@@ -473,17 +474,21 @@ export function cachedRoutingBriefing(
 
   const text = routingBriefing(outcomeTable(readEpisodes(transcriptPath)));
   try {
-    mkdirSync(dir, { recursive: true, mode: 0o700 });
-    writeFileSync(
-      memoPath,
-      JSON.stringify({
-        path: transcriptPath,
-        size: stat.size,
-        at: Date.now(),
-        text,
-      }),
-      { mode: 0o600 }
-    );
+    // UNDER A WRITE LEASE (#542): a cache, so in maintenance it is simply not
+    // written; the next session recomputes it.
+    withWriteLease(dir, () => {
+      mkdirSync(dir, { recursive: true, mode: 0o700 });
+      writeFileSync(
+        memoPath,
+        JSON.stringify({
+          path: transcriptPath,
+          size: stat.size,
+          at: Date.now(),
+          text,
+        }),
+        { mode: 0o600 }
+      );
+    });
   } catch {
     /* the memo is an optimisation; failing to write it costs latency, not correctness */
   }

@@ -7,6 +7,7 @@ import {
   statSync,
 } from 'node:fs';
 import { createHash } from 'node:crypto';
+import { projectStore } from './maintenance.mjs';
 import { join, resolve } from 'node:path';
 
 const MAX_INDEX_BYTES = 1_000_000;
@@ -29,7 +30,7 @@ function digest(value) {
 function indexRoot() {
   return process.env.TOKEN_OPTIMIZER_UCR_DIR
     ? resolve(process.env.TOKEN_OPTIMIZER_UCR_DIR)
-    : resolve(process.cwd(), '.token-optimizer', 'ucr');
+    : join(projectStore(process.cwd()), 'ucr');
 }
 
 export function loadActiveUcrGuards() {

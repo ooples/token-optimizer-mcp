@@ -1,3 +1,4 @@
+import { projectStore } from '../utils/project-store.js';
 import type { Express, Request, Response } from 'express';
 import { existsSync, readFileSync } from 'fs';
 import path from 'path';
@@ -15,7 +16,7 @@ async function runtime(): Promise<any> {
 function root(): string {
   return process.env.TOKEN_OPTIMIZER_UCR_DIR
     ? path.resolve(process.env.TOKEN_OPTIMIZER_UCR_DIR)
-    : path.join(process.cwd(), '.token-optimizer', 'ucr');
+    : path.join(projectStore(process.cwd()), 'ucr');
 }
 
 function releaseEvidence(ucr: any): any {

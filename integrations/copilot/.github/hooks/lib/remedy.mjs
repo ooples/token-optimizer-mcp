@@ -32,6 +32,8 @@
  */
 
 import { readFileSync, writeFileSync, existsSync, mkdirSync, chmodSync } from 'node:fs';
+import { withWriteLease } from './maintenance.mjs';
+import { rejected } from './store-write.mjs';
 import { join } from 'node:path';
 import { record, readMetrics } from './metrics.mjs';
 import { canonicalPath } from './paths.mjs';
@@ -59,8 +61,17 @@ export function activeRules(dir) {
 }
 
 function writeRules(dir, rules) {
-  ensureDir(dir);
-  writeFileSync(rulesPath(dir), `${JSON.stringify({ version: 1, rules }, null, 2)}\n`, { mode: 0o600 });
+  // UNDER A WRITE LEASE (#542). Rules are rewritten whole, so they are not
+  // spooled: in maintenance the write is refused, reported, and thrown to the
+  // caller exactly like any other failed write here.
+  const lease = withWriteLease(dir, () => {
+    ensureDir(dir);
+    writeFileSync(rulesPath(dir), `${JSON.stringify({ version: 1, rules }, null, 2)}\n`, { mode: 0o600 });
+  });
+  if (!lease.admitted) {
+    const outcome = rejected({ store: dir, op: 'rules-write', file: rulesPath(dir), reason: `store is ${lease.state.state}` });
+    throw Object.assign(new Error(`rules not written: ${outcome.reason}`), { code: 'ESTOREMAINT' });
+  }
 }
 
 function allRules(dir) {

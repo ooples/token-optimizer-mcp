@@ -33,6 +33,7 @@ import {
 } from './lib/capabilities.mjs';
 import { restorationPlan } from './lib/restore.mjs';
 import { applyQuietEnv } from './lib/quiet-env.mjs';
+import { resumeIfDue } from './lib/migrate.mjs';
 import { serverCrashNotice } from './lib/server-crash.mjs';
 import {
   relevantFindingIdsForContext,
@@ -238,6 +239,10 @@ try {
   // Falls back to `cwd` when there is no discoverable root, which is the
   // unrooted case the machine-level store already handles.
   const projectRoot = projectRootFor(join(cwd, '__session__'), cwd) || cwd;
+  // A store migration a crash interrupted, or one refused earlier whose
+  // blockers may have cleared, is finished here, before the store is used.
+  const migrated = resumeIfDue(projectRoot);
+  if (migrated) blocks.push({ id: 'storage', volatility: 4, text: migrated });
   const dir = wikiDir(projectRoot);
 
   // INDEX THE PROJECT BEFORE THE FIRST TURN.

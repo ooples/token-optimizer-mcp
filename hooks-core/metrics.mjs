@@ -28,6 +28,7 @@ import {
   closeSync,
 } from 'node:fs';
 import { rejected } from './store-write.mjs';
+import { spool, storeRelative, withWriteLease } from './maintenance.mjs';
 import { join } from 'node:path';
 import { createHash, randomBytes } from 'node:crypto';
 import { redact } from './redact.mjs';
@@ -212,16 +213,6 @@ function nextId() {
 
 export function record(dir, event) {
   try {
-    // Same restriction as the graph directory: metrics name real file paths
-    // from a private codebase.
-    const created = !existsSync(dir);
-    mkdirSync(dir, { recursive: true, mode: 0o700 });
-    try {
-      chmodSync(dir, 0o700);
-    } catch {
-      // Not POSIX, or not ours to chmod; the write still proceeds.
-    }
-    ignoreSelf(dir, { created });
     // The CALLER'S timestamp wins when it supplied one. Overwriting it made
     // `rereadWaste`'s ordering depend on write order rather than on `at`, so a
     // test that set explicit times was passing by luck.
@@ -247,12 +238,42 @@ export function record(dir, event) {
       at: event.at ?? Date.now(),
     };
     const line = JSON.stringify(complete) + '\n';
-    appendFileSync(metricsPath(dir), line);
-    // Balance-critical records go to their own log as well, so the windows on
-    // the firehose can never starve the measurement. Written SECOND: a torn
-    // write here costs a duplicate the reader dedupes, not a lost event.
-    if (BALANCE_KINDS.has(event.kind)) appendFileSync(balancePath(dir), line);
-    if (EVIDENCE_KINDS.has(event.kind)) appendFileSync(evidencePath(dir), line);
+    // UNDER A WRITE LEASE (#542). In maintenance the record is spooled for each
+    // log it belongs to and replayed after cutover; `id` is its dedupe key.
+    // Creating the directory is a write too: done before the lease, it made a
+    // draining store's old copy, or failed against the fence and lost the
+    // record instead of spooling it.
+    const files = [metricsPath(dir)];
+    if (BALANCE_KINDS.has(event.kind)) files.push(balancePath(dir));
+    if (EVIDENCE_KINDS.has(event.kind)) files.push(evidencePath(dir));
+    const lease = withWriteLease(
+      dir,
+      () => {
+        // Same restriction as the graph directory: metrics name real file
+        // paths from a private codebase.
+        const created = !existsSync(dir);
+        mkdirSync(dir, { recursive: true, mode: 0o700 });
+        try {
+          chmodSync(dir, 0o700);
+        } catch {
+          // Not POSIX, or not ours to chmod; the write still proceeds.
+        }
+        ignoreSelf(dir, { created });
+        // Balance-critical records go to their own log as well, so the windows
+        // on the firehose can never starve the measurement. Written AFTER the
+        // firehose: a torn write here costs a duplicate the reader dedupes, not
+        // a lost event.
+        for (const file of files) appendFileSync(file, line);
+      },
+      undefined,
+      {
+        queue: (state) =>
+          files.every(
+            (file) => spool(dir, storeRelative(dir, file), [{ ...complete, rid: id }], state).outcome !== 'rejected'
+          ),
+      }
+    );
+    if (!lease.admitted && !lease.value) return null;
     return complete;
   } catch (error) {
     // Metrics must never break a tool call -- and a lost record is reported,

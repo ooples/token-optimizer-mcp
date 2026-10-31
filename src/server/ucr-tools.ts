@@ -1,3 +1,4 @@
+import { projectStore } from '../utils/project-store.js';
 import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { mkdirSync, renameSync, writeFileSync } from 'fs';
@@ -13,7 +14,7 @@ async function runtime(): Promise<any> {
 function runtimeRoot(): string {
   return process.env.TOKEN_OPTIMIZER_UCR_DIR
     ? path.resolve(process.env.TOKEN_OPTIMIZER_UCR_DIR)
-    : path.join(process.cwd(), '.token-optimizer', 'ucr');
+    : path.join(projectStore(process.cwd()), 'ucr');
 }
 
 function writeActiveGuardIndex(ucr: any, events: any[]): void {

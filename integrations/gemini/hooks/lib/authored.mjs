@@ -35,6 +35,7 @@ import {
   existsSync,
 } from 'node:fs';
 import { rejected } from './store-write.mjs';
+import { projectStore, withWriteLease } from './maintenance.mjs';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { canonicalPath, isFsSafePath } from './paths.mjs';
@@ -52,8 +53,7 @@ const limit = () => {
   return Number.isFinite(raw) && raw > 0 ? raw : 262_144;
 };
 
-const storeDir = (projectRoot) =>
-  join(projectRoot, '.token-optimizer', 'authored');
+const storeDir = (projectRoot) => join(projectStore(projectRoot), 'authored');
 
 /** One file per authored path, named by a digest so no path escapes the store. */
 const recordPath = (projectRoot, filePath) =>
@@ -89,9 +89,6 @@ export function recordAuthoredContent(projectRoot, sessionId, filePath, content)
     if (!isFsSafePath(filePath)) return;
 
     const dir = storeDir(projectRoot);
-    const created = !existsSync(dir);
-    mkdirSync(dir, { recursive: true });
-    ignoreSelf(dir, { created });
 
     const record = JSON.stringify({
       v: 1,
@@ -112,8 +109,19 @@ export function recordAuthoredContent(projectRoot, sessionId, filePath, content)
 
     const target = recordPath(projectRoot, filePath);
     const tmp = `${target}.tmp-${process.pid}-${Date.now()}`;
-    writeFileSync(tmp, record, { mode: 0o600 });
-    renameSync(tmp, target);
+    // UNDER A WRITE LEASE (#542). A whole-file record is not spooled: in
+    // maintenance it is refused and reported, which costs one later re-read.
+    // Creating the directory is a write too, so it happens under the lease:
+    // before it, a draining store's old copy was recreated, or the fence threw.
+    const lease = withWriteLease(dir, () => {
+      const created = !existsSync(dir);
+      mkdirSync(dir, { recursive: true });
+      ignoreSelf(dir, { created });
+      writeFileSync(tmp, record, { mode: 0o600 });
+      renameSync(tmp, target);
+    });
+    if (!lease.admitted)
+      rejected({ store: projectRoot, op: 'authored-write', file: filePath, reason: `store is ${lease.state.state}` });
   } catch (error) {
     // The user's write landed; this record is an optimization -- but a lost
     // one is reported, not hidden (#542).
