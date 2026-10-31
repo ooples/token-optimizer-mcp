@@ -39,9 +39,11 @@ import {
   readFileSync,
   readdirSync,
   statSync,
+  renameSync,
   unlinkSync,
   writeFileSync,
 } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { homedir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
@@ -249,13 +251,82 @@ function newStoreDir(root, env) {
   const meta = join(controlDir(id, env), 'meta.json');
   try {
     if (!existsSync(meta)) {
+      // Writable first: where the record cannot be kept (a sandbox that may
+      // not write the home directory), every hook call would otherwise spawn
+      // git again, since the missing record is what triggers this.
+      mkdirSync(join(home(env), 'projects'), { recursive: true, mode: 0o700 });
+      const rootCommit = repositoryRootCommit(root);
+      // A REPOSITORY MOVED TO A NEW PATH keeps its graph. An in-repo store
+      // travelled with its directory; one keyed by path would not, so a store
+      // whose recorded root no longer exists, for the same repository (its
+      // first commit), is adopted here instead of starting empty. Only an
+      // orphan is adopted: a clone that still exists at its old path keeps its
+      // own store.
+      if (rootCommit && adoptOrphanedStore(id, root, rootCommit, env)) return dir;
       mkdirSync(controlDir(id, env), { recursive: true, mode: 0o700 });
-      writeFileSync(meta, JSON.stringify({ root: canonicalPath(root), storeId: id, createdAt: new Date().toISOString() }));
+      writeFileSync(
+        meta,
+        JSON.stringify({ root: canonicalPath(root), storeId: id, rootCommit, createdAt: new Date().toISOString() })
+      );
     }
   } catch {
     // The record names the project for dashboards; a store works without it.
   }
   return dir;
+}
+
+/** The repository's first commit, or null when it is not a git repository. */
+function repositoryRootCommit(root) {
+  try {
+    const out = execFileSync('git', ['rev-list', '--max-parents=0', 'HEAD'], {
+      cwd: root,
+      encoding: 'utf8',
+      timeout: 2000,
+      stdio: ['ignore', 'pipe', 'ignore'],
+      windowsHide: true,
+    });
+    // A repository with several roots (merged histories) is identified by the
+    // smallest, so every clone agrees on it.
+    const roots = out.split(/\s+/).filter((h) => /^[0-9a-f]{40,64}$/.test(h)).sort();
+    return roots[0] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** Move an orphaned store of the same repository to `id`. True when adopted. */
+function adoptOrphanedStore(id, root, rootCommit, env) {
+  const projects = join(home(env), 'projects');
+  let names = [];
+  try {
+    names = readdirSync(projects);
+  } catch {
+    return false;
+  }
+  for (const name of names) {
+    if (name === id) continue;
+    const metaPath = join(projects, name, 'meta.json');
+    let meta;
+    try {
+      meta = JSON.parse(readFileSync(metaPath, 'utf8'));
+    } catch {
+      continue;
+    }
+    if (meta.rootCommit !== rootCommit || !meta.root || existsSync(meta.root)) continue;
+    // A store in maintenance is never moved from under its migrator.
+    if (readState(name, env).state !== NORMAL) continue;
+    try {
+      renameSync(join(projects, name), controlDir(id, env));
+      writeFileSync(
+        join(controlDir(id, env), 'meta.json'),
+        JSON.stringify({ ...meta, root: canonicalPath(root), storeId: id, adoptedFrom: { storeId: name, root: meta.root } })
+      );
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  return false;
 }
 
 /** Where a project's store lives outside its repository. */

@@ -15,7 +15,7 @@
 import { afterEach, beforeEach, describe, expect, test } from '@jest/globals';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { tmpdir } from 'node:os';
 
@@ -114,6 +114,39 @@ describe('a plugin that already holds a store from an older release', () => {
     readThroughHook(ENTRIES.codex);
     readThroughHook(ENTRIES['claude code']);
     expect(fingerprint(plugin)).toEqual(settled);
+  });
+});
+
+describe('a repository moved to a new path keeps its graph', () => {
+  function gitRepo(dir) {
+    mkdirSync(dir, { recursive: true });
+    const git = (...args) => spawnSync('git', args, { cwd: dir, encoding: 'utf8' });
+    git('init', '-q');
+    writeFileSync(join(dir, 'a.ts'), 'export const a = 1;\n');
+    git('add', 'a.ts');
+    git('-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-qm', 'root');
+  }
+
+  test('the store follows the repository to its new path; a live clone keeps its own', async () => {
+    const { projectStore } = await import('../../hooks-core/maintenance.mjs');
+    const env = { TOKEN_OPTIMIZER_HOME: join(home, '.token-optimizer') };
+    const original = join(work, 'repos', 'project');
+    gitRepo(original);
+    const store = projectStore(original, env);
+    mkdirSync(join(store, 'wiki'), { recursive: true });
+    writeFileSync(join(store, 'wiki', 'graph.jsonl'), '{"t":"n","id":"file:remembered"}\n');
+
+    // A second clone of the same history that still exists keeps its own store.
+    const clone = join(work, 'repos', 'clone');
+    spawnSync('git', ['clone', '-q', original, clone], { encoding: 'utf8' });
+    expect(projectStore(clone, env)).not.toBe(store);
+
+    // The original moves.
+    const moved = join(work, 'elsewhere', 'project');
+    mkdirSync(join(work, 'elsewhere'), { recursive: true });
+    renameSync(original, moved);
+    const adopted = projectStore(moved, env);
+    expect(readFileSync(join(adopted, 'wiki', 'graph.jsonl'), 'utf8')).toContain('file:remembered');
   });
 });
 
