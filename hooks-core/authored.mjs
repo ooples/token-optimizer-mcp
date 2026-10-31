@@ -87,9 +87,6 @@ export function recordAuthoredContent(projectRoot, sessionId, filePath, content)
     if (!isFsSafePath(filePath)) return;
 
     const dir = storeDir(projectRoot);
-    const created = !existsSync(dir);
-    mkdirSync(dir, { recursive: true });
-    ignoreSelf(dir, { created });
 
     const record = JSON.stringify({
       v: 1,
@@ -112,7 +109,12 @@ export function recordAuthoredContent(projectRoot, sessionId, filePath, content)
     const tmp = `${target}.tmp-${process.pid}-${Date.now()}`;
     // UNDER A WRITE LEASE (#542). A whole-file record is not spooled: in
     // maintenance it is refused and reported, which costs one later re-read.
-    const lease = withWriteLease(storeDir(projectRoot), () => {
+    // Creating the directory is a write too, so it happens under the lease:
+    // before it, a draining store's old copy was recreated, or the fence threw.
+    const lease = withWriteLease(dir, () => {
+      const created = !existsSync(dir);
+      mkdirSync(dir, { recursive: true });
+      ignoreSelf(dir, { created });
       writeFileSync(tmp, record, { mode: 0o600 });
       renameSync(tmp, target);
     });

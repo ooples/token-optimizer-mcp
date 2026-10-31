@@ -439,14 +439,16 @@ export function queueInvalidation(dir, { path, before, after, at } = {}) {
       at: at ?? Date.now(),
     };
     // UNDER A WRITE LEASE (#542); spooled while the store is in maintenance.
-    const lease = withWriteLease(dir, () => {
-      mkdirSync(dir, { recursive: true });
-      appendFileSync(file, `${JSON.stringify(record)}\n`, 'utf8');
-    });
-    if (!lease.admitted) {
-      return spool(dir, storeRelative(dir, file), [record], lease.state).outcome !== 'rejected';
-    }
-    return true;
+    const lease = withWriteLease(
+      dir,
+      () => {
+        mkdirSync(dir, { recursive: true });
+        appendFileSync(file, `${JSON.stringify(record)}\n`, 'utf8');
+      },
+      undefined,
+      { queue: (state) => spool(dir, storeRelative(dir, file), [record], state).outcome !== 'rejected' }
+    );
+    return lease.admitted || lease.value;
   } catch (error) {
     rejected({ store: dir, op: 'pending-append', file: queuePath(dir), error });
     return false;

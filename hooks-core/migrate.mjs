@@ -56,6 +56,7 @@ import {
   READY,
   controlDir,
   liveLeases,
+  projectStore,
   readState,
   readTombstone,
   spoolDir,
@@ -323,21 +324,31 @@ function excludeFromGit(root) {
   }
 }
 
-/** Replay a store's spool into the moved store, skipping rids already present. */
-function replaySpool(id, dest, env) {
-  const dir = spoolDir(id, env);
-  if (!existsSync(dir)) return { replayed: 0, duplicates: 0 };
+/** A record's dedupe key: its `rid`, when that is a non-empty string. */
+const ridOf = (record) => (typeof record?.rid === 'string' && record.rid ? record.rid : null);
+
+/** Replay one spool directory into `dest`, skipping rids already present, then remove it. */
+function replaySpoolDir(dir, dest) {
   const seen = new Map();
   const ridsIn = (file) => {
     if (!seen.has(file)) {
       const rids = new Set();
+      let text = '';
       try {
-        for (const line of readFileSync(join(dest, file), 'utf8').split('\n')) {
-          const rid = /"rid":"([0-9a-f]+)"/.exec(line)?.[1];
-          if (rid) rids.add(rid);
-        }
+        text = readFileSync(join(dest, file), 'utf8');
       } catch {
         // No such file yet.
+      }
+      // PARSED, not pattern-matched: a metrics rid is `<base36>-<hex>`, which
+      // a hex-only pattern never saw, so every replay re-added every metric.
+      for (const line of text.split('\n')) {
+        if (!line.trim()) continue;
+        try {
+          const rid = ridOf(JSON.parse(line));
+          if (rid) rids.add(rid);
+        } catch {
+          // A torn last line carries no usable rid.
+        }
       }
       seen.set(file, rids);
     }
@@ -357,18 +368,65 @@ function replaySpool(id, dest, env) {
       const file = String(entry.file || '').replace(/\\/g, '/');
       if (!file || file.startsWith('..') || /^[a-z]:|^\//i.test(file)) continue;
       const rids = ridsIn(file);
-      if (entry.record?.rid && rids.has(entry.record.rid)) {
+      const rid = ridOf(entry.record);
+      if (rid && rids.has(rid)) {
         duplicates += 1;
         continue;
       }
       mkdirSync(dirname(join(dest, file)), { recursive: true, mode: 0o700 });
       appendFileSync(join(dest, file), `${JSON.stringify(entry.record)}\n`);
-      if (entry.record?.rid) rids.add(entry.record.rid);
+      if (rid) rids.add(rid);
       replayed += 1;
     }
   }
   rmSync(dir, { recursive: true, force: true });
   return { replayed, duplicates };
+}
+
+/**
+ * Hand a store's spool to `dest`, race-free. Call it only once the state is
+ * back to NORMAL, so no new write spools.
+ *
+ * A writer that saw maintenance spools UNDER its lease (`withWriteLease`'s
+ * `queue`), so once every lease held at the switch has cleared no spool append
+ * can follow. Only then is the spool detached, in one rename, and replayed: an
+ * append could otherwise land after the last read and sit in the spool for
+ * good. A detached spool a crash left behind is replayed as well; the rid
+ * dedupe makes a second pass harmless. A writer that outlives the wait spools
+ * into a fresh directory, which the next session start replays.
+ */
+function settleSpool(id, dest, env, timeoutMs = DRAIN_TIMEOUT_MS) {
+  const held = new Set(liveLeases(id, env, process.pid));
+  const deadline = Date.now() + timeoutMs;
+  while (held.size && liveLeases(id, env, process.pid).some((name) => held.has(name)) && Date.now() <= deadline) {
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 50);
+  }
+  const dir = spoolDir(id, env);
+  try {
+    renameSync(dir, `${dir}.replay-${Date.now()}-${process.pid}`);
+  } catch (error) {
+    // Nothing spooled is the common case. Anything else leaves the spool where
+    // it is, for the next session start, rather than reading it while live.
+    if (error?.code !== 'ENOENT') return { replayed: 0, duplicates: 0, spoolLeft: true };
+  }
+  let replayed = 0;
+  let duplicates = 0;
+  const parent = dirname(dir);
+  for (const name of existsSync(parent) ? readdirSync(parent).sort() : []) {
+    if (!name.startsWith(`${id}.replay-`)) continue;
+    const r = replaySpoolDir(join(parent, name), dest);
+    replayed += r.replayed;
+    duplicates += r.duplicates;
+  }
+  return { replayed, duplicates };
+}
+
+/** A spool, live or detached, that no maintenance is in progress to replay. */
+function spoolPending(id, env) {
+  const dir = spoolDir(id, env);
+  if (existsSync(dir)) return true;
+  const parent = dirname(dir);
+  return existsSync(parent) && readdirSync(parent).some((name) => name.startsWith(`${id}.replay-`));
 }
 
 /**
@@ -391,7 +449,16 @@ export function migrate(
 ) {
   root = canonicalPath(root);
   const source = join(root, '.token-optimizer');
-  if (readTombstone(root)) return { ok: true, report: { alreadyMoved: true, ...readTombstone(root) } };
+  const tomb = readTombstone(root);
+  if (tomb?.movedTo) return { ok: true, report: { alreadyMoved: true, ...tomb } };
+  // A FILE without `movedTo` is the fence of a migration that never finished:
+  // the store is aside, not moved, and only recovery knows which way to go.
+  if (tomb)
+    return {
+      ok: false,
+      state: readState(tomb.storeId ?? storeId(source), env).state,
+      blockers: [`an interrupted migration left its fence at ${source}; run \`token-optimizer-storage recover\``],
+    };
   if (!existsSync(source)) return { ok: false, state: NORMAL, blockers: ['no store at ' + source] };
   const id = storeId(source);
   const control = controlDir(id, env);
@@ -415,6 +482,15 @@ export function migrate(
     } catch (inner) {
       setState(id, { state: FAILED, step, reason: `${error?.message || error}; rollback: ${inner?.message || inner}`, staged }, env);
       return { ok: false, state: FAILED, blockers: [`${step}: ${error?.message || error}`, `rollback failed: ${inner?.message || inner}`] };
+    }
+    // What writers spooled while it drained belongs to the store they found,
+    // which the rollback has just put back. A short wait: a drain that timed
+    // out did so on a lease that is still held, and whatever outlives this
+    // wait is replayed at the next session start.
+    try {
+      settleSpool(id, source, env, Math.min(drainTimeoutMs, 1000));
+    } catch {
+      // Left for the next session start; the rollback itself succeeded.
     }
     return { ok: false, state: NORMAL, blockers: [`${step}: ${error?.message || error}`] };
   };
@@ -481,9 +557,15 @@ export function migrate(
   try {
     faultAt('publish');
     if (existsSync(dest)) throw new Error(`a store already exists at ${dest}`);
+    // Recorded BEFORE the rename: a crash between it and CUTOVER leaves a
+    // `dest` that recovery can then prove this migration made, and remove.
+    setState(id, { state: READY, step: 'publish', root, generation, staged }, env);
     renameSync(staging, dest);
     fsyncDir(dirname(dest));
-    atomicJson(join(control, 'meta.json'), { root, storeId: id, movedAt: now().toISOString() });
+    faultAt('renamed');
+    // The manifest is what gc checks the backup against: the moved store's
+    // files may legitimately change after the move, the backup's may not.
+    atomicJson(join(control, 'meta.json'), { root, storeId: id, movedAt: now().toISOString(), generation, manifest: hash });
     setState(id, { state: CUTOVER, step: 'publish', root, generation, staged }, env);
     faultAt('tombstone');
     atomicJson(source, { movedTo: dest, storeId: id, since: now().toISOString(), by: PROTOCOL_VERSION });
@@ -495,15 +577,16 @@ export function migrate(
     });
   }
 
-  // 6. Replay what upgraded writers spooled, keep the source as a backup.
-  faultAt('replay');
-  const replay = replaySpool(id, dest, env);
+  // 6. Keep the source as a backup, reopen the store, then replay what
+  // upgraded writers spooled. Reopening comes FIRST: see settleSpool.
   faultAt('backup');
   const backup = `${source}.migrated-${generation}`;
   renameSync(staged, backup);
   const excluded = excludeFromGit(root);
   rmSync(join(control, 'intent.json'), { force: true });
+  faultAt('replay');
   setState(id, { state: NORMAL, step: 'done', root, generation }, env);
+  const replay = settleSpool(id, dest, env);
   return {
     ok: true,
     report: { root, storeId: id, movedTo: dest, backup, files: Object.keys(hash).length, ...replay, gitExclude: excluded },
@@ -525,12 +608,20 @@ export function recover(root, { env = process.env } = {}) {
   const staged = state.staged || (state.generation && `${source}.migrating-${state.generation}`);
   const dest = movedStoreDir(id, env);
   if (state.state === CUTOVER || (tomb?.movedTo && existsSync(dest))) {
-    replaySpool(id, dest, env);
     if (staged && existsSync(staged)) renameSync(staged, `${source}.migrated-${state.generation}`);
     if (!tomb?.movedTo) atomicJson(source, { movedTo: dest, storeId: id, since: new Date().toISOString(), by: PROTOCOL_VERSION });
     excludeFromGit(root);
     setState(id, { state: NORMAL, step: 'done', root, generation: state.generation, recovered: true }, env);
+    settleSpool(id, dest, env);
     return { recovered: true, state: NORMAL, completed: true };
+  }
+  // KILLED INSIDE PUBLISH, between the rename and CUTOVER: `dest` is this
+  // migration's copy -- the step was recorded before the rename, and the
+  // staging directory it was renamed from is gone. Anything else at `dest`
+  // was not made here and is left alone.
+  const staging = state.generation && `${dest}.staging-${state.generation}`;
+  if (state.state === READY && state.step === 'publish' && staging && !existsSync(staging) && existsSync(dest)) {
+    rmSync(dest, { recursive: true, force: true });
   }
   if (staged && existsSync(staged)) {
     rmSync(source, { force: true });
@@ -540,6 +631,7 @@ export function recover(root, { env = process.env } = {}) {
     if (name.startsWith('store.staging-')) rmSync(join(dirname(dest), name), { recursive: true, force: true });
   }
   setState(id, { state: NORMAL, step: 'rolled-back', root, generation: state.generation, recovered: true }, env);
+  settleSpool(id, source, env);
   return { recovered: true, state: NORMAL, completed: false };
 }
 
@@ -549,18 +641,33 @@ export function gc(root, { env = process.env } = {}) {
   const tomb = readTombstone(root);
   if (!tomb?.movedTo) return { ok: false, reason: 'store has not been migrated' };
   const backups = readdirSync(root).filter((n) => n.startsWith('.token-optimizer.migrated-'));
+  let meta = {};
+  try {
+    meta = JSON.parse(readFileSync(join(controlDir(tomb.storeId, env), 'meta.json'), 'utf8'));
+  } catch {
+    // No manifest: every file is held to the moved store's contents instead.
+  }
   const removed = [];
   for (const name of backups) {
     const backup = join(root, name);
+    // The manifest proves what the copy received. A backup file still matching
+    // it was copied, so the moved store only has to still HAVE it: a rules or
+    // index file rewritten since the move is not data missing from the move.
+    const manifest = name === `.token-optimizer.migrated-${meta.generation}` && meta.manifest ? meta.manifest : {};
     const moved = treeHash(tomb.movedTo);
     const missing = Object.entries(treeHash(backup)).filter(([file, sum]) => {
-      // Append-only logs may have grown since: every original byte must still
-      // be there at the front. Anything else must match exactly.
       if (!moved[file]) return true;
       if (moved[file] === sum) return false;
-      const was = readFileSync(join(backup, file));
-      const now = readFileSync(join(tomb.movedTo, file));
-      return !(file.endsWith('.jsonl') && now.subarray(0, was.length).equals(was));
+      // Append-only logs may have grown since: every original byte must still
+      // be there at the front.
+      if (file.endsWith('.jsonl')) {
+        const was = readFileSync(join(backup, file));
+        const now = readFileSync(join(tomb.movedTo, file));
+        return !now.subarray(0, was.length).equals(was);
+      }
+      // Anything else changed: fine if the backup holds exactly what was
+      // copied; a backup that differs from the copy holds bytes the move lacks.
+      return manifest[file] !== sum;
     });
     if (missing.length) return { ok: false, reason: `moved store lacks ${missing.length} file(s) of ${name}`, missing: missing.map(([f]) => f) };
     rmSync(backup, { recursive: true, force: true });
@@ -612,6 +719,9 @@ export function resumeIfDue(root, { env = process.env, processes = tokenOptimize
         ? `token-optimizer finished moving this project's graph to ${movedStoreDir(id, env)} after an interrupted migration. Tell the user once.`
         : `token-optimizer rolled back an interrupted store migration; the graph is unchanged in ${source}. Tell the user once.`;
     }
+    // A spool no maintenance is replaying: a writer outlived the final wait, or
+    // the process died between reopening the store and replaying it.
+    if (state.state === NORMAL && spoolPending(id, env)) settleSpool(id, projectStore(root), env);
     if (tomb?.movedTo) return null;
     if (!existsSync(join(control, 'intent.json')) || state.state !== NORMAL) return null;
     const result = migrate(root, { env, processes });
@@ -666,10 +776,19 @@ export function restore(root, { env = process.env, processes = tokenOptimizerPro
     // THE ONE NON-ATOMIC STEP: a file cannot be renamed over a directory.
     // Recovery from `swap` with no marker present completes the rename.
     rmSync(marker, { force: true });
+    faultAt('tombstone-removed');
     renameSync(staging, marker);
   } catch (error) {
+    // A swap that removed the tombstone and then failed to rename would leave
+    // the moved store undiscoverable: put the tombstone back first.
+    if (!existsSync(marker)) atomicJson(marker, tomb);
     rmSync(staging, { recursive: true, force: true });
     setState(id, { state: NORMAL, previous: FAILED, direction: 'restore', reason: String(error?.message || error) }, env);
+    try {
+      settleSpool(id, moved, env, 1000);
+    } catch {
+      // Left for the next session start.
+    }
     return { ok: false, state: NORMAL, blockers: [`restore: ${error?.message || error}`] };
   }
   return finishRestore(root, id, generation, env);
@@ -678,10 +797,10 @@ export function restore(root, { env = process.env, processes = tokenOptimizerPro
 function finishRestore(root, id, generation, env) {
   const marker = join(root, '.token-optimizer');
   const moved = movedStoreDir(id, env);
-  const replay = replaySpool(id, marker, env);
   const kept = `${moved}.restored-${generation}`;
   if (existsSync(moved)) renameSync(moved, kept);
   setState(id, { state: NORMAL, direction: 'restore', step: 'done', root, generation }, env);
+  const replay = settleSpool(id, marker, env);
   return { ok: true, report: { root, restoredTo: marker, movedStoreKept: kept, ...replay } };
 }
 
@@ -707,5 +826,6 @@ function recoverRestore(root, id, state, env) {
   if (!existsSync(marker))
     atomicJson(marker, { movedTo: movedStoreDir(id, env), storeId: id, since: new Date().toISOString(), by: PROTOCOL_VERSION });
   setState(id, { state: NORMAL, direction: 'restore', step: 'rolled-back', root, recovered: true }, env);
+  settleSpool(id, movedStoreDir(id, env), env);
   return { recovered: true, state: NORMAL, completed: false };
 }

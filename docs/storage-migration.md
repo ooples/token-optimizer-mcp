@@ -23,7 +23,7 @@ A move goes ahead only when **both** of these hold:
 
    **If the process list can't be read completely, that counts as a blocker too.** This happens when permission is denied, or when running inside a container, which can't see processes in other containers that share the same files. Being unable to see a writer is not evidence that none exists.
 
-   To clear this blocker, close every Claude Code, Codex, Cursor or other client session that uses token-optimizer 7.7.x or older, or upgrade it to a release with write leases. Then run `status` again.
+   To clear this blocker, close every client session (Claude Code, Codex, Cursor or any other) whose process `status` lists as one "whose code takes no write leases", or upgrade it to a release whose code takes them. Then run `status` again.
 
 2. **The old location is fenced off.** The store directory is renamed aside, and a small *file* is put where the directory was. Any older process that later tries to write there fails with `ENOTDIR`, so it can't recreate the store behind your back. `migrate` confirms this with a test write that must fail before it copies anything.
 
@@ -50,7 +50,7 @@ No record that was written is lost or added twice. The test suite kills the proc
 
 - **The tombstone stays.** `<repo>/.token-optimizer` is now a small file saying where the store went. Up-to-date clients follow it, and older ones are kept out by it, so don't delete it while any client without write leases might still run on this machine. It also records the store's id, so if you move or rename the repository folder, it still finds its store.
 - **git doesn't see the tombstone or the backup.** `/.token-optimizer` and `/.token-optimizer.migrated-*` are added to this clone's own `.git/info/exclude`, which is never committed, so `git status` stays clean.
-- **The backup stays until you remove it.** `token-optimizer-storage gc` first checks that every file in the backup is also in the new store. Logs that have grown since the move are fine, as long as their original contents are still there at the start. If the check passes, it deletes the backup; if not, it refuses and lists what's missing.
+- **The backup stays until you remove it.** `token-optimizer-storage gc` first checks that every file in the backup is also in the new store. Logs that have grown since the move are fine, as long as their original contents are still there at the start. Other files that were rewritten since the move are fine too, as long as the backup still holds exactly what the move copied; a backup file that changed after the copy blocks `gc`, because the new store never received those bytes. If the check passes, it deletes the backup; if not, it refuses and lists what's missing.
 
 ## Rolling back
 

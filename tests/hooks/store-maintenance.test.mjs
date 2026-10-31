@@ -11,7 +11,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, 
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { pathToFileURL } from 'node:url';
-import { liveLeases, storeId, SPOOL_MAX_BYTES } from '../../hooks-core/maintenance.mjs';
+import { liveLeases, storeId, SPOOL_MAX_BYTES, withWriteLease } from '../../hooks-core/maintenance.mjs';
 
 const ROOT = process.cwd();
 const mod = (name) => pathToFileURL(join(ROOT, 'hooks-core', name)).href;
@@ -192,6 +192,25 @@ describe('every writer honours maintenance', () => {
     expect(JSON.parse(r.stdout).rules).toBe('ESTOREMAINT');
     expect(readFileSync(join(wiki, 'rules.json'), 'utf8')).toBe(rulesBefore);
     expect(existsSync(join(wiki, 'routing-brief.json'))).toBe(false);
+  });
+
+  test('a metrics record behind the fence is spooled, not lost to ENOTDIR', () => {
+    // The fence: a FILE where the store directory was. Creating the metrics
+    // directory before taking the lease threw here and dropped the record.
+    mkdirSync(join(work, 'repo'), { recursive: true });
+    writeFileSync(store, '{"state":"migrating"}');
+    setState({ state: 'ready' });
+    const { out } = runWith(`return metrics.record(${JSON.stringify(wiki)}, { kind: 'read' });`);
+    expect(out).toMatchObject({ kind: 'read', id: expect.any(String) });
+    expect(spooled().map((e) => e.record.rid)).toContain(out.id);
+  });
+
+  test('the spool append runs while the lease is still held', () => {
+    setState({ state: 'cutover' });
+    const env = { TOKEN_OPTIMIZER_HOME: home };
+    const lease = withWriteLease(wiki, () => 'written', env, { queue: () => liveLeases(id, env).length });
+    expect(lease).toMatchObject({ admitted: false, value: 1 });
+    expect(liveLeases(id, env)).toEqual([]);
   });
 
   test('the wiki and authored stores of one repository are one store', () => {
