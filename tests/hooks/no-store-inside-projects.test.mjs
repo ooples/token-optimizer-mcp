@@ -104,7 +104,7 @@ describe('a plugin that already holds a store from an older release', () => {
     const { resumeIfDue } = await import('../../hooks-core/migrate.mjs');
     const env = { TOKEN_OPTIMIZER_HOME: join(home, '.token-optimizer') };
 
-    const notice = resumeIfDue(plugin, { env, processes: () => ({ complete: true, found: [] }) });
+    const notice = resumeIfDue(plugin, { env, processes: () => ({ complete: true, found: [] }), background: false });
     expect(notice).toMatch(/moved this project's graph out of the repository/);
     // One change to the bundle, and only one: the store became a tombstone file.
     expect(readdirSync(plugin).filter((n) => n.startsWith('.token-optimizer'))).toEqual(['.token-optimizer']);

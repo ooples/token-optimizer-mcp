@@ -44,8 +44,9 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { createHash } from 'node:crypto';
-import { execFileSync } from 'node:child_process';
-import { dirname, isAbsolute, join, relative } from 'node:path';
+import { execFileSync, spawn } from 'node:child_process';
+import { dirname, isAbsolute, join, relative, resolve as resolvePath } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { hostname } from 'node:os';
 import { canonicalPath } from './paths.mjs';
 import {
@@ -719,6 +720,10 @@ export function recover(root, { env = process.env } = {}) {
  */
 function keepBackup(staged, id, generation, env) {
   const backup = join(controlDir(id, env), `backup-${generation}`);
+  // A HALF-COPIED BACKUP from an interrupted cross-volume copy would make every
+  // later rename fail and wedge recovery. The staged store is still the
+  // original, so the partial copy is discarded and made again.
+  if (existsSync(staged) && existsSync(backup)) rmSync(backup, { recursive: true, force: true });
   try {
     renameSync(staged, backup);
   } catch (error) {
@@ -810,7 +815,7 @@ function ownerAlive(owner) {
  * Returns a one-line notice for the session, or null. Costs one stat when there
  * is nothing to do; enumerates processes only when an intent is pending.
  */
-export function resumeIfDue(root, { env = process.env, processes = tokenOptimizerProcesses } = {}) {
+export function resumeIfDue(root, { env = process.env, processes = tokenOptimizerProcesses, background = true } = {}) {
   try {
     root = canonicalPath(root);
     const source = join(root, '.token-optimizer');
@@ -827,48 +832,144 @@ export function resumeIfDue(root, { env = process.env, processes = tokenOptimize
       inRepo = false;
     }
     if (!existsSync(control) && !inRepo) return null;
+
+    // What a background run finished since the last session start, said once.
+    const notice = takeNotice(control);
     const state = readState(id, env);
-    // FIRST, an interrupted move in either direction -- a restore leaves the
-    // tombstone in place until its last step, so this comes before the check
-    // that a moved store needs nothing.
-    if (state.state !== NORMAL && !ownerAlive(state.owner)) {
-      const done = recover(root, { env });
-      if (state.direction === 'restore')
-        return done.completed
-          ? `token-optimizer finished moving this project's graph back into ${source} after an interrupted restore. Tell the user once.`
-          : `token-optimizer rolled back an interrupted restore; the graph stays in ${movedStoreDir(id, env)}. Tell the user once.`;
-      return done.completed
-        ? `token-optimizer finished moving this project's graph to ${movedStoreDir(id, env)} after an interrupted migration. Tell the user once.`
-        : `token-optimizer rolled back an interrupted store migration; the graph is unchanged in ${source}. Tell the user once.`;
+    const recoverable = state.state !== NORMAL && !ownerAlive(state.owner);
+    const spooled = state.state === NORMAL && spoolPending(id, env);
+    const wanted = !tomb?.movedTo && inRepo && state.state === NORMAL && retryDue(control);
+    if (!recoverable && !spooled && !wanted) return notice;
+
+    // NOT IN THE HOOK (review of #546). A migration copies and hashes the
+    // whole store, and recovery may wait up to 30 s for writers' leases; the
+    // Codex hooks have 5 s. Killed by the hook timeout mid-copy, a migration was
+    // rolled back and retried hourly, for ever. The work runs in a detached
+    // process that outlives the hook, under the same claim as any migration.
+    if (background) {
+      launchBackground(root, env);
+      return notice;
     }
-    // A spool no maintenance is replaying: a writer outlived the final wait, or
-    // the process died between reopening the store and replaying it.
-    if (state.state === NORMAL && spoolPending(id, env)) settleSpool(id, projectStore(root), env);
-    if (tomb?.movedTo || !inRepo || state.state !== NORMAL) return null;
-    // A BLOCKED MIGRATION IS RETRIED AT MOST HOURLY. The offline check lists
-    // processes, about a second on Windows, and a long-lived older session can
-    // keep it blocked for days; every session start must not pay for that.
-    const intentPath = join(control, 'intent.json');
-    try {
-      const intent = JSON.parse(readFileSync(intentPath, 'utf8'));
-      if (Date.now() - Date.parse(intent.lastTry || intent.requested || 0) < RETRY_INTERVAL_MS) return null;
-    } catch {
-      // No intent yet: this session start is the first request.
-    }
-    const result = migrate(root, { env, processes });
-    if (!result.ok) {
-      try {
-        const intent = JSON.parse(readFileSync(intentPath, 'utf8'));
-        atomicJson(intentPath, { ...intent, lastTry: new Date().toISOString() });
-      } catch {
-        // migrate records the intent itself when it refuses; nothing to add.
-      }
-      return null;
-    }
-    return `token-optimizer moved this project's graph out of the repository, to ${result.report.movedTo}; the old store is kept as ${result.report.backup} until \`token-optimizer-storage gc\`. Tell the user once.`;
+    return runDue(root, { env, processes }) ?? notice;
   } catch {
     // Session start must never fail because of a migration.
     return null;
+  }
+}
+
+/** Is an automatic migration attempt due? At most hourly while it stays blocked. */
+function retryDue(control) {
+  try {
+    const intent = JSON.parse(readFileSync(join(control, 'intent.json'), 'utf8'));
+    return Date.now() - Date.parse(intent.lastTry || intent.requested || 0) >= RETRY_INTERVAL_MS;
+  } catch {
+    return true;
+  }
+}
+
+/** Record that an attempt was made now, so the next is an hour away. */
+function markTried(control, root) {
+  try {
+    let intent = { root };
+    try {
+      intent = JSON.parse(readFileSync(join(control, 'intent.json'), 'utf8'));
+    } catch {
+      // First attempt.
+    }
+    atomicJson(join(control, 'intent.json'), { ...intent, lastTry: new Date().toISOString() });
+  } catch {
+    // Without the mark the next session start simply tries again.
+  }
+}
+
+/** Leave a one-line notice for the next session start. */
+function leaveNotice(control, text) {
+  try {
+    atomicJson(join(control, 'notice.json'), { text, at: new Date().toISOString() });
+  } catch {
+    // The work is done either way; only the message is lost.
+  }
+}
+
+/** Read and remove the pending notice, if any. */
+function takeNotice(control) {
+  const path = join(control, 'notice.json');
+  try {
+    const { text } = JSON.parse(readFileSync(path, 'utf8'));
+    rmSync(path, { force: true });
+    return typeof text === 'string' ? text : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Do whatever is due for `root`, synchronously: recover an interrupted move,
+ * replay a stray spool, or attempt the automatic migration. Returns the notice
+ * for the user, or null. The background process runs this; tests call it
+ * directly with `background: false`.
+ */
+export function runDue(root, { env = process.env, processes = tokenOptimizerProcesses } = {}) {
+  root = canonicalPath(root);
+  const source = join(root, '.token-optimizer');
+  const tomb = readTombstone(root);
+  const id = tomb?.storeId ?? storeId(source);
+  const control = controlDir(id, env);
+  const state = readState(id, env);
+  let text = null;
+  if (state.state !== NORMAL && !ownerAlive(state.owner)) {
+    const done = recover(root, { env });
+    if (state.direction === 'restore')
+      text = done.completed
+        ? `token-optimizer finished moving this project's graph back into ${source} after an interrupted restore. Tell the user once.`
+        : `token-optimizer rolled back an interrupted restore; the graph stays in ${movedStoreDir(id, env)}. Tell the user once.`;
+    else
+      text = done.completed
+        ? `token-optimizer finished moving this project's graph to ${movedStoreDir(id, env)} after an interrupted migration. Tell the user once.`
+        : `token-optimizer rolled back an interrupted store migration; the graph is unchanged in ${source}. Tell the user once.`;
+  } else if (state.state === NORMAL && spoolPending(id, env)) {
+    // A spool no maintenance is replaying: a writer outlived the final wait,
+    // or the process died between reopening the store and replaying it.
+    settleSpool(id, projectStore(root), env);
+  } else if (!tomb?.movedTo && state.state === NORMAL && retryDue(control)) {
+    let inRepo = false;
+    try {
+      inRepo = statSync(source).isDirectory();
+    } catch {
+      inRepo = false;
+    }
+    if (inRepo) {
+      markTried(control, root);
+      const result = migrate(root, { env, processes });
+      if (result.ok && !result.report.alreadyMoved)
+        text = `token-optimizer moved this project's graph out of the repository, to ${result.report.movedTo}; the old store is kept as ${result.report.backup} until \`token-optimizer-storage gc\`. Tell the user once.`;
+    }
+  }
+  if (text) leaveNotice(control, text);
+  return text;
+}
+
+/** Start `runDue` for `root` in a detached process that outlives this hook. */
+function launchBackground(root, env) {
+  try {
+    const child = spawn(process.execPath, [fileURLToPath(import.meta.url), '--run-due', root], {
+      detached: true,
+      stdio: 'ignore',
+      windowsHide: true,
+      env: { ...process.env, ...env },
+    });
+    child.unref();
+  } catch {
+    // Not launched: the next session start tries again.
+  }
+}
+
+// `node migrate.mjs --run-due <root>`: the background half of resumeIfDue.
+if (process.argv[2] === '--run-due' && process.argv[3] && fileURLToPath(import.meta.url) === resolvePath(process.argv[1])) {
+  try {
+    runDue(process.argv[3]);
+  } catch {
+    // Nothing to report to: the next session start retries.
   }
 }
 

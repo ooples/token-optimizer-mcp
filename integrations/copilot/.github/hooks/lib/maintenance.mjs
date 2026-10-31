@@ -276,9 +276,12 @@ function newStoreDir(root, env) {
       // own store.
       if (rootCommit && adoptOrphanedStore(id, root, rootCommit, env)) return dir;
       mkdirSync(controlDir(id, env), { recursive: true, mode: 0o700 });
+      // EXCLUSIVE: two hooks starting on a new project at once must not have
+      // the second overwrite the first's record (and an adoption it recorded).
       writeFileSync(
         meta,
-        JSON.stringify({ root: canonicalPath(root), storeId: id, rootCommit, createdAt: new Date().toISOString() })
+        JSON.stringify({ root: canonicalPath(root), storeId: id, rootCommit, createdAt: new Date().toISOString() }),
+        { flag: 'wx' }
       );
     }
   } catch {
@@ -324,7 +327,12 @@ function adoptOrphanedStore(id, root, rootCommit, env) {
     } catch {
       continue;
     }
-    if (meta.rootCommit !== rootCommit || !meta.root || existsSync(meta.root)) continue;
+    // GONE, NOT UNREACHABLE. A repository on an unplugged drive or an
+    // unmounted share also "does not exist"; adopting its store would take it
+    // from that repository the next time the drive is back. Only a root whose
+    // parent directory is present and which itself is not, was moved or deleted.
+    if (meta.rootCommit !== rootCommit || !meta.root || existsSync(meta.root) || !existsSync(dirname(meta.root)))
+      continue;
     // A store in maintenance is never moved from under its migrator.
     if (readState(name, env).state !== NORMAL) continue;
     try {
@@ -346,7 +354,10 @@ export const movedStoreDir = (id, env = process.env) => join(controlDir(id, env)
 
 /** The project root a per-user store belongs to, from its record, or null. */
 export function storeProjectRoot(storeDir) {
-  const m = /^(.*)[\\/]store(?:[\\/].*)?$/.exec(String(storeDir || ''));
+  // The per-user layout exactly: `<home>/projects/<16 hex>/store[/...]`. A
+  // looser pattern took the LAST `store` segment, which a store's own
+  // subdirectories can contain.
+  const m = /^(.*[\\/]projects[\\/][0-9a-f]{16})[\\/]store(?:[\\/]|$)/.exec(String(storeDir || ''));
   if (!m) return null;
   try {
     return JSON.parse(readFileSync(join(m[1], 'meta.json'), 'utf8')).root ?? null;

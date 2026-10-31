@@ -246,7 +246,7 @@ describe('coordination', () => {
       join(spool, '9.jsonl'),
       `${JSON.stringify({ file: 'wiki/graph.jsonl', record: { t: 'n', id: 'file:straggler', rid: 'ffffffffffffffff' } })}\n`
     );
-    expect(resumeIfDue(repo, { env, processes: quiet })).toBeNull();
+    expect(resumeIfDue(repo, { env, processes: quiet, background: false })).toBeNull();
     expect(graphOf(report.movedTo).match(/file:straggler/g)).toHaveLength(1);
     expect(existsSync(spool)).toBe(false);
   });
@@ -347,10 +347,43 @@ describe('session start finishes what was left', () => {
   });
 
   test('an existing in-repo store is migrated at session start without being asked (#538)', () => {
-    const notice = resumeIfDue(repo, { env, processes: quiet });
+    const notice = resumeIfDue(repo, { env, processes: quiet, background: false });
     expect(notice).toMatch(/moved this project's graph out of the repository/);
     expect(readTombstone(repo)?.movedTo).toBeTruthy();
   });
+
+  test('session start only launches the work; it finishes in the background and is reported next time', async () => {
+    // A hook has seconds (Codex: 5). Session start must return at once and
+    // leave the copy to a detached process -- here with the real process list,
+    // so give it a repository nothing on this machine is writing to.
+    const started = Date.now();
+    expect(resumeIfDue(repo, { env, processes: quiet })).toBeNull();
+    expect(Date.now() - started).toBeLessThan(1500);
+    // The detached process finishes the move...
+    // ...or, when an older token-optimizer process really is running on this
+    // machine, refuses and records why. Either outcome proves the detached
+    // process ran; neither is reached if it never started.
+    const intent = join(work, 'home', 'projects', id, 'intent.json');
+    const refused = () => {
+      try {
+        return JSON.parse(readFileSync(intent, 'utf8')).blockers?.length > 0;
+      } catch {
+        return false;
+      }
+    };
+    const deadline = Date.now() + 60_000;
+    while (!readTombstone(repo)?.movedTo && !refused() && Date.now() < deadline)
+      await new Promise((r) => setTimeout(r, 200));
+    const moved = readTombstone(repo)?.movedTo;
+    if (!moved) {
+      expect(refused()).toBe(true);
+      expect(statSync(join(repo, '.token-optimizer')).isDirectory()).toBe(true);
+      return;
+    }
+    // The next session start says what happened, once.
+    expect(resumeIfDue(repo, { env, processes: quiet })).toMatch(/moved this project's graph out of the repository/);
+    expect(resumeIfDue(repo, { env, processes: quiet })).toBeNull();
+  }, 90_000);
 
   test('a blocked automatic migration is retried at most hourly', () => {
     let calls = 0;
@@ -358,8 +391,8 @@ describe('session start finishes what was left', () => {
       calls += 1;
       return legacy();
     };
-    expect(resumeIfDue(repo, { env, processes: counting })).toBeNull();
-    expect(resumeIfDue(repo, { env, processes: counting })).toBeNull();
+    expect(resumeIfDue(repo, { env, processes: counting, background: false })).toBeNull();
+    expect(resumeIfDue(repo, { env, processes: counting, background: false })).toBeNull();
     expect(calls).toBe(1);
     expect(statSync(join(repo, '.token-optimizer')).isDirectory()).toBe(true);
   });
@@ -367,14 +400,14 @@ describe('session start finishes what was left', () => {
   test('a refused migration completes once its blockers clear', () => {
     expect(migrate(repo, { env, processes: legacy }).ok).toBe(false);
     // Still blocked at the next session start: still nothing.
-    expect(resumeIfDue(repo, { env, processes: legacy })).toBeNull();
+    expect(resumeIfDue(repo, { env, processes: legacy, background: false })).toBeNull();
     expect(statSync(join(repo, '.token-optimizer')).isDirectory()).toBe(true);
     // The legacy session has ended, and an hour has passed since the last try.
     const intentPath = join(work, 'home', 'projects', id, 'intent.json');
     const intent = JSON.parse(readFileSync(intentPath, 'utf8'));
     const hourAgo = new Date(Date.now() - 61 * 60 * 1000).toISOString();
     writeFileSync(intentPath, JSON.stringify({ ...intent, requested: hourAgo, lastTry: hourAgo }));
-    const notice = resumeIfDue(repo, { env, processes: quiet });
+    const notice = resumeIfDue(repo, { env, processes: quiet, background: false });
     expect(notice).toMatch(/moved this project's graph out of the repository/);
     expect(readTombstone(repo)?.movedTo).toBeTruthy();
     expect(existsSync(join(work, 'home', 'projects', id, 'intent.json'))).toBe(false);
@@ -386,7 +419,7 @@ describe('session start finishes what was left', () => {
       join(work, 'home', 'projects', id, 'maintenance.json'),
       JSON.stringify({ state: 'draining', owner: { pid: 999999, host: hostname() } })
     );
-    expect(resumeIfDue(repo, { env, processes: quiet })).toMatch(/rolled back an interrupted store migration/);
+    expect(resumeIfDue(repo, { env, processes: quiet, background: false })).toMatch(/rolled back an interrupted store migration/);
     expect(readState(id, env).state).toBe('normal');
   });
 
@@ -396,7 +429,7 @@ describe('session start finishes what was left', () => {
       join(work, 'home', 'projects', id, 'maintenance.json'),
       JSON.stringify({ state: 'draining', owner: { pid: process.pid, host: hostname() } })
     );
-    expect(resumeIfDue(repo, { env, processes: quiet })).toBeNull();
+    expect(resumeIfDue(repo, { env, processes: quiet, background: false })).toBeNull();
     expect(readState(id, env).state).toBe('draining');
   });
 });
@@ -434,7 +467,7 @@ describe('restore: the same move in reverse', () => {
       { encoding: 'utf8', env: { ...process.env, ...env } }
     );
     expect(r.status).toBe(137);
-    expect(resumeIfDue(repo, { env, processes: quiet })).toMatch(/interrupted restore/);
+    expect(resumeIfDue(repo, { env, processes: quiet, background: false })).toMatch(/interrupted restore/);
     expect(readState(id, env).state).toBe('normal');
     // Either way, exactly one live store, holding the original record once.
     const tomb = readTombstone(repo);
