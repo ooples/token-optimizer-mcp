@@ -413,6 +413,9 @@ function emptyState() {
     toolCalls: 0,
     optimizerToolAbsentAt: {},
     optimizerToolOkAt: {},
+    // When the host last reported the optimizer server failed to connect; a
+    // reconnect revokes only the absences that failure caused.
+    optimizerServerFailedAt: 0,
     optimizerTools: [],
     optimizerToolsObservedAt: 0,
     // The harvest nudge the Stop hook held for the next turn (null when none).
@@ -549,6 +552,10 @@ export function loadState(sessionId, agent) {
         !Array.isArray(parsed.optimizerToolOkAt)
           ? parsed.optimizerToolOkAt
           : {},
+      optimizerServerFailedAt:
+        Number.isFinite(parsed.optimizerServerFailedAt) && parsed.optimizerServerFailedAt > 0
+          ? parsed.optimizerServerFailedAt
+          : 0,
       advised: Array.isArray(parsed.advised)
         ? parsed.advised.filter((f) => typeof f === 'string')
         : [],
@@ -668,6 +675,10 @@ export function saveState(sessionId, state, agent) {
       // processes each read, each increment, and last-writer would lose one. Monotonic beats
       // exact here -- undercounting delays a nudge, overcounting invents one.
       edits: Math.max(Number(current.edits) || 0, Number(state.edits) || 0),
+      optimizerServerFailedAt: Math.max(
+        Number(current.optimizerServerFailedAt) || 0,
+        Number(state.optimizerServerFailedAt) || 0
+      ),
       editedFiles: [
         ...new Set([
           ...(state.editedFiles || []),

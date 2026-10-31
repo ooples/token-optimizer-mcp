@@ -33,6 +33,7 @@ import {
 } from './lib/capabilities.mjs';
 import { restorationPlan } from './lib/restore.mjs';
 import { applyQuietEnv } from './lib/quiet-env.mjs';
+import { serverCrashNotice } from './lib/server-crash.mjs';
 import {
   relevantFindingIdsForContext,
   sessionContext,
@@ -213,6 +214,8 @@ const blocks = [
     text: policyText(true, toolEvidence.names, toolEvidence.proven),
   },
 ];
+const crashed = serverCrashNotice();
+if (crashed) blocks.push({ id: 'server-crash', volatility: 0, text: crashed });
 if (retired?.removed.length) {
   blocks.push({
     id: 'install',
