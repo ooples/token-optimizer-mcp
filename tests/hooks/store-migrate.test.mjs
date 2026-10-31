@@ -141,6 +141,13 @@ describe('the offline check', () => {
     ]);
   });
 
+  test('a crafted command line cannot stall the process scan (CodeQL)', () => {
+    const crafted = `1\tnode ${'-!\t-'.repeat(20000)} token-optimizer.mjs`;
+    const started = Date.now();
+    tokenOptimizerProcesses({ run: () => crafted, platform: 'win32' });
+    expect(Date.now() - started).toBeLessThan(2000);
+  });
+
   test('a process list that cannot be read is incomplete', () => {
     const r = tokenOptimizerProcesses({
       run: () => {
