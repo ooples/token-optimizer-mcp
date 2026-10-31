@@ -125,7 +125,10 @@ describe.each([
   });
 
   test('says nothing about Node when it meets the floor', () => {
-    expect(sessionStart(entry, '22.23.4')).not.toContain('below the supported');
+    const out = sessionStart(entry, '22.23.4');
+    // The session context is still delivered, just without the notice.
+    expect(out).toContain('Token optimization is active');
+    expect(out).not.toContain('below the supported');
   });
 });
 

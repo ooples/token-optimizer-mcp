@@ -208,9 +208,10 @@ describe.each([
   });
 
   test('says nothing while hooks are fast', () => {
-    expect(sessionStart(entry, logs({ runs: fast(100) }))).not.toContain(
-      'have been slow'
-    );
+    const out = sessionStart(entry, logs({ runs: fast(100) }));
+    // The session context is still delivered, just without the notice.
+    expect(out).toContain('Token optimization is active');
+    expect(out).not.toContain('have been slow');
   });
 
   test('leaves the cause to the Node floor notice when Node is below the floor', () => {
