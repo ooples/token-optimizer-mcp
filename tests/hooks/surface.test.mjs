@@ -334,11 +334,12 @@ describe('the wiring is real, not merely present', () => {
   const hook = (name) => readFileSync(join(process.cwd(), 'plugin', 'hooks', name), 'utf8');
 
   test('the PreToolUse router calls maybeSurface', () => {
-    expect(hook('pretooluse-router.mjs')).toMatch(/maybeSurface\(/);
+    // The entry is a thin runtime-switch shim; the router's code is in impl/.
+    expect(hook('impl/pretooluse-router.mjs')).toMatch(/maybeSurface\(/);
   });
 
   test('the PreCompact hook calls closeForecast', () => {
-    expect(hook('precompact-optimize.mjs')).toMatch(/closeForecast\(/);
+    expect(hook('impl/precompact-optimize.mjs')).toMatch(/closeForecast\(/);
   });
 
   test('the vendored copy of surface.mjs is in place for the plugin to import', () => {
