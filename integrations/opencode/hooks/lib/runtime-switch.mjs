@@ -447,14 +447,13 @@ function takeSessionLock(root, safe) {
   return null;
 }
 
-/** Signal 0 only checks the pid exists; EPERM means it does, under another user. */
-function isPidAlive(pid) {
-  if (!Number.isInteger(pid) || pid <= 0) return false;
+/** Signal 0 only checks the pid exists. Only ESRCH proves it is gone; any other answer is not proof. */
+function isPidGone(pid) {
   try {
     process.kill(pid, 0);
-    return true;
+    return false;
   } catch (error) {
-    return error?.code === 'EPERM';
+    return error?.code === 'ESRCH';
   }
 }
 
@@ -475,13 +474,15 @@ function takeOverStaleLock(path) {
   const owner = lockOwner(path);
   let judged;
   try {
-    judged = statSync(path);
+    judged = statSync(path, { bigint: true });
   } catch {
     return true; // Released meanwhile.
   }
-  const age = Date.now() - judged.mtimeMs;
-  const pid = Number(owner?.split('-')[0]);
-  const dead = owner !== null && pid !== process.pid && !isPidAlive(pid);
+  const age = Date.now() - Number(judged.mtimeMs);
+  // Only a complete token names an owner: a file read while its writer is
+  // still filling it is empty, and an empty or torn token proves nothing.
+  const pid = Number(/^(\d+)-\d+-[0-9a-f]+$/.exec(owner ?? '')?.[1]);
+  const dead = Number.isInteger(pid) && pid > 0 && pid !== process.pid && isPidGone(pid);
   if (!dead && age <= LOCK_STALE_MS) return false;
   const aside = `${path}.stale-${process.pid}-${Math.random().toString(16).slice(2)}`;
   try {
@@ -491,12 +492,21 @@ function takeOverStaleLock(path) {
   }
   let moved = null;
   try {
-    moved = statSync(aside);
+    moved = statSync(aside, { bigint: true });
   } catch {
     // Treated as a different lock below.
   }
-  // The owner alone cannot tell two unowned locks apart; the directory's identity can.
-  if (lockOwner(aside) !== owner || moved?.ino !== judged.ino || moved?.birthtimeMs !== judged.birthtimeMs) {
+  // The owner alone cannot tell two unowned locks apart; the directory's
+  // identity can. Birth time counts only when it is real: where the platform
+  // reports ctime in its place, the rename itself changes it. A rename within
+  // one directory leaves the moved directory's mtime alone.
+  const realBirth = judged.birthtimeNs !== 0n && judged.birthtimeNs !== judged.ctimeNs;
+  const sameLock =
+    moved !== null &&
+    moved.dev === judged.dev &&
+    moved.ino === judged.ino &&
+    (realBirth ? moved.birthtimeNs === judged.birthtimeNs : moved.mtimeNs === judged.mtimeNs);
+  if (lockOwner(aside) !== owner || !sameLock) {
     try {
       renameSync(aside, path);
     } catch {
@@ -504,13 +514,25 @@ function takeOverStaleLock(path) {
     }
     return false;
   }
-  rmSync(aside, { recursive: true, force: true });
+  try {
+    rmSync(aside, { recursive: true, force: true });
+  } catch {
+    // A scanner holds it (EBUSY, EPERM): the lock's own path is free all the same.
+  }
   return true;
 }
 
-/** Removes the lock only while it is still this hook's: a takeover may have replaced it. */
+/**
+ * Removes the lock only while it is still this hook's: a takeover may have
+ * replaced it. Never throws -- a release that failed must not turn a finished
+ * migration into an error; the lock left behind goes stale and is taken over.
+ */
 function releaseSessionLock({ path, token }) {
-  if (lockOwner(path) === token) rmSync(path, { recursive: true, force: true });
+  try {
+    if (lockOwner(path) === token) rmSync(path, { recursive: true, force: true });
+  } catch {
+    // As above.
+  }
 }
 
 /** A session's state files: `<session>.json` and its agents' `<session>-<12 hex>.json`. */

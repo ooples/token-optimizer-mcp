@@ -597,6 +597,18 @@ describe('a lock or call record left by a killed hook', () => {
     expect(readFileSync(join(lockOf(w), 'owner'), 'utf8')).toBe(`${process.ppid}-1-abc`);
   });
 
+  test('a recent lock whose owner file is still being written holds', async () => {
+    const w = world();
+    await pendingMigration(w);
+    mkdirSync(lockOf(w));
+    for (const torn of ['', '12', 'garbage']) {
+      writeFileSync(join(lockOf(w), 'owner'), torn);
+      expect((await call(w, 'pre-tool')).mode).not.toBe('current');
+      expect(existsSync(lockOf(w))).toBe(true);
+    }
+    expect(sessionRecord('sess-1', w.env).schema).toBe(STATE_SCHEMA);
+  });
+
   test('a resumed session start prunes call records whose post-tool never ran', async () => {
     const w = world();
     await call(w, 'session-start');
