@@ -965,8 +965,30 @@ export function toolSearchOutcomesFromTranscript(transcriptPath, options = {}) {
   return { missed: list(missed), loaded: list(loaded) };
 }
 
-/** A failed MCP server entry names this package's server. */
-const OPTIMIZER_SERVER = /token[-_]?optimizer/i;
+/**
+ * The names this package's server is registered under, EXACTLY. Every
+ * installer writes the key `token-optimizer`; the Claude Code plugin's server is
+ * `plugin:token-optimizer:token-optimizer`. A substring match let any server
+ * whose name merely contains the words -- `token-optimizer-proxy`, someone
+ * else's `my-token-optimizer` -- mark every optimizer tool absent (review).
+ */
+const OPTIMIZER_SERVERS = new Set(['token-optimizer', 'plugin:token-optimizer:token-optimizer']);
+
+/**
+ * The qualified tool-name prefixes those servers produce:
+ * `mcp__token-optimizer__smart_grep` and
+ * `mcp__plugin_token-optimizer_token-optimizer__smart_grep`. A reconnect is
+ * recognised only from these, so a foreign server announcing a tool that
+ * happens to share a name cannot restore an optimizer tool (review).
+ */
+const OPTIMIZER_TOOL_PREFIXES = ['mcp__token-optimizer__', 'mcp__plugin_token-optimizer_token-optimizer__'];
+
+const isOptimizerServer = (name) => OPTIMIZER_SERVERS.has(String(name || '').trim().toLowerCase());
+const ownToolName = (qualified) => {
+  const text = String(qualified || '');
+  const prefix = OPTIMIZER_TOOL_PREFIXES.find((p) => text.toLowerCase().startsWith(p));
+  return prefix ? optimizerToolName(text.slice(prefix.length)) : null;
+};
 
 /**
  * Whether the host reported THIS PACKAGE'S MCP SERVER as failed to connect.
@@ -1011,9 +1033,7 @@ export function serverFailuresFromTranscript(transcriptPath, options = {}) {
     const at = Date.parse(entry.timestamp || '') || 0;
     const failed =
       Array.isArray(delta.failedMcpServers) &&
-      delta.failedMcpServers.some((server) =>
-        OPTIMIZER_SERVER.test(String(server?.name || ''))
-      );
+      delta.failedMcpServers.some((server) => isOptimizerServer(server?.name));
     if (failed) {
       failedAt = Math.max(failedAt, at || 1);
       continue;
@@ -1022,7 +1042,7 @@ export function serverFailuresFromTranscript(transcriptPath, options = {}) {
       ...(Array.isArray(delta.addedNames) ? delta.addedNames : []),
       ...(Array.isArray(delta.readdedNames) ? delta.readdedNames : []),
     ]) {
-      const name = optimizerToolName(qualified);
+      const name = ownToolName(qualified);
       if (name) restored.set(name, Math.max(restored.get(name) || 0, at || 1));
     }
   }

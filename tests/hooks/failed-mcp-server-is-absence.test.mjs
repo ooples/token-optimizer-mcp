@@ -83,6 +83,27 @@ describe('serverFailuresFromTranscript', () => {
     expect(serverFailuresFromTranscript(path)).toEqual({ failed: [], restored: [] });
   });
 
+  test('the standalone server name counts too', () => {
+    const path = transcript([delta(T0, { failed: ['token-optimizer'] })]);
+    expect(serverFailuresFromTranscript(path).failed).toHaveLength(HOOK_MCP_TOOLS.length);
+  });
+
+  test.each(['token-optimizer-proxy', 'my-token-optimizer', 'plugin:other:token-optimizer'])(
+    'a foreign server whose name contains the words is not ours: %s',
+    (name) => {
+      const path = transcript([delta(T0, { failed: [name] })]);
+      expect(serverFailuresFromTranscript(path)).toEqual({ failed: [], restored: [] });
+    }
+  );
+
+  test('a foreign server announcing a same-named tool does not restore ours', () => {
+    const path = transcript([
+      delta(T0, { failed: [PLUGIN_SERVER] }),
+      delta(T1, { added: ['mcp__other-server__wiki_write', 'wiki_write'] }),
+    ]);
+    expect(serverFailuresFromTranscript(path).restored).toEqual([]);
+  });
+
   test('a server still pending is not a failure', () => {
     const path = transcript([delta(T0, { pending: [PLUGIN_SERVER] })]);
     expect(serverFailuresFromTranscript(path)).toEqual({ failed: [], restored: [] });
