@@ -24,9 +24,10 @@
  */
 
 import {
-  putNodeWithEdges, load, nodeId, sharedDir, isSharedDir, putNode, putEdge,
+  putNodeWithEdges, writeNodeWithEdges, load, nodeId, sharedDir, isSharedDir, putNode, putEdge,
   unrootedRoot, projectRootFor,
 } from './wiki.mjs';
+import { lastRejection } from './store-write.mjs';
 import { indexFile } from './staleness.mjs';
 import { symbolKey } from './symbols.mjs';
 import { canonicalPath } from './paths.mjs';
@@ -352,7 +353,7 @@ function physicalPath(path) {
   }
 }
 
-function resolveAnchor(dir, anchor, projectRoot) {
+function resolveAnchor(dir, anchor, projectRoot, storeFailures = null) {
   const [rawPath, symbol] = String(anchor).split('#');
   if (!rawPath) return null;
 
@@ -424,9 +425,18 @@ function resolveAnchor(dir, anchor, projectRoot) {
 
   // Indexing creates the file node and its symbols with hashes and spans, which
   // is what makes the claim checkable later.
+  const before = lastRejection();
   indexFile(dir, path);
 
-  return load(dir).nodes.has(target) ? target : null;
+  if (load(dir).nodes.has(target)) return target;
+  // A VALID ANCHOR THE STORE WOULD NOT TAKE (#542). The path passed every check
+  // above; if indexing it produced a new store rejection, the node is missing
+  // because the write was refused, not because the anchor is wrong.
+  const rejection = lastRejection();
+  if (storeFailures && rejection && rejection !== before) {
+    storeFailures.push({ anchor, reason: rejection.reason, code: rejection.code });
+  }
+  return null;
 }
 
 /**
@@ -684,11 +694,19 @@ export function writeHarvested(
   const evidenceIncomplete = evidenceTruncated(dir);
 
   const written = [];
+  const storeRejected = [];
+  const anchorRejections = [];
   for (const finding of findings) {
     const resolved = [];
     for (const anchor of finding.anchors || []) {
-      const target = resolveAnchor(dir, anchor, projectRoot);
+      const target = resolveAnchor(dir, anchor, projectRoot, anchorRejections);
       if (target && !resolved.includes(target)) resolved.push(target);
+    }
+    // Every valid anchor was refused by the store: that is the store's
+    // rejection, reported as one, not a finding with no anchors.
+    if (!resolved.length && anchorRejections.length) {
+      storeRejected.push({ key: null, ...anchorRejections[0] });
+      anchorRejections.length = 0;
     }
     // A claim about files that do not exist cannot be verified against
     // anything, so it is dropped rather than kept as unfalsifiable.
@@ -774,7 +792,7 @@ export function writeHarvested(
     // anchored to nothing, which can never be invalidated and is therefore
     // served as current forever -- the precise record the anchor discipline
     // above exists to refuse.
-    const id = putNodeWithEdges(
+    const outcome = writeNodeWithEdges(
       dir,
       {
         kind: 'finding',
@@ -820,9 +838,13 @@ export function writeHarvested(
       },
       edges
     );
-    // A failed write returns null. Reporting the key anyway would tell the
-    // caller a claim was stored that no later session can retrieve.
+    // A rejected write reports no key: that would tell the caller a claim was
+    // stored that no later session can retrieve. The rejection itself is kept
+    // on the result (#542), so a caller can say the STORE refused it rather
+    // than guessing a cause.
+    const id = outcome.outcome === 'rejected' ? null : outcome.id;
     if (id) written.push(key);
+    else storeRejected.push({ key, reason: outcome.reason, code: outcome.code });
 
     // AFTER the project write, and never instead of it. The project graph is the
     // record of what happened here; the shared tier is a copy for the lessons
@@ -842,5 +864,8 @@ export function writeHarvested(
     }
   }
 
+  // Non-enumerable, so every caller that treats the result as a plain list of
+  // keys -- spreads it, serialises it, compares it -- sees exactly what it did.
+  Object.defineProperty(written, 'storeRejected', { value: storeRejected, enumerable: false });
   return written;
 }

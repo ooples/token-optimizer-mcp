@@ -65,6 +65,16 @@ export function failureLogPath(env = process.env) {
 const FAILURE_LOG_MAX_BYTES = 1024 * 1024;
 
 const reported = new Set();
+let last = null;
+
+/**
+ * The most recent rejection in this process, or null. For a caller several
+ * layers above the write (wiki_write, through writeHarvested and indexFile)
+ * that needs the store's own reason rather than a guess.
+ */
+export function lastRejection() {
+  return last;
+}
 
 /**
  * A rejected outcome, reported.
@@ -78,6 +88,7 @@ export function rejected({ store, op, file, error, reason, quiet = false }) {
   const code = (error && typeof error === 'object' && error.code) || undefined;
   const why = reason || (error instanceof Error ? error.message : String(error ?? 'unknown'));
   const outcome = { outcome: REJECTED, reason: why, ...(code ? { code } : {}) };
+  last = { store, op, ...outcome };
   if (quiet) return outcome;
 
   const key = `${store}\u0000${op}\u0000${code ?? why}`;
