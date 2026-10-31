@@ -265,7 +265,7 @@
     "diff": "^8.0.2",
     "express": "^5.1.0",
     "express-rate-limit": "^8.5.2",
-    "glob": "^11.1.0",
+    "glob": "^14.0.2",
     "graphlib": "^2.1.8",
     "lru-cache": "^11.2.2",
     "tiktoken": "^1.0.22",
