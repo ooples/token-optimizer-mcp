@@ -236,6 +236,19 @@ export function projectStore(root, env = process.env) {
   const inRepo = join(root, '.token-optimizer');
   const tomb = readTombstone(root);
   if (tomb && typeof tomb.movedTo === 'string') return tomb.movedTo;
+  // MID-MIGRATION the store's path is a fence FILE. Readers are pointed at the
+  // staged copy, which holds exactly the store's data until the move publishes;
+  // writers never reach it, because every write takes a lease and the store is
+  // in maintenance, so they spool. Without this, a session starting while its
+  // store was being moved read nothing at all.
+  if (tomb && tomb.state === 'migrating' && typeof tomb.generation === 'string') {
+    const staged = `${inRepo}.migrating-${tomb.generation}`;
+    try {
+      if (statSync(staged).isDirectory()) return staged;
+    } catch {
+      // Published or rolled back meanwhile: the in-repo path, as below.
+    }
+  }
   // THE OPTIMIZER'S OWN DIRECTORIES keep their layout: the unrooted bucket is
   // `<home>/unrooted/.token-optimizer`, and redirecting it would move it to a
   // second place every reader of the unrooted graph would miss.

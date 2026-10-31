@@ -49,7 +49,7 @@ import { createHash } from 'node:crypto';
 import { execFileSync, spawn } from 'node:child_process';
 import { dirname, isAbsolute, join, relative, resolve as resolvePath } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { hostname } from 'node:os';
+import { hostname, tmpdir } from 'node:os';
 import { canonicalPath } from './paths.mjs';
 import {
   CUTOVER,
@@ -834,6 +834,11 @@ export function resumeIfDue(root, { env = process.env, processes = tokenOptimize
       inRepo = false;
     }
     if (!existsSync(control) && !inRepo) return null;
+    // A LOCATION THE USER CONFIGURED is theirs. With a store directory set by
+    // environment, the in-repo store is what they pointed at -- moving it would
+    // pull it out from under their configuration (and from under this very
+    // session, which reads it next).
+    if (inRepo && STORE_OVERRIDES.some((name) => env[name])) inRepo = false;
 
     // What a background run finished since the last session start, said once.
     const notice = takeNotice(control);
@@ -858,6 +863,9 @@ export function resumeIfDue(root, { env = process.env, processes = tokenOptimize
     return null;
   }
 }
+
+/** Environment settings that place a store where the user chose. */
+const STORE_OVERRIDES = ['TOKEN_OPTIMIZER_WIKI_DIR', 'TOKEN_OPTIMIZER_UCR_DIR'];
 
 /** Is an automatic migration attempt due? At most hourly while it stays blocked. */
 function retryDue(control) {
@@ -933,7 +941,7 @@ export function runDue(root, { env = process.env, processes = tokenOptimizerProc
     // A spool no maintenance is replaying: a writer outlived the final wait,
     // or the process died between reopening the store and replaying it.
     settleSpool(id, projectStore(root), env);
-  } else if (!tomb?.movedTo && state.state === NORMAL && retryDue(control)) {
+  } else if (!tomb?.movedTo && state.state === NORMAL && retryDue(control) && !STORE_OVERRIDES.some((name) => env[name])) {
     let inRepo = false;
     try {
       inRepo = statSync(source).isDirectory();
@@ -955,6 +963,10 @@ export function runDue(root, { env = process.env, processes = tokenOptimizerProc
 function launchBackground(root, env) {
   try {
     const child = spawn(process.execPath, [fileURLToPath(import.meta.url), '--run-due', root], {
+      // NOT THE PROJECT'S DIRECTORY. A process holds its working directory
+      // open, and on Windows that locks it: the user could not delete or
+      // rename their project while the background migration ran (EBUSY).
+      cwd: tmpdir(),
       detached: true,
       stdio: 'ignore',
       windowsHide: true,

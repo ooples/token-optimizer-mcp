@@ -385,6 +385,39 @@ describe('session start finishes what was left', () => {
     expect(resumeIfDue(repo, { env, processes: quiet })).toBeNull();
   }, 90_000);
 
+  test('the background process does not hold the project directory open', () => {
+    // On Windows a process locks its working directory: launched from the
+    // project, the background migration made the project impossible to delete
+    // or rename (EBUSY) while it ran. Deleting it at once must succeed.
+    const legacy = () => ({ complete: true, found: [{ pid: 4242, version: '7.7.1' }] });
+    resumeIfDue(repo, { env, processes: legacy });
+    expect(() => rmSync(repo, { recursive: true })).not.toThrow();
+  });
+
+  test('a store the user placed by environment is never moved automatically', () => {
+    const configured = { ...env, TOKEN_OPTIMIZER_WIKI_DIR: join(repo, '.token-optimizer', 'wiki') };
+    expect(resumeIfDue(repo, { env: configured, processes: quiet, background: false })).toBeNull();
+    expect(statSync(join(repo, '.token-optimizer')).isDirectory()).toBe(true);
+  });
+
+  test('mid-migration, readers are pointed at the staged copy, not the fence', async () => {
+    const { projectStore } = await import('../../hooks-core/maintenance.mjs');
+    let seen = null;
+    let graph = null;
+    migrate(repo, {
+      env,
+      processes: quiet,
+      faultAt: (at) => {
+        if (at !== 'copy') return;
+        // Read while the fence is up, as a session starting now would.
+        seen = projectStore(repo, env);
+        graph = readFileSync(join(seen, 'wiki', 'graph.jsonl'), 'utf8');
+      },
+    });
+    expect(seen).toMatch(/\.token-optimizer\.migrating-/);
+    expect(graph).toContain('file:a');
+  });
+
   test('a blocked automatic migration is retried at most hourly', () => {
     let calls = 0;
     const counting = () => {

@@ -318,17 +318,13 @@ describe('wiki_query', () => {
       // `indexBudget`, the project registry and the dashboards all key on the
       // graph directory, so two strings for one repository double-count it.
       expect(odd).not.toBe(canonicalRoot);
-      // ...and on Windows that difference reaches the KEY, because `wikiDir`
-      // joins and `path.join` does not touch a drive letter's case.
-      //
-      // STATED RATHER THAN ASSERTED EVERYWHERE: on a POSIX host there is no
-      // spelling of the same directory that survives `path.join` -- it collapses
-      // `.`, `..` and doubled separators, and a case-sensitive filesystem has no
-      // case variant that names the same directory. So the fork is demonstrated
-      // where the platform can produce one; the GUARANTEE below is asserted on
-      // every platform, and so is the end-to-end event placement further down.
-      if (process.platform === 'win32') expect(wikiDir(odd)).not.toBe(hookDir);
-      // Canonicalised, they are one key. This is the guarantee the fix adds.
+      // The difference no longer reaches the KEY: since #538 a project's store
+      // lives outside it, under an id hashed from the CANONICAL path (case-folded
+      // on Windows and macOS), so `wikiDir` itself sends both spellings to one
+      // graph. Before that, `wikiDir` joined the raw string and a lower-case
+      // drive letter forked the repository into two graphs on Windows.
+      expect(wikiDir(odd)).toBe(hookDir);
+      // And canonicalising first, as wiki_query does, agrees.
       expect(wikiDir(canonicalPath(odd))).toBe(hookDir);
 
       await wikiQuery({ operation: 'get', key: 'nothing', projectRoot: odd });
