@@ -58,7 +58,7 @@ export function outlineRead({ sessionId, filePath, offset, limit, state }) {
   // the record this module calls "shared" between a cat and a Read never was,
   // and a ranged shell read could not find the outline a Read had served.
   const target = join(outlineDir(), `${recordKey(sessionId || '', canonicalPath(filePath))}.outline.txt`);
-  const missed = join(outlineDir(), `${recordKey(sessionId || '', '')}.outline-missed`);
+  const missed = missedMarker(sessionId);
 
   if (offset != null || limit != null) {
     // A PAGED READ OF A FILE THIS SESSION WAS GIVEN AN OUTLINE OF says the
@@ -67,7 +67,7 @@ export function outlineRead({ sessionId, filePath, offset, limit, state }) {
     // followed by paged reads of the same file, usually covering all of it, so
     // the outlines saved 21k tokens and cost about 25 extra calls. Stopping at
     // the first such read keeps all but ~3 of those calls off.
-    if (existsSync(target)) {
+    if (missed && existsSync(target)) {
       try {
         writeFileSync(missed, '', { flag: 'a', mode: 0o600 });
       } catch {
@@ -76,7 +76,7 @@ export function outlineRead({ sessionId, filePath, offset, limit, state }) {
     }
     return null;
   }
-  if (existsSync(missed)) return null;
+  if (missed && existsSync(missed)) return null;
   const found = substitutionFor(filePath, {
     turnsSoFar: turnsSoFar(state),
     alreadyRead: existsSync(target),
@@ -116,31 +116,127 @@ const RANGED_READ =
  * record for is checked; the command itself is never changed.
  */
 function noteRangedShellRead({ sessionId, command, cwd }) {
-  if (typeof command !== 'string' || !RANGED_READ.test(command)) return;
-  const words = command
-    .split(/[\s|;&<>()]+/)
-    .map((w) => w.replace(/^['"]|['"]$/g, ''))
-    .filter((w) => w && !w.startsWith('-') && /[\\/.]/.test(w))
-    .slice(0, 24);
-  for (const word of words) {
-    let path;
+  const missed = missedMarker(sessionId);
+  if (!missed || typeof command !== 'string' || !RANGED_READ.test(command)) return;
+  for (const path of rangedReadOperands(command)) {
+    let canonical;
     try {
-      path = canonicalPath(word, cwd);
+      canonical = canonicalPath(path, cwd);
     } catch {
       continue;
     }
-    const target = join(outlineDir(), `${recordKey(sessionId || '', path)}.outline.txt`);
+    const target = join(outlineDir(), `${recordKey(sessionId, canonical)}.outline.txt`);
     if (!existsSync(target)) continue;
     try {
-      writeFileSync(join(outlineDir(), `${recordKey(sessionId || '', '')}.outline-missed`), '', {
-        flag: 'a',
-        mode: 0o600,
-      });
+      writeFileSync(missed, '', { flag: 'a', mode: 0o600 });
     } catch {
       // Nowhere to write: outlines simply continue.
     }
     return;
   }
+}
+
+// A program that prints a file, possibly only part of it.
+const READER = /^(cat|type|nl|head|tail|sed|awk|less|more|Get-Content|gc)$/i;
+// A stage that only narrows what an earlier stage printed.
+const NARROWER = /^(head|tail|sed|awk|nl|cut|Select-Object|select|cat)$/i;
+
+/** The words of one shell stage, with quotes removed (bash/PowerShell subset). */
+function words(stage) {
+  return (stage.match(/'[^']*'|"(?:\\.|[^"\\])*"|\S+/g) || []).map((w) =>
+    w.replace(/^'(.*)'$/s, '$1').replace(/^"(.*)"$/s, '$1')
+  );
+}
+
+/**
+ * The files a ranged read actually reads: the operands of the program that
+ * produces each pipeline's output, and only when every later stage merely
+ * narrows it. `echo a.ts | sed -n 1,20p b.ts` reads b.ts, not a.ts (review);
+ * an `sed`/`awk` script argument is not an operand.
+ */
+function rangedReadOperands(command) {
+  const out = [];
+  for (const statement of pipelines(command)) {
+    const stages = statement.map((stage) => words(stage.trim())).filter((w) => w.length);
+    if (!stages.length) continue;
+    // The producer is the LAST stage that names files of its own: a later
+    // `sed -n ... b.ts` ignores its stdin, so b.ts is what is printed.
+    let producer = -1;
+    for (let k = stages.length - 1; k >= 0; k--) {
+      if (READER.test(stages[k][0]) && fileOperands(stages[k]).length) {
+        producer = k;
+        break;
+      }
+    }
+    if (producer < 0) continue;
+    if (!stages.slice(producer + 1).every((w) => NARROWER.test(w[0]))) continue;
+    out.push(...fileOperands(stages[producer]));
+  }
+  return out.slice(0, 24);
+}
+
+/**
+ * Statements as lists of pipeline stages, split OUTSIDE quotes:
+ * `awk 'NR>=10 && NR<=90' a.ts` is one stage, not two statements.
+ */
+function pipelines(command) {
+  const statements = [];
+  let stages = [];
+  let current = '';
+  let quote = '';
+  const endStage = () => {
+    stages.push(current);
+    current = '';
+  };
+  const endStatement = () => {
+    endStage();
+    statements.push(stages);
+    stages = [];
+  };
+  for (let i = 0; i < command.length; i++) {
+    const c = command[i];
+    const next = command[i + 1];
+    if (quote) {
+      current += c;
+      if (c === quote) quote = '';
+    } else if (c === "'" || c === '"') {
+      quote = c;
+      current += c;
+    } else if (c === '\n' || c === ';') {
+      endStatement();
+    } else if ((c === '&' && next === '&') || (c === '|' && next === '|')) {
+      endStatement();
+      i++;
+    } else if (c === '|') {
+      endStage();
+    } else {
+      current += c;
+    }
+  }
+  endStatement();
+  return statements;
+}
+
+/** Path operands of one reader invocation: no flags, and not an sed/awk script. */
+function fileOperands(argv) {
+  const [program, ...rest] = argv;
+  let args = rest.filter((w) => !w.startsWith('-'));
+  if (/^(sed|awk)$/i.test(program)) args = args.slice(1);
+  return args.filter((w) => /[\\/.]/.test(w) && !/^[\d,$p;]+$/.test(w));
+}
+
+/**
+ * The marker that ends outlining for a session, or null when there is no real
+ * session to scope it to. Codex and Qwen can omit every session id, and the
+ * payload normaliser then assigns `default`: a marker under that name would be
+ * shared by every such session, so one session paging a file would switch
+ * outlines off for all of them (review). Without a real id, outlining stays
+ * as it was and no marker is kept.
+ */
+function missedMarker(sessionId) {
+  const id = typeof sessionId === 'string' ? sessionId.trim() : '';
+  if (!id || id === 'default') return null;
+  return join(outlineDir(), `${recordKey(id, '')}.outline-missed`);
 }
 
 /** What the model is told when its read is answered with an outline. */

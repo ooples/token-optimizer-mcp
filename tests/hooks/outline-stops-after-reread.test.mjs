@@ -87,6 +87,26 @@ describe('outlines stop once the session pages through an outlined file', () => 
     expect(outlineShell({ sessionId, command: `cat ${a}`, cwd: workspace, shell: 'posix', state })).toBeNull();
   });
 
+  test('only the file the ranged read reads counts, not every path in the command', () => {
+    // Review: `echo a.ts | sed -n '1,20p' b.ts` reads b.ts. a.ts was outlined,
+    // but nothing here pages through it.
+    const a = source('a.ts');
+    expect(read(a)).not.toBeNull();
+    const b = source('b.ts');
+    outlineShell({ sessionId, command: `echo ${a} | sed -n '1,20p' ${b}`, cwd: workspace, shell: 'posix', state });
+    expect(read(source('c.ts'))).not.toBeNull();
+  });
+
+  test.each(['default', '', undefined])('no real session id (%p) keeps no shared marker', (none) => {
+    const a = source('a.ts');
+    const r = (path, extra = {}) => outlineRead({ sessionId: none, filePath: path, state, ...extra });
+    r(a);
+    r(a, { offset: 1, limit: 200 });
+    outlineShell({ sessionId: none, command: `sed -n '1,200p' ${a}`, cwd: workspace, shell: 'posix', state });
+    // Another session without an id must still be outlined.
+    expect(r(source(`fresh-${randomUUID()}.ts`))).not.toBeNull();
+  });
+
   test('a ranged shell read of a file never outlined changes nothing', () => {
     const a = source('a.ts');
     outlineShell({ sessionId, command: `sed -n '1,200p' ${a}`, cwd: workspace, shell: 'posix', state });
