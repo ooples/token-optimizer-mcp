@@ -403,7 +403,17 @@ describe('native CLI hook integrations', () => {
         join(repoRoot, 'integrations/codex/plugin/hooks', entry),
         'utf8'
       );
-      expect(plugin).toBe(standalone);
+      // Identical except for `entryRel`, which tells the runtime switch where
+      // THIS entry lives inside an installed package: each copy must name its
+      // own directory, and nothing else may differ.
+      expect(plugin).toContain("entryRel: 'integrations/codex/plugin/hooks'");
+      expect(standalone).toContain("entryRel: 'integrations/codex/hooks'");
+      expect(
+        plugin.replaceAll(
+          "entryRel: 'integrations/codex/plugin/hooks'",
+          "entryRel: 'integrations/codex/hooks'"
+        )
+      ).toBe(standalone);
     }
   });
 

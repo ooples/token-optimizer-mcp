@@ -78,29 +78,30 @@ export const STATE_SCHEMA = 1;
  * to the state root (TOKEN_OPTIMIZER_STATE_DIR, else <tmp>/token-optimizer-hooks),
  * a project's wiki directory, ~/.token-optimizer, or the OS temp dir.
  */
-export const STATE_FORMATS = Object.freeze([
-  { owner: 'policy.mjs', where: 'state root: <session>[-<agent>].json', what: 'session state: seen, denied, injected, counters, advisories' },
-  { owner: 'agent-scope.mjs', where: 'state root: agent-scope/<tool_use_id>.json', what: 'which agent made a call' },
-  { owner: 'blackboard.mjs', where: 'state root: blackboard/<session>.jsonl', what: 'sibling agents\' read-only results' },
-  { owner: 'runtime-switch.mjs', where: 'state root: <session>.runtime.json, runtime-calls/, runtime-current.json', what: 'session runtime record, per-call version, pointer cache' },
-  { owner: 'authored.mjs', where: 'wiki dir', what: 'records of files the agent authored' },
-  { owner: 'compact-stage.mjs', where: 'temp dir', what: 'the previous output of a staged command' },
-  { owner: 'outline-rewrite.mjs', where: '<tmp>/token-optimizer-compact', what: 'outlines substituted for large reads' },
-  { owner: 'expand.mjs', where: 'wiki dir: artifacts/<digest>.txt', what: 'full outputs behind a compacted result' },
-  { owner: 'metrics.mjs', where: 'wiki dir: metrics.jsonl, balance.jsonl, evidence.jsonl', what: 'events, savings balance, evidence' },
-  { owner: 'wiki.mjs', where: 'wiki dir: graph.jsonl, graph.compact.json, snapshots.jsonl', what: 'knowledge graph and file snapshots' },
-  { owner: 'pending.mjs', where: 'wiki dir: pending queue', what: 'harvest work queued for a later turn' },
-  { owner: 'harvest.mjs', where: 'wiki dir', what: 'harvest markers and prompt files' },
-  { owner: 'transcript.mjs', where: 'wiki dir: transcripts/', what: 'archived turns' },
-  { owner: 'routing.mjs', where: 'wiki dir: routing-brief.json', what: 'routing brief' },
-  { owner: 'remedy.mjs', where: 'wiki dir: rules file', what: 'applied remedies' },
-  { owner: 'manifest.mjs', where: 'wiki dir: manifest', what: 'project manifest' },
-  { owner: 'projects.mjs', where: '~/.token-optimizer/projects.jsonl', what: 'known projects' },
-  { owner: 'observability.mjs', where: '~/.token-optimizer/logs/', what: 'hook event log (HOOK_LOG_SCHEMA_VERSION)' },
-  { owner: 'quiet-env.mjs', where: 'client env file', what: 'quiet defaults for shell tools' },
-  { owner: 'ignore-self.mjs', where: 'project ignore file', what: 'keeps our own directory out of searches' },
-  { owner: 'ucr-guard.mjs', where: 'wiki dir', what: 'active UCR guards (ucr.active-guards/1)' },
-]);
+/*
+ * STATE_FORMATS -- every format STATE_SCHEMA covers (owner | where | what):
+ *
+ *   policy.mjs | state root: <session>[-<agent>].json | session state: seen, denied, injected, counters, advisories
+ *   agent-scope.mjs | state root: agent-scope/<tool_use_id>.json | which agent made a call
+ *   runtime-switch.mjs | state root: <session>.runtime.json, runtime-calls/, runtime-current.json | session runtime record, per-call version, pointer cache
+ *   authored.mjs | wiki dir | records of files the agent authored
+ *   compact-stage.mjs | temp dir | the previous output of a staged command
+ *   outline-rewrite.mjs | <tmp>/token-optimizer-compact | outlines substituted for large reads
+ *   expand.mjs | wiki dir: artifacts/<digest>.txt | full outputs behind a compacted result
+ *   metrics.mjs | wiki dir: metrics.jsonl, balance.jsonl, evidence.jsonl | events, savings balance, evidence
+ *   wiki.mjs | wiki dir: graph.jsonl, graph.compact.json, snapshots.jsonl | knowledge graph and file snapshots
+ *   pending.mjs | wiki dir: pending queue | harvest work queued for a later turn
+ *   harvest.mjs | wiki dir | harvest markers and prompt files
+ *   transcript.mjs | wiki dir: transcripts/ | archived turns
+ *   routing.mjs | wiki dir: routing-brief.json | routing brief
+ *   remedy.mjs | wiki dir: rules file | applied remedies
+ *   manifest.mjs | wiki dir: manifest | project manifest
+ *   projects.mjs | ~/.token-optimizer/projects.jsonl | known projects
+ *   observability.mjs | ~/.token-optimizer/logs/ | hook event log (HOOK_LOG_SCHEMA_VERSION)
+ *   quiet-env.mjs | client env file | quiet defaults for shell tools
+ *   ignore-self.mjs | project ignore file | keeps our own directory out of searches
+ *   ucr-guard.mjs | wiki dir | active UCR guards (ucr.active-guards/1)
+ */
 
 /**
  * Migrations this runtime can apply to a session that started on an older
