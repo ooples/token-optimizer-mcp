@@ -38,6 +38,7 @@ import {
   rmSync,
   statSync,
 } from 'node:fs';
+import { rejected } from './store-write.mjs';
 import { join } from 'node:path';
 import { invalidateChangedAnchors, invalidateOnWrite } from './staleness.mjs';
 import { canonicalPath, isFsSafePath, resolvableCandidates } from './paths.mjs';
@@ -421,7 +422,12 @@ export function queueInvalidation(dir, { path, before, after, at } = {}) {
 
     const file = queuePath(dir);
     try {
-      if (statSync(file).size > MAX_QUEUE_BYTES) return false;
+      if (statSync(file).size > MAX_QUEUE_BYTES) {
+        // A FULL QUEUE DROPS THE INVALIDATION, and that is reported: the edit
+        // it described will not mark its findings stale (#542).
+        rejected({ store: dir, op: 'pending-append', file, reason: `queue over ${MAX_QUEUE_BYTES} bytes` });
+        return false;
+      }
     } catch {
       // No queue yet, which is the normal case.
     }
@@ -437,7 +443,8 @@ export function queueInvalidation(dir, { path, before, after, at } = {}) {
       'utf8'
     );
     return true;
-  } catch {
+  } catch (error) {
+    rejected({ store: dir, op: 'pending-append', file: queuePath(dir), error });
     return false;
   }
 }

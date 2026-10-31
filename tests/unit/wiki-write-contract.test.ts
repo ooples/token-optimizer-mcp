@@ -67,6 +67,67 @@ describe('active-model semantic finding contract', () => {
     expect(result.error).toMatch(/evidence is required/i);
   });
 
+  it('names a store that rejected the write, not the anchors (#542)', async () => {
+    // A FILE where the graph directory should be: every append fails ENOTDIR.
+    const blocker = join(workspace, 'blocker');
+    writeFileSync(blocker, 'fixture');
+    process.env.TOKEN_OPTIMIZER_WIKI_DIR = join(blocker, 'graph');
+    const result = await wikiWrite({
+      claim: 'The verifier requires the project runner.',
+      anchors: [anchor],
+      evidence: 'Ran the suite directly and it failed with a clear error.',
+      applicability: 'When running project verification.',
+      confidenceLabel: 'probable',
+      projectRoot: workspace,
+    } as never);
+    expect(result.success).toBe(false);
+    expect(result.written).toBe(0);
+    expect(result.error).toMatch(/store rejected the write/);
+    expect(result.error).not.toMatch(/no anchor resolved/);
+    expect(result.error).toMatch(/ENOTDIR/);
+    // Nothing reached the graph, but the anchor is fine: it is not reported
+    // as unresolved.
+    expect(result.unresolvedAnchors).toEqual([]);
+  });
+
+  it('a switched-off graph is named as such, not as a store failure', async () => {
+    process.env.TOKEN_OPTIMIZER_WIKI_DISABLED = '1';
+    try {
+      const result = await wikiWrite({
+        claim: 'The verifier requires the project runner.',
+        anchors: [anchor],
+        evidence: 'Ran the suite directly and it failed with a clear error.',
+        applicability: 'When running project verification.',
+        confidenceLabel: 'probable',
+        projectRoot: workspace,
+      } as never);
+      expect(result.success).toBe(false);
+      expect(result.error).toMatch(/graph is switched off/);
+    } finally {
+      delete process.env.TOKEN_OPTIMIZER_WIKI_DISABLED;
+    }
+  });
+
+  it('an anchor on disk but outside the project is an anchor problem, not the store', async () => {
+    const elsewhere = mkdtempSync(join(tmpdir(), 'wiki-write-outside-'));
+    try {
+      const outside = join(elsewhere, 'other.ts');
+      writeFileSync(outside, 'export const other = 1;\n');
+      const result = await wikiWrite({
+        claim: 'The verifier requires the project runner.',
+        anchors: [outside],
+        evidence: 'Ran the suite directly and it failed with a clear error.',
+        applicability: 'When running project verification.',
+        confidenceLabel: 'probable',
+        projectRoot: workspace,
+      } as never);
+      expect(result.success).toBe(false);
+      expect(result.error).toMatch(/no anchor resolved/);
+      expect(result.error).not.toMatch(/store rejected/);
+    } finally {
+      rmSync(elsewhere, { recursive: true, force: true });
+    }
+  });
 });
 
 /**

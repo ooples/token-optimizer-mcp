@@ -27,6 +27,7 @@ import {
   readSync,
   closeSync,
 } from 'node:fs';
+import { rejected } from './store-write.mjs';
 import { join } from 'node:path';
 import { createHash, randomBytes } from 'node:crypto';
 import { redact } from './redact.mjs';
@@ -253,8 +254,10 @@ export function record(dir, event) {
     if (BALANCE_KINDS.has(event.kind)) appendFileSync(balancePath(dir), line);
     if (EVIDENCE_KINDS.has(event.kind)) appendFileSync(evidencePath(dir), line);
     return complete;
-  } catch {
-    // Metrics must never break a tool call.
+  } catch (error) {
+    // Metrics must never break a tool call -- and a lost record is reported,
+    // not hidden behind the null (#542).
+    rejected({ store: dir, op: 'metrics-append', file: metricsPath(dir), error });
     return null;
   }
 }

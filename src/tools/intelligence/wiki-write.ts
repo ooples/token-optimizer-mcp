@@ -19,6 +19,31 @@
 
 import { loadHooksCore } from './hooks-core-loader.js';
 
+/**
+ * Why nothing was written, from what actually happened (#542).
+ *
+ * This said "no anchor resolved to a file on disk" for every empty result, and
+ * a first fix guessed "store rejected" whenever an anchor existed on disk --
+ * wrong both ways, since an anchor outside the project is refused before any
+ * write. The reason now comes from the write itself: `writeHarvested` carries
+ * the store's rejections, and only those are reported as the store's.
+ */
+function refusalReason(
+  storeRejected: Array<{ reason?: string; code?: string }>
+): string {
+  if (storeRejected.some((r) => r.reason === 'graph disabled')) {
+    return 'the graph is switched off (TOKEN_OPTIMIZER_WIKI_DISABLED), so nothing was stored';
+  }
+  if (storeRejected.length) {
+    const first = storeRejected[0];
+    return (
+      `the project store rejected the write (${first.code ? `${first.code}: ` : ''}${first.reason ?? 'unknown'}); ` +
+      'details are on stderr and in ~/.token-optimizer/write-failures.jsonl'
+    );
+  }
+  return 'no anchor resolved to a file in this project, so the finding was refused';
+}
+
 export interface WikiWriteOptions {
   /** The claim itself. What was concluded, in a sentence someone can act on. */
   claim: string;
@@ -202,7 +227,9 @@ export async function wikiWrite(
     const dir = wiki.wikiDir(project);
     projects.registerProject({ root: project, graphDir: dir, client: 'mcp' });
 
-    const keys: string[] = harvestWrite.writeHarvested(
+    const keys: string[] & {
+      storeRejected?: Array<{ reason?: string; code?: string }>;
+    } = harvestWrite.writeHarvested(
       dir,
       [
         {
@@ -254,14 +281,20 @@ export async function wikiWrite(
     // and counts as a success, so gating this on failure hid exactly the case
     // worth telling the caller about: the claim is narrower than they asked for,
     // and the misspelled file will never invalidate it.
+    const storeRejected = keys.storeRejected ?? [];
     const graph = wiki.load(dir);
-    const unresolvedAnchors = anchors.filter((a) => {
-      const [file, symbol] = a.split('#');
-      const id = symbol
-        ? wiki.nodeId('symbol', `${file}#${symbol}`)
-        : wiki.nodeId('file', wiki.canonicalKey('file', file));
-      return !graph.nodes.has(id);
-    });
+    // NOT REPORTED WHEN THE STORE REFUSED THE WRITE: nothing reached the graph,
+    // so every anchor would look unresolved, and a caller would go fixing paths
+    // that are fine. Anchor resolution and write status are separate answers.
+    const unresolvedAnchors = storeRejected.length
+      ? []
+      : anchors.filter((a) => {
+          const [file, symbol] = a.split('#');
+          const id = symbol
+            ? wiki.nodeId('symbol', `${file}#${symbol}`)
+            : wiki.nodeId('file', wiki.canonicalKey('file', file));
+          return !graph.nodes.has(id);
+        });
 
     if (keys.length) {
       // This is the marginal context used to persist the conclusion: the model
@@ -297,9 +330,8 @@ export async function wikiWrite(
       keys,
       unresolvedAnchors,
       project,
-      error: keys.length
-        ? undefined
-        : 'no anchor resolved to a file on disk, so the finding was refused',
+      ...(storeRejected.length ? { storeRejected: storeRejected.length } : {}),
+      error: keys.length ? undefined : refusalReason(storeRejected),
     };
   } catch (error) {
     return {
