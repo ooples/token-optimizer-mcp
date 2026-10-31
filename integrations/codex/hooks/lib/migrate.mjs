@@ -200,8 +200,34 @@ export function offlineBlockers(processes) {
 
 /** The script a node command line runs, or null. */
 function scriptPath(command) {
-  const m = /(?:^"[^"]+"|^\S+)\s+(?:--?\S+\s+)*("([^"]+\.(?:m?js|cjs))"|(\S+\.(?:m?js|cjs)))/i.exec(command.trim());
-  return m ? m[2] || m[3] : null;
+  // TOKENISED, NOT MATCHED. A single regex for "executable, flags, then the
+  // script" nested a repeated `\S+` group before another `\S+`, which
+  // backtracks exponentially on a crafted command line (CodeQL), and the
+  // process list is not trusted input.
+  const words = [];
+  const text = String(command).trim();
+  let i = 0;
+  while (i < text.length && words.length < 64) {
+    while (i < text.length && /\s/.test(text[i])) i++;
+    if (i >= text.length) break;
+    if (text[i] === '"') {
+      const end = text.indexOf('"', i + 1);
+      const stop = end === -1 ? text.length : end;
+      words.push(text.slice(i + 1, stop));
+      i = stop + 1;
+    } else {
+      let j = i;
+      while (j < text.length && !/\s/.test(text[j])) j++;
+      words.push(text.slice(i, j));
+      i = j;
+    }
+  }
+  // words[0] is node itself; the script is the first non-flag argument.
+  for (const word of words.slice(1)) {
+    if (word.startsWith('-')) continue;
+    return /\.(?:m?js|cjs)$/i.test(word) ? word : null;
+  }
+  return null;
 }
 
 /**
