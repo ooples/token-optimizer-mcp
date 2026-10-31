@@ -64,6 +64,38 @@ describe('folding and selection', () => {
     expect(isDenseLine('{"a": "' + 'x'.repeat(500) + '"}')).toBe(false);
     expect(foldOutput(minified).text.length).toBeLessThan(400);
   });
+
+  test('a compiler error with a long path is dense but stays whole', () => {
+    // Recorded shape: the path leaves almost no spaces, and the message -- the part
+    // the model needs -- sits in the middle that elision would cut.
+    const path = '/home/runner/work/AiDotNet.Tensors/AiDotNet.Tensors/tests/AiDotNet.Tensors.Tests/Engines/BlasManaged/';
+    const error =
+      `##[error]${path}GotoGemmRoutingTests.cs(94,50): error CS0117: 'BitConverter' does not contain a definition for 'SingleToInt32Bits' [${path}${'x'.repeat(120)}.csproj::TargetFramework=net471]`;
+    expect(isDenseLine(error)).toBe(true);
+    expect(foldOutput(error).text).toBe(error);
+    const huge = 'error:' + 'x'.repeat(5000);
+    expect(foldOutput(huge).text.length).toBeLessThan(400);
+  });
+
+  test('one MSBuild diagnostic per target framework is kept once, with a count', () => {
+    // Recorded shape: a multi-targeted test project prints every analyzer error
+    // once per framework, so 8 distinct errors arrive as 32 lines.
+    const at = (n) => `C:\\repo\\tests\\T.Tests\\UnitTests\\WorkLogTests.cs(${160 + n},26): error xUnit1031: Test methods should not use blocking task operations`;
+    const lines = [];
+    for (let n = 0; n < 8; n++)
+      for (const tf of ['net471', 'net8.0', 'net9.0', 'net10.0'])
+        lines.push(`${at(n)} [C:\\repo\\tests\\T.Tests\\T.Tests.csproj::TargetFramework=${tf}]`);
+    const { text, folded } = foldOutput(lines.join('\n'));
+    expect(folded).toBe(24);
+    for (let n = 0; n < 8; n++) {
+      expect(text).toContain(at(n));
+      expect(text.split(at(n)).length - 1).toBe(1);
+    }
+    expect(text).toContain('[+3 more: same diagnostic in other projects/target frameworks]');
+    // Different errors on the same line are not merged.
+    const two = [`${at(0)} [a.csproj]`, `${at(0).replace('xUnit1031', 'CS0117')} [a.csproj]`].join('\n');
+    expect(foldOutput(two).text).toBe(two);
+  });
 });
 
 describe('a read is judged by the stage that produces the output', () => {
@@ -92,6 +124,34 @@ describe('a read is judged by the stage that produces the output', () => {
       expect(isReadLikeCommand(command)).toBe(true);
   });
 
+  test('an issue or PR body is read like a file, also inside a loop', () => {
+    for (const command of [
+      'gh issue view 542 --json body,comments --jq .body',
+      'gh pr view 535 -R ooples/token-optimizer-mcp',
+      "for n in 538 542; do echo \"## $n\"; gh issue view $n --json body --jq .body; done",
+      'for n in 1 2; do gh pr view $n; done',
+    ])
+      expect(isReadLikeCommand(command)).toBe(true);
+    for (const command of ['gh pr list --state open', 'gh pr checks 535', 'gh run view 1 --log-failed'])
+      expect(isReadLikeCommand(command)).toBe(false);
+  });
+
+  test('a cat that writes a file, or reads a task log, is not a read', () => {
+    for (const command of [
+      "cat > probe.py <<'EOF'\nimport sys\nhead = sys.argv[1]\nEOF\npython probe.py",
+      'cat > out.txt <<EOF\ncat a.cs\nEOF\ndotnet test',
+      'cat src/a.ts > copy.ts; npm test',
+      'cat "C:/Temp/claude/x/tasks/b1.output"; gh pr list --state all -L 4',
+    ])
+      expect(isReadLikeCommand(command)).toBe(false);
+    for (const command of [
+      'cat src/a.ts 2>&1',
+      'cat src/a.ts 2>/dev/null | head -40',
+      "sed -n 's/a>b/c/p' src/a.ts",
+    ])
+      expect(isReadLikeCommand(command)).toBe(true);
+  });
+
   test('a multi-line command is judged by its last line, CRLF or LF, continuations joined', () => {
     for (const command of [
       'cd C:\\repo\nGet-Content src\\A.cs',
@@ -100,8 +160,10 @@ describe('a read is judged by the stage that produces the output', () => {
       'Get-Content src\\A.cs `\n  | Select-Object -Skip 10',
     ])
       expect(isReadLikeCommand(command)).toBe(true);
-    for (const command of ['cat a.ts\ndotnet test', 'cd /repo\r\ngrep -rn x src | head -50'])
+    for (const command of ['cat a.log\ndotnet test', 'cd /repo\r\ngrep -rn x src | head -50'])
       expect(isReadLikeCommand(command)).toBe(false);
+    // a.ts is in the output whatever runs after it: an edit may be built from it.
+    expect(isReadLikeCommand('cat a.ts\ndotnet test')).toBe(true);
   });
 
   test('a multi-line read keeps its exact text where a log would be folded', () => {
@@ -115,6 +177,67 @@ describe('a read is judged by the stage that produces the output', () => {
     expect(isReadLikeCommand('git show --stat abc123')).toBe(false);
     expect(isReadLikeCommand('git show abc123:src/a.ts')).toBe(true);
     expect(isReadLikeCommand('git cat-file -p HEAD:src/a.ts')).toBe(true);
+  });
+
+  test('an operator inside quotes does not split the command', () => {
+    // A quote-blind split made these the statement `NR<=60' src/a.cs` or
+    // `40,60p' src/a.cs`: not a read, so the file was folded like a log.
+    for (const command of [
+      "awk 'NR>=10 && NR<=60' src/a.cs",
+      "sed -n '1,20p;40,60p' src/a.cs",
+      "awk 'NR>=10 && NR<=60' src/a.cs | cat -n",
+      "cat 'notes; draft.md'",
+      'cd C:\\repo\ngit show "HEAD:src/a b.cs"',
+    ]) {
+      expect(isReadLikeCommand(command)).toBe(true);
+    }
+    expect(isShellSearchCommand("echo 'a | grep b'")).toBe(false);
+    expect(isBuildOrTestCommand("git commit -m 'fix; dotnet test passes'")).toBe(false);
+    const source = Array.from({ length: 300 }, (_, i) => `    var x${i} = Compute(${i});`).join('\n');
+    expect(compactText(source, { command: "awk 'NR>=1 && NR<=300' src/A.cs" })).toBeNull();
+  });
+
+  test('a file read anywhere in a compound command keeps the output exact', () => {
+    // Replayed corpus: 160 sub-24 KB reads were folded because only the last
+    // statement (a grep) or the last stage (a renumbering awk / cut) was judged.
+    for (const command of [
+      'cd C:/repo && cat src/a.cs; grep -n "Fact" tests/b.cs | head -40',
+      "sed -n 9990,10340p Plan.cs | cat -n | awk '{n=$1+9989; $1=\"\"; print n $0}' | cut -c1-200",
+      "awk '{printf \"%4d: %s\\n\", NR, $0}' a.cs | sed -n '505,660p;740,790p'",
+    ]) {
+      expect(isReadLikeCommand(command)).toBe(true);
+    }
+    // A read with lines REMOVED or reformatted is still the file's text: the
+    // recorded shapes, 32 of them folded before.
+    for (const command of [
+      'sed -n 52,340p src/Swin.cs | cat -n | grep -v "^\\s*[0-9]*\\s*///"',
+      'sed -n 869,1000p Plan.cs | grep -v "^\\s*$" | cut -c1-170 | head -120',
+      "sed -n 9700,9815p Plan.cs | cat -n | sed 's/^ *\\([0-9]*\\)\\t/\\1: /' | awk -F': ' '{printf \"%d: %s\\n\", $1+9699, $2}'",
+      'Get-Content t.mjs -TotalCount 140 | ForEach-Object -Begin {$i=1} -Process {"{0,4}: {1}" -f $i++, $_}',
+      'Get-Content a.cs | Select-String -NotMatch "^\\s*//"',
+    ]) {
+      expect(isReadLikeCommand(command)).toBe(true);
+    }
+    // A pattern awk or a positive grep filters like a search: not a read.
+    expect(isReadLikeCommand("cat a.cs | awk '/ERROR/'")).toBe(false);
+    expect(isReadLikeCommand('cat a.cs | grep -n Compute')).toBe(false);
+    expect(isReadLikeCommand('cat a.cs | grep -E "x|v"')).toBe(false);
+    expect(isReadLikeCommand('cat a.cs | Select-String Compute')).toBe(false);
+    // A log file is not an edit target: selected around its verdicts, not cut head-first.
+    const log = ciLog();
+    const out = compactText(log, { command: 'cat ci-logs/ledger.log' });
+    expect(out.text).toContain('test_round_up FAILED');
+    expect(out.text).toContain('1 failed, 2411 passed');
+    const source = Array.from({ length: 300 }, (_, i) => `src/b.cs:${i + 1}:    var x${i} = Compute(${i});`).join('\n');
+    expect(Buffer.byteLength(source)).toBeGreaterThan(OUTPUT_COMPACT_MIN_BYTES);
+    expect(
+      compactToolResponse({
+        tool: 'Bash',
+        input: { command: 'cat src/a.cs; grep -rn Compute src/b.cs' },
+        response: { stdout: source, stderr: '' },
+        dir: mkdtempSync(join(root, 'read-')),
+      })
+    ).toBeNull();
   });
 
   test('an 8 KB search piped into head is compacted; the same bytes from cat are not', () => {

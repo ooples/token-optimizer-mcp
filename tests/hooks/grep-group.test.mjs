@@ -50,6 +50,18 @@ describe('Grep results grouped by file', () => {
     expect(groupGrepByFile('a.ts:1:x')).toBeNull();
     expect(groupGrepByFile(Array.from({ length: 40 }, (_, i) => `f${i}.ts:1:${'z'.repeat(40)}`).join('\n'))).toBeNull();
   });
+
+  test('a timestamped CI log is not mistaken for search hits', () => {
+    // Recorded shape: `gh run view --log-failed | Select-String FAIL` -- the
+    // timestamp's hour reads as a path and its minutes as a line number.
+    const ciLog = Array.from(
+      { length: 30 },
+      (_, i) => `Test (Node 22)\tUNKNOWN STEP\t2026-10-16T13:${String(10 + i)}:14.9088817Z FAIL tests/bench/case-${i}.test.mjs`
+    ).join('\n');
+    expect(groupGrepByFile(ciLog)).toBeNull();
+    const plainClock = Array.from({ length: 30 }, (_, i) => `[run 12:${String(10 + i)}:05] step ${i} failed: ${'x'.repeat(30)}`).join('\n');
+    expect(groupGrepByFile(plainClock)).toBeNull();
+  });
 });
 
 // THE WIRING: the packaged PostToolUse hook, on a Claude Code Grep result.

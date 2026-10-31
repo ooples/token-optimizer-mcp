@@ -20,6 +20,12 @@
  * Usage:
  *   node bench/field/compaction-replay.mjs [--session <uuid>] [--since <ISO>] [--until <ISO>]
  *     [--root <dir>] [--json out.json] [--artifacts <dir>]
+ *     [--compactor <path/to/output-compact.mjs>] [--dump out.jsonl]
+ *
+ * --compactor replays through another tree's compactor (a master worktree, for
+ * the "before" column) without stashing this one. --dump writes one JSON line per
+ * replayed result -- its pattern, the raw text and the size after this compactor
+ * -- so a competitor (bench/field/headroom-replay.py) is scored on the same bytes.
  *
  * Prints one row per pattern (multi-agent-waste.mjs's classifier): results,
  * tokens as produced, tokens after this tree's compactor, and the share removed.
@@ -28,7 +34,8 @@ import { mkdtempSync, rmSync, writeFileSync, createReadStream } from 'node:fs';
 import { createInterface } from 'node:readline';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { compactToolResponse } from '../../hooks-core/output-compact.mjs';
+import { pathToFileURL } from 'node:url';
+import { compactToolResponse as treeCompactor } from '../../hooks-core/output-compact.mjs';
 import { classify, transcripts } from './multi-agent-waste.mjs';
 
 const args = process.argv.slice(2);
@@ -50,18 +57,39 @@ export function responseText(tool, response) {
 }
 
 /**
+ * Whether the hook compacted this response when it was recorded.
+ *
+ * THE NOTICE'S POSITION, NOT ITS TEXT. The compactor appends its notice as the
+ * last line of stdout (or Grep content), so only there does it mean anything:
+ * a recorded `cat hooks-core/output-compact.mjs` contains the same literal in
+ * the middle of the source, and was skipped as if already compacted.
+ */
+export function wasCompacted(tool, response) {
+  const endsInNotice = (text) => {
+    const last = String(text ?? '').trimEnd().split('\n').pop() ?? '';
+    return last.startsWith(MARK) && /; full (?:output|text): Read .+\]$/.test(last);
+  };
+  if (tool === 'Grep') return endsInNotice(response?.content);
+  // The compactor treats stdout and stderr separately and can compact either
+  // alone; a compacted stderr's original is gone just the same, so replaying it
+  // would score an already-cut text.
+  return endsInNotice(response?.stdout) || endsInNotice(response?.stderr);
+}
+
+/**
  * One recorded call through the compactor. Returns null for a call this harness
  * does not replay (another tool, or a response without the hook's shape).
  */
-export function replayCall({ tool, input, response, dir }) {
+export function replayCall({ tool, input, response, dir, compactToolResponse = treeCompactor }) {
   if (tool !== 'Bash' && tool !== 'PowerShell' && tool !== 'Grep') return null;
   if (tool === 'Grep' ? typeof response?.content !== 'string' : typeof response?.stdout !== 'string')
     return null;
   const before = responseText(tool, response);
-  if (before.includes(MARK)) return { before: before.length, after: before.length, recorded: true };
+  if (wasCompacted(tool, response))
+    return { before: before.length, after: before.length, recorded: true, text: before };
   const replaced = compactToolResponse({ tool, input, response, dir, sessionId: 'replay' });
   const after = replaced ? responseText(tool, replaced) : before;
-  return { before: before.length, after: after.length, recorded: false };
+  return { before: before.length, after: after.length, recorded: false, text: before, out: replaced ? after : null };
 }
 
 async function main() {
@@ -69,6 +97,12 @@ async function main() {
   // A live session keeps appending; a fixed --until is what makes two runs comparable.
   const until = opt('--until');
   const artifacts = opt('--artifacts') || mkdtempSync(join(tmpdir(), 'compaction-replay-'));
+  const compactor = opt('--compactor');
+  const compactToolResponse = compactor
+    ? (await import(pathToFileURL(compactor).href)).compactToolResponse
+    : treeCompactor;
+  const dumpPath = opt('--dump');
+  const dump = dumpPath ? [] : null;
   const rows = new Map();
   const bump = (pattern, r) => {
     const row = rows.get(pattern) || { pattern, n: 0, before: 0, after: 0, changed: 0, recorded: 0 };
@@ -103,10 +137,29 @@ async function main() {
           if (c.type !== 'tool_result') continue;
           const use = uses.get(c.tool_use_id);
           if (!use) continue;
-          const r = replayCall({ tool: use.name, input: use.input, response: o.toolUseResult, dir: artifacts });
+          const r = replayCall({
+            tool: use.name,
+            input: use.input,
+            response: o.toolUseResult,
+            dir: artifacts,
+            compactToolResponse,
+          });
           if (!r) continue;
-          bump(classify(use.name, use.input).pattern.split(':').slice(0, 2).join(':'), r);
+          const pattern = classify(use.name, use.input).pattern.split(':').slice(0, 2).join(':');
+          bump(pattern, r);
           bump('TOTAL', r);
+          if (dump)
+            dump.push(
+              JSON.stringify({
+                pattern,
+                tool: use.name,
+                command: typeof use.input.command === 'string' ? use.input.command : null,
+                recorded: r.recorded,
+                after: r.after,
+                text: r.text,
+                out: r.out ?? null,
+              })
+            );
         }
       }
     }
@@ -123,6 +176,7 @@ async function main() {
     );
   const out = opt('--json');
   if (out) writeFileSync(out, JSON.stringify(list, null, 2));
+  if (dump) writeFileSync(dumpPath, dump.join('\n') + '\n');
 }
 
 if (process.argv[1] && process.argv[1].replace(/\\/g, '/').endsWith('bench/field/compaction-replay.mjs'))

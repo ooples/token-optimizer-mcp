@@ -808,6 +808,34 @@ describe('a command that only STARTS by changing the shell', () => {
     ).not.toThrow();
   });
 
+  it('a comment with an apostrophe does not hide the cd after it', () => {
+    // The apostrophe in `API's` opened a quote that never closed, so the `cd`
+    // was read as part of the comment and wrapped inside the subshell, where
+    // it no longer moves the caller's working directory.
+    const original = "# Run the API's tests\ncd /tmp && echo ran";
+    const bounded = boundedRewrite(original);
+    expect(bounded).not.toBeNull();
+    expect(bounded.command.indexOf('cd /tmp')).toBeLessThan(bounded.command.indexOf('('));
+    expect(() =>
+      execFileSync(BASH, ['-n', '-c', bounded.command], { stdio: 'pipe' })
+    ).not.toThrow();
+    const bare = run(`${original}\npwd`).stdout.trim().split('\n').pop();
+    const after = run(`${bounded.command}\npwd`).stdout.trim().split('\n').pop();
+    expect(after).toBe(bare);
+  });
+
+  it.each([["cd /tmp # it's here\necho ran"], ['cd /tmp # note && echo ran']])(
+    'a trailing comment on the cd never breaks the command: %j',
+    (command) => {
+      const bounded = boundedRewrite(command);
+      if (bounded === null) return;
+      expect(() =>
+        execFileSync(BASH, ['-n', '-c', bounded.command], { stdio: 'pipe' })
+      ).not.toThrow();
+      expect(run(bounded.command).stdout).toContain('ran');
+    }
+  );
+
   it('leaves the working directory where the unbounded command would', () => {
     // The whole reason these were refused: this client's Bash tool persists the
     // cwd between calls, and a `cd` inside the subshell would not.
@@ -877,6 +905,8 @@ describe('commands whose point is to change the shell itself', () => {
   it.each([
     // An assignment ATTACHED to a command never outlived that command anyway.
     ['CI=1 npm test'],
+    // A `; cd` inside a quoted argument is data, not a statement.
+    ["npm test -- -t 'stops; cd away'"],
     // And the words must be matched as commands, not found anywhere: these two
     // contain `cd` and `export` and mutate nothing.
     ['make cdrom'],
