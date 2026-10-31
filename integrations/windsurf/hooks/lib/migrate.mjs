@@ -47,7 +47,7 @@ import {
 } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import { dirname, join, relative } from 'node:path';
+import { dirname, isAbsolute, join, relative } from 'node:path';
 import { hostname } from 'node:os';
 import { canonicalPath } from './paths.mjs';
 import {
@@ -115,19 +115,17 @@ function setState(id, record, env) {
   });
 }
 
-/** Compare dotted versions; a missing part counts as 0. */
-export function olderThan(version, floor) {
-  const a = String(version).split('.').map((n) => Number.parseInt(n, 10) || 0);
-  const b = String(floor).split('.').map((n) => Number.parseInt(n, 10) || 0);
-  for (let i = 0; i < 3; i++) if ((a[i] || 0) !== (b[i] || 0)) return (a[i] || 0) < (b[i] || 0);
-  return false;
-}
 
 /**
  * Every running process whose command line names token-optimizer, with the
  * version its path shows, and whether the list could be read completely.
  */
-export function tokenOptimizerProcesses({ run = execFileSync, platform = process.platform } = {}) {
+/** Every process listing goes through here, so no listing ever opens a console window. */
+function listProcesses(command, args, options) {
+  return execFileSync(command, args, { ...options, windowsHide: true });
+}
+
+export function tokenOptimizerProcesses({ run = listProcesses, platform = process.platform } = {}) {
   let lines;
   try {
     if (platform === 'win32') {
@@ -140,7 +138,7 @@ export function tokenOptimizerProcesses({ run = execFileSync, platform = process
             '-Command',
             'Get-CimInstance Win32_Process | ForEach-Object { "$($_.ProcessId)`t$($_.CommandLine)" }',
           ],
-          { encoding: 'utf8', timeout: 20_000, windowsHide: true, maxBuffer: 64 * 1024 * 1024 }
+          { encoding: 'utf8', timeout: 20_000, maxBuffer: 64 * 1024 * 1024 }
         )
       ).split(/\r?\n/);
     } else {
@@ -243,7 +241,10 @@ function scriptPath(command) {
  * found or read counts as legacy -- inability to tell is not an all-clear.
  */
 export function takesWriteLeases(script) {
-  if (!script) return false;
+  // ABSOLUTE ONLY. A relative path -- or a Windows path read on POSIX, where
+  // `C:/x` is relative -- resolves against the current directory, and the walk
+  // up from there finds whatever maintenance.mjs sits beside the caller.
+  if (!script || !isAbsolute(script)) return false;
   let dir = dirname(script);
   for (let i = 0; i < 8 && dir; i++) {
     for (const candidate of [join(dir, 'maintenance.mjs'), join(dir, 'lib', 'maintenance.mjs'), join(dir, 'hooks-core', 'maintenance.mjs')]) {
