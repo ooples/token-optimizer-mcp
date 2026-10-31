@@ -590,6 +590,11 @@ export async function resolveHook({
       } catch {
         // No record: pre-tool did not run for this call, or did not switch.
       }
+      // A call whose pre-tool ran on THIS copy finishes on it: the running copy
+      // cannot be missing, so its files are not re-checked (they need not be
+      // laid out like an installed runtime). Any other recorded runtime must
+      // still be complete on disk.
+      if (recorded?.mode === 'self') return { ...self, note: null, sessionId };
       if (recorded?.hooksDir && runtimeFiles(recorded.hooksDir, entryFile).every((f) => existsSync(f)))
         return { ...self, ...recorded, note: null, sessionId };
     }
