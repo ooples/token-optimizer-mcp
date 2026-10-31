@@ -1005,7 +1005,9 @@ export function isNativeCrash(code, signal) {
   const unsigned = code >>> 0;
   // NTSTATUS errors only: 0xC0000000-0xCFFFFFFF. `process.exit(-1)` arrives as
   // 0xFFFFFFFF and is an ordinary exit, not a crash.
-  const ntstatus = unsigned >= 0xc0000000 && unsigned <= 0xcfffffff;
+  // ...except 0xC000013A, STATUS_CONTROL_C_EXIT: a console process ended by
+  // Ctrl+C, which is the user stopping it, not a crash (review).
+  const ntstatus = unsigned >= 0xc0000000 && unsigned <= 0xcfffffff && unsigned !== 0xc000013a;
   return ntstatus || code === 134 || code === 135 || code === 132 || code === 139;
 }
 
@@ -1048,6 +1050,26 @@ function noteServerExit(code, signal, served) {
   }
 }
 
+// How long a server must stay up before an earlier crash record is cleared.
+// The recorded crashes happened within about a second of launch, and the
+// SessionStart that reads the record runs at that same moment -- clearing at
+// spawn would erase the notice for exactly the session it was written for.
+export const CRASH_CLEAR_AFTER_MS = 15_000;
+
+/**
+ * A server that survives startup has replaced the one that crashed, so the
+ * crash record is cleared (review: a long-lived replacement never reaches the
+ * clean-exit branch). A later native crash writes a new record.
+ */
+export function clearCrashWhenSurvived(child, { after = CRASH_CLEAR_AFTER_MS, file = SERVER_CRASH_FILE } = {}) {
+  const timer = setTimeout(() => {
+    if (child.exitCode === null && child.signalCode === null) safeRm(file);
+  }, after);
+  timer.unref?.();
+  child.once?.('exit', () => clearTimeout(timer));
+  return timer;
+}
+
 /** Spawn the server, forwarding stdio, signals, and exit code. */
 function runServer(entry) {
   // Announce which runtime this shim is serving BEFORE the server starts, so a
@@ -1065,6 +1087,7 @@ function runServer(entry) {
     stdio: 'inherit',
     env: process.env,
   });
+  clearCrashWhenSurvived(child);
   startPeriodicRefresh();
   const forward = (sig) => {
     try {

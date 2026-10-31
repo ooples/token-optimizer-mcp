@@ -23,6 +23,7 @@ const PACKAGE_DIR = join('node_modules', '@ooples', 'token-optimizer-mcp');
 
 let runtime;
 let isNativeCrash;
+let clearCrashWhenSurvived;
 
 // IMPORTED, NOT RUN: a static import of launch.mjs executes main() inside the
 // Jest worker. TOKEN_OPTIMIZER_LAUNCH_IMPORT_ONLY is set for the import only.
@@ -30,7 +31,7 @@ beforeAll(async () => {
   const saved = process.env.TOKEN_OPTIMIZER_LAUNCH_IMPORT_ONLY;
   process.env.TOKEN_OPTIMIZER_LAUNCH_IMPORT_ONLY = '1';
   try {
-    ({ isNativeCrash } = await import('../../plugin/launch.mjs'));
+    ({ isNativeCrash, clearCrashWhenSurvived } = await import('../../plugin/launch.mjs'));
   } finally {
     if (saved === undefined) delete process.env.TOKEN_OPTIMIZER_LAUNCH_IMPORT_ONLY;
     else process.env.TOKEN_OPTIMIZER_LAUNCH_IMPORT_ONLY = saved;
@@ -89,6 +90,7 @@ describe('isNativeCrash', () => {
     [139, null, true], // 128 + SIGSEGV through a shell
     [1, null, false], // a thrown JavaScript error
     [4294967295, null, false], // process.exit(-1) on Windows
+    [3221225786, null, false], // 0xC000013A, Ctrl+C: the user stopped it
     [3221226505, null, true], // 0xC0000409, stack buffer overrun
     [0, null, false],
     [null, 'SIGTERM', false], // the host shutting the server down
@@ -134,6 +136,38 @@ describe('the launcher records a native crash', () => {
     seedServer('9.9.9', 'process.exit(0);\n');
     launch();
     expect(existsSync(crashFile())).toBe(false);
+  });
+});
+
+describe('a replacement server clears the old record once it has survived startup', () => {
+  /** A stand-in child process: running until `exit()` is called. */
+  function fakeChild() {
+    const listeners = [];
+    return {
+      exitCode: null,
+      signalCode: null,
+      once: (event, fn) => event === 'exit' && listeners.push(fn),
+      exit(code) {
+        this.exitCode = code;
+        listeners.forEach((fn) => fn(code, null));
+      },
+    };
+  }
+
+  test('a server still running after the grace period clears the record', async () => {
+    writeFileSync(crashFile(), JSON.stringify({ node: process.versions.node, exit: '0xC0000005' }));
+    clearCrashWhenSurvived(fakeChild(), { after: 50, file: crashFile() });
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    expect(existsSync(crashFile())).toBe(false);
+  });
+
+  test('a server that dies before the grace period leaves the record for SessionStart', async () => {
+    writeFileSync(crashFile(), JSON.stringify({ node: process.versions.node, exit: '0xC0000005' }));
+    const child = fakeChild();
+    clearCrashWhenSurvived(child, { after: 80, file: crashFile() });
+    child.exit(3221225477);
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    expect(existsSync(crashFile())).toBe(true);
   });
 });
 
