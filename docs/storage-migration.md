@@ -19,15 +19,15 @@ If `migrate` says **NOT READY**, nothing was changed. It also recorded that you 
 
 A move goes ahead only when **both** of these hold:
 
-1. **No older token-optimizer process is running.** Releases before 7.8.0 don't know about migrations, so they would keep writing to the old location. `migrate` lists every Node process running a token-optimizer script and refuses if any of them is older than 7.8.0, or if its version can't be read.
+1. **No older token-optimizer process is running.** Releases without write leases don't know about migrations, so they would keep writing to the old location. `migrate` lists every Node process running a token-optimizer script and checks the code each one runs: it refuses unless that code takes write leases, and it treats a process whose code can't be found or read as one that doesn't.
 
    **If the process list can't be read completely, that counts as a blocker too.** This happens when permission is denied, or when running inside a container, which can't see processes in other containers that share the same files. Being unable to see a writer is not evidence that none exists.
 
-   To clear this blocker, close every Claude Code, Codex, Cursor or other client session that uses token-optimizer 7.7.x or older, or upgrade it. Then run `status` again.
+   To clear this blocker, close every Claude Code, Codex, Cursor or other client session that uses token-optimizer 7.7.x or older, or upgrade it to a release with write leases. Then run `status` again.
 
 2. **The old location is fenced off.** The store directory is renamed aside, and a small *file* is put where the directory was. Any older process that later tries to write there fails with `ENOTDIR`, so it can't recreate the store behind your back. `migrate` confirms this with a test write that must fail before it copies anything.
 
-Up-to-date (7.8.0+) processes don't need to be stopped. They take a short *write lease* for every write, and `migrate` waits up to 30 seconds for those to finish. While a move is in progress, their writes go to a holding area (the *spool*) and are added to the new store afterwards. Each record is added once, even if it was seen twice.
+Processes whose code takes write leases don't need to be stopped. They take a short *write lease* for every write, and `migrate` waits up to 30 seconds for those to finish. While a move is in progress, their writes go to a holding area (the *spool*) and are added to the new store afterwards. Each record is added once, even if it was seen twice.
 
 ## Step by step
 
@@ -48,7 +48,7 @@ No record that was written is lost or added twice. The test suite kills the proc
 
 ## After the move
 
-- **The tombstone stays.** `<repo>/.token-optimizer` is now a small file saying where the store went. Up-to-date clients follow it, and older ones are kept out by it, so don't delete it while any client older than 7.8.0 might still run on this machine. It also records the store's id, so if you move or rename the repository folder, it still finds its store.
+- **The tombstone stays.** `<repo>/.token-optimizer` is now a small file saying where the store went. Up-to-date clients follow it, and older ones are kept out by it, so don't delete it while any client without write leases might still run on this machine. It also records the store's id, so if you move or rename the repository folder, it still finds its store.
 - **git doesn't see the tombstone or the backup.** `/.token-optimizer` and `/.token-optimizer.migrated-*` are added to this clone's own `.git/info/exclude`, which is never committed, so `git status` stays clean.
 - **The backup stays until you remove it.** `token-optimizer-storage gc` first checks that every file in the backup is also in the new store. Logs that have grown since the move are fine, as long as their original contents are still there at the start. If the check passes, it deletes the backup; if not, it refuses and lists what's missing.
 

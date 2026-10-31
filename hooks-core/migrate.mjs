@@ -64,8 +64,12 @@ import {
 
 export { readTombstone };
 
-/** The release that introduced write leases; anything older is a legacy writer. */
-export const PROTOCOL_VERSION = '7.8.0';
+/**
+ * The store protocol a tombstone was written under. A name, not a release
+ * number: which release first ships it is decided at release time, and the
+ * offline check judges a writer by its code (takesWriteLeases), not by this.
+ */
+export const PROTOCOL_VERSION = 'write-leases/1';
 
 const DRAIN_TIMEOUT_MS = 30_000;
 const COPY_ATTEMPTS = 3;
@@ -174,7 +178,12 @@ export function tokenOptimizerProcesses({ run = execFileSync, platform = process
     // The version a process runs is in its path: the plugin cache
     // (.../token-optimizer/<v>/...) or the managed runtime (versions/<v>/...).
     const m = /token-optimizer[\\/](\d+\.\d+\.\d+)[\\/]|versions[\\/](\d+\.\d+\.\d+)[\\/]/i.exec(command);
-    found.push({ pid, version: m ? m[1] || m[2] : null, command: command.slice(0, 200) });
+    found.push({
+      pid,
+      version: m ? m[1] || m[2] : null,
+      leases: takesWriteLeases(scriptPath(command)),
+      command: command.slice(0, 200),
+    });
   }
   return { complete: true, found };
 }
@@ -183,8 +192,44 @@ export function tokenOptimizerProcesses({ run = execFileSync, platform = process
 export function offlineBlockers(processes) {
   if (!processes.complete) return [processes.reason];
   return processes.found
-    .filter((p) => !p.version || olderThan(p.version, PROTOCOL_VERSION))
-    .map((p) => `pid ${p.pid} runs token-optimizer ${p.version ?? '(unknown version)'}, which predates write leases`);
+    .filter((p) => p.leases !== true)
+    .map((p) => `pid ${p.pid} runs token-optimizer ${p.version ?? '(unknown version)'}, whose code takes no write leases`);
+}
+
+/** The script a node command line runs, or null. */
+function scriptPath(command) {
+  const m = /(?:^"[^"]+"|^\S+)\s+(?:--?\S+\s+)*("([^"]+\.(?:m?js|cjs))"|(\S+\.(?:m?js|cjs)))/i.exec(command.trim());
+  return m ? m[2] || m[3] : null;
+}
+
+/**
+ * Whether the code a process runs takes write leases, judged from the code
+ * itself rather than its version number.
+ *
+ * A VERSION FLOOR WAS WRONG HERE. The lease protocol ships in whichever release
+ * first contains it, and that is decided at release time: a floor of "7.8.0"
+ * would have counted a 7.8.0 that shipped without leases as safe, and the
+ * migration would then have moved a store under a live writer. Instead the
+ * installed package next to the running script is inspected: it takes leases
+ * when its `maintenance.mjs` exports `withWriteLease`. Anything that cannot be
+ * found or read counts as legacy -- inability to tell is not an all-clear.
+ */
+export function takesWriteLeases(script) {
+  if (!script) return false;
+  let dir = dirname(script);
+  for (let i = 0; i < 8 && dir; i++) {
+    for (const candidate of [join(dir, 'maintenance.mjs'), join(dir, 'lib', 'maintenance.mjs'), join(dir, 'hooks-core', 'maintenance.mjs')]) {
+      try {
+        if (readFileSync(candidate, 'utf8').includes('export function withWriteLease')) return true;
+      } catch {
+        // Not here.
+      }
+    }
+    const up = dirname(dir);
+    if (up === dir) break;
+    dir = up;
+  }
+  return false;
 }
 
 /** sha256 of every file under `dir`, keyed by relative path. */

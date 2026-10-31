@@ -18,7 +18,7 @@
 
 import { afterEach, beforeEach, describe, expect, test } from '@jest/globals';
 import { spawn, spawnSync } from 'node:child_process';
-import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { appendFileSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { hostname, tmpdir } from 'node:os';
 import { pathToFileURL } from 'node:url';
@@ -110,20 +110,32 @@ describe('the offline check', () => {
   });
 
   test('only node processes running a token-optimizer script are writers', () => {
+    // An installed plugin carrying this branch's maintenance module.
+    const leasing = join(work, 'plugins', 'token-optimizer', 'next');
+    mkdirSync(join(leasing, 'hooks', 'lib'), { recursive: true });
+    writeFileSync(join(leasing, 'hooks', 'post-tool.mjs'), '');
+    copyFileSync(join(ROOT, 'hooks-core', 'maintenance.mjs'), join(leasing, 'hooks', 'lib', 'maintenance.mjs'));
     const table = [
       '101\t"C:\\Program Files\\nodejs\\node.exe" C:\\Users\\u\\.token-optimizer\\runtime\\versions\\7.7.1\\node_modules\\@ooples\\token-optimizer-mcp\\dist\\server\\index.js',
+      // A version number alone proves nothing: this one is a newer number whose
+      // code (a path that does not exist here) cannot be shown to take leases.
       '102\tnode C:/Users/u/.claude/plugins/cache/token-optimizer/token-optimizer/7.8.0/hooks/post-tool.mjs',
+      `106\tnode ${join(leasing, 'hooks', 'post-tool.mjs').replace(/\\/g, '/')}`,
       '103\t"C:\\Program Files\\Git\\bin\\bash.exe" -c "cd ~/source/repos/token-optimizer-mcp && npm test"',
       '104\tbash -c node "${CLAUDE_PLUGIN_ROOT}/hooks/post-tool.mjs" # token-optimizer',
       '105\tvim token-optimizer-notes.md',
     ].join('\n');
     const r = tokenOptimizerProcesses({ run: () => table, platform: 'win32' });
     expect(r.complete).toBe(true);
-    expect(r.found.map((p) => [p.pid, p.version])).toEqual([
-      [101, '7.7.1'],
-      [102, '7.8.0'],
+    expect(r.found.map((p) => [p.pid, p.version, p.leases])).toEqual([
+      [101, '7.7.1', false],
+      [102, '7.8.0', false],
+      [106, null, true],
     ]);
-    expect(offlineBlockers(r)).toEqual([expect.stringMatching(/pid 101 runs token-optimizer 7\.7\.1/)]);
+    expect(offlineBlockers(r)).toEqual([
+      expect.stringMatching(/pid 101 runs token-optimizer 7\.7\.1/),
+      expect.stringMatching(/pid 102 runs token-optimizer 7\.8\.0, whose code takes no write leases/),
+    ]);
   });
 
   test('a process list that cannot be read is incomplete', () => {
@@ -136,9 +148,10 @@ describe('the offline check', () => {
     expect(r).toMatchObject({ complete: false, reason: expect.stringContaining('EPERM') });
   });
 
-  test('a process whose version cannot be read counts as legacy', () => {
-    expect(offlineBlockers({ complete: true, found: [{ pid: 7, version: null }] })[0]).toMatch(/unknown version/);
-    expect(offlineBlockers({ complete: true, found: [{ pid: 7, version: '7.8.0' }] })).toEqual([]);
+  test('only code shown to take leases is a safe writer, whatever its version', () => {
+    expect(offlineBlockers({ complete: true, found: [{ pid: 7, version: null, leases: false }] })[0]).toMatch(/unknown version/);
+    expect(offlineBlockers({ complete: true, found: [{ pid: 7, version: '9.0.0' }] })).toHaveLength(1);
+    expect(offlineBlockers({ complete: true, found: [{ pid: 7, version: '7.7.1', leases: true }] })).toEqual([]);
   });
 });
 
