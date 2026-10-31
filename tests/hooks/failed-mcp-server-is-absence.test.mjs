@@ -99,7 +99,7 @@ describe('serverFailuresFromTranscript', () => {
   test('a foreign server announcing a same-named tool does not restore ours', () => {
     const path = transcript([
       delta(T0, { failed: [PLUGIN_SERVER] }),
-      delta(T1, { added: ['mcp__other-server__wiki_write', 'wiki_write'] }),
+      delta(T1, { added: ['mcp__other-server__wiki_write', 'wiki_write', 'mcp__token-optimizer__other__wiki_write'] }),
     ]);
     expect(serverFailuresFromTranscript(path).restored).toEqual([]);
   });

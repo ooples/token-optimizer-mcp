@@ -985,7 +985,12 @@ const isOptimizerServer = (name) => OPTIMIZER_SERVERS.has(String(name || '').tri
 const ownToolName = (qualified) => {
   const text = String(qualified || '');
   const prefix = OPTIMIZER_TOOL_PREFIXES.find((p) => text.toLowerCase().startsWith(p));
-  return prefix ? optimizerToolName(text.slice(prefix.length)) : null;
+  if (!prefix) return null;
+  // EXACTLY a tool name after the prefix. optimizerToolName matches by suffix,
+  // so a server named `token-optimizer__other` announcing
+  // `mcp__token-optimizer__other__wiki_write` would otherwise pass (review).
+  const rest = text.slice(prefix.length).toLowerCase();
+  return HOOK_MCP_TOOLS.find((name) => name === rest) ?? null;
 };
 
 /**
