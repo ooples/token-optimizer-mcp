@@ -503,7 +503,10 @@ function notice({ originalBytes, folded, dropped, readLike, path }) {
     const { errors, files } = namesIn(dropped);
     let d = `${dropped.length} lines omitted`;
     if (errors.length) d += ` (mentioning ${errors.join(', ')})`;
-    else if (files.length) d += ` (from ${files.join(', ')})`;
+    // MENTIONING, NOT FROM: these are names found in the dropped text. A
+    // script's report that merely named LlamaNetwork.cs was labelled "(from
+    // LlamaNetwork.cs)", which reads as where the output came from.
+    else if (files.length) d += ` (mentioning ${files.join(', ')})`;
     parts.push(d);
   }
   const how = readLike

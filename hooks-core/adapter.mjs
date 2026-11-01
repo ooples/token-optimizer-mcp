@@ -117,6 +117,8 @@ import { registerProject, registeredProjects } from './projects.mjs';
 import { runStopHarvest } from './stop-harvest.mjs';
 import { applyQuietEnv } from './quiet-env.mjs';
 import { resumeIfDue } from './migrate.mjs';
+import { slowHookNotice } from './hook-latency.mjs';
+import { nodeFloorNotice } from './node-floor.mjs';
 import { serverCrashNotice } from './server-crash.mjs';
 import { CHECK_EVERY_CALLS, overWindowNotice } from './context-window.mjs';
 import { compactToolResponse, outputCompactEnabled } from './output-compact.mjs';
@@ -1385,6 +1387,11 @@ async function runHook(clientName, event, invocation) {
     ];
     const crashed = serverCrashNotice();
     if (crashed) blocks.push({ id: 'server-crash', volatility: 0, text: crashed });
+    const oldNode = nodeFloorNotice();
+    if (oldNode) blocks.push({ id: 'node-floor', volatility: 0, text: oldNode });
+    // The floor notice already names the likeliest cause of slow hooks.
+    const slowHooks = oldNode ? null : slowHookNotice();
+    if (slowHooks) blocks.push({ id: 'hook-latency', volatility: 4, text: slowHooks });
     // Reduce at the source before anything runs: quiet defaults for the tools
     // the agent will call, through the env file Claude Code sources for every
     // later Bash call (quiet-env.mjs). A no-op for clients without one.
