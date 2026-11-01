@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
+import { describe, it, expect, beforeAll, afterAll, jest } from '@jest/globals';
 import { execFileSync } from 'child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
@@ -11,6 +11,12 @@ import {
 import { CacheEngine } from '../../src/core/cache-engine.js';
 import { TokenCounter } from '../../src/core/token-counter.js';
 import { MetricsCollector } from '../../src/core/metrics.js';
+
+// SIZED TO THE WORK, NOT JEST'S DEFAULT. These tests spawn git or write
+// packs; the slowest took 2.5 s alone, and under a full parallel
+// run on a Windows machine with endpoint protection the same I/O went past
+// 5 s, with the failing test changing between runs.
+jest.setTimeout(20_000);
 
 /**
  * smart_grep read gitignored build output by default.

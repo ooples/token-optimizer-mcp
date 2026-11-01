@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
+import { describe, it, expect, beforeAll, afterAll, jest } from '@jest/globals';
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -16,6 +16,12 @@ import {
   type GitRunner,
 } from '../../../src/proxy/repo-pack.js';
 import type { ProviderRequest } from '../../../src/compress/frontier.js';
+
+// SIZED TO THE WORK, NOT JEST'S DEFAULT. These tests spawn git or write
+// packs; the slowest took 2.1 s alone, and under a full parallel
+// run on a Windows machine with endpoint protection the same I/O went past
+// 5 s, with the failing test changing between runs.
+jest.setTimeout(20_000);
 
 let root: string;
 let alpha: string;

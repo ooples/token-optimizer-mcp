@@ -1,10 +1,16 @@
-import { describe, it, expect, afterEach } from '@jest/globals';
+import { describe, it, expect, afterEach, jest } from '@jest/globals';
 import { mkdtempSync, rmSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 
 // @ts-expect-error -- hooks-core ships as plain ESM with no type declarations.
 import { probeHarvest, diagnose } from '../../hooks-core/doctor.mjs';
+
+// SIZED TO THE WORK, NOT JEST'S DEFAULT. These tests spawn git or write
+// packs; the slowest took 2.0 s alone, and under a full parallel
+// run on a Windows machine with endpoint protection the same I/O went past
+// 5 s, with the failing test changing between runs.
+jest.setTimeout(20_000);
 
 /**
  * The doctor reported a clean bill while the half that learns captured nothing.
