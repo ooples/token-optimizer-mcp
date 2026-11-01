@@ -371,8 +371,12 @@ describe('session start finishes what was left', () => {
         return false;
       }
     };
+    // Wait for the notice, not the tombstone: the move publishes the tombstone
+    // first and leaves the notice last, so a check between the two found no
+    // notice yet (Node 22 CI on #549).
+    const notice = join(work, 'home', 'projects', id, 'notice.json');
     const deadline = Date.now() + 60_000;
-    while (!readTombstone(repo)?.movedTo && !refused() && Date.now() < deadline)
+    while (!existsSync(notice) && !refused() && Date.now() < deadline)
       await new Promise((r) => setTimeout(r, 200));
     const moved = readTombstone(repo)?.movedTo;
     if (!moved) {
