@@ -120,6 +120,7 @@ import { runStopHarvest } from './stop-harvest.mjs';
 import { applyQuietEnv } from './quiet-env.mjs';
 import { resumeIfDue } from './migrate.mjs';
 import { serverCrashNotice } from './server-crash.mjs';
+import { CHECK_EVERY_CALLS, overWindowNotice } from './context-window.mjs';
 import { compactToolResponse, outputCompactEnabled } from './output-compact.mjs';
 import { repeatResponse, repeatsEnabled } from './repeats.mjs';
 import { recordOnBoard } from './blackboard.mjs';
@@ -2052,6 +2053,23 @@ async function runHook(clientName, event, invocation) {
       : null;
   // Cleared explicitly, so saveState knows this caller changed it.
   if (pendingHarvest) state.pendingHarvest = null;
+  // A SESSION OVER ITS CONFIGURED COMPACTION WINDOW pays for the excess on
+  // every turn (context-window.mjs). Checked every CHECK_EVERY_CALLS calls
+  // from the transcript tail, and said once.
+  let overWindow = null;
+  if (
+    event === 'post-tool' &&
+    clientName === 'claude-code' &&
+    !state.overWindowNoted &&
+    (Number(state.toolCalls) || 0) % CHECK_EVERY_CALLS === 0
+  ) {
+    try {
+      overWindow = overWindowNotice(raw.transcript_path ?? raw.transcriptPath ?? null);
+    } catch {
+      overWindow = null;
+    }
+    if (overWindow) state.overWindowNoted = true;
+  }
   saveState(payload.session_id, state, agentScope);
 
   const context = [
@@ -2060,6 +2078,7 @@ async function runHook(clientName, event, invocation) {
     guided ? recordingGuidance() : null,
     recordingContext,
     pendingHarvest,
+    overWindow,
   ]
     .filter(Boolean)
     .join('\n\n');
