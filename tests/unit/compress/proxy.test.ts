@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach, afterAll } from '@jest/globals';
+import { describe, it, expect, afterEach, afterAll, jest } from '@jest/globals';
 import { createServer, request as httpRequest, type Server } from 'node:http';
 import {
   bodyLimitFor,
@@ -22,6 +22,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DEFAULT_KEEP_RELEVANT } from '../../../src/compress/tools.js';
 import { variedRows } from './varied-rows.js';
+
+// SIZED TO THE WORK, NOT JEST'S DEFAULT. These tests spawn git or write
+// packs; the slowest took 2.5 s alone, and under a full parallel
+// run on a Windows machine with endpoint protection the same I/O went past
+// 5 s, with the failing test changing between runs.
+jest.setTimeout(20_000);
 
 /**
  * A project root with no graph in it.

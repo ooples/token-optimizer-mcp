@@ -21,6 +21,7 @@ const PRIOR = {
   unixHome: process.env.HOME,
   shaper: process.env.TOKEN_OPTIMIZER_OUTPUT_SHAPER,
   holdout: process.env.TOKEN_OPTIMIZER_OUTPUT_HOLDOUT,
+  doNotTrack: process.env.DO_NOT_TRACK,
 };
 
 afterEach(() => {
@@ -35,6 +36,8 @@ afterEach(() => {
   else process.env.USERPROFILE = PRIOR.home;
   if (PRIOR.unixHome === undefined) delete process.env.HOME;
   else process.env.HOME = PRIOR.unixHome;
+  if (PRIOR.doNotTrack === undefined) delete process.env.DO_NOT_TRACK;
+  else process.env.DO_NOT_TRACK = PRIOR.doNotTrack;
 });
 
 /** A request big enough to clear the proxy's size floor. */
@@ -121,6 +124,9 @@ describe('the shaper arm reaches the recorder', () => {
     home = mkdtempSync(join(tmpdir(), 'wiring-telemetry-'));
     process.env.USERPROFILE = home;
     process.env.HOME = home;
+    // DO_NOT_TRACK on the developer's machine overrides the opt-in, as it
+    // should; these tests are about the opt-in, so it is cleared here.
+    delete process.env.DO_NOT_TRACK;
     for (const [k, v] of Object.entries(extra)) process.env[k] = v;
     forward(request());
     const at = eventsFile(process.env);

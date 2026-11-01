@@ -170,6 +170,11 @@ test('streamed capture preserves chunk-edge Unicode, escapes, and the enqueue sn
   ).toBe(text);
 });
 
+// THE BUDGET FITS THE WORK: the byte bound is only reached with 16 MiB in
+// flight, and all of it is then written. In plain Node that takes 0.2-0.3 s;
+// inside a Jest process on a Windows machine running endpoint protection
+// (Bitdefender) every close of a written file is scanned, and the same writes
+// took 7.3 s -- over Jest's 5 s default, though the code was not slower.
 test('capture pressure is bounded across destinations and capacity returns after draining', async () => {
   const body = Buffer.alloc(128 * 1024, 120);
   const writes = Array.from({ length: 300 }, (_, i) =>
@@ -185,4 +190,4 @@ test('capture pressure is bounded across destinations and capacity returns after
   expect(
     JSON.parse(readFileSync(join(dir, 'requests.jsonl'), 'utf8')).body
   ).toBe('recovered');
-});
+}, 30_000);
