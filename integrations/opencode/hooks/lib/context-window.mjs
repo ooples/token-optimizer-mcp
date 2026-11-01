@@ -1,19 +1,21 @@
 // GENERATED FILE -- do not edit.
 // Source of truth: hooks-core/context-window.mjs. Regenerate with `npm run sync:hooks`.
 /**
- * Is a Claude Code session running with more context than the user configured?
+ * Is a Claude Code session running with more context than its settings configure?
  *
  * Every turn re-reads the whole context from cache, so the context a session
  * carries is what each turn costs. On one machine (2026-10) cache reads were
  * about 99% of all tokens, and sessions averaged 490-550K tokens of context
- * per turn because they compacted only at about 965K. The user had set
- * `autoCompactWindow: 400000`; a session started afterwards reported
- * "10.7k / 400k", but the sessions already running kept the window they
- * started with -- Claude Code reads it once, at session start -- and nothing
- * said so. This compares a session's actual context, read from its
- * transcript, with the window its settings configure.
+ * per turn because they compacted only at about 965K. This package's proxy
+ * had written `autoCompactWindow: 400000` (src/proxy/compact-window.ts); a
+ * session started afterwards reported "10.7k / 400k", but the sessions already
+ * running kept the window they started with -- Claude Code reads it once, at
+ * session start -- so the lever did nothing for them, and nothing said so.
+ * This compares a session's actual context, read from its transcript, with the
+ * window its settings configure.
  */
 import {
+  existsSync,
   readdirSync,
   readFileSync,
   statSync,
@@ -27,8 +29,6 @@ import { basename, dirname, join } from 'node:path';
 /** Above the window by more than this is not rounding. */
 const SLACK = 1.02;
 const TAIL_BYTES = 512 * 1024;
-/** Other sessions count only while active. */
-const ACTIVE_WITHIN_MS = 2 * 60 * 60 * 1000;
 /** The in-session check runs on every this-many tool calls. */
 export const CHECK_EVERY_CALLS = 50;
 
@@ -177,18 +177,63 @@ export function overWindowNotice(
   );
 }
 
+/** Signal 0 only checks the pid exists; EPERM means it does, under another user. */
+function pidAlive(pid) {
+  if (!Number.isInteger(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return error?.code === 'EPERM';
+  }
+}
+
 /**
- * Other recently active sessions above their configured window, from the
- * transcripts beside this one: `<projects>/<project>/<session>.jsonl`.
+ * The sessions Claude Code is running now, from its registry:
+ * `<config>/sessions/<pid>.json` names each live process's CURRENT session.
+ * A transcript's recency cannot say this: after /clear the conversation just
+ * cleared is recent and no longer running (review on #552), and a session whose
+ * process exited is recent too. Null when there is no registry to read.
+ */
+function runningSessionIds(config) {
+  let names;
+  try {
+    names = readdirSync(join(config, 'sessions')).filter((name) =>
+      /^\d+\.json$/.test(name)
+    );
+  } catch {
+    return null;
+  }
+  const ids = new Set();
+  for (const name of names) {
+    let entry;
+    try {
+      entry = JSON.parse(readFileSync(join(config, 'sessions', name), 'utf8'));
+    } catch {
+      continue;
+    }
+    if (typeof entry?.sessionId === 'string' && pidAlive(Number(entry.pid)))
+      ids.add(entry.sessionId);
+  }
+  return ids;
+}
+
+/**
+ * Other running sessions above their configured window. Their transcripts sit
+ * beside this one: `<config>/projects/<project>/<session>.jsonl`. Without
+ * Claude Code's session registry nothing says which are running, so nothing is
+ * reported.
  */
 function sessionsOverWindow(
   transcriptPath,
-  { env = process.env, home = homedir(), now = Date.now() } = {}
+  { env = process.env, home = homedir() } = {}
 ) {
   if (!transcriptPath) return [];
   const projects = dirname(dirname(transcriptPath));
-  const own = basename(transcriptPath);
-  const over = [];
+  const running = runningSessionIds(dirname(projects));
+  if (!running) return [];
+  running.delete(basename(transcriptPath, '.jsonl'));
+  if (!running.size) return [];
   let dirs = [];
   try {
     dirs = readdirSync(projects, { withFileTypes: true }).filter((d) =>
@@ -197,33 +242,23 @@ function sessionsOverWindow(
   } catch {
     return [];
   }
-  for (const dir of dirs) {
-    let names = [];
-    try {
-      names = readdirSync(join(projects, dir.name)).filter(
-        (name) => name.endsWith('.jsonl') && name !== own
-      );
-    } catch {
-      continue;
-    }
-    for (const name of names) {
-      const path = join(projects, dir.name, name);
-      try {
-        if (now - statSync(path).mtimeMs > ACTIVE_WITHIN_MS) continue;
-      } catch {
-        continue;
-      }
-      const context = sessionContext(path);
-      if (!context?.cwd) continue;
-      const window = configuredWindow({
-        cwd: context.cwd,
-        model: context.model,
-        env,
-        home,
-      });
-      if (window && context.tokens > window * SLACK)
-        over.push({ path, tokens: context.tokens, window });
-    }
+  const over = [];
+  for (const id of running) {
+    const dir = dirs.find((d) =>
+      existsSync(join(projects, d.name, `${id}.jsonl`))
+    );
+    if (!dir) continue;
+    const path = join(projects, dir.name, `${id}.jsonl`);
+    const context = sessionContext(path);
+    if (!context?.cwd) continue;
+    const window = configuredWindow({
+      cwd: context.cwd,
+      model: context.model,
+      env,
+      home,
+    });
+    if (window && context.tokens > window * SLACK)
+      over.push({ path, tokens: context.tokens, window });
   }
   return over.sort((a, b) => b.tokens - a.tokens);
 }

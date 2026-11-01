@@ -189,23 +189,71 @@ describe('this session', () => {
   });
 });
 
+let entries = 0;
+/** Records `sessionId` as the current session of process `pid` in Claude Code's registry. */
+function register(w, pid, sessionId) {
+  mkdirSync(join(w.config, 'sessions'), { recursive: true });
+  writeFileSync(
+    join(w.config, 'sessions', `${++entries}.json`),
+    JSON.stringify({ pid, sessionId })
+  );
+}
+
+/** A pid that has exited. */
+const deadPid = () =>
+  spawnSync(process.execPath, ['-e', ''], { windowsHide: true }).pid;
+
 describe('other sessions', () => {
-  test('active sessions above the window are counted, the largest named; this one and idle ones are not', () => {
+  test('running sessions above the window are counted and the largest named; this one is not', () => {
     const w = world({ user: { autoCompactWindow: 400000 } });
     const own = transcript(w, 'own', 900_000);
     transcript(w, 'big', 760_000);
     transcript(w, 'mid', 520_000);
     transcript(w, 'small', 300_000);
-    transcript(w, 'idle', 950_000, { ageMs: 3 * 60 * 60 * 1000 });
+    // Any live pid will do: the registry entry is what names the session.
+    for (const id of ['own', 'big', 'mid', 'small'])
+      register(w, process.pid, id);
     const notice = otherSessionsNotice(own, { env: w.env });
     expect(notice).toContain('2 other Claude Code sessions');
     expect(notice).toContain('the largest is at 760K tokens against 400K');
+  });
+
+  test('the conversation a /clear left behind is not another session', () => {
+    // The process that ran 'before' now runs 'after': the registry names only
+    // its current session, however recent the cleared transcript is.
+    const w = world({ user: { autoCompactWindow: 400000 } });
+    transcript(w, 'before', 900_000);
+    const after = transcript(w, 'after', 20_000);
+    register(w, process.pid, 'after');
+    expect(otherSessionsNotice(after, { env: w.env })).toBeNull();
+  });
+
+  test('a session whose process has exited is not counted', () => {
+    const w = world({ user: { autoCompactWindow: 400000 } });
+    const own = transcript(w, 'own', 20_000);
+    transcript(w, 'gone', 900_000);
+    register(w, process.pid, 'own');
+    register(w, deadPid(), 'gone');
+    expect(otherSessionsNotice(own, { env: w.env })).toBeNull();
+  });
+
+  test('without the registry nothing can say what is running, so nothing is reported', () => {
+    const w = world({ user: { autoCompactWindow: 400000 } });
+    const own = transcript(w, 'own', 20_000);
+    transcript(w, 'other', 900_000);
+    expect(otherSessionsNotice(own, { env: w.env })).toBeNull();
+    // The same transcripts with the other session registered are reported.
+    register(w, process.pid, 'other');
+    expect(otherSessionsNotice(own, { env: w.env })).toContain(
+      'Another Claude Code session'
+    );
   });
 
   test('none above the window says nothing', () => {
     const w = world({ user: { autoCompactWindow: 400000 } });
     const own = transcript(w, 'own', 100_000);
     transcript(w, 'small', 300_000);
+    register(w, process.pid, 'small');
     expect(otherSessionsNotice(own, { env: w.env })).toBeNull();
     expect(otherSessionsNotice(null, { env: w.env })).toBeNull();
   });
@@ -268,6 +316,7 @@ describe('the Claude Code hooks deliver it', () => {
     const w = world({ user: { autoCompactWindow: 400000 } });
     const own = transcript(w, 'fresh', 20_000);
     transcript(w, 'old', 760_000);
+    register(w, process.pid, 'old');
     const out = run(
       'plugin/hooks/session-start.mjs',
       w,
