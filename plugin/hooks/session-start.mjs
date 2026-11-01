@@ -37,6 +37,7 @@ import { resumeIfDue } from './lib/migrate.mjs';
 import { slowHookNotice } from './lib/hook-latency.mjs';
 import { nodeFloorNotice } from './lib/node-floor.mjs';
 import { serverCrashNotice } from './lib/server-crash.mjs';
+import { otherSessionsNotice } from './lib/context-window.mjs';
 import {
   relevantFindingIdsForContext,
   sessionContext,
@@ -224,6 +225,15 @@ if (oldNode) blocks.push({ id: 'node-floor', volatility: 0, text: oldNode });
 // The floor notice already names the likeliest cause of slow hooks.
 const slowHooks = oldNode ? null : slowHookNotice();
 if (slowHooks) blocks.push({ id: 'hook-latency', volatility: 4, text: slowHooks });
+// Other sessions still running on a larger compaction window than the user
+// configured: each of their turns re-reads the excess (context-window.mjs).
+let overWindow = null;
+try {
+  overWindow = otherSessionsNotice(payload.transcript_path ?? null);
+} catch {
+  overWindow = null;
+}
+if (overWindow) blocks.push({ id: 'context-window', volatility: 4, text: overWindow });
 if (retired?.removed.length) {
   blocks.push({
     id: 'install',
