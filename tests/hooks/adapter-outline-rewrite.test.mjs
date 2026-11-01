@@ -219,7 +219,10 @@ describe('the once-per-file rule holds under parallel calls', () => {
       )
     );
     expect(outlined.filter(Boolean)).toHaveLength(1);
-  });
+    // Eight hook processes start at once; under a full parallel suite that
+    // took longer than Jest's 5 s default in three local runs out of three.
+    // What is checked -- exactly one outline -- does not depend on time.
+  }, 30_000);
 });
 
 describe('a client without a rewrite contract', () => {
