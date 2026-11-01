@@ -90,6 +90,36 @@ afterAll(() => {
   }
 });
 
+/**
+ * THE RATIO FROM ALTERNATING ROUNDS, NOT ONE RUN OF EACH. Timing the two
+ * searches once, back to back, compares whatever load each happened to meet:
+ * on a shared runner one capped grep took 646 ms against an exhaustive 543 ms
+ * (#549, Node 26), failing a check that holds. Alternating the arms puts both
+ * under the same conditions in every round, and the medians shrug off a spike
+ * in any one. Enumerate-then-filter still fails: then the capped arm costs as
+ * much as the exhaustive one in every round, not in one.
+ */
+const ROUNDS = 5;
+const median = (values: number[]) =>
+  [...values].sort((x, y) => x - y)[Math.floor(values.length / 2)];
+async function alternate<T, U>(
+  exhaustiveRun: () => Promise<T>,
+  cappedRun: () => Promise<U>
+): Promise<{ exhaustive: number; capped: number; last: U }> {
+  const exhaustive: number[] = [];
+  const capped: number[] = [];
+  let last!: U;
+  for (let round = 0; round < ROUNDS; round++) {
+    let started = Date.now();
+    await exhaustiveRun();
+    exhaustive.push(Date.now() - started);
+    started = Date.now();
+    last = await cappedRun();
+    capped.push(Date.now() - started);
+  }
+  return { exhaustive: median(exhaustive), capped: median(capped), last };
+}
+
 describe('traversal stays bounded at scale', () => {
   it('smart_glob: an exhaustive search finishes inside its ceiling', async () => {
     const { value, ms } = await timed('smart_glob exhaustive', () =>
@@ -102,28 +132,34 @@ describe('traversal stays bounded at scale', () => {
   it('smart_glob: a capped search is far cheaper than an exhaustive one', async () => {
     // THE REGRESSION THIS CATCHES. Enumerate-then-filter makes these two cost
     // the same, because the cap is applied to a list that was already built.
-    const exhaustive = await timed('smart_glob exhaustive (ratio base)', () =>
-      glob.glob('**/*.ts', { cwd: root })
+    const { exhaustive, capped, last } = await alternate(
+      () => glob.glob('**/*.ts', { cwd: root }),
+      () => glob.glob('**/*.ts', { cwd: root, limit: 10 })
     );
-    const capped = await timed('smart_glob limit=10', () =>
-      glob.glob('**/*.ts', { cwd: root, limit: 10 })
-    );
-    expect(capped.value.files).toHaveLength(10);
-    expect(capped.ms).toBeLessThan(CEILING_MS);
+    report.push({
+      operation: 'smart_glob exhaustive (median)',
+      ms: exhaustive,
+    });
+    report.push({ operation: 'smart_glob limit=10 (median)', ms: capped });
+    expect(last.files).toHaveLength(10);
+    expect(capped).toBeLessThan(CEILING_MS);
     // Generous factor: the claim is "short-circuits", not a speed record.
-    expect(capped.ms).toBeLessThanOrEqual(Math.max(250, exhaustive.ms / 2));
-  }, 180_000);
+    expect(capped).toBeLessThanOrEqual(Math.max(250, exhaustive / 2));
+  }, 600_000);
 
   it('smart_grep: a capped search is far cheaper than an exhaustive one', async () => {
-    const exhaustive = await timed('smart_grep exhaustive (ratio base)', () =>
-      grep.grep('NEEDLE', { cwd: root })
+    const { exhaustive, capped } = await alternate(
+      () => grep.grep('NEEDLE', { cwd: root }),
+      () => grep.grep('NEEDLE', { cwd: root, limit: 5 })
     );
-    const capped = await timed('smart_grep limit=5', () =>
-      grep.grep('NEEDLE', { cwd: root, limit: 5 })
-    );
-    expect(capped.ms).toBeLessThan(CEILING_MS);
-    expect(capped.ms).toBeLessThanOrEqual(Math.max(250, exhaustive.ms / 2));
-  }, 180_000);
+    report.push({
+      operation: 'smart_grep exhaustive (median)',
+      ms: exhaustive,
+    });
+    report.push({ operation: 'smart_grep limit=5 (median)', ms: capped });
+    expect(capped).toBeLessThan(CEILING_MS);
+    expect(capped).toBeLessThanOrEqual(Math.max(250, exhaustive / 2));
+  }, 600_000);
 
   it('a tight deadline is honoured rather than ignored', async () => {
     // The bound that covers the case a cap cannot: a walk that matches nothing
