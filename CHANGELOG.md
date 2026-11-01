@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.9.0](https://github.com/ooples/token-optimizer-mcp/compare/v7.8.0...v7.9.0) (2026-11-01)
+
+
+### Features
+
+* **hooks:** name slow hooks and an unsupported node at session start ([#549](https://github.com/ooples/token-optimizer-mcp/issues/549)) ([6e57666](https://github.com/ooples/token-optimizer-mcp/commit/6e576664510b4beb70c019346f618b2dbcf3aa9d))
+* **hooks:** tell a session it is above its configured compaction window ([#552](https://github.com/ooples/token-optimizer-mcp/issues/552)) ([8a309ff](https://github.com/ooples/token-optimizer-mcp/commit/8a309ffb9e75fd508f96b03bf13f41d01358147a))
+
+
+### Bug Fixes
+
+* **compact:** label names in omitted lines as mentioned, not as their source ([#550](https://github.com/ooples/token-optimizer-mcp/issues/550)) ([5f07849](https://github.com/ooples/token-optimizer-mcp/commit/5f078492c733009cadd20625dc4be5c3d7ccaed0))
+
 ## [7.8.0](https://github.com/ooples/token-optimizer-mcp/compare/v7.7.1...v7.8.0) (2026-10-31)
 
 
