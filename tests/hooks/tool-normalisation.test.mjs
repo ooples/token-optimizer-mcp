@@ -235,3 +235,59 @@ describe('what the newly-resolving names must NOT be counted as', () => {
     expect(isReplacementTool(null)).toBe(false);
   });
 });
+
+describe('Antigravity (agy) camelCase payload and tool aliases', () => {
+  it('normalizes Antigravity tool aliases (view_file_outline, find_by_name, replace_file_content, multi_replace_file_content)', () => {
+    expect(normalizeTool('view_file_outline')).toBe('Read');
+    expect(normalizeTool('view_code_item')).toBe('Read');
+    expect(normalizeTool('find_by_name')).toBe('Glob');
+    expect(normalizeTool('replace_file_content')).toBe('Edit');
+    expect(normalizeTool('multi_replace_file_content')).toBe('MultiEdit');
+    expect(normalizeTool('write_to_file')).toBe('Write');
+  });
+
+  it('normalizes Antigravity camelCase toolCall payload (conversationId, workspacePaths, Path, StartLine, EndLine, CommandLine)', () => {
+    const readPayload = normalizePayload({
+      conversationId: 'agy-conv-123',
+      workspacePaths: [workspace],
+      toolCall: {
+        name: 'read_file',
+        args: {
+          Path: big,
+          StartLine: 10,
+          EndLine: 49,
+        },
+      },
+    });
+    expect(readPayload.session_id).toBe('agy-conv-123');
+    expect(readPayload.cwd).toBe(workspace);
+    expect(readPayload.tool_name).toBe('Read');
+    expect(readPayload.tool_input.file_path).toBe(big.replace(/\\/g, '/'));
+    expect(readPayload.tool_input.offset).toBe(10);
+    expect(readPayload.tool_input.limit).toBe(40);
+
+    const absPayload = normalizePayload({
+      conversationId: 'agy-conv-123',
+      workspacePaths: [workspace],
+      toolCall: {
+        name: 'view_file_outline',
+        args: { AbsolutePath: big },
+      },
+    });
+    expect(absPayload.tool_name).toBe('Read');
+    expect(absPayload.tool_input.file_path).toBe(big.replace(/\\/g, '/'));
+
+    const bashPayload = normalizePayload({
+      conversationId: 'agy-conv-123',
+      workspacePaths: [workspace],
+      toolCall: {
+        name: 'run_command',
+        args: {
+          CommandLine: 'Get-ChildItem -Recurse',
+        },
+      },
+    });
+    expect(bashPayload.tool_name).toBe('Bash');
+    expect(bashPayload.tool_input.command).toBe('Get-ChildItem -Recurse');
+  });
+});

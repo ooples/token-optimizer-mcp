@@ -769,6 +769,8 @@ const TOOL_ALIASES = new Map(
     view: 'Read',
     str_replace_editor_view: 'Read',
     open_file: 'Read',
+    view_file_outline: 'Read',
+    view_code_item: 'Read',
 
     grep: 'Grep',
     search_file_content: 'Grep',
@@ -782,6 +784,7 @@ const TOOL_ALIASES = new Map(
     file_search: 'Glob',
     list_dir: 'Glob',
     glob_file_search: 'Glob',
+    find_by_name: 'Glob',
 
     edit: 'Edit',
     edit_file: 'Edit',
@@ -790,9 +793,12 @@ const TOOL_ALIASES = new Map(
     str_replace: 'Edit',
     multiedit: 'Edit',
     search_replace: 'Edit',
+    replace_file_content: 'Edit',
+    multi_replace_file_content: 'MultiEdit',
 
     write: 'Write',
     write_file: 'Write',
+    write_to_file: 'Write',
     create_file: 'Write',
 
     bash: 'Bash',
@@ -909,10 +915,10 @@ export function normalizeTool(name) {
  * so both are resolved once here rather than in each decision branch.
  */
 /** The keys a client may carry a file path under, in the order they are read. */
-export const PATH_KEYS = Object.freeze(['file_path', 'path', 'absolute_path', 'filePath', 'target_file']);
+export const PATH_KEYS = Object.freeze(['file_path', 'path', 'Path', 'AbsolutePath', 'absolute_path', 'filePath', 'target_file', 'TargetFile']);
 
 /** The keys a client may carry a shell command under, in the order they are read. */
-export const COMMAND_KEYS = Object.freeze(['command', 'cmd', 'script']);
+export const COMMAND_KEYS = Object.freeze(['command', 'CommandLine', 'cmd', 'script']);
 
 /**
  * The tool's arguments exactly as the client sent them, as an object.
@@ -930,6 +936,7 @@ export const COMMAND_KEYS = Object.freeze(['command', 'cmd', 'script']);
  */
 export function rawToolInput(raw) {
   const rawInput =
+    raw?.toolCall?.args ||
     raw?.tool_input ||
     raw?.toolInput ||
     raw?.tool_args ||
@@ -965,11 +972,11 @@ export function normalizePayload(raw) {
   const commandKey = firstKey(input, COMMAND_KEYS);
   const command = commandKey === undefined ? undefined : input[commandKey];
 
-  const cwd = raw.cwd ?? raw.workspace_root ?? process.cwd();
+  const cwd = (Array.isArray(raw.workspacePaths) ? raw.workspacePaths[0] : undefined) ?? raw.cwd ?? raw.workspace_root ?? process.cwd();
 
   return {
     session_id:
-      raw.session_id ?? raw.sessionId ?? raw.conversation_id ?? 'default',
+      raw.session_id ?? raw.sessionId ?? raw.conversation_id ?? raw.conversationId ?? 'default',
     // WHICH AGENT, not just which session. Subagents inherit the parent's session
     // id, so state keyed on the session alone is shared by every agent under it
     // -- which made one agent's reads silence another's. The transcript path is
@@ -979,17 +986,17 @@ export function normalizePayload(raw) {
     // time this fix was attempted.
     transcript_path: raw.transcript_path ?? raw.transcriptPath ?? null,
     cwd,
-    tool_name: normalizeTool(raw.tool_name ?? raw.toolName ?? raw.tool),
+    tool_name: normalizeTool(raw.tool_name ?? raw.toolName ?? raw.tool ?? raw.toolCall?.name),
     // The client's own spelling, for the few rules that differ by client: Claude
     // Code's `Edit` returns one line where another client's edit tool may not.
-    raw_tool_name: raw.tool_name ?? raw.toolName ?? raw.tool ?? null,
+    raw_tool_name: raw.tool_name ?? raw.toolName ?? raw.tool ?? raw.toolCall?.name ?? null,
     // WHETHER THIS CALL IS ALREADY THE REPLACEMENT, carried alongside the
     // canonical name rather than inferred from it -- because it cannot be
     // inferred from it. `smart_edit` and `Edit` both normalise to `Edit`, and
     // routing has to treat them as opposites while accounting treats them as
     // the same. Absent by default (`false`), so a payload assembled by hand in
     // a test or by a caller that predates this field is a normal built-in call.
-    replacement: isReplacementTool(raw.tool_name ?? raw.toolName ?? raw.tool),
+    replacement: isReplacementTool(raw.tool_name ?? raw.toolName ?? raw.tool ?? raw.toolCall?.name),
     tool_input: {
       ...input,
       // CANONICALISED HERE, once. Every consumer downstream -- the `seen` map
@@ -1009,6 +1016,9 @@ export function normalizePayload(raw) {
       // Gemini and Cursor express paging as start_line/end_line.
       ...(input.start_line !== undefined ? { offset: input.start_line } : {}),
       ...(input.end_line !== undefined ? { limit: input.end_line } : {}),
+      ...(input.StartLine !== undefined ? { offset: input.StartLine } : {}),
+      ...(input.EndLine !== undefined ? { limit: input.StartLine !== undefined ? Math.max(1, Number(input.EndLine) - Number(input.StartLine) + 1) : input.EndLine } : {}),
+      ...(input.ByteOffset !== undefined && input.StartLine === undefined ? { offset: input.ByteOffset } : {}),
     },
   };
 }
