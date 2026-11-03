@@ -1613,6 +1613,48 @@ async function runHook(clientName, event, invocation) {
     // delivered with the next turn's first tool result instead, a call that is
     // being made anyway. TOKEN_OPTIMIZER_HARVEST_TURN=1 restores the old turn.
     let stopPrompt = prompt;
+    const maximizeSubscription = /^(1|true|yes|on)$/i.test(
+      String(process.env.TOKEN_OPTIMIZER_MAXIMIZE_SUBSCRIPTION ?? '').trim()
+    );
+    const backlogPath = process.env.TOKEN_OPTIMIZER_STOP_BACKLOG
+      ? resolve(cwd, process.env.TOKEN_OPTIMIZER_STOP_BACKLOG)
+      : maximizeSubscription
+        ? join(cwd, 'STOP_BACKLOG')
+        : null;
+    if (
+      !stopPrompt &&
+      client.stopDecision &&
+      !raw.stop_hook_active &&
+      !raw.stopHookActive &&
+      (maximizeSubscription || Boolean(process.env.TOKEN_OPTIMIZER_STOP_BACKLOG))
+    ) {
+      const unverified = Number(state.edits || 0) > Number(state.verifiedEdits || 0);
+      if (maximizeSubscription && unverified && !state.verificationContinued) {
+        state.verificationContinued = true;
+        const recent = (state.editedFiles || []).slice(0, 5).join(', ');
+        stopPrompt = `[token-optimizer subscription-maximizer] ${state.edits} edit(s) were made in this session (${recent || 'files modified'}) without a subsequent passing test/build verification run. Run the relevant test or build suite to verify your changes before stopping.`;
+        saveState(sessionId, state, agentScope);
+      } else if (backlogPath) {
+        try {
+          const maxCont = Number(process.env.TOKEN_OPTIMIZER_MAX_CONTINUATIONS) || 3;
+          const usedCont = Number(state.backlogContinuations || 0);
+          if (usedCont < maxCont) {
+            const backlogText = readFileSync(backlogPath, 'utf8');
+            const nextTask = backlogText
+              .split(/\r?\n/)
+              .map((l) => l.trim())
+              .find((l) => /^[-*]\s+\[\s\]\s+.+/.test(l));
+            if (nextTask) {
+              state.backlogContinuations = usedCont + 1;
+              stopPrompt = `[token-optimizer subscription-maximizer] Pending backlog task (${usedCont + 1}/${maxCont}): ${nextTask}. Continue autonomous execution and mark the item [x] in ${backlogPath} when complete.`;
+              saveState(sessionId, state, agentScope);
+            }
+          }
+        } catch {
+          // Optional backlog file does not exist or cannot be read.
+        }
+      }
+    }
     if (prompt) {
       state.harvestedEdits = Number(state.edits || 0);
       if (harvestDeferred(clientName)) {
@@ -1776,6 +1818,13 @@ async function runHook(clientName, event, invocation) {
             anchor || join(payload.cwd || process.cwd(), '__tool__'),
             payload.cwd
           );
+      if (
+        command &&
+        toolSucceeded(raw) &&
+        /\b(test|jest|vitest|pytest|cargo\s+test|dotnet\s+(?:test|build)|go\s+test|npm\s+run\s+(?:test|build|check|verify)|tsc)\b/i.test(String(command))
+      ) {
+        state.verifiedEdits = Number(state.edits || 0);
+      }
       recordToolOutcome(wikiDir(root), {
         ...episode,
         surface: command ? 'command' : 'file',

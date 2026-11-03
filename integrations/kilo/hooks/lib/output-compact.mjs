@@ -124,14 +124,16 @@ function namesIn(lines, limit = 5) {
   };
 }
 
-/** `path(line,col): error|warning CODE: message [project::TargetFramework=x]` */
-const MSBUILD_DIAGNOSTIC = /\(\d{1,9},\d{1,9}\): (?:error|warning) [A-Za-z]{1,20}\d{1,9}:/;
+/** `path(line,col): error|warning CODE: message [project]` or project-level `path.csproj : warning NU1903: ...` */
+const MSBUILD_DIAGNOSTIC = /(?:\(\d{1,9},\d{1,9}\)|\.(?:csproj|fsproj|vbproj|props|targets)\s*): (?:error|warning) [A-Za-z]{1,20}\d{1,9}:/i;
 
-/** The line without its trailing ` [project...]`, or null when it has none. */
+/** The line without its trailing ` [project...]`, or the normalized project-level diagnostic key. */
 function withoutProjectSuffix(line) {
   const end = line.trimEnd();
   const open = end.lastIndexOf(' [');
-  return end.endsWith(']') && open > 0 ? end.slice(0, open).trimEnd() : null;
+  if (end.endsWith(']') && open > 0) return end.slice(0, open).trimEnd();
+  const m = end.match(/: ((?:error|warning) [A-Za-z]{1,20}\d{1,9}: .*)$/i);
+  return m ? m[1].trimEnd() : null;
 }
 
 /**

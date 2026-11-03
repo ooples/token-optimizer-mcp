@@ -2297,8 +2297,62 @@ async function cleanup() {
   ]);
 }
 
-// Start server
+// Start server or dispatch CLI subcommands when invoked directly by a user
 async function main() {
+  const cliArgs = process.argv.slice(2);
+  const firstArg = cliArgs[0];
+  if (firstArg === '--version' || firstArg === '-v') {
+    const { createRequire } = await import('node:module');
+    const req = createRequire(import.meta.url);
+    const pkg = req('../../package.json') as { version?: string };
+    console.log(pkg.version ?? 'unknown');
+    process.exit(0);
+  }
+  if (firstArg === '--help' || firstArg === '-h' || firstArg === 'help') {
+    console.log(
+      [
+        '@ooples/token-optimizer-mcp — MCP Server & CLI Dispatcher',
+        '',
+        'Usage:',
+        '  token-optimizer-mcp                     Start stdio MCP server (default)',
+        '  token-optimizer-mcp --version | -v      Print package version',
+        '  token-optimizer-mcp --help | -h         Show this help message',
+        '  token-optimizer-mcp install [args...]   Run interactive/automated client installer',
+        '  token-optimizer-mcp install-client ...  Install hooks for a specific client',
+        '  token-optimizer-mcp uninstall [args...] Remove installed hooks',
+        '  token-optimizer-mcp doctor [args...]    Run installation & hook diagnostics',
+        '  token-optimizer-mcp savings [args...]   Inspect verified token savings',
+      ].join('\n')
+    );
+    process.exit(0);
+  }
+  const SUBCOMMAND_SCRIPTS: Record<string, string> = {
+    install: '../../scripts/install-cli.mjs',
+    'install-client': '../../scripts/install-client-hooks.mjs',
+    uninstall: '../../scripts/uninstall.mjs',
+    doctor: '../../scripts/doctor.mjs',
+    storage: '../../scripts/storage.mjs',
+    diagnostics: '../../scripts/export-diagnostics.mjs',
+    run: '../../scripts/run-client.mjs',
+    route: '../../scripts/route-client.mjs',
+    savings: '../savings/cli.js',
+    learn: '../learn/cli.js',
+    update: '../update/cli.js',
+    rollout: '../rollout/cli.js',
+    inspect: '../inspect/cli.js',
+    proxy: '../proxy/cli.js',
+  };
+  if (firstArg && Object.prototype.hasOwnProperty.call(SUBCOMMAND_SCRIPTS, firstArg)) {
+    const { fileURLToPath } = await import('node:url');
+    const { spawnSync } = await import('node:child_process');
+    const scriptPath = fileURLToPath(new URL(SUBCOMMAND_SCRIPTS[firstArg], import.meta.url));
+    const res = spawnSync(process.execPath, [scriptPath, ...cliArgs.slice(1)], {
+      stdio: 'inherit',
+      env: process.env,
+    });
+    process.exit(res.status ?? 0);
+  }
+
   const transport = new StdioServerTransport();
   await server.connect(transport);
   mcpEvidence.transportConnected();
