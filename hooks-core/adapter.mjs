@@ -123,7 +123,8 @@ import { serverCrashNotice } from './server-crash.mjs';
 import { CHECK_EVERY_CALLS, overWindowNotice } from './context-window.mjs';
 import { compactToolResponse, outputCompactEnabled } from './output-compact.mjs';
 import { repeatResponse, repeatsEnabled } from './repeats.mjs';
-import { recordOnBoard } from './blackboard.mjs';
+import { recordOnBoard, recordReadOnBoard } from './blackboard.mjs';
+import { nextPacedContinuation, recordWindowActivity } from './quota-pacer.mjs';
 import { artifactPath, capture } from './expand.mjs';
 
 /**
@@ -1613,6 +1614,18 @@ async function runHook(clientName, event, invocation) {
     // delivered with the next turn's first tool result instead, a call that is
     // being made anyway. TOKEN_OPTIMIZER_HARVEST_TURN=1 restores the old turn.
     let stopPrompt = prompt;
+    if (
+      !stopPrompt &&
+      client.stopDecision &&
+      !raw.stop_hook_active &&
+      !raw.stopHookActive
+    ) {
+      const paced = nextPacedContinuation({ cwd, state });
+      if (paced) {
+        stopPrompt = paced;
+        saveState(sessionId, state, agentScope);
+      }
+    }
     if (prompt) {
       state.harvestedEdits = Number(state.edits || 0);
       if (harvestDeferred(clientName)) {
@@ -1776,6 +1789,14 @@ async function runHook(clientName, event, invocation) {
             anchor || join(payload.cwd || process.cwd(), '__tool__'),
             payload.cwd
           );
+      recordWindowActivity({ calls: 1, edits: isSubstantive(payload.tool_name) ? 1 : 0 });
+      if (
+        command &&
+        toolSucceeded(raw) &&
+        /\b(test|jest|vitest|pytest|cargo\s+test|dotnet\s+(?:test|build)|go\s+test|npm\s+run\s+(?:test|build|check|verify)|tsc)\b/i.test(String(command))
+      ) {
+        state.verifiedEdits = Number(state.edits || 0);
+      }
       recordToolOutcome(wikiDir(root), {
         ...episode,
         surface: command ? 'command' : 'file',
@@ -1993,15 +2014,25 @@ async function runHook(clientName, event, invocation) {
         });
       // THE SIBLING BLACKBOARD (blackboard.mjs): every read-only result, for
       // the agents of this session that have not started yet.
-      if ((tool === 'Bash' || tool === 'PowerShell') && typeof raw.tool_response?.stdout === 'string') {
-        const output = raw.tool_response.stdout;
-        const ref = output.length > 1000 ? capture(dir, output, { tool, sessionId: payload.session_id, shape: 'board' }) : null;
+      const boardText = typeof raw.tool_response?.stdout === 'string' ? raw.tool_response.stdout : outputFrom(raw);
+      if ((tool === 'Bash' || tool === 'PowerShell') && typeof boardText === 'string') {
+        const ref = boardText.length > 1000 ? capture(dir, boardText, { tool, sessionId: payload.session_id, shape: 'board' }) : null;
         recordOnBoard({
           sessionId: payload.session_id,
           agent: String(raw.agent_id ?? raw.agentId ?? ''),
           command: payload.tool_input?.command,
           cwd,
-          output,
+          output: boardText,
+          artifact: ref ? artifactPath(dir, ref) : null,
+        });
+      } else if (tool === 'Read' && typeof boardText === 'string' && boardText.length > 1000) {
+        const ref = capture(dir, boardText, { tool, sessionId: payload.session_id, shape: 'board-read' });
+        recordReadOnBoard({
+          sessionId: payload.session_id,
+          agent: String(raw.agent_id ?? raw.agentId ?? ''),
+          filePath: payload.tool_input?.file_path,
+          cwd,
+          output: boardText,
           artifact: ref ? artifactPath(dir, ref) : null,
         });
       }

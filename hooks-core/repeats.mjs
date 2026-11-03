@@ -57,9 +57,37 @@ export function repeatKey(tool, input, cwd = '') {
 }
 
 function outputOf(tool, response) {
-  if (tool === 'Read') return typeof response?.file?.content === 'string' ? response.file.content : null;
-  if (typeof response?.stdout !== 'string') return null;
-  return response.stderr ? `${response.stdout}${STDERR}${response.stderr}` : response.stdout;
+  if (typeof response === 'string') return response;
+  if (tool === 'Read') {
+    if (typeof response?.file?.content === 'string') return response.file.content;
+    if (typeof response?.content === 'string') return response.content;
+    if (typeof response?.output === 'string') return response.output;
+    return null;
+  }
+  if (typeof response?.stdout === 'string') {
+    return response.stderr ? `${response.stdout}${STDERR}${response.stderr}` : response.stdout;
+  }
+  if (typeof response?.output === 'string') return response.output;
+  if (typeof response?.content === 'string') return response.content;
+  if (typeof response?.result === 'string') return response.result;
+  return null;
+}
+
+function replaceShellOutput(response, text) {
+  if (typeof response === 'string') return text;
+  if (typeof response?.stdout === 'string') return { ...response, stdout: text, stderr: '' };
+  if (typeof response?.output === 'string') return { ...response, output: text };
+  if (typeof response?.content === 'string') return { ...response, content: text };
+  if (typeof response?.result === 'string') return { ...response, result: text };
+  return { ...response, stdout: text, stderr: '' };
+}
+
+/** Normalize volatile per-run timing/duration tokens so unchanged test/build lines match across turns. */
+export function canonicalLine(line) {
+  return String(line)
+    .replace(/\[xUnit\.net\s+\d{2}:\d{2}:\d{2}\.\d+\]/g, '[xUnit.net TIME]')
+    .replace(/\b(?:train|time|duration|elapsed|p95|wall)=\d+(?:\.\d+)?(?:ms|s|us|µs|x)\b/gi, 'TIMING')
+    .replace(/\b\d+\.\d+\s*(?:ms|s|us|µs|sec|seconds|Minutes)\b/g, 'DURATION');
 }
 
 /**
@@ -78,7 +106,7 @@ export function lineHunks(prev, next) {
   const lcs = new Uint32Array((n + 1) * w);
   for (let i = n - 1; i >= 0; i--)
     for (let j = m - 1; j >= 0; j--)
-      lcs[i * w + j] = a[i] === b[j] ? lcs[(i + 1) * w + j + 1] + 1 : Math.max(lcs[(i + 1) * w + j], lcs[i * w + j + 1]);
+      lcs[i * w + j] = (a[i] === b[j] || canonicalLine(a[i]) === canonicalLine(b[j])) ? lcs[(i + 1) * w + j + 1] + 1 : Math.max(lcs[(i + 1) * w + j], lcs[i * w + j + 1]);
   const hunks = [];
   let open = null;
   const close = () => {
@@ -88,7 +116,7 @@ export function lineHunks(prev, next) {
   let i = 0;
   let j = 0;
   while (i < n || j < m) {
-    if (i < n && j < m && a[i] === b[j]) {
+    if (i < n && j < m && (a[i] === b[j] || canonicalLine(a[i]) === canonicalLine(b[j]))) {
       close();
       i++;
       j++;
@@ -144,33 +172,37 @@ export function repeatResponse({ tool, input, response, cwd = '', call, state, s
 
   if (tool === 'Read') {
     if (!same) return null;
-    const lines = response.file.numLines ?? text.split(NL).length;
-    return {
-      ...response,
-      file: {
-        ...response.file,
-        content: `[unchanged since your Read of this file at call #${prior.call}: the same ${lines} lines, still in your context above]`,
-      },
-    };
+    const lines = response?.file?.numLines ?? text.split(NL).length;
+    const msg = `[unchanged since your Read of this file at call #${prior.call}: the same ${lines} lines, still in your context above]`;
+    if (typeof response === 'string') return msg;
+    if (response?.file && typeof response.file === 'object') {
+      return { ...response, file: { ...response.file, content: msg } };
+    }
+    if (typeof response?.content === 'string') return { ...response, content: msg };
+    if (typeof response?.output === 'string') return { ...response, output: msg };
+    return { ...response, file: { content: msg } };
   }
 
   const ref = store ? store(text) : null;
   const where = ref ? ` Full output: ${ref}` : '';
   if (same)
-    return {
-      ...response,
-      stdout: `[identical to the output of this same command at your call #${prior.call}, still in your context above.${where}]`,
-      stderr: '',
-    };
+    return replaceShellOutput(
+      response,
+      `[identical to the output of this same command at your call #${prior.call}, still in your context above.${where}]`
+    );
   if (!prior.text) return null;
   const hunks = lineHunks(prior.text, text);
   if (!hunks) return null;
+  if (hunks.length === 0)
+    return replaceShellOutput(
+      response,
+      `[identical modulo run timing to the output of this same command at your call #${prior.call}, still in your context above.${where}]`
+    );
   const shown = render(hunks);
   if (shown.length > text.length * DIFF_MAX_SHARE) return null;
   const total = text.split(NL).length;
-  return {
-    ...response,
-    stdout: `[changed since this command's output at your call #${prior.call}; of its ${total} lines only the changed ones follow, the rest are identical and in your context above.${where}]${NL}${shown}`,
-    stderr: '',
-  };
+  return replaceShellOutput(
+    response,
+    `[changed since this command's output at your call #${prior.call}; of its ${total} lines only the changed ones follow, the rest are identical and in your context above.${where}]${NL}${shown}`
+  );
 }
