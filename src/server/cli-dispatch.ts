@@ -35,7 +35,15 @@ export async function dispatchCli(args: string[]): Promise<boolean> {
     await writeStdout(`${pkg.version ?? 'unknown'}\n`);
     return true;
   }
-  if (first === '--help' || first === '-h' || first === 'help') {
+  if (
+    first === '--help' ||
+    first === '-h' ||
+    first === 'help' ||
+    ((first === 'install' ||
+      first === 'install-client' ||
+      first === 'uninstall') &&
+      args.slice(1).some((arg) => arg === '--help' || arg === '-h'))
+  ) {
     await writeStdout(
       [
         '@ooples/token-optimizer-mcp — MCP Server & CLI Dispatcher',
@@ -58,6 +66,7 @@ export async function dispatchCli(args: string[]): Promise<boolean> {
   );
   process.exitCode = await new Promise<number>((resolve) => {
     const child = spawn(process.execPath, [script, ...args.slice(1)], {
+      windowsHide: true,
       stdio: 'inherit',
       env: process.env,
     });
@@ -80,6 +89,10 @@ export async function dispatchCli(args: string[]): Promise<boolean> {
     });
     child.once('exit', (code, signal) => {
       cleanup();
+      if (signal) {
+        // Preserve signal termination for supervisors, after removing our forwarders.
+        process.kill(process.pid, signal);
+      }
       resolve(
         code ?? (signal === 'SIGINT' ? 130 : signal === 'SIGTERM' ? 143 : 1)
       );

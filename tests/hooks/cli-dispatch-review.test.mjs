@@ -45,6 +45,10 @@ test('a signal-terminated child is a failed dispatch', () => {
   writeFileSync(join(scripts, 'doctor.mjs'), "process.kill(process.pid,'SIGTERM');");
   const result = spawnSync(process.execPath, [entry, 'doctor'], { encoding: 'utf8', windowsHide: true });
   expect(result.status).not.toBe(0);
+  if (process.platform !== 'win32') {
+    expect(result.signal).toBe('SIGTERM');
+    expect(result.status).toBeNull();
+  }
 });
 
 test('the default invocation still starts the server', () => {
@@ -73,5 +77,26 @@ signalTest('termination reaches the run child so it can clean up', async () => {
 test('the package entry retains both public instruction exports', () => {
   const result = spawnSync(process.execPath, ['--input-type=module', '-e', "process.argv.push('--help'); const entry = await import(process.env.REVIEW_ENTRY); if (typeof entry.instructionsFor !== 'function' || typeof entry.PLUGIN_INSTRUCTIONS !== 'string' || entry.instructionsFor({CLAUDE_PLUGIN_ROOT:'plugin'}) !== entry.PLUGIN_INSTRUCTIONS) process.exitCode=1;"], { encoding: 'utf8', windowsHide: true, env: { ...process.env, REVIEW_ENTRY: pathToFileURL(entry).href } });
   expect({ status: result.status, stderr: result.stderr }).toEqual({ status: 0, stderr: '' });
+});
+
+test('CommonJS require retains synchronous package exports', () => {
+  rmSync(marker, { force: true });
+  const result = spawnSync(process.execPath, ['-e', "process.argv=[process.execPath,process.env.REVIEW_ENTRY,'--help'];const entry=require(process.env.REVIEW_ENTRY);if(typeof entry.instructionsFor!=='function'||typeof entry.PLUGIN_INSTRUCTIONS!=='string')process.exitCode=1;"], { encoding: 'utf8', windowsHide: true, env: { ...process.env, REVIEW_ENTRY: entry } });
+  expect({ status: result.status, stderr: result.stderr }).toEqual({ status: 0, stderr: '' });
+  expect(result.stdout).toContain('Usage:');
+  expect(existsSync(marker)).toBe(false);
+});
+
+test('installer help never executes the mutating installer', () => {
+  const installed = join(work, 'installed');
+  for (const script of ['install-cli.mjs', 'install-client-hooks.mjs', 'uninstall.mjs']) {
+    writeFileSync(join(scripts, script), "import{writeFileSync}from'node:fs';writeFileSync(process.env.REVIEW_INSTALL_MARKER,'installed');");
+  }
+  for (const args of [['install', '--help'], ['install', '-h'], ['install', '--global', '--help'], ['install-client', '--help'], ['uninstall', '--help']]) {
+    const result = spawnSync(process.execPath, [entry, ...args], { encoding: 'utf8', windowsHide: true, env: { ...process.env, REVIEW_INSTALL_MARKER: installed } });
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain('Usage:');
+    expect(existsSync(installed)).toBe(false);
+  }
 });
 
