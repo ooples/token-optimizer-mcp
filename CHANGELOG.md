@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.9.0](https://github.com/ooples/token-optimizer-mcp/compare/v7.8.0...v7.9.0) (2026-11-04)
+
+
+### Features
+
+* **cli,hooks:** add CLI subcommand dispatcher, Subscription Usage Maximizer stop-hook continuation, and project-level MSBuild/NuGet diagnostic deduplication ([#556](https://github.com/ooples/token-optimizer-mcp/issues/556)) ([5b2fa0b](https://github.com/ooples/token-optimizer-mcp/commit/5b2fa0bb55733956ba06f724b6b46eb74e863d27))
+* **hooks:** add Antigravity CLI (agy) camelCase payload normalization, tool aliases, and overwrite/ephemeral protocol support ([#555](https://github.com/ooples/token-optimizer-mcp/issues/555)) ([cf2eff5](https://github.com/ooples/token-optimizer-mcp/commit/cf2eff52d81aa2f68ca15bce5081c464d083b00a))
+* **hooks:** add timing-invariant cross-turn diff compaction, sibling file-read blackboard deduplication, and rolling-window quota pacer ([#557](https://github.com/ooples/token-optimizer-mcp/issues/557)) ([f9b4deb](https://github.com/ooples/token-optimizer-mcp/commit/f9b4deb7a1fb44f46e84d7d90c251d22437eb941))
+* **hooks:** name slow hooks and an unsupported node at session start ([#549](https://github.com/ooples/token-optimizer-mcp/issues/549)) ([6e57666](https://github.com/ooples/token-optimizer-mcp/commit/6e576664510b4beb70c019346f618b2dbcf3aa9d))
+* **hooks:** tell a session it is above its configured compaction window ([#552](https://github.com/ooples/token-optimizer-mcp/issues/552)) ([8a309ff](https://github.com/ooples/token-optimizer-mcp/commit/8a309ffb9e75fd508f96b03bf13f41d01358147a))
+
+
+### Bug Fixes
+
+* **compact:** label names in omitted lines as mentioned, not as their source ([#550](https://github.com/ooples/token-optimizer-mcp/issues/550)) ([5f07849](https://github.com/ooples/token-optimizer-mcp/commit/5f078492c733009cadd20625dc4be5c3d7ccaed0))
+* **search:** bound binary probes and avoid duplicate read diffs ([#558](https://github.com/ooples/token-optimizer-mcp/issues/558)) ([63a7f4c](https://github.com/ooples/token-optimizer-mcp/commit/63a7f4c5909d95519c4577f8bf1606f71ec9a99f))
+
 ## [7.8.0](https://github.com/ooples/token-optimizer-mcp/compare/v7.7.1...v7.8.0) (2026-10-31)
 
 
