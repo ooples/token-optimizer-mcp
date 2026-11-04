@@ -25,7 +25,7 @@ import {
 
 const ROOT = process.cwd();
 const work = mkdtempSync(join(tmpdir(), 'context-window-'));
-afterAll(() => rmSync(work, { recursive: true, force: true }));
+afterAll(() => rmSync(work, { recursive: true, force: true, maxRetries: 3, retryDelay: 50 }));
 
 let n = 0;
 

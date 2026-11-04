@@ -132,8 +132,9 @@ function withoutProjectSuffix(line) {
   const end = line.trimEnd();
   const open = end.lastIndexOf(' [');
   if (end.endsWith(']') && open > 0) return end.slice(0, open).trimEnd();
-  const m = end.match(/: ((?:error|warning) [A-Za-z]{1,20}\d{1,9}: .*)$/i);
-  return m ? m[1].trimEnd() : null;
+  return /\.(?:csproj|fsproj|vbproj|props|targets)\s*: (?:error|warning) [A-Za-z]{1,20}\d{1,9}:/i.test(end)
+    ? end
+    : null;
 }
 
 /**

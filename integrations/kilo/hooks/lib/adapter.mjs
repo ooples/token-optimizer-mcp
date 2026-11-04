@@ -125,6 +125,7 @@ import { serverCrashNotice } from './server-crash.mjs';
 import { CHECK_EVERY_CALLS, overWindowNotice } from './context-window.mjs';
 import { compactToolResponse, outputCompactEnabled } from './output-compact.mjs';
 import { repeatResponse, repeatsEnabled } from './repeats.mjs';
+import { isVerificationCommand } from './verification.mjs';
 import { recordOnBoard } from './blackboard.mjs';
 import { artifactPath, capture } from './expand.mjs';
 
@@ -1620,14 +1621,13 @@ async function runHook(clientName, event, invocation) {
     );
     const backlogPath = process.env.TOKEN_OPTIMIZER_STOP_BACKLOG
       ? resolve(cwd, process.env.TOKEN_OPTIMIZER_STOP_BACKLOG)
-      : maximizeSubscription
-        ? join(cwd, 'STOP_BACKLOG')
-        : null;
+      : null;
     if (
       !stopPrompt &&
       client.stopDecision &&
       !raw.stop_hook_active &&
       !raw.stopHookActive &&
+      !(clientName === 'cursor' && Number(raw.loop_count ?? raw.loopCount ?? 0) > 0) &&
       (maximizeSubscription || Boolean(process.env.TOKEN_OPTIMIZER_STOP_BACKLOG))
     ) {
       const unverified = Number(state.edits || 0) > Number(state.verifiedEdits || 0);
@@ -1638,7 +1638,8 @@ async function runHook(clientName, event, invocation) {
         saveState(sessionId, state, agentScope);
       } else if (backlogPath) {
         try {
-          const maxCont = Number(process.env.TOKEN_OPTIMIZER_MAX_CONTINUATIONS) || 3;
+          const configuredLimit = Number(process.env.TOKEN_OPTIMIZER_MAX_CONTINUATIONS ?? 3);
+          const maxCont = Number.isFinite(configuredLimit) ? Math.max(0, Math.floor(configuredLimit)) : 3;
           const usedCont = Number(state.backlogContinuations || 0);
           if (usedCont < maxCont) {
             const backlogText = readFileSync(backlogPath, 'utf8');
@@ -1821,9 +1822,9 @@ async function runHook(clientName, event, invocation) {
             payload.cwd
           );
       if (
-        command &&
+        isVerificationCommand(command) &&
         toolSucceeded(raw) &&
-        /\b(test|jest|vitest|pytest|cargo\s+test|dotnet\s+(?:test|build)|go\s+test|npm\s+run\s+(?:test|build|check|verify)|tsc)\b/i.test(String(command))
+        (exitFrom(raw) === null || exitFrom(raw) === 0)
       ) {
         state.verifiedEdits = Number(state.edits || 0);
       }
