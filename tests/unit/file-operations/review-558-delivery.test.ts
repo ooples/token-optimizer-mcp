@@ -14,6 +14,7 @@ import { MetricsCollector } from '../../../src/core/metrics.js';
 import { TokenCounter } from '../../../src/core/token-counter.js';
 import { SmartReadTool } from '../../../src/tools/file-operations/smart-read.js';
 import { SmartGlobTool } from '../../../src/tools/file-operations/smart-glob.js';
+import { boundedGlob } from '../../../src/tools/shared/bounded-traversal.js';
 
 const dirs: string[] = [];
 const caches: CacheEngine[] = [];
@@ -35,6 +36,12 @@ function fixture() {
     reader: new SmartReadTool(cache, new TokenCounter(), metrics),
   };
 }
+
+it('represents the current directory as a usable dot path', async () => {
+  const { dir } = fixture();
+  const result = await boundedGlob('.', { cwd: dir, nodir: false });
+  expect(result.items).toEqual(['.']);
+});
 
 it('keeps undelivered fallback changes available on repeated bounded reads', async () => {
   const { dir, reader } = fixture();

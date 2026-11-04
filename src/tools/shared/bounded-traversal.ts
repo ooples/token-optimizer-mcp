@@ -134,16 +134,30 @@ export async function boundedGlob(
       signal: controller.signal,
     })) {
       const fullPath = entry.fullpath();
-      if (options.nodir && entry.isSymbolicLink()) {
+      if (options.nodir && !entry.isFile()) {
+        if (!entry.isSymbolicLink()) continue;
+        let onAbort: (() => void) | undefined;
         try {
-          if (!(await stat(fullPath)).isFile()) continue;
+          controller.signal.throwIfAborted();
+          const target = stat(fullPath);
+          const aborted = new Promise<never>((_, reject) => {
+            onAbort = () => reject(controller.signal.reason);
+            controller.signal.addEventListener('abort', onAbort, {
+              once: true,
+            });
+          });
+          // Promise.race observes a late target rejection even after the deadline wins.
+          if (!(await Promise.race([target, aborted])).isFile()) continue;
         } catch {
+          if (controller.signal.aborted) throw controller.signal.reason;
           continue;
+        } finally {
+          if (onAbort) controller.signal.removeEventListener('abort', onAbort);
         }
       }
       const path = options.absolute
         ? fullPath
-        : relative(options.cwd, fullPath);
+        : relative(options.cwd, fullPath) || '.';
       if (accept && !accept(path)) continue;
       items.push(path);
       if (items.length >= cap) {
