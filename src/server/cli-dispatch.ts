@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 
 const SUBCOMMAND_SCRIPTS: Record<string, string> = {
@@ -30,7 +30,7 @@ export async function dispatchCli(args: string[]): Promise<boolean> {
   const first = args[0];
   if (first === '--version' || first === '-v') {
     const pkg = JSON.parse(
-      readFileSync(new URL('../../package.json', import.meta.url), 'utf8')
+      await readFile(new URL('../../package.json', import.meta.url), 'utf8')
     ) as { version?: string };
     await writeStdout(`${pkg.version ?? 'unknown'}\n`);
     return true;
