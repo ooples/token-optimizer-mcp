@@ -27,11 +27,11 @@ test('verification and continuation fields survive stale concurrent state saves'
   expect(loadState(session)).toMatchObject({ edits: 4, verifiedEdits: 4, verificationContinued: true, backlogContinuations: 3, nightlySweepContinued: true });
 });
 
-test.each(['npm test 2>&1', 'npm test &> results.log', 'npm test', 'npm run test:unit', 'dotnet build src/Library.csproj', 'cd project && pytest', 'npx vitest run', 'cargo test'])('recognizes verification runner %s', (command) => {
+test.each(['pytest -v', 'go test -v ./...', 'cargo test -v', 'npx jest --verbose', 'npm test 2>&1', 'npm test &> results.log', 'npm test', 'npm run test:unit', 'dotnet build src/Library.csproj', 'cd project && pytest', 'npx vitest run', 'cargo test'])('recognizes verification runner %s', (command) => {
   expect(isVerificationCommand(command)).toBe(true);
 });
 
-test.each(['npx jest --listTests', 'pytest --collect-only', 'npm test -- --help', 'npx tsc --showConfig', 'npm test 2>&1 &', 'echo npm test', 'cat tests/results.txt', 'test -f output.txt', 'npm test || echo ignored', 'npm test; echo done', 'npm test | cat', 'npm test &'])('rejects misleading verification command %s', (command) => {
+test.each(['pytest -V', 'pytest -h', 'npx jest -v', 'npx vitest -v', 'npx tsc -v', 'npm test -v', 'npx jest --listTests', 'pytest --collect-only', 'npm test -- --help', 'npx tsc --showConfig', 'npm test 2>&1 &', 'echo npm test', 'cat tests/results.txt', 'test -f output.txt', 'npm test || echo ignored', 'npm test; echo done', 'npm test | cat', 'npm test &'])('rejects misleading verification command %s', (command) => {
   expect(isVerificationCommand(command)).toBe(false);
 });
 
