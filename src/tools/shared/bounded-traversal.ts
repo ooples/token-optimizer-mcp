@@ -34,8 +34,8 @@
  */
 
 import { globIterate } from 'glob';
-import { readdir } from 'fs/promises';
-import { join } from 'path';
+import { readdir, stat } from 'fs/promises';
+import { join, relative } from 'path';
 
 /**
  * The default wall-clock budget for one traversal.
@@ -127,13 +127,23 @@ export async function boundedGlob(
   try {
     for await (const entry of globIterate(pattern, {
       cwd: options.cwd,
-      absolute: options.absolute,
       ignore: options.ignore,
       nodir: options.nodir,
       dot: options.dot,
+      withFileTypes: true,
       signal: controller.signal,
     })) {
-      const path = String(entry);
+      const fullPath = entry.fullpath();
+      if (options.nodir && entry.isSymbolicLink()) {
+        try {
+          if (!(await stat(fullPath)).isFile()) continue;
+        } catch {
+          continue;
+        }
+      }
+      const path = options.absolute
+        ? fullPath
+        : relative(options.cwd, fullPath);
       if (accept && !accept(path)) continue;
       items.push(path);
       if (items.length >= cap) {

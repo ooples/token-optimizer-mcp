@@ -25,6 +25,7 @@
  */
 
 import { readFileSync, existsSync, statSync } from 'fs';
+import { createHash } from 'node:crypto';
 import { homedir } from 'os';
 import { join } from 'path';
 import { CacheEngine, resolveCacheLocation } from '../../core/cache-engine.js';
@@ -248,7 +249,11 @@ export class SmartReadTool {
     const fromCache = ownCached !== null;
 
     // Read file content
-    const rawContent = readFileSync(filePath, encoding);
+    const snapshot = readFileSync(filePath);
+    const rawContent = snapshot.toString(encoding);
+    const snapshotHash = includeMetadata
+      ? createHash('sha256').update(snapshot).digest('hex')
+      : undefined;
     // maxSize and chunkSize are UTF-8 bytes, as the schema says (see utf8Length).
     const rawBytes = utf8Length(rawContent);
 
@@ -420,9 +425,15 @@ export class SmartReadTool {
       }).truncated;
       truncated = true;
     }
+    if (truncated) diffData = undefined;
     // Advance the read base after an edit too. Leaving a cache hit pinned to
     // its old bytes would return the same diff on every subsequent read.
-    if (enableCache && (!fromCache || ownCached !== rawContent)) {
+    if (
+      enableCache &&
+      !truncated &&
+      !chunked &&
+      (!fromCache || ownCached !== rawContent)
+    ) {
       // A ttl that is not a positive number would reach the engine as "never
       // expires" -- the very behaviour being fixed -- so it means the default.
       const ttlSeconds = Number(ttl) > 0 ? Number(ttl) : 300;
@@ -455,7 +466,7 @@ export class SmartReadTool {
     if (includeMetadata) {
       header.path = filePath;
       header.fileType = fileType;
-      header.hash = hashFile(filePath);
+      header.hash = snapshotHash;
     }
     // The encoding is worth a line when it is NOT the one every caller assumes,
     // asked for or not: content decoded as latin1 and labelled nothing reads as
