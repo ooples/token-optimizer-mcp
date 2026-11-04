@@ -6,3 +6,5 @@ import { dispatchCli } from './cli-dispatch.js';
 if (!(await dispatchCli(process.argv.slice(2)))) {
   await import('./mcp-server.js');
 }
+
+export { instructionsFor, PLUGIN_INSTRUCTIONS } from './plugin-instructions.js';

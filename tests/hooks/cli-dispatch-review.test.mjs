@@ -14,7 +14,7 @@ beforeAll(() => {
   mkdirSync(server, { recursive: true });
   mkdirSync(scripts);
   writeFileSync(join(work, 'package.json'), JSON.stringify({ type: 'module', version: '7.8.0' }));
-  for (const name of ['index', 'cli-dispatch']) {
+  for (const name of ['index', 'cli-dispatch', 'plugin-instructions']) {
     const source = readFileSync(join(process.cwd(), `src/server/${name}.ts`), 'utf8');
     writeFileSync(join(server, `${name}.js`), ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ES2022 } }).outputText);
   }
@@ -68,3 +68,8 @@ signalTest('termination reaches the run child so it can clean up', async () => {
     expect(existsSync(cleaned)).toBe(true);
   } finally { child.kill('SIGKILL'); }
 }, 10000);
+
+test('the package entry retains both public instruction exports', () => {
+  const result = spawnSync(process.execPath, ['--input-type=module', '-e', `process.argv.push('--help'); const entry = await import(${JSON.stringify(new URL(`file:///${entry.replaceAll('\\', '/')}`).href)}); if (typeof entry.instructionsFor !== 'function' || typeof entry.PLUGIN_INSTRUCTIONS !== 'string' || entry.instructionsFor({CLAUDE_PLUGIN_ROOT:'plugin'}) !== entry.PLUGIN_INSTRUCTIONS) process.exitCode=1;`], { encoding: 'utf8', windowsHide: true });
+  expect({ status: result.status, stderr: result.stderr }).toEqual({ status: 0, stderr: '' });
+});
