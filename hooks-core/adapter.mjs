@@ -140,6 +140,7 @@ import { artifactPath, capture } from './expand.mjs';
  * PowerShell or bash, and a command quoted for the wrong one is broken.
  */
 function outlineRewrite(raw, payload, state, clientName) {
+  if (payload.replacement) return null;
   // A Codex code-mode envelope orchestrates several operations; rewriting one
   // would discard the rest, the same reason the refusal path leaves it alone.
   if (clientName === 'codex' && payload.tool_input?.code_mode_envelope) return null;
@@ -1354,6 +1355,24 @@ async function runHook(clientName, event, invocation) {
   if (mode() === MODE_OFF) process.exit(0);
 
   const features = featuresForArm();
+  if (event === 'pre-invocation' && isAntigravity) {
+    const input = await readPayloadResult({ timeoutMs: 250 });
+    const raw = input.payload || {};
+    invocation.bind(raw, null, input.bytes);
+    if (input.status !== 'ok') invocation.noteInput(input.status, input.bytes);
+    if (features.routing || features.retrieval || features.harvest) {
+      const sessionId = raw.session_id ?? raw.sessionId ?? raw.conversation_id ?? raw.conversationId ?? 'default';
+      const scope = stateScope(raw, raw.transcript_path ?? raw.transcriptPath ?? null);
+      const state = loadState(sessionId, scope);
+      if (typeof state.pendingHarvest === 'string' && state.pendingHarvest) {
+        emit({ injectSteps: [{ ephemeralMessage: state.pendingHarvest }] });
+        state.pendingHarvest = null;
+        saveState(sessionId, state, scope);
+      }
+    }
+    process.exit(0);
+  }
+
 
   if (event === 'session-start') {
     // Some hook hosts invoke SessionStart without closing stdin. Waiting the
@@ -1378,13 +1397,14 @@ async function runHook(clientName, event, invocation) {
     const sessionId = raw.session_id ?? raw.sessionId ?? raw.conversation_id ?? raw.conversationId;
     let deferredToolContext = null;
     if (sessionId) {
-      const state = loadState(sessionId);
+      const scope = stateScope(raw, raw.transcript_path ?? raw.transcriptPath ?? null);
+      const state = loadState(sessionId, scope);
       if (toolEvidence.proven) rememberOptimizerTools(state, toolEvidence);
       if (typeof state.pendingHarvest === 'string' && state.pendingHarvest) {
         deferredToolContext = state.pendingHarvest;
         state.pendingHarvest = null;
       }
-      if (toolEvidence.proven || deferredToolContext) saveState(sessionId, state);
+      if (toolEvidence.proven || deferredToolContext) saveState(sessionId, state, scope);
     }
     // ASSEMBLED IN CACHE ORDER, not in whatever order this function happens to
     // discover the blocks. Everything emitted here sits near the FRONT of the

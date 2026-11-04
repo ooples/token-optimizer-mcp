@@ -994,7 +994,8 @@ export function normalizePayload(raw) {
     // routing has to treat them as opposites while accounting treats them as
     // the same. Absent by default (`false`), so a payload assembled by hand in
     // a test or by a caller that predates this field is a normal built-in call.
-    replacement: isReplacementTool(raw.tool_name ?? raw.toolName ?? raw.tool ?? raw.toolCall?.name),
+    replacement: isReplacementTool(raw.tool_name ?? raw.toolName ?? raw.tool ?? raw.toolCall?.name)
+      || /^(view_file_outline|view_code_item)$/i.test(String(raw.tool_name ?? raw.toolName ?? raw.tool ?? raw.toolCall?.name ?? '')),
     tool_input: {
       ...input,
       // CANONICALISED HERE, once. Every consumer downstream -- the `seen` map
