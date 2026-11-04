@@ -280,6 +280,10 @@ function run(entry, w, payload, state) {
       TOKEN_OPTIMIZER_STATE_DIR: state,
       TOKEN_OPTIMIZER_RUNTIME: join(state, 'runtime'),
       TOKEN_OPTIMIZER_HOME: join(state, 'home'),
+      // Keep this context-window fixture out of automatic store migration.
+      // A detached migration otherwise outlives the hook and races teardown.
+      TOKEN_OPTIMIZER_WIKI_DIR: join(state, 'wiki'),
+      TOKEN_OPTIMIZER_UCR_DIR: join(state, 'ucr'),
       TOKEN_OPTIMIZER_LOG_DIR: join(state, 'logs'),
       TOKEN_OPTIMIZER_REFRESH_INTERVAL_MS: '999999999999',
     },
