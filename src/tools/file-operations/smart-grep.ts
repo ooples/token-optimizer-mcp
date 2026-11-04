@@ -11,7 +11,7 @@
  * Target: 80% reduction vs returning full file contents
  */
 
-import { readFileSync, statSync } from 'fs';
+import { closeSync, openSync, readFileSync, readSync, statSync } from 'fs';
 import {
   boundedGlobStream,
   traversalDeadlineMs,
@@ -27,7 +27,10 @@ import { TokenCounter } from '../../core/token-counter.js';
 import { MetricsCollector } from '../../core/metrics.js';
 import { generateCacheKey } from '../shared/hash-utils.js';
 import { fsGeneration } from '../../utils/fs-generation.js';
-import { detectFileType } from '../shared/syntax-utils.js';
+import {
+  detectFileType,
+  KNOWN_BINARY_EXTENSIONS,
+} from '../shared/syntax-utils.js';
 import { appendAll } from '../shared/append-all.js';
 import { resolveSearchScope } from '../../utils/search-scope.js';
 
@@ -389,6 +392,10 @@ export async function gitGrepCandidates(
     if (links.some(Boolean)) return null;
   }
 
+  const binaryExcludes = opts.skipBinary
+    ? KNOWN_BINARY_EXTENSIONS.map((ext) => `:(exclude,glob)**/*.${ext}`)
+    : [];
+
   const grep = await runGit(
     [
       ...base,
@@ -409,6 +416,7 @@ export async function gitGrepCandidates(
       '--',
       '.',
       ...excludes,
+      ...binaryExcludes,
     ],
     left(),
     limit
@@ -1237,20 +1245,31 @@ export class SmartGrepTool {
    */
   private isBinaryFile(filePath: string): boolean {
     try {
-      // Read first 8KB to check for binary content
-      const buffer = readFileSync(filePath, { encoding: null }).slice(0, 8192);
+      // Fast O(1) extension check before touching disk: both gitGrepCandidates
+      // and the walk skip these extensions when skipBinary is true.
+      const fileType = detectFileType(filePath);
+      const binaryTypes = ['image', 'video', 'audio', 'binary', 'archive'];
+      if (binaryTypes.includes(fileType || '')) {
+        return true;
+      }
 
-      // Check for null bytes (common in binary files)
-      for (let i = 0; i < buffer.length; i++) {
-        if (buffer[i] === 0) {
+      // Read ONLY the first 8KB from disk (never readFileSync the whole file).
+      const probe = Buffer.allocUnsafe(8192);
+      const fd = openSync(filePath, 'r');
+      let bytesRead = 0;
+      try {
+        bytesRead = readSync(fd, probe, 0, 8192, 0);
+      } finally {
+        closeSync(fd);
+      }
+
+      for (let i = 0; i < bytesRead; i++) {
+        if (probe[i] === 0) {
           return true;
         }
       }
 
-      // Check file type
-      const fileType = detectFileType(filePath);
-      const binaryTypes = ['image', 'video', 'audio', 'binary', 'archive'];
-      return binaryTypes.includes(fileType || '');
+      return false;
     } catch {
       return false;
     }

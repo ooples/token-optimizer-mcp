@@ -276,4 +276,29 @@ describe('when git is not asked', () => {
     const env = gitEnvironment({ PATH: '/bin', GIT_DIR: '/elsewhere/.git', GIT_INDEX_FILE: '/x', git_work_tree: '/y' });
     expect(env).toEqual({ PATH: '/bin' });
   });
+
+  it('skips compiled binary extensions (.dll, .pdb) identically across git and walk backends', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'grep-binext-'));
+    try {
+      gitFixture(['init', '-q', dir]);
+      writeFileSync(join(dir, 'source.ts'), `export const k = '${NEEDLE}';\n`);
+      mkdirSync(join(dir, 'altbin'), { recursive: true });
+      writeFileSync(join(dir, 'altbin', 'assembly.dll'), `MZ_${NEEDLE}_BINARY\n`);
+      writeFileSync(join(dir, 'altbin', 'symbols.pdb'), `PDB_${NEEDLE}_BINARY\n`);
+
+      expect(await gitGrepCandidates(NEEDLE, { ...base, cwd: dir, skipBinary: true }, 30_000)).toEqual([
+        join(dir, 'source.ts'),
+      ]);
+
+      process.env.TOKEN_OPTIMIZER_GREP_BACKEND = 'walk';
+      const walkRes = await new SmartGrepTool(...deps()).grep(NEEDLE, { path: dir, skipBinary: true });
+      delete process.env.TOKEN_OPTIMIZER_GREP_BACKEND;
+      const gitRes = await new SmartGrepTool(...deps()).grep(NEEDLE, { path: dir, skipBinary: true });
+
+      expect((gitRes.matches ?? []).map((m) => m.file.replace(/\\/g, '/'))).toEqual(['source.ts']);
+      expect((walkRes.matches ?? []).map((m) => m.file.replace(/\\/g, '/'))).toEqual(['source.ts']);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });
