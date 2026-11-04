@@ -509,8 +509,13 @@ export function verificationSucceeded(raw) {
   if (!toolSucceeded(raw) || envelopes.some((value) =>
     value.success === false || /^(?:error|failed|failure|cancelled|canceled|denied)$/i.test(String(value.status ?? ''))
   )) return false;
-  const exit = exitFrom(raw);
-  if (exit !== null) return exit === 0;
+  const exitCodes = envelopes.flatMap((value) => EXIT_KEYS.flatMap((key) => {
+    const code = value[key];
+    if (Number.isInteger(code)) return [code];
+    if (typeof code === 'string' && /^-?\d{1,5}$/.test(code.trim())) return [Number(code.trim())];
+    return [];
+  }));
+  if (exitCodes.length) return exitCodes.every((code) => code === 0);
   return envelopes.some((value) => value.success === true ||
     /^(?:ok|success|succeeded|passed)$/i.test(String(value.status ?? '')));
 }

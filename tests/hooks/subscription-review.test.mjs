@@ -76,6 +76,10 @@ test.each([
   [{ tool_response: { success: false, exit_code: 0 } }, false],
   [{ status: 'failed', tool_response: { exit_code: 0 } }, false],
   [{ postToolUse: { success: true } }, true],
+  [{ tool_response: { exit_code: 0 }, postToolUse: { exitCode: 1 } }, false],
+  [{ exit_code: 0, tool_response: { exitCode: '1' } }, false],
+  [{ tool_response: { exit_code: 0, exitCode: 1 } }, false],
+  [{ tool_response: { exit_code: 0 }, postToolUse: { exitCode: '0' } }, true],
 ])('verification requires affirmative, noncontradictory success: %j', (raw, expected) => {
   expect(verificationSucceeded(raw)).toBe(expected);
 });

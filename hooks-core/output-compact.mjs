@@ -129,7 +129,8 @@ const MSBUILD_DIAGNOSTIC = /(?:\(\d{1,9},\d{1,9}\)|\.(?:csproj|fsproj|vbproj|pro
 function withoutProjectSuffix(line) {
   const end = line.trimEnd();
   const open = end.lastIndexOf(' [');
-  if (end.endsWith(']') && open > 0) return end.slice(0, open).trimEnd();
+  if (end.endsWith(']') && open > 0 && /\.(?:csproj|fsproj|vbproj|props|targets)(?:::[^\]]*)?\]$/i.test(end.slice(open)))
+    return end.slice(0, open).trimEnd();
   return /\.(?:csproj|fsproj|vbproj|props|targets)\s*: (?:error|warning) [A-Za-z]{1,20}\d{1,9}:/i.test(end)
     ? end
     : null;
