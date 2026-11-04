@@ -102,4 +102,3 @@ test('installer help never executes the mutating installer', () => {
     expect(existsSync(installed)).toBe(false);
   }
 });
-

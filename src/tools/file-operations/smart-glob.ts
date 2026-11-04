@@ -413,66 +413,78 @@ export class SmartGlobTool {
 
       // Filter and collect file info
       let files: Array<{ path: string; metadata?: FileMetadata }> = [];
+      const needsStat =
+        filtersNeedStat ||
+        opts.includeMetadata ||
+        opts.sortBy === 'size' ||
+        opts.sortBy === 'modified' ||
+        !opts.onlyFiles;
 
-      for (const filePath of matches) {
-        try {
-          // globSync returns paths relative to opts.cwd when absolute:false.
-          // statSync resolves relative paths against process.cwd(), NOT
-          // opts.cwd — so when a caller passes a cwd different from the MCP
-          // server's process cwd, EVERY statSync throws and every file is
-          // skipped, yielding 0 matches for a directory that actually has
-          // files. Resolve against opts.cwd for all filesystem access while
-          // keeping the caller-facing display path (filePath) unchanged.
-          const absPath = isAbsolute(filePath)
-            ? filePath
-            : join(opts.cwd, filePath);
-          const stats = statSync(absPath);
-          const isFile = stats.isFile();
-          const isDir = stats.isDirectory();
+      if (!needsStat) {
+        // Fast path: boundedGlob already enforced nodir:true (onlyFiles) and
+        // acceptsExtension, so no per-file statSync syscall is needed.
+        files = matches.map((filePath) => ({ path: filePath }));
+      } else {
+        for (const filePath of matches) {
+          try {
+            // globSync returns paths relative to opts.cwd when absolute:false.
+            // statSync resolves relative paths against process.cwd(), NOT
+            // opts.cwd — so when a caller passes a cwd different from the MCP
+            // server's process cwd, EVERY statSync throws and every file is
+            // skipped, yielding 0 matches for a directory that actually has
+            // files. Resolve against opts.cwd for all filesystem access while
+            // keeping the caller-facing display path (filePath) unchanged.
+            const absPath = isAbsolute(filePath)
+              ? filePath
+              : join(opts.cwd, filePath);
+            const stats = statSync(absPath);
+            const isFile = stats.isFile();
+            const isDir = stats.isDirectory();
 
-          // Apply filters
-          if (opts.onlyFiles && !isFile) continue;
-          if (opts.onlyDirectories && !isDir) continue;
+            // Apply filters
+            if (opts.onlyFiles && !isFile) continue;
+            if (opts.onlyDirectories && !isDir) continue;
 
-          if (isFile) {
-            // Extension filter
-            const ext = extname(filePath);
-            if (opts.extensions.length > 0 && !opts.extensions.includes(ext))
-              continue;
-            if (opts.excludeExtensions.includes(ext)) continue;
+            if (isFile) {
+              // Extension filter
+              const ext = extname(filePath);
+              if (opts.extensions.length > 0 && !opts.extensions.includes(ext))
+                continue;
+              if (opts.excludeExtensions.includes(ext)) continue;
 
-            // Size filter
-            if (stats.size < opts.minSize || stats.size > opts.maxSize)
-              continue;
+              // Size filter
+              if (stats.size < opts.minSize || stats.size > opts.maxSize)
+                continue;
 
-            // Date filter
-            if (
-              stats.mtime < opts.modifiedAfter ||
-              stats.mtime > opts.modifiedBefore
-            )
-              continue;
+              // Date filter
+              if (
+                stats.mtime < opts.modifiedAfter ||
+                stats.mtime > opts.modifiedBefore
+              )
+                continue;
+            }
+
+            // Build metadata if requested
+            let metadata: FileMetadata | undefined;
+            if (opts.includeMetadata) {
+              metadata = {
+                path: absPath,
+                relativePath: relative(opts.cwd, absPath),
+                name: basename(absPath),
+                extension: extname(absPath),
+                size: stats.size,
+                modified: stats.mtime,
+                type: isFile ? 'file' : 'directory',
+                fileType: isFile ? detectFileType(absPath) : undefined,
+              };
+            }
+
+            // Keep the caller-facing display path (respects opts.absolute).
+            files.push({ path: filePath, metadata });
+          } catch {
+            // Skip files we can't access
+            continue;
           }
-
-          // Build metadata if requested
-          let metadata: FileMetadata | undefined;
-          if (opts.includeMetadata) {
-            metadata = {
-              path: absPath,
-              relativePath: relative(opts.cwd, absPath),
-              name: basename(absPath),
-              extension: extname(absPath),
-              size: stats.size,
-              modified: stats.mtime,
-              type: isFile ? 'file' : 'directory',
-              fileType: isFile ? detectFileType(absPath) : undefined,
-            };
-          }
-
-          // Keep the caller-facing display path (respects opts.absolute).
-          files.push({ path: filePath, metadata });
-        } catch {
-          // Skip files we can't access
-          continue;
         }
       }
 

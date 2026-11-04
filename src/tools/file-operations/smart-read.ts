@@ -25,6 +25,7 @@
  */
 
 import { readFileSync, existsSync, statSync } from 'fs';
+import { createHash } from 'node:crypto';
 import { homedir } from 'os';
 import { join } from 'path';
 import { CacheEngine, resolveCacheLocation } from '../../core/cache-engine.js';
@@ -192,7 +193,6 @@ export class SmartReadTool {
 
     // Get file stats
     const stats = statSync(filePath);
-    const fileHash = hashFile(filePath);
     const fileType = detectFileType(filePath);
 
     // Generate cache key.
@@ -249,7 +249,11 @@ export class SmartReadTool {
     const fromCache = ownCached !== null;
 
     // Read file content
-    const rawContent = readFileSync(filePath, encoding);
+    const snapshot = readFileSync(filePath);
+    const rawContent = snapshot.toString(encoding);
+    const snapshotHash = includeMetadata
+      ? createHash('sha256').update(snapshot).digest('hex')
+      : undefined;
     // maxSize and chunkSize are UTF-8 bytes, as the schema says (see utf8Length).
     const rawBytes = utf8Length(rawContent);
 
@@ -290,20 +294,16 @@ export class SmartReadTool {
           if (diff.compressionRatio < 0.5) {
             finalContent = diff.diffText;
             isDiff = true;
-            diffData = {
-              added: diff.added,
-              removed: diff.removed,
-              unchanged: diff.unchanged,
-            };
-          } else {
-            // Diff exists but not efficient, still return full content with diff metadata
-            isDiff = true;
-            diffData = {
-              added: diff.added,
-              removed: diff.removed,
-              unchanged: diff.unchanged,
-            };
+            if (includeMetadata) {
+              diffData = {
+                added: diff.added,
+                removed: diff.removed,
+                unchanged: diff.unchanged,
+              };
+            }
           }
+          // When diff.compressionRatio >= 0.5, finalContent stays rawContent (subject to maxSize/chunking)
+          // and diffData is omitted so added/removed arrays do not duplicate the file or bypass maxSize.
         } else {
           // No changes, return minimal response
           finalContent = '// No changes';
@@ -425,9 +425,15 @@ export class SmartReadTool {
       }).truncated;
       truncated = true;
     }
+    if (truncated) diffData = undefined;
     // Advance the read base after an edit too. Leaving a cache hit pinned to
     // its old bytes would return the same diff on every subsequent read.
-    if (enableCache && (!fromCache || ownCached !== rawContent)) {
+    if (
+      enableCache &&
+      !truncated &&
+      !chunked &&
+      (!fromCache || ownCached !== rawContent)
+    ) {
       // A ttl that is not a positive number would reach the engine as "never
       // expires" -- the very behaviour being fixed -- so it means the default.
       const ttlSeconds = Number(ttl) > 0 ? Number(ttl) : 300;
@@ -460,7 +466,7 @@ export class SmartReadTool {
     if (includeMetadata) {
       header.path = filePath;
       header.fileType = fileType;
-      header.hash = fileHash;
+      header.hash = snapshotHash;
     }
     // The encoding is worth a line when it is NOT the one every caller assumes,
     // asked for or not: content decoded as latin1 and labelled nothing reads as
@@ -480,6 +486,19 @@ export class SmartReadTool {
       header.chunkCount = chunkCount;
       header.chunkIndex = chunkIndex;
     }
+
+    // Diff arrays repeat changed text; retain them only when the complete reply fits.
+    if (
+      diffData &&
+      utf8Length(
+        JSON.stringify({
+          content: finalContent,
+          metadata: header,
+          diff: diffData,
+        })
+      ) > maxSize
+    )
+      diffData = undefined;
 
     return {
       content: finalContent,

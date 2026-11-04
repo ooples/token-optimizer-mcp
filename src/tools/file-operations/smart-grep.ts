@@ -20,14 +20,17 @@ import {
 } from '../shared/bounded-traversal.js';
 import { relative, join, resolve } from 'path';
 import { spawn } from 'child_process';
-import { lstat } from 'fs/promises';
+import { lstat, open } from 'fs/promises';
 import { homedir } from 'os';
 import { CacheEngine, resolveCacheLocation } from '../../core/cache-engine.js';
 import { TokenCounter } from '../../core/token-counter.js';
 import { MetricsCollector } from '../../core/metrics.js';
 import { generateCacheKey } from '../shared/hash-utils.js';
 import { fsGeneration } from '../../utils/fs-generation.js';
-import { detectFileType } from '../shared/syntax-utils.js';
+import {
+  detectFileType,
+  KNOWN_BINARY_EXTENSIONS,
+} from '../shared/syntax-utils.js';
 import { appendAll } from '../shared/append-all.js';
 import { resolveSearchScope } from '../../utils/search-scope.js';
 
@@ -292,6 +295,28 @@ export async function gitIgnoredGlobs(
   return entries.map((entry) => (entry.endsWith('/') ? `${entry}**` : entry));
 }
 
+/** Inspect a bounded prefix; .pdb and .so can also be ordinary text formats. */
+async function hasBinaryPrefix(filePath: string): Promise<boolean> {
+  const handle = await open(filePath, 'r');
+  try {
+    const probe = Buffer.allocUnsafe(8192);
+    let total = 0;
+    while (total < probe.length) {
+      const { bytesRead } = await handle.read(
+        probe,
+        total,
+        probe.length - total,
+        total
+      );
+      if (bytesRead === 0) break;
+      total += bytesRead;
+    }
+    return probe.subarray(0, total).includes(0);
+  } finally {
+    await handle.close();
+  }
+}
+
 /**
  * The files under `opts.cwd` that contain a LITERAL pattern, per `git grep -l`,
  * or null when git cannot answer the same question the walk would.
@@ -389,6 +414,47 @@ export async function gitGrepCandidates(
     if (links.some(Boolean)) return null;
   }
 
+  const binaryExcludes = opts.skipBinary
+    ? KNOWN_BINARY_EXTENSIONS.map((ext) => `:(exclude,glob,icase)**/*.${ext}`)
+    : [];
+  if (opts.skipBinary) {
+    // Protein coordinates and linker scripts share suffixes with binary artifacts.
+    // Probe only those ambiguous candidates before native grep reads their bodies.
+    const ambiguous = await runGit(
+      [
+        ...base,
+        'ls-files',
+        '-c',
+        '-o',
+        '-z',
+        '--',
+        ':(glob,icase)**/*.pdb',
+        ':(glob,icase)**/*.so',
+        ...excludes,
+      ],
+      left(),
+      limit
+    );
+    if (!ambiguous || ambiguous.code !== 0) return null;
+    const files = [...new Set(nulEntries(ambiguous.stdout))];
+    for (let i = 0; i < files.length; i += 16) {
+      if (Date.now() >= deadline) return null;
+      const headers = await Promise.all(
+        files.slice(i, i + 16).map(async (file) => {
+          try {
+            return (await hasBinaryPrefix(resolve(opts.cwd, file)))
+              ? file
+              : null;
+          } catch {
+            return null;
+          }
+        })
+      );
+      for (const file of headers)
+        if (file !== null) binaryExcludes.push(`:(exclude,literal)${file}`);
+    }
+  }
+
   const grep = await runGit(
     [
       ...base,
@@ -409,6 +475,7 @@ export async function gitGrepCandidates(
       '--',
       '.',
       ...excludes,
+      ...binaryExcludes,
     ],
     left(),
     limit
@@ -738,7 +805,7 @@ export class SmartGrepTool {
       const streamState: StreamState = { truncated: false };
 
       /** Path-and-stat filters, applied per file as it arrives. */
-      const passesFilters = (file: string): boolean => {
+      const passesFilters = async (file: string): Promise<boolean> => {
         try {
           if (opts.extensions.length > 0) {
             const hasAllowedExt = opts.extensions.some((ext) =>
@@ -755,7 +822,7 @@ export class SmartGrepTool {
           const stats = statSync(file);
           if (stats.size > opts.maxFileSize) return false;
 
-          if (opts.skipBinary && this.isBinaryFile(file)) return false;
+          if (opts.skipBinary && (await this.isBinaryFile(file))) return false;
 
           return true;
         } catch {
@@ -844,7 +911,7 @@ export class SmartGrepTool {
             searchTruncatedBy = 'cap';
             break;
           }
-          if (!passesFilters(file)) continue;
+          if (!(await passesFilters(file))) continue;
           try {
             filesSearched++;
             const content = readFileSync(file, opts.encoding);
@@ -1038,7 +1105,10 @@ export class SmartGrepTool {
         );
         // The caller's extension, size and binary filters still apply, or the
         // hint names a file that following it would not search.
-        ignoredHits = (everywhere ?? []).filter(passesFilters);
+        ignoredHits = [];
+        for (const file of everywhere ?? []) {
+          if (await passesFilters(file)) ignoredHits.push(file);
+        }
       }
 
       const result: SmartGrepResult = {
@@ -1235,22 +1305,16 @@ export class SmartGrepTool {
   /**
    * Check if a file is binary
    */
-  private isBinaryFile(filePath: string): boolean {
+  private async isBinaryFile(filePath: string): Promise<boolean> {
     try {
-      // Read first 8KB to check for binary content
-      const buffer = readFileSync(filePath, { encoding: null }).slice(0, 8192);
-
-      // Check for null bytes (common in binary files)
-      for (let i = 0; i < buffer.length; i++) {
-        if (buffer[i] === 0) {
-          return true;
-        }
-      }
-
-      // Check file type
       const fileType = detectFileType(filePath);
-      const binaryTypes = ['image', 'video', 'audio', 'binary', 'archive'];
-      return binaryTypes.includes(fileType || '');
+      if (
+        ['image', 'video', 'audio', 'binary', 'archive'].includes(
+          fileType || ''
+        )
+      )
+        return true;
+      return await hasBinaryPrefix(filePath);
     } catch {
       return false;
     }
