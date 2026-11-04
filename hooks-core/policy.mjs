@@ -390,6 +390,10 @@ function emptyState() {
     actCounts: {},
     forecast: null,
     edits: 0,
+    verifiedEdits: 0,
+    verificationContinued: false,
+    backlogContinuations: 0,
+    nightlySweepContinued: false,
     editedFiles: [],
     harvestedEdits: 0,
     recordingNudged: false,
@@ -508,6 +512,10 @@ export function loadState(sessionId, agent) {
       // counter not carried through here resets to zero on each one and can never reach a
       // threshold -- which is exactly how the act counter came to sit at one forever.
       edits: Number.isFinite(parsed.edits) ? parsed.edits : 0,
+      verifiedEdits: Number.isFinite(parsed.verifiedEdits) && parsed.verifiedEdits >= 0 ? parsed.verifiedEdits : 0,
+      verificationContinued: parsed.verificationContinued === true,
+      backlogContinuations: Number.isFinite(parsed.backlogContinuations) && parsed.backlogContinuations >= 0 ? parsed.backlogContinuations : 0,
+      nightlySweepContinued: parsed.nightlySweepContinued === true,
       editedFiles: Array.isArray(parsed.editedFiles) ? parsed.editedFiles : [],
       // Stop hooks run in a fresh process. Remember how many confirmed edits
       // the active model has already been asked to harvest so a client that
@@ -678,6 +686,10 @@ export function saveState(sessionId, state, agent) {
       // processes each read, each increment, and last-writer would lose one. Monotonic beats
       // exact here -- undercounting delays a nudge, overcounting invents one.
       edits: Math.max(Number(current.edits) || 0, Number(state.edits) || 0),
+      verifiedEdits: Math.max(0, Number(current.verifiedEdits) || 0, Number(state.verifiedEdits) || 0),
+      verificationContinued: Boolean(current.verificationContinued || state.verificationContinued),
+      backlogContinuations: Math.max(0, Number(current.backlogContinuations) || 0, Number(state.backlogContinuations) || 0),
+      nightlySweepContinued: Boolean(current.nightlySweepContinued || state.nightlySweepContinued),
       optimizerServerFailedAt: Math.max(
         Number(current.optimizerServerFailedAt) || 0,
         Number(state.optimizerServerFailedAt) || 0
