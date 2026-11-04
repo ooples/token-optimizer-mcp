@@ -34,6 +34,11 @@ import { noteToolCall, flushToolRollup } from '../telemetry/tool-rollup.js';
 import { runUcrTool } from './ucr-tools.js';
 
 import { CacheEngine } from '../core/cache-engine.js';
+import { cacheSet } from '../utils/cache-helper.js';
+import {
+  lastWrittenKey,
+  LAST_WRITTEN_TTL_SECONDS,
+} from '../tools/shared/hash-utils.js';
 import { TokenCounter } from '../core/token-counter.js';
 import { CompressionEngine } from '../core/compression-engine.js';
 import { analyzeProjectTokens } from '../analysis/project-analyzer.js';
@@ -1274,7 +1279,14 @@ async function handleToolCall(request: {
             securityRejected: 0,
           };
 
-          const fileToolNames = ['Read', 'Write', 'Edit'];
+          const fileToolNames = [
+            'Read',
+            'Write',
+            'Edit',
+            'smart_read',
+            'smart_write',
+            'smart_edit',
+          ];
 
           // SECURITY: Define secure base directory for file access
           // Resolve to absolute path to prevent bypasses
@@ -1354,6 +1366,9 @@ async function handleToolCall(request: {
                 compressionResult.originalSize,
                 compressionResult.compressedSize
               );
+              cacheSet(cache, lastWrittenKey(filePath), fileContent, {
+                ttlSeconds: LAST_WRITTEN_TTL_SECONDS,
+              });
               compressedTokens += compressedCount.tokens;
               operationsCompressed++;
             } else {
