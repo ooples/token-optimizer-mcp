@@ -26,11 +26,11 @@ test('verification and continuation fields survive stale concurrent state saves'
   expect(loadState(session)).toMatchObject({ edits: 4, verifiedEdits: 4, verificationContinued: true, backlogContinuations: 3, nightlySweepContinued: true });
 });
 
-test.each(['npm test', 'npm run test:unit', 'dotnet build src/Library.csproj', 'cd project && pytest', 'npx vitest run', 'cargo test'])('recognizes verification runner %s', (command) => {
+test.each(['npm test 2>&1', 'npm test &> results.log', 'npm test', 'npm run test:unit', 'dotnet build src/Library.csproj', 'cd project && pytest', 'npx vitest run', 'cargo test'])('recognizes verification runner %s', (command) => {
   expect(isVerificationCommand(command)).toBe(true);
 });
 
-test.each(['echo npm test', 'cat tests/results.txt', 'test -f output.txt', 'npm test || echo ignored', 'npm test; echo done', 'npm test | cat', 'npm test &'])('rejects misleading verification command %s', (command) => {
+test.each(['npx jest --listTests', 'pytest --collect-only', 'npm test -- --help', 'npx tsc --showConfig', 'npm test 2>&1 &', 'echo npm test', 'cat tests/results.txt', 'test -f output.txt', 'npm test || echo ignored', 'npm test; echo done', 'npm test | cat', 'npm test &'])('rejects misleading verification command %s', (command) => {
   expect(isVerificationCommand(command)).toBe(false);
 });
 
@@ -52,6 +52,8 @@ test('actual post-tool processes accept a passing test and reject failed or unre
   expect(loadState('actual-verification').verifiedEdits).toBe(0);
   post('echo npm test', 0);
   expect(loadState('actual-verification').verifiedEdits).toBe(0);
-  post('npm test', 0);
+  post('npx jest --listTests', 0);
+  expect(loadState('actual-verification').verifiedEdits).toBe(0);
+  post('npm test 2>&1', 0);
   expect(loadState('actual-verification').verifiedEdits).toBe(2);
 });
