@@ -49,7 +49,7 @@
       "count": 6
     }
   },
-  "src/server/index.ts": {
+  "src/server/mcp-server.ts": {
     "n/no-sync": {
       "count": 10
     }

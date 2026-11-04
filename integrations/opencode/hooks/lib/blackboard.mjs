@@ -46,7 +46,7 @@ export function boardPath(sessionId) {
 
 /** First words of commands that only read. Anything else is never recorded. */
 const READ_ONLY =
-  /^(?:git\s+(?:log|show|diff|grep|ls-files|ls-tree|status|branch|rev-parse|blame|describe|tag\s+-l|remote\s+-v)|gh\s+(?:issue|pr)\s+(?:view|list|diff|checks)|gh\s+api\s+(?![^|;&]*(?:-X\s*(?:POST|PATCH|PUT|DELETE)|--method|\s-f\s|\s-F\s|--field|--input))|ls|cat|head|tail|grep|rg|find|wc|tree|jq|sed\s+-n|awk\s+(?!.*-i))\b/;
+  /^(?:git\s+(?:log|show|diff|grep|ls-files|ls-tree|status|branch|rev-parse|blame|describe|tag\s+-l|remote\s+-v)|gh\s+(?:issue|pr)\s+(?:view|list|diff|checks)|gh\s+api\s+(?![^|;&]*(?:-X\s*(?:POST|PATCH|PUT|DELETE)|--method|\s-f\s|\s-F\s|--field|--input))|ls|cat|head|tail|grep|rg|find|wc|tree|jq|sed\s+-n|awk\s+(?!.*-i)|Get-ChildItem|Get-Content|Select-String|Get-Item|Get-Location)\b/i;
 const MUTATES = /(?:^|[^>])>(?!&)|>>|\btee\b|\brm\b|\bmv\b|\bcp\b|\bmkdir\b|\btouch\b|-i\b|--in-place|\s-(?:delete|exec(?:dir)?|ok|fprint\w*)\b/;
 /** `git branch` and `git tag` list by default and change refs with these. */
 const REF_CHANGE = /\s-(?:[dDmMcCf]|-(?:delete|move|copy|force|set-upstream-to|unset-upstream|edit-description))\b/;
@@ -119,6 +119,35 @@ function digestOf(output) {
 }
 
 /** Record one result. Silently does nothing for anything but a read-only command. */
+/** Record a large file read on the sibling blackboard so subagents can reuse its digest/artifact without re-reading. */
+export function recordReadOnBoard({ sessionId, agent = '', filePath, offset, limit, cwd = '', output, artifact = null, now = Date.now() }) {
+  if (!boardEnabled() || !sessionId || !filePath || typeof output !== 'string' || output.length < MIN_OUTPUT_CHARS) return false;
+  const resolved = cwd ? resolve(cwd, String(filePath)) : String(filePath);
+  const version = fileVersion(resolved);
+  if (version === null) return false;
+  const head = cwd ? gitHead(cwd) : null;
+  const command = `read ${resolved}${offset != null ? ` offset=${offset}` : ''}${limit != null ? ` limit=${limit}` : ''}`;
+  const key = createHash('sha256').update(`${cwd}\n${head}\n${command}`).digest('hex').slice(0, 16);
+  const entry = { key, at: now, agent, command, cwd, head, chars: output.length, digest: digestOf(output), artifact, filePath: resolved, fileVersion: version };
+  try {
+    const file = boardPath(sessionId);
+    mkdirSync(dirname(file), { recursive: true, mode: 0o700 });
+    appendFileSync(file, `${JSON.stringify(entry)}\n`);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function fileVersion(path) {
+  try {
+    const file = statSync(path, { bigint: true });
+    return file.isFile() ? `${file.size}:${file.mtimeNs}:${file.ctimeNs}:${file.ino}` : null;
+  } catch {
+    return null;
+  }
+}
+
 export function recordOnBoard({ sessionId, agent = '', command, cwd = '', output, artifact = null, now = Date.now() }) {
   if (!boardEnabled() || !sessionId || typeof output !== 'string' || output.length < MIN_OUTPUT_CHARS) return false;
   const split = splitCd(command, cwd);
@@ -152,6 +181,7 @@ export function boardFor({ sessionId, agent = '', task = '', now = Date.now() })
     return null;
   }
   const latest = new Map();
+  const versions = new Map();
   for (const line of raw.split('\n')) {
     let e;
     try {
@@ -160,6 +190,11 @@ export function boardFor({ sessionId, agent = '', task = '', now = Date.now() })
       continue;
     }
     if (!e?.key || e.agent === agent || now - e.at > BOARD_TTL_MS) continue;
+    if (e.command?.startsWith('read ')) {
+      if (!e.filePath || !e.fileVersion) continue;
+      if (!versions.has(e.filePath)) versions.set(e.filePath, fileVersion(e.filePath));
+      if (versions.get(e.filePath) !== e.fileVersion) continue;
+    }
     if (!latest.has(e.key) || latest.get(e.key).at < e.at) latest.set(e.key, e);
   }
   if (!latest.size) return null;

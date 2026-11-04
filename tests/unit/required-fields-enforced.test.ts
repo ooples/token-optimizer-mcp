@@ -89,7 +89,7 @@ describe('published required fields are enforced', () => {
     );
     expect(defs).toContain('export const TOOL_DEFINITIONS = [');
 
-    const server = readFileSync(join(ROOT, 'src/server/index.ts'), 'utf8');
+    const server = readFileSync(join(ROOT, 'src/server/mcp-server.ts'), 'utf8');
     // Both guards are constructed from that array and nothing else.
     expect(server).toContain('createToolArgumentChecker(');
     expect(server).toContain(

@@ -149,7 +149,7 @@ describe('every advertised tool can actually be called', () => {
   it('advertises names in the same form the dispatch uses', () => {
     // cache-benchmark / smart-cache-api advertised hyphens while their case
     // labels used underscores, so no client could route to them.
-    const server = readFileSync(join(ROOT, 'src/server/index.ts'), 'utf8');
+    const server = readFileSync(join(ROOT, 'src/server/mcp-server.ts'), 'utf8');
     const cases = new Set(
       [...server.matchAll(/case\s+'([a-zA-Z0-9_-]+)':/g)].map((m) => m[1])
     );

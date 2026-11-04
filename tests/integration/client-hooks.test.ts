@@ -60,6 +60,8 @@ function runHook(
   payload: object,
   env: Record<string, string> = {}
 ) {
+  const fixtureCwd = (payload as { cwd?: string }).cwd;
+  if (!fixtureCwd) throw new Error('Hook fixtures must supply their own cwd');
   const result = spawnSync(process.execPath, [script, ...args], {
     cwd: repoRoot,
     input: JSON.stringify(payload),
@@ -75,6 +77,10 @@ function runHook(
       // inventories are covered separately by mcp-capability-negotiation.
       TOKEN_OPTIMIZER_MCP_CAPABILITIES:
         'smart_read,smart_write,smart_edit,smart_glob,smart_grep,wiki_write',
+      // Anonymous hook sessions must not inherit counters from other suites or runs.
+      TOKEN_OPTIMIZER_STATE_DIR: join(fixtureCwd, '.test-hook-state'),
+      TOKEN_OPTIMIZER_WIKI_DIR: join(fixtureCwd, '.test-wiki'),
+      TOKEN_OPTIMIZER_UCR_DIR: join(fixtureCwd, '.test-ucr'),
       ...env,
     },
   });
