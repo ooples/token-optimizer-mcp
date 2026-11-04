@@ -456,10 +456,9 @@ jobs:
         integration-test,
         windows-path-security,
       ]
-    # always() so a real failure is still reported, but skip entirely on
-    # release-please PRs (its deps are skipped there, which would otherwise fail
-    # the != "success" checks below).
-    if: ${{ always() && !startsWith(github.head_ref, 'release-please') }}
+    # Report real failures, but do not queue a runner after workflow cancellation.
+    # Release PR dependencies are skipped, so their aggregate remains skipped too.
+    if: ${{ always() && !cancelled() && !startsWith(github.head_ref, 'release-please') }}
 
     steps:
       - name: Check all job statuses
