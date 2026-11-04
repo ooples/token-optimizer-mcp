@@ -75,15 +75,18 @@ signalTest('termination reaches the run child so it can clean up', async () => {
 }, 10000);
 
 test('the package entry retains both public instruction exports', () => {
-  const result = spawnSync(process.execPath, ['--input-type=module', '-e', "process.argv.push('--help'); const entry = await import(process.env.REVIEW_ENTRY); if (typeof entry.instructionsFor !== 'function' || typeof entry.PLUGIN_INSTRUCTIONS !== 'string' || entry.instructionsFor({CLAUDE_PLUGIN_ROOT:'plugin'}) !== entry.PLUGIN_INSTRUCTIONS) process.exitCode=1;"], { encoding: 'utf8', windowsHide: true, env: { ...process.env, REVIEW_ENTRY: pathToFileURL(entry).href } });
+  rmSync(marker, { force: true });
+  const result = spawnSync(process.execPath, ['--input-type=module', '-e', "const entry = await import(process.env.REVIEW_ENTRY); if (typeof entry.instructionsFor !== 'function' || typeof entry.PLUGIN_INSTRUCTIONS !== 'string' || entry.instructionsFor({CLAUDE_PLUGIN_ROOT:'plugin'}) !== entry.PLUGIN_INSTRUCTIONS) process.exitCode=1;"], { encoding: 'utf8', windowsHide: true, env: { ...process.env, REVIEW_ENTRY: pathToFileURL(entry).href } });
   expect({ status: result.status, stderr: result.stderr }).toEqual({ status: 0, stderr: '' });
+  expect(result.stdout).toBe('');
+  expect(existsSync(marker)).toBe(false);
 });
 
 test('CommonJS require retains synchronous package exports', () => {
   rmSync(marker, { force: true });
-  const result = spawnSync(process.execPath, ['-e', "process.argv=[process.execPath,process.env.REVIEW_ENTRY,'--help'];const entry=require(process.env.REVIEW_ENTRY);if(typeof entry.instructionsFor!=='function'||typeof entry.PLUGIN_INSTRUCTIONS!=='string')process.exitCode=1;"], { encoding: 'utf8', windowsHide: true, env: { ...process.env, REVIEW_ENTRY: entry } });
+  const result = spawnSync(process.execPath, ['-e', "const entry=require(process.env.REVIEW_ENTRY);if(typeof entry.instructionsFor!=='function'||typeof entry.PLUGIN_INSTRUCTIONS!=='string')process.exitCode=1;"], { encoding: 'utf8', windowsHide: true, env: { ...process.env, REVIEW_ENTRY: entry } });
   expect({ status: result.status, stderr: result.stderr }).toEqual({ status: 0, stderr: '' });
-  expect(result.stdout).toContain('Usage:');
+  expect(result.stdout).toBe('');
   expect(existsSync(marker)).toBe(false);
 });
 
