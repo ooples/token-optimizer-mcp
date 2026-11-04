@@ -140,6 +140,7 @@ import { artifactPath, capture } from './expand.mjs';
  * PowerShell or bash, and a command quoted for the wrong one is broken.
  */
 function outlineRewrite(raw, payload, state, clientName) {
+  if (payload.replacement) return null;
   // A Codex code-mode envelope orchestrates several operations; rewriting one
   // would discard the rest, the same reason the refusal path leaves it alone.
   if (clientName === 'codex' && payload.tool_input?.code_mode_envelope) return null;
@@ -166,8 +167,9 @@ function outlineRewrite(raw, payload, state, clientName) {
   if (payload.tool_name === 'Bash') {
     const key = firstKey(input, COMMAND_KEYS);
     if (key === undefined || typeof input[key] !== 'string') return null;
-    const toolName = String(raw?.tool_name ?? raw?.toolName ?? raw?.tool ?? '');
-    const shell = /powershell|pwsh/i.test(toolName)
+    const toolName = String(raw?.tool_name ?? raw?.toolName ?? raw?.tool ?? raw?.toolCall?.name ?? '');
+    const isAgy = clientName === 'antigravity' || clientName === 'agy' || Boolean(raw?.toolCall);
+    const shell = /powershell|pwsh/i.test(toolName) || (isAgy && process.platform === 'win32')
       ? 'powershell'
       : process.platform === 'win32'
         ? null
@@ -508,6 +510,10 @@ function contextOutput(client, eventName, additionalContext) {
   if (client.contextStyle === 'cursor') {
     return { continue: true, agent_message: additionalContext };
   }
+  if (client.contextStyle === 'antigravity-ephemeral') {
+    if (eventName === 'PreToolUse' || eventName === 'PostToolUse') return null;
+    return additionalContext ? { injectSteps: [{ ephemeralMessage: additionalContext }] } : null;
+  }
   if (client.contextStyle === 'silent') return null;
   return {
     hookSpecificOutput: { hookEventName: eventName, additionalContext },
@@ -616,7 +622,7 @@ export function hostToolName(raw) {
     const tool = body.parameters?.tool_name ?? body.parameters?.toolName;
     return tool ? `mcp__${server}__${tool}` : null;
   }
-  return raw?.tool_name ?? raw?.toolName ?? raw?.tool ?? body?.toolName ?? body?.tool ?? null;
+  return raw?.tool_name ?? raw?.toolName ?? raw?.tool ?? raw?.toolCall?.name ?? body?.toolName ?? body?.tool ?? null;
 }
 
 /** Convert client-specific lifecycle envelopes into the common tool shape. */
@@ -1321,7 +1327,16 @@ export async function run(clientName, event) {
 }
 
 async function runHook(clientName, event, invocation) {
-  const client = CLIENTS[clientName] || CLIENTS['claude-code'];
+  const isAntigravity = clientName === 'antigravity' || clientName === 'agy';
+  const client = isAntigravity
+    ? {
+        ...CLIENTS.gemini,
+        name: 'Antigravity',
+        contextStyle: 'antigravity-ephemeral',
+        inputRewrite: 'antigravity-overwrite',
+        stopDecision: 'continue',
+      }
+    : CLIENTS[clientName] || CLIENTS['claude-code'];
   const eventName =
     event === 'session-start'
       ? 'SessionStart'
@@ -1340,6 +1355,24 @@ async function runHook(clientName, event, invocation) {
   if (mode() === MODE_OFF) process.exit(0);
 
   const features = featuresForArm();
+  if (event === 'pre-invocation' && isAntigravity) {
+    const input = await readPayloadResult({ timeoutMs: 250 });
+    const raw = input.payload || {};
+    invocation.bind(raw, null, input.bytes);
+    if (input.status !== 'ok') invocation.noteInput(input.status, input.bytes);
+    if (features.routing || features.retrieval || features.harvest) {
+      const sessionId = raw.session_id ?? raw.sessionId ?? raw.conversation_id ?? raw.conversationId ?? 'default';
+      const scope = stateScope(raw, raw.transcript_path ?? raw.transcriptPath ?? null);
+      const state = loadState(sessionId, scope);
+      if (typeof state.pendingHarvest === 'string' && state.pendingHarvest) {
+        emit({ injectSteps: [{ ephemeralMessage: state.pendingHarvest }] });
+        state.pendingHarvest = null;
+        saveState(sessionId, state, scope);
+      }
+    }
+    process.exit(0);
+  }
+
 
   if (event === 'session-start') {
     // Some hook hosts invoke SessionStart without closing stdin. Waiting the
@@ -1350,7 +1383,7 @@ async function runHook(clientName, event, invocation) {
     const raw = input.payload || {};
     invocation.bind(raw, null, input.bytes);
     if (input.status !== 'ok') invocation.noteInput(input.status, input.bytes);
-    const cwd = raw.cwd || raw.working_directory || process.cwd();
+    const cwd = (Array.isArray(raw.workspacePaths) ? raw.workspacePaths[0] : undefined) || raw.cwd || raw.working_directory || process.cwd();
     const root = projectRootFor(join(cwd, '__session__'), cwd);
     // Finish a store migration a crash interrupted, or a refused one whose
     // blockers may have cleared, before the store is used (#542). BEFORE the
@@ -1361,11 +1394,17 @@ async function runHook(clientName, event, invocation) {
     if (!features.routing && !features.retrieval && !features.harvest)
       process.exit(0);
     const toolEvidence = optimizerToolEvidence(raw);
-    const sessionId = raw.session_id ?? raw.sessionId ?? raw.conversation_id;
-    if (sessionId && toolEvidence.proven) {
-      const state = loadState(sessionId);
-      rememberOptimizerTools(state, toolEvidence);
-      saveState(sessionId, state);
+    const sessionId = raw.session_id ?? raw.sessionId ?? raw.conversation_id ?? raw.conversationId;
+    let deferredToolContext = null;
+    if (sessionId) {
+      const scope = stateScope(raw, raw.transcript_path ?? raw.transcriptPath ?? null);
+      const state = loadState(sessionId, scope);
+      if (toolEvidence.proven) rememberOptimizerTools(state, toolEvidence);
+      if (typeof state.pendingHarvest === 'string' && state.pendingHarvest) {
+        deferredToolContext = state.pendingHarvest;
+        state.pendingHarvest = null;
+      }
+      if (toolEvidence.proven || deferredToolContext) saveState(sessionId, state, scope);
     }
     // ASSEMBLED IN CACHE ORDER, not in whatever order this function happens to
     // discover the blocks. Everything emitted here sits near the FRONT of the
@@ -1397,6 +1436,7 @@ async function runHook(clientName, event, invocation) {
     // later Bash call (quiet-env.mjs). A no-op for clients without one.
     applyQuietEnv();
     if (migrated) blocks.push({ id: 'storage', volatility: 4, text: migrated });
+    if (deferredToolContext) blocks.push({ id: 'deferred-tool-context', volatility: 4, text: deferredToolContext });
     registerProject({ root, graphDir: wikiDir(root), client: clientName });
     if (features.retrieval) {
       try {
@@ -1441,7 +1481,7 @@ async function runHook(clientName, event, invocation) {
     // not look like an input reader that never ran in cross-client telemetry.
     invocation.bind(raw, null, input.bytes);
     const sessionId =
-      raw.session_id ?? raw.sessionId ?? raw.conversation_id ?? 'default';
+      raw.session_id ?? raw.sessionId ?? raw.conversation_id ?? raw.conversationId ?? 'default';
     // The transcript FILE, for archiving and derivation; the state scope adds
     // the agent id, which is not part of any path.
     const transcriptPath = raw.transcript_path ?? raw.transcriptPath ?? null;
@@ -1454,7 +1494,7 @@ async function runHook(clientName, event, invocation) {
     // Hoisted out of the try below, because the harvest needs the same resolved
     // directory and resolving it twice is how two halves of one hook end up
     // reasoning about different projects.
-    const cwd = raw.cwd || raw.working_directory || process.cwd();
+    const cwd = (Array.isArray(raw.workspacePaths) ? raw.workspacePaths[0] : undefined) || raw.cwd || raw.working_directory || process.cwd();
     try {
       const dir = wikiDir(projectRootFor(join(cwd, '__session__'), cwd));
       recordEpisodeOutcome(dir, {
@@ -1479,7 +1519,7 @@ async function runHook(clientName, event, invocation) {
       // firehose is read for ARRIVALS only if an unscored refresh exists, so
       // the dormant case never pays for that. The moment an issuer exists, the
       // decision starts learning with no second wiring change.
-      const cwd = raw.cwd || raw.working_directory || process.cwd();
+      const cwd = (Array.isArray(raw.workspacePaths) ? raw.workspacePaths[0] : undefined) || raw.cwd || raw.working_directory || process.cwd();
       const dir = wikiDir(projectRootFor(join(cwd, '__session__'), cwd));
       scoreRefreshes(dir);
     } catch {
@@ -1500,7 +1540,7 @@ async function runHook(clientName, event, invocation) {
       // BEFORE `derive`, deliberately: the correction detector reads the archive
       // first and treats the live transcript as the fallback, and the archive is
       // the copy that survives into later sessions.
-      const cwd = raw.cwd || raw.working_directory || process.cwd();
+      const cwd = (Array.isArray(raw.workspacePaths) ? raw.workspacePaths[0] : undefined) || raw.cwd || raw.working_directory || process.cwd();
       const dir = wikiDir(projectRootFor(join(cwd, '__session__'), cwd));
       if (transcriptPath) archive(dir, transcriptPath, { sessionId });
     } catch {
@@ -1518,7 +1558,7 @@ async function runHook(clientName, event, invocation) {
       // the two is the number that says whether the bound is doing anything --
       // one figure alone cannot distinguish "nothing to derive" from "derived
       // plenty and stored none of it".
-      const cwd = raw.cwd || raw.working_directory || process.cwd();
+      const cwd = (Array.isArray(raw.workspacePaths) ? raw.workspacePaths[0] : undefined) || raw.cwd || raw.working_directory || process.cwd();
       // WHERE THE WORK HAPPENED, NOT WHERE THE CLIENT WAS LAUNCHED.
       //
       // `projectRootFor` on a cwd with no VCS marker -- a home directory, which
@@ -1663,7 +1703,7 @@ async function runHook(clientName, event, invocation) {
       emit({ followup_message: stopPrompt, ...(harvestNotice ? { systemMessage: harvestNotice } : {}) });
     } else {
       emit({
-        ...(stopPrompt ? { decision: client.stopDecision, reason: stopPrompt } : {}),
+        ...(stopPrompt ? { decision: client.stopDecision, reason: stopPrompt } : isAntigravity ? { decision: 'allow' } : {}),
         ...(harvestNotice ? { systemMessage: harvestNotice } : {}),
       });
     }
@@ -1691,6 +1731,9 @@ async function runHook(clientName, event, invocation) {
       const graded = loadState(payload.session_id, scope);
       gradeObservedTools(graded, event, payload, raw);
       saveState(payload.session_id, graded, scope);
+    }
+    if (event === 'pre-tool' && isAntigravity) {
+      emit({ decision: 'allow' });
     }
     process.exit(0);
   }
@@ -1858,15 +1901,27 @@ async function runHook(clientName, event, invocation) {
       const told = verdict && adviseOnce(state, verdict) ? verdict.reason : null;
       remember(payload, state);
       saveState(payload.session_id, state, agentScope);
-      emit({
-        hookSpecificOutput: {
-          hookEventName: eventName,
-          // Codex applies updatedInput only alongside an explicit allow.
-          permissionDecision: 'allow',
-          updatedInput: rewrite.input,
-          additionalContext: [told, rewrite.notice].filter(Boolean).join('\n\n'),
-        },
-      });
+      const advise = [told, rewrite.notice].filter(Boolean).join('\n\n');
+      if (client.inputRewrite === 'antigravity-overwrite' || Boolean(raw?.toolCall)) {
+        if (advise) {
+          state.pendingHarvest = [state.pendingHarvest, advise].filter(Boolean).join('\n\n');
+          saveState(payload.session_id, state, agentScope);
+        }
+        emit({
+          decision: 'allow',
+          overwrite: rewrite.input,
+        });
+      } else {
+        emit({
+          hookSpecificOutput: {
+            hookEventName: eventName,
+            // Codex applies updatedInput only alongside an explicit allow.
+            permissionDecision: 'allow',
+            updatedInput: rewrite.input,
+            additionalContext: advise,
+          },
+        });
+      }
       process.exit(0);
     }
   }
@@ -2041,11 +2096,12 @@ async function runHook(clientName, event, invocation) {
   // gets no recording instructions (the nudge above has the same gate), and a
   // client whose context style is silent (Windsurf) cannot deliver any context,
   // so it must not spend the once-only flag on a message nobody receives.
+  const canDeliverToolContext = contextOutput(client, eventName, 'x') !== null;
   const guided =
     event === 'post-tool' &&
     !state.recordingGuided &&
     features.harvest &&
-    contextOutput(client, eventName, '') !== null &&
+    client.contextStyle !== 'silent' &&
     toolEvidence.names.has('wiki_write') &&
     ((Number(state.edits) || 0) >= 1 ||
       (Number(state.toolCalls) || 0) >= GUIDANCE_AFTER_CALLS);
@@ -2053,7 +2109,7 @@ async function runHook(clientName, event, invocation) {
   // The previous turn's harvest nudge, held back by the Stop hook so it never
   // cost a turn of its own, rides on this result -- once.
   const pendingHarvest =
-    event === 'post-tool' && typeof state.pendingHarvest === 'string'
+    event === 'post-tool' && canDeliverToolContext && typeof state.pendingHarvest === 'string'
       ? state.pendingHarvest
       : null;
   // Cleared explicitly, so saveState knows this caller changed it.
@@ -2075,8 +2131,6 @@ async function runHook(clientName, event, invocation) {
     }
     if (overWindow) state.overWindowNoted = true;
   }
-  saveState(payload.session_id, state, agentScope);
-
   const context = [
     advisory,
     graphContext,
@@ -2087,6 +2141,10 @@ async function runHook(clientName, event, invocation) {
   ]
     .filter(Boolean)
     .join('\n\n');
+  if (context && !canDeliverToolContext && client.contextStyle === 'antigravity-ephemeral') {
+    state.pendingHarvest = [state.pendingHarvest, context].filter(Boolean).join('\n\n');
+  }
+  saveState(payload.session_id, state, agentScope);
   if (updatedToolOutput) {
     const withContext = context ? contextOutput(client, eventName, context) : null;
     emit({
@@ -2097,7 +2155,11 @@ async function runHook(clientName, event, invocation) {
     });
   } else if (context) {
     const output = contextOutput(client, eventName, context);
-    if (output) emit(output);
+    if (output) {
+      emit(event === 'pre-tool' && isAntigravity ? { decision: 'allow', ...output } : output);
+    }
+  } else if (event === 'pre-tool' && isAntigravity) {
+    emit({ decision: 'allow' });
   }
   process.exit(0);
 }
