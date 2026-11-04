@@ -487,6 +487,19 @@ export class SmartReadTool {
       header.chunkIndex = chunkIndex;
     }
 
+    // Diff arrays repeat changed text; retain them only when the complete reply fits.
+    if (
+      diffData &&
+      utf8Length(
+        JSON.stringify({
+          content: finalContent,
+          metadata: header,
+          diff: diffData,
+        })
+      ) > maxSize
+    )
+      diffData = undefined;
+
     return {
       content: finalContent,
       metadata: header,

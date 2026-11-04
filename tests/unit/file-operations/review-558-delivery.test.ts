@@ -15,6 +15,8 @@ import { TokenCounter } from '../../../src/core/token-counter.js';
 import { SmartReadTool } from '../../../src/tools/file-operations/smart-read.js';
 import { SmartGlobTool } from '../../../src/tools/file-operations/smart-glob.js';
 import { boundedGlob } from '../../../src/tools/shared/bounded-traversal.js';
+import { cacheSet } from '../../../src/utils/cache-helper.js';
+import { lastWrittenKey } from '../../../src/tools/shared/hash-utils.js';
 
 const dirs: string[] = [];
 const caches: CacheEngine[] = [];
@@ -47,7 +49,7 @@ it('keeps undelivered fallback changes available on repeated bounded reads', asy
   const { dir, reader } = fixture();
   const file = join(dir, 'data.txt');
   writeFileSync(file, 'old\n');
-  await reader.read(file);
+  await reader.read(file, { maxSize: 1000 });
   const updated = Array.from(
     { length: 1000 },
     (_, i) => `changed line ${i}`
@@ -59,6 +61,7 @@ it('keeps undelivered fallback changes available on repeated bounded reads', asy
       includeMetadata: true,
     });
     expect(result.metadata.truncated).toBe(true);
+    expect(result.metadata.fromCache).toBe(true);
     expect(result.diff).toBeUndefined();
     expect(result.content).not.toBe('// No changes');
   }
@@ -67,14 +70,14 @@ it('keeps undelivered fallback changes available on repeated bounded reads', asy
 });
 
 it('omits oversized diff details without advancing the delivered base', async () => {
-  const { dir, reader } = fixture();
+  const { dir, reader, cache } = fixture();
   const file = join(dir, 'data.txt');
   const lines = Array.from(
     { length: 1000 },
     (_, i) => `${i}: ${'a'.repeat(90)}`
   );
   writeFileSync(file, lines.join('\n'));
-  await reader.read(file, { maxSize: 200000 });
+  cacheSet(cache, lastWrittenKey(file), lines.join('\n'));
   for (let i = 400; i < 500; i++) lines[i] = `${i}: ${'b'.repeat(90)}`;
   writeFileSync(file, lines.join('\n'));
   for (let i = 0; i < 2; i++) {
@@ -83,10 +86,39 @@ it('omits oversized diff details without advancing the delivered base', async ()
       includeMetadata: true,
     });
     expect(result.metadata.truncated).toBe(true);
+    expect(result.metadata.isDiff).toBe(true);
     expect(result.diff).toBeUndefined();
     expect(result.content).not.toBe('// No changes');
     expect(Buffer.byteLength(result.content)).toBeLessThanOrEqual(5000);
   }
+});
+
+it('bounds duplicate diff details even when the diff text itself fits', async () => {
+  const { dir, reader, cache } = fixture();
+  const file = join(dir, 'data.txt');
+  const original = Array.from(
+    { length: 1000 },
+    (_, i) => `${i}: ${'a'.repeat(90)}`
+  ).join('\n');
+  cacheSet(cache, lastWrittenKey(file), original);
+  const updated = original.replace(
+    '500: ' + 'a'.repeat(90),
+    '500: ' + 'b'.repeat(2500)
+  );
+  writeFileSync(file, updated);
+  const bounded = await reader.read(file, {
+    maxSize: 4000,
+    includeMetadata: true,
+  });
+  expect(bounded.metadata.isDiff).toBe(true);
+  expect(bounded.metadata.truncated).toBeUndefined();
+  expect(bounded.diff).toBeUndefined();
+  expect(Buffer.byteLength(JSON.stringify(bounded))).toBeLessThanOrEqual(4000);
+  const roomy = await reader.read(file, {
+    maxSize: 20000,
+    includeMetadata: true,
+  });
+  expect(roomy.diff?.added.length).toBeGreaterThan(0);
 });
 
 it('hashes the returned snapshot even when a metrics listener removes the file', async () => {
