@@ -498,6 +498,20 @@ export function exitFrom(raw) {
   return null;
 }
 
+/** Verification requires affirmative evidence; a result envelope alone is not success. */
+export function verificationSucceeded(raw) {
+  const envelopes = [raw, ...responseEnvelopes(raw), raw?.postToolUse]
+    .filter((value) => value && typeof value === 'object');
+  if (!toolSucceeded(raw) || envelopes.some((value) =>
+    value.success === false || /^(?:error|failed|failure|cancelled|canceled|denied)$/i.test(String(value.status ?? ''))
+  )) return false;
+  const exit = exitFrom(raw);
+  if (exit !== null) return exit === 0;
+  return envelopes.some((value) => value.success === true ||
+    /^(?:ok|success|succeeded|passed)$/i.test(String(value.status ?? '')));
+}
+
+
 function contextOutput(client, eventName, additionalContext) {
   if (client.contextStyle === 'top-level') return { additionalContext };
   if (client.contextStyle === 'cline') {
@@ -1794,8 +1808,7 @@ async function runHook(clientName, event, invocation) {
       if (pacerEnabled()) recordWindowActivity({ calls: 1, edits: isSubstantive(payload.tool_name) ? 1 : 0 });
       if (
         isVerificationCommand(command) &&
-        toolSucceeded(raw) &&
-        (exitFrom(raw) === null || exitFrom(raw) === 0)
+        verificationSucceeded(raw)
       ) {
         state.verifiedEdits = Number(state.edits || 0);
       }
