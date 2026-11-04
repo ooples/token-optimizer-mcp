@@ -9,7 +9,8 @@ void (async () => {
   }
 })().catch((error: unknown) => {
   console.error(error);
-  process.exitCode = 1;
+  // Failed startup can leave timers from imported services alive.
+  process.exit(1);
 });
 
 export { instructionsFor, PLUGIN_INSTRUCTIONS } from './plugin-instructions.js';
