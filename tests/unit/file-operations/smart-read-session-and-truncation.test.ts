@@ -402,6 +402,8 @@ describe('#489 truncation keeps the top, and chunkIndex pages a file over maxSiz
     const again = await tool.read(file, { maxSize: 5_000 });
     expect(again.content.length).toBeLessThanOrEqual(5_000);
     expect(again.content.startsWith('- line 0 second')).toBe(true);
+    expect(again.diff).toBeUndefined();
+    expect(JSON.stringify(again).length).toBeLessThanOrEqual(5_500);
   });
 
   it('never returns more than maxSize, even when every line is structural', () => {

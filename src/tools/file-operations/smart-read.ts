@@ -192,7 +192,6 @@ export class SmartReadTool {
 
     // Get file stats
     const stats = statSync(filePath);
-    const fileHash = hashFile(filePath);
     const fileType = detectFileType(filePath);
 
     // Generate cache key.
@@ -290,20 +289,16 @@ export class SmartReadTool {
           if (diff.compressionRatio < 0.5) {
             finalContent = diff.diffText;
             isDiff = true;
-            diffData = {
-              added: diff.added,
-              removed: diff.removed,
-              unchanged: diff.unchanged,
-            };
-          } else {
-            // Diff exists but not efficient, still return full content with diff metadata
-            isDiff = true;
-            diffData = {
-              added: diff.added,
-              removed: diff.removed,
-              unchanged: diff.unchanged,
-            };
+            if (includeMetadata) {
+              diffData = {
+                added: diff.added,
+                removed: diff.removed,
+                unchanged: diff.unchanged,
+              };
+            }
           }
+          // When diff.compressionRatio >= 0.5, finalContent stays rawContent (subject to maxSize/chunking)
+          // and diffData is omitted so added/removed arrays do not duplicate the file or bypass maxSize.
         } else {
           // No changes, return minimal response
           finalContent = '// No changes';
@@ -460,7 +455,7 @@ export class SmartReadTool {
     if (includeMetadata) {
       header.path = filePath;
       header.fileType = fileType;
-      header.hash = fileHash;
+      header.hash = hashFile(filePath);
     }
     // The encoding is worth a line when it is NOT the one every caller assumes,
     // asked for or not: content decoded as latin1 and labelled nothing reads as
