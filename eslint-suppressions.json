@@ -231,7 +231,7 @@
   },
   "src/tools/file-operations/smart-grep.ts": {
     "n/no-sync": {
-      "count": 3
+      "count": 2
     }
   },
   "src/tools/file-operations/smart-log.ts": {

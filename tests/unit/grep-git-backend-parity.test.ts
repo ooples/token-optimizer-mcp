@@ -277,14 +277,14 @@ describe('when git is not asked', () => {
     expect(env).toEqual({ PATH: '/bin' });
   });
 
-  it('skips compiled binary extensions (.dll, .pdb) identically across git and walk backends', async () => {
+  it('skips compiled binaries identically across git and walk backends', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'grep-binext-'));
     try {
       gitFixture(['init', '-q', dir]);
       writeFileSync(join(dir, 'source.ts'), `export const k = '${NEEDLE}';\n`);
       mkdirSync(join(dir, 'altbin'), { recursive: true });
       writeFileSync(join(dir, 'altbin', 'assembly.dll'), `MZ_${NEEDLE}_BINARY\n`);
-      writeFileSync(join(dir, 'altbin', 'symbols.pdb'), `PDB_${NEEDLE}_BINARY\n`);
+      writeFileSync(join(dir, 'altbin', 'symbols.pdb'), Buffer.from(`Microsoft C/C++ MSF 7.00\0${NEEDLE}\n`));
 
       expect(await gitGrepCandidates(NEEDLE, { ...base, cwd: dir, skipBinary: true }, 30_000)).toEqual([
         join(dir, 'source.ts'),
@@ -298,6 +298,40 @@ describe('when git is not asked', () => {
       expect((gitRes.matches ?? []).map((m) => m.file.replace(/\\/g, '/'))).toEqual(['source.ts']);
       expect((walkRes.matches ?? []).map((m) => m.file.replace(/\\/g, '/'))).toEqual(['source.ts']);
     } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('keeps text PDB and linker files while excluding uppercase binary artifacts', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'grep-ambiguous-types-'));
+    try {
+      gitFixture(['init', '-q', dir]);
+      writeFileSync(join(dir, '.gitattributes'), '*.pdb binary\n*.PDB binary\n*.so binary\n');
+      writeFileSync(join(dir, 'source.ts'), `export const k = '${NEEDLE}';\n`);
+      writeFileSync(join(dir, 'protein.PDB'), `HEADER    ${NEEDLE}\nATOM      1  N   ALA A   1\n`);
+      writeFileSync(join(dir, 'liblinker.so'), `/* ${NEEDLE} */\nGROUP ( libc.so.6 )\n`);
+      writeFileSync(join(dir, 'ASSEMBLY.DLL'), `MZ_${NEEDLE}_BINARY\n`);
+      mkdirSync(join(dir, 'altbin'));
+      writeFileSync(join(dir, 'altbin', 'SYMBOLS.PDB'), Buffer.from(`Microsoft C/C++ MSF 7.00\0${NEEDLE}\n`));
+      writeFileSync(join(dir, 'altbin', 'NATIVE.SO'), Buffer.from(`\x7fELF\0${NEEDLE}\n`));
+      gitFixture(['-C', dir, 'add', 'protein.PDB', 'altbin/SYMBOLS.PDB']);
+      const textFiles = ['liblinker.so', 'protein.PDB', 'source.ts'];
+      const candidates = await gitGrepCandidates(NEEDLE, { ...base, cwd: dir, skipBinary: true }, 30_000);
+      expect(candidates?.map((file) => file.slice(dir.length + 1).replace(/\\/g, '/')).sort()).toEqual(textFiles);
+      for (const backend of ['walk', 'git']) {
+        process.env.TOKEN_OPTIMIZER_GREP_BACKEND = backend;
+        const tool = new SmartGrepTool(...deps());
+        const result = await tool.grep(NEEDLE, { path: dir, skipBinary: true });
+        expect((result.matches ?? []).map((match) => match.file.replace(/\\/g, '/')).sort()).toEqual(textFiles);
+        const all = await tool.grep(NEEDLE, { path: dir, skipBinary: false });
+        expect([...new Set((all.matches ?? []).map((match) => match.file.replace(/\\/g, '/')))].sort()).toEqual([
+          'ASSEMBLY.DLL', 'altbin/NATIVE.SO', 'altbin/SYMBOLS.PDB', ...textFiles,
+        ]);
+        const single = await tool.grep(NEEDLE, { path: join(dir, 'protein.PDB'), skipBinary: true });
+        expect(single.matches?.[0]?.file).toBe('protein.PDB');
+      }
+    } finally {
+      delete process.env.TOKEN_OPTIMIZER_GREP_BACKEND;
       rmSync(dir, { recursive: true, force: true });
     }
   });

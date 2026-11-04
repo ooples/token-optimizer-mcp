@@ -37,8 +37,6 @@ export interface TruncationResult {
 export const KNOWN_BINARY_EXTENSIONS = [
   'dll',
   'exe',
-  'pdb',
-  'so',
   'dylib',
   'wasm',
   'pyc',
@@ -127,8 +125,6 @@ export function detectFileType(filePath: string): string {
     whl: 'archive',
     dll: 'binary',
     exe: 'binary',
-    pdb: 'binary',
-    so: 'binary',
     dylib: 'binary',
     wasm: 'binary',
     pyc: 'binary',
