@@ -1373,7 +1373,7 @@ export function adviseOnce(state, verdict) {
  */
 export function remember(payload, state) {
   const path = payload.tool_input?.file_path;
-  if (path && payload.tool_name === 'Read') {
+  if (path && payload.tool_name === 'Read' && !/^(view_file_outline|view_code_item)$/i.test(String(payload.raw_tool_name ?? ''))) {
     state.seen[path] = true;
   }
   // A FETCHED URL IS A READ. The same session asking for the same page twice is

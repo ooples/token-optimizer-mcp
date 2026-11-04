@@ -56,3 +56,17 @@ test('a structural outline request retains its source file', () => {
   expect(response.decision).toBe('allow');
   expect(response.overwrite).toBeUndefined();
 });
+
+test('structural views leave full-read bookkeeping untouched', async () => {
+  const { normalizePayload, remember } = await import('../../hooks-core/decide.mjs');
+  const file = join(work, 'bookkeeping.py');
+  const state = { seen: {} };
+  for (const name of ['view_file_outline', 'view_code_item']) {
+    const payload = normalizePayload({ tool_name: name, tool_input: { AbsolutePath: file }, cwd: work });
+    remember(payload, state);
+    expect(state.seen[payload.tool_input.file_path]).toBeUndefined();
+  }
+  const payload = normalizePayload({ tool_name: 'view_file', tool_input: { AbsolutePath: file }, cwd: work });
+  remember(payload, state);
+  expect(state.seen[payload.tool_input.file_path]).toBe(true);
+});
