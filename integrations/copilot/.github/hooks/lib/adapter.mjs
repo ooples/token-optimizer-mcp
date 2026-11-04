@@ -125,8 +125,9 @@ import { serverCrashNotice } from './server-crash.mjs';
 import { CHECK_EVERY_CALLS, overWindowNotice } from './context-window.mjs';
 import { compactToolResponse, outputCompactEnabled } from './output-compact.mjs';
 import { repeatResponse, repeatsEnabled } from './repeats.mjs';
+import { isVerificationCommand } from './verification.mjs';
 import { recordOnBoard, recordReadOnBoard } from './blackboard.mjs';
-import { nextPacedContinuation, recordWindowActivity } from './quota-pacer.mjs';
+import { nextPacedContinuation, recordWindowActivity, pacerEnabled } from './quota-pacer.mjs';
 import { artifactPath, capture } from './expand.mjs';
 
 /**
@@ -1620,7 +1621,8 @@ async function runHook(clientName, event, invocation) {
       !stopPrompt &&
       client.stopDecision &&
       !raw.stop_hook_active &&
-      !raw.stopHookActive
+      !raw.stopHookActive &&
+      !(clientName === 'cursor' && Number(raw.loop_count ?? raw.loopCount ?? 0) > 0)
     ) {
       const paced = nextPacedContinuation({ cwd, state });
       if (paced) {
@@ -1791,11 +1793,11 @@ async function runHook(clientName, event, invocation) {
             anchor || join(payload.cwd || process.cwd(), '__tool__'),
             payload.cwd
           );
-      recordWindowActivity({ calls: 1, edits: isSubstantive(payload.tool_name) ? 1 : 0 });
+      if (pacerEnabled()) recordWindowActivity({ calls: 1, edits: isSubstantive(payload.tool_name) ? 1 : 0 });
       if (
-        command &&
+        isVerificationCommand(command) &&
         toolSucceeded(raw) &&
-        /\b(test|jest|vitest|pytest|cargo\s+test|dotnet\s+(?:test|build)|go\s+test|npm\s+run\s+(?:test|build|check|verify)|tsc)\b/i.test(String(command))
+        (exitFrom(raw) === null || exitFrom(raw) === 0)
       ) {
         state.verifiedEdits = Number(state.edits || 0);
       }
@@ -2016,7 +2018,11 @@ async function runHook(clientName, event, invocation) {
         });
       // THE SIBLING BLACKBOARD (blackboard.mjs): every read-only result, for
       // the agents of this session that have not started yet.
-      const boardText = typeof raw.tool_response?.stdout === 'string' ? raw.tool_response.stdout : outputFrom(raw);
+      const boardText = typeof raw.tool_response?.stdout === 'string'
+        ? raw.tool_response.stdout
+        : typeof raw.tool_response?.file?.content === 'string'
+          ? raw.tool_response.file.content
+          : outputFrom(raw);
       if ((tool === 'Bash' || tool === 'PowerShell') && typeof boardText === 'string') {
         const ref = boardText.length > 1000 ? capture(dir, boardText, { tool, sessionId: payload.session_id, shape: 'board' }) : null;
         recordOnBoard({
@@ -2033,6 +2039,8 @@ async function runHook(clientName, event, invocation) {
           sessionId: payload.session_id,
           agent: String(raw.agent_id ?? raw.agentId ?? ''),
           filePath: payload.tool_input?.file_path,
+          offset: payload.tool_input?.offset,
+          limit: payload.tool_input?.limit,
           cwd,
           output: boardText,
           artifact: ref ? artifactPath(dir, ref) : null,

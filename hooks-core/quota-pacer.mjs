@@ -13,7 +13,7 @@
  *       rolling-window quota pacing.
  *   - TOKEN_OPTIMIZER_WINDOW_HOURS=5
  *       Rolling subscription window duration in hours (default: 5).
- *   - TOKEN_OPTIMIZER_REPO_QUEUE="pathA;pathB" (or .token-optimizer/repo-queue.json)
+ *   - TOKEN_OPTIMIZER_REPO_QUEUE="pathA;pathB"
  *       Multi-repo autonomous backlog queue scanned for `- [ ]` tasks at Stop.
  *   - TOKEN_OPTIMIZER_NIGHTLY_SWEEP_CMD="npm test"
  *       Proactive verification/research sweep command executed once per session
@@ -81,8 +81,6 @@ function candidateBacklogFiles(cwd, env = process.env) {
   if (env.TOKEN_OPTIMIZER_STOP_BACKLOG) {
     files.push(resolve(cwd, env.TOKEN_OPTIMIZER_STOP_BACKLOG));
   }
-  files.push(join(cwd, 'STOP_BACKLOG'));
-  files.push(join(cwd, '.token-optimizer', 'backlog.md'));
 
   const queueRaw = String(env.TOKEN_OPTIMIZER_REPO_QUEUE ?? '').trim();
   const repoDirs = queueRaw
@@ -90,20 +88,8 @@ function candidateBacklogFiles(cwd, env = process.env) {
         .split(/[;,]/)
         .map((s) => s.trim())
         .filter(Boolean)
+        .map((s) => resolve(cwd, s))
     : [];
-  const queueJson = join(cwd, '.token-optimizer', 'repo-queue.json');
-  if (existsSync(queueJson)) {
-    try {
-      const parsed = JSON.parse(readFileSync(queueJson, 'utf8'));
-      if (Array.isArray(parsed?.repos)) {
-        for (const r of parsed.repos) {
-          if (typeof r === 'string' && r.trim()) repoDirs.push(resolve(cwd, r.trim()));
-        }
-      }
-    } catch {
-      // Ignore malformed repo-queue.json.
-    }
-  }
   for (const repoDir of repoDirs) {
     files.push(join(repoDir, 'STOP_BACKLOG'));
     files.push(join(repoDir, '.token-optimizer', 'backlog.md'));
@@ -116,7 +102,8 @@ function candidateBacklogFiles(cwd, env = process.env) {
  */
 export function nextPacedContinuation({ cwd, state, now = Date.now(), env = process.env }) {
   if (!pacerEnabled(env)) return null;
-  const maxCont = Number(env.TOKEN_OPTIMIZER_MAX_CONTINUATIONS) || 3;
+  const configuredLimit = Number(env.TOKEN_OPTIMIZER_MAX_CONTINUATIONS ?? 3);
+  const maxCont = Number.isFinite(configuredLimit) ? Math.max(0, Math.floor(configuredLimit)) : 3;
   const status = recordWindowActivity({ calls: 0, edits: 0, now, env });
   const windowTag = `[window: ${status.calls} calls used, ${status.remainingMinutes}m until ${status.windowHours}h reset]`;
 

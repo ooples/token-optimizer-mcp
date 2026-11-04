@@ -103,12 +103,14 @@ export function lineHunks(prev, next) {
   if (a.length * b.length > LCS_LIMIT) return null;
   const n = a.length;
   const m = b.length;
+  const canonicalA = a.map(canonicalLine);
+  const canonicalB = b.map(canonicalLine);
   const w = m + 1;
   // lcs[i * w + j]: longest common subsequence of a[i..] and b[j..].
   const lcs = new Uint32Array((n + 1) * w);
   for (let i = n - 1; i >= 0; i--)
     for (let j = m - 1; j >= 0; j--)
-      lcs[i * w + j] = (a[i] === b[j] || canonicalLine(a[i]) === canonicalLine(b[j])) ? lcs[(i + 1) * w + j + 1] + 1 : Math.max(lcs[(i + 1) * w + j], lcs[i * w + j + 1]);
+      lcs[i * w + j] = canonicalA[i] === canonicalB[j] ? lcs[(i + 1) * w + j + 1] + 1 : Math.max(lcs[(i + 1) * w + j], lcs[i * w + j + 1]);
   const hunks = [];
   let open = null;
   const close = () => {
@@ -118,7 +120,7 @@ export function lineHunks(prev, next) {
   let i = 0;
   let j = 0;
   while (i < n || j < m) {
-    if (i < n && j < m && (a[i] === b[j] || canonicalLine(a[i]) === canonicalLine(b[j]))) {
+    if (i < n && j < m && canonicalA[i] === canonicalB[j]) {
       close();
       i++;
       j++;
