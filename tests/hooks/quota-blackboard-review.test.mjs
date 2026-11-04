@@ -66,3 +66,14 @@ test('timing normalization still reports changed compiler lines', () => {
     { at: 2, added: ['error CS0001: after'], removed: 1 },
   ]);
 });
+
+test('repeat replacement follows content when file contains metadata only', async () => {
+  const { repeatResponse } = await import('../../hooks-core/repeats.mjs');
+  const response = { file: { filePath: 'source.txt' }, content: 'x'.repeat(1000) };
+  const state = {};
+  const args = { tool: 'Read', input: { file_path: 'source.txt' }, response, cwd: work, state };
+  expect(repeatResponse({ ...args, call: 1 })).toBeNull();
+  const replaced = repeatResponse({ ...args, call: 2 });
+  expect(replaced.content).toContain('unchanged since your Read');
+  expect(replaced.file).toEqual(response.file);
+});

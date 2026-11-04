@@ -19,7 +19,8 @@
  *       Proactive verification/research sweep command executed once per session
  *       when rolling-window capacity remains at Stop.
  */
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync } from 'node:fs';
+import { writeAtomically } from './policy.mjs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 
@@ -64,7 +65,7 @@ export function recordWindowActivity({ calls = 1, edits = 0, now = Date.now(), e
   data.lastActive = now;
   try {
     mkdirSync(dirname(file), { recursive: true, mode: 0o700 });
-    writeFileSync(file, JSON.stringify(data));
+    writeAtomically(file, JSON.stringify(data));
   } catch {
     // Non-fatal.
   }

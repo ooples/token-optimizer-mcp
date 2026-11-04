@@ -179,7 +179,7 @@ export function repeatResponse({ tool, input, response, cwd = '', call, state, s
     const lines = response?.file?.numLines ?? text.split(NL).length;
     const msg = `[unchanged since your Read of this file at call #${prior.call}: the same ${lines} lines, still in your context above]`;
     if (typeof response === 'string') return msg;
-    if (response?.file && typeof response.file === 'object') {
+    if (typeof response?.file?.content === 'string') {
       return { ...response, file: { ...response.file, content: msg } };
     }
     if (typeof response?.content === 'string') return { ...response, content: msg };
