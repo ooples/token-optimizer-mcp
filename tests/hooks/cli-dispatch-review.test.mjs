@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import ts from 'typescript';
+import { pathToFileURL } from 'node:url';
 
 const work = mkdtempSync(join(tmpdir(), 'cli-dispatch-review-'));
 const server = join(work, 'dist/server');
@@ -56,8 +57,8 @@ const signalTest = process.platform === 'win32' ? test.skip : test;
 signalTest('termination reaches the run child so it can clean up', async () => {
   const ready = join(work, 'ready');
   const cleaned = join(work, 'cleaned');
-  writeFileSync(join(scripts, 'run-client.mjs'), `import{writeFileSync}from'node:fs';process.on('SIGTERM',()=>{writeFileSync(${JSON.stringify(cleaned)},'yes');process.exit(0)});writeFileSync(${JSON.stringify(ready)},'yes');setInterval(()=>{},1000);`);
-  const child = spawn(process.execPath, [entry, 'run', 'fixture'], { stdio: 'ignore' });
+  writeFileSync(join(scripts, 'run-client.mjs'), "import{writeFileSync}from'node:fs';process.on('SIGTERM',()=>{writeFileSync(process.env.REVIEW_CLEANED,'yes');process.exit(0)});writeFileSync(process.env.REVIEW_READY,'yes');setInterval(()=>{},1000);");
+  const child = spawn(process.execPath, [entry, 'run', 'fixture'], { stdio: 'ignore', env: { ...process.env, REVIEW_READY: ready, REVIEW_CLEANED: cleaned } });
   const exited = new Promise((resolve, reject) => { child.once('error', reject); child.once('exit', resolve); });
   try {
     const deadline = Date.now() + 5000;
@@ -70,6 +71,7 @@ signalTest('termination reaches the run child so it can clean up', async () => {
 }, 10000);
 
 test('the package entry retains both public instruction exports', () => {
-  const result = spawnSync(process.execPath, ['--input-type=module', '-e', `process.argv.push('--help'); const entry = await import(${JSON.stringify(new URL(`file:///${entry.replaceAll('\\', '/')}`).href)}); if (typeof entry.instructionsFor !== 'function' || typeof entry.PLUGIN_INSTRUCTIONS !== 'string' || entry.instructionsFor({CLAUDE_PLUGIN_ROOT:'plugin'}) !== entry.PLUGIN_INSTRUCTIONS) process.exitCode=1;`], { encoding: 'utf8', windowsHide: true });
+  const result = spawnSync(process.execPath, ['--input-type=module', '-e', "process.argv.push('--help'); const entry = await import(process.env.REVIEW_ENTRY); if (typeof entry.instructionsFor !== 'function' || typeof entry.PLUGIN_INSTRUCTIONS !== 'string' || entry.instructionsFor({CLAUDE_PLUGIN_ROOT:'plugin'}) !== entry.PLUGIN_INSTRUCTIONS) process.exitCode=1;"], { encoding: 'utf8', windowsHide: true, env: { ...process.env, REVIEW_ENTRY: pathToFileURL(entry).href } });
   expect({ status: result.status, stderr: result.stderr }).toEqual({ status: 0, stderr: '' });
 });
+
