@@ -136,9 +136,18 @@ function stagePlugin(work) {
   const staged = join(work, 'plugin');
   rmSync(staged, { recursive: true, force: true });
   cpSync(join(REPO, 'plugin'), staged, { recursive: true });
+  // A SNAPSHOT of the build, not the live dist/: a rebuild during a campaign
+  // would otherwise change the arm under test half-way through. It stays inside
+  // the checkout, so the server still resolves this checkout's node_modules.
+  // The layout is kept: the server reads ../../package.json relative to itself
+  // for its version, and that package.json's "type" is what makes dist/*.js ESM.
+  const snapshot = join(work, 'build');
+  rmSync(snapshot, { recursive: true, force: true });
+  cpSync(join(REPO, 'dist'), join(snapshot, 'dist'), { recursive: true });
+  cpSync(join(REPO, 'package.json'), join(snapshot, 'package.json'));
   writeFileSync(
     join(staged, '.mcp.json'),
-    `${JSON.stringify({ mcpServers: { 'token-optimizer': { command: 'node', args: [server], env: {} } } }, null, 2)}\n`
+    `${JSON.stringify({ mcpServers: { 'token-optimizer': { command: 'node', args: [join(snapshot, 'dist', 'server', 'index.js')], env: {} } } }, null, 2)}\n`
   );
   return staged;
 }
