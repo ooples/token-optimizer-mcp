@@ -160,3 +160,6 @@ bench/subscription/observations.jsonl
 
 # The mutation battery holds this while it runs; it is never committed.
 bench/compression/known-answer/.mutants.lock
+
+# SWE-bench harness state: instance cache, repo mirrors, runs, results
+bench/swebench/.work/
