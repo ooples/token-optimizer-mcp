@@ -75,6 +75,7 @@ function fixture(fn, command = 'claude') {
       'pretooluse-router.mjs',
       'agent-scope.mjs',
       'post-tool.mjs',
+      'post-tool-failure.mjs',
       'precompact-optimize.mjs',
       'stop.mjs',
     ])
