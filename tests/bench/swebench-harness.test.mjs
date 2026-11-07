@@ -5,6 +5,7 @@
 
 import { describe, expect, test } from '@jest/globals';
 import {
+  ARMS,
   armEnv,
   costUnits,
   isShim,
@@ -59,9 +60,24 @@ describe('fairness', () => {
       PATH: '/bin',
       ANTHROPIC_API_KEY: 'k',
       CLAUDE_CONFIG_DIR: '/tmp/run/config',
-      TOKEN_OPTIMIZER_EXPERIMENT_ARM: 'control',
+      TOKEN_OPTIMIZER_EXPERIMENT_ARM: 'baseline',
       ENABLE_CLAUDEAI_MCP_SERVERS: 'false',
     });
+  });
+
+  test('every arm passes an experiment arm the MCP server accepts', async () => {
+    // The server exits on any other value (src/server/tool-profile.ts); the
+    // first pilot lost its plugin arm to exactly that.
+    const accepted = ['baseline', 'optimizer', 'retrieval', 'full'];
+    for (const arm of Object.keys(ARMS)) {
+      expect(accepted).toContain(armEnv({}, { arm, configDir: '/c' }).TOKEN_OPTIMIZER_EXPERIMENT_ARM);
+    }
+    expect(armEnv({}, { arm: 'token-optimizer', configDir: '/c' }).TOKEN_OPTIMIZER_EXPERIMENT_ARM).toBe('full');
+    expect(() => armEnv({}, { arm: 'nope', configDir: '/c' })).toThrow(/unknown arm/);
+    const { resolveExperimentArm } = await import('../../dist/server/tool-profile.js');
+    for (const arm of Object.keys(ARMS)) {
+      expect(() => resolveExperimentArm(armEnv({}, { arm, configDir: '/c' }).TOKEN_OPTIMIZER_EXPERIMENT_ARM)).not.toThrow();
+    }
   });
 
   test('a launcher shim is never taken for the binary under test', () => {

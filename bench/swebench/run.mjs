@@ -20,7 +20,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { appendFileSync, cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { delimiter, dirname, join, resolve as resolvePath } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import {
   ARMS,
   armEnv,
@@ -171,6 +171,28 @@ function stageConfig(dir, env) {
   return 'subscription';
 }
 
+/**
+ * Put the plugin arm where an installed user is: routed through the proxy
+ * before the first request, as the installer leaves them.
+ *
+ * WHY THE HARNESS DOES IT. A fresh config directory per run is a user on their
+ * very first session, every time. The product deliberately does not switch a
+ * running session onto the route -- Claude Code re-sends the context uncached
+ * when its endpoint moves mid-session -- so a first session runs unrouted, and
+ * without this the arm would measure hooks and MCP tools but never the proxy.
+ * It calls the product's own routing code, from the same build snapshot the
+ * arm runs, with the timing the installer uses.
+ */
+async function installRoute(work, configDir, arm) {
+  const module = join(work, 'build', 'dist', 'proxy', 'default-routing.js');
+  const { maintainDefaultRouting } = await import(pathToFileURL(module).href);
+  const result = await maintainDefaultRouting(armEnv(process.env, { arm, configDir }), { switchTiming: 'now' });
+  if (result.status !== 'written' && result.status !== 'unchanged') {
+    throw new Error(`could not route the ${arm} arm through the proxy (status ${result.status}); the arm would not be the product`);
+  }
+  return result.url;
+}
+
 function ensureMirror(work, repo) {
   const mirror = join(work, 'repos', `${repo.replace('/', '__')}.git`);
   if (!existsSync(mirror)) {
@@ -261,6 +283,7 @@ async function runPlan(work, args) {
     mkdirSync(runDir, { recursive: true });
     git(['--git-dir', mirror, 'worktree', 'add', '--detach', '--force', repoDir, instance.base_commit]);
     const billing = stageConfig(join(runDir, 'config'), process.env);
+    const routedVia = ARMS[item.arm].plugin ? await installRoute(work, join(runDir, 'config'), item.arm) : null;
     const started = Date.now();
     const { code, out } = await runAgent({
       claude,
@@ -282,6 +305,7 @@ async function runPlan(work, args) {
       arm: item.arm,
       rep: item.rep,
       billing,
+      routedVia,
       exit: code,
       subtype: result?.subtype ?? null,
       costUsd: result?.total_cost_usd ?? null,

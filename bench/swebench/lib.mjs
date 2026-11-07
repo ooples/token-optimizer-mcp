@@ -12,8 +12,14 @@ import { createHash } from 'node:crypto';
 
 /** The arms. A closed set: an arm is an installed configuration, not a label. */
 export const ARMS = Object.freeze({
-  control: Object.freeze({ id: 'control', plugin: false, description: 'Claude Code with nothing installed' }),
-  'token-optimizer': Object.freeze({ id: 'token-optimizer', plugin: true, description: "this checkout's plugin: hooks + MCP server" }),
+  // `experimentArm` is the product's own TOKEN_OPTIMIZER_EXPERIMENT_ARM, a
+  // closed set the MCP server validates at startup (baseline | optimizer |
+  // retrieval | full). The first pilot passed the harness arm name instead;
+  // the server rejected it and exited, so those plugin-arm runs measured the
+  // hooks alone. Setting it at all also stops the in-product injection holdout
+  // from withholding context at random in the middle of a benchmark.
+  control: Object.freeze({ id: 'control', plugin: false, experimentArm: 'baseline', description: 'Claude Code with nothing installed' }),
+  'token-optimizer': Object.freeze({ id: 'token-optimizer', plugin: true, experimentArm: 'full', description: "this checkout's plugin: hooks + MCP server" }),
 });
 
 export const DATASETS = Object.freeze({
@@ -39,7 +45,9 @@ export function armEnv(parent, { arm, configDir }) {
     env[key] = value;
   }
   env.CLAUDE_CONFIG_DIR = configDir;
-  env.TOKEN_OPTIMIZER_EXPERIMENT_ARM = arm;
+  const known = ARMS[arm];
+  if (!known) throw new Error(`unknown arm ${arm}; one of ${Object.keys(ARMS).join(', ')}`);
+  env.TOKEN_OPTIMIZER_EXPERIMENT_ARM = known.experimentArm;
   // The account's claude.ai connectors (Gmail, Docs, Slack, ...) loaded in the
   // plugin arm and not in the control arm when probed: 46 tool definitions
   // billed to one arm only. Off in both.
