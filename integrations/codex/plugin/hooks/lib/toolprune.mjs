@@ -145,13 +145,14 @@ export function emptyStore() {
   };
 }
 
-export function storePath(dir) {
-  return join(dir, STORE_FILE);
+export function storePath(dir, file = STORE_FILE) {
+  return join(dir, file);
 }
 
-export function loadStore(dir) {
+/** `file` lets another client's pruning (codexprune.mjs) keep its own record. */
+export function loadStore(dir, file = STORE_FILE) {
   try {
-    const parsed = JSON.parse(readFileSync(storePath(dir), 'utf8'));
+    const parsed = JSON.parse(readFileSync(storePath(dir, file), 'utf8'));
     if (!parsed || parsed.version !== STORE_VERSION) return emptyStore();
     const base = emptyStore();
     return {
@@ -168,9 +169,9 @@ export function loadStore(dir) {
   }
 }
 
-export function saveStore(dir, store) {
+export function saveStore(dir, store, file = STORE_FILE) {
   mkdirSync(dir, { recursive: true });
-  writeAtomically(storePath(dir), JSON.stringify(store, null, 2));
+  writeAtomically(storePath(dir, file), JSON.stringify(store, null, 2));
 }
 
 // ---------------------------------------------------------------------------
@@ -469,13 +470,13 @@ export function allowedTools(root) {
   return new Set(permissionList(read.json, 'allow').map((rule) => rule.replace(/\(.*$/, '')));
 }
 
-function excludeFromGit(root) {
+export function excludeFromGit(root, relative = '.claude/settings.local.json') {
   const exclude = join(root, '.git', 'info', 'exclude');
   try {
     if (!existsSync(join(root, '.git', 'info'))) return;
     const current = existsSync(exclude) ? readFileSync(exclude, 'utf8') : '';
-    if (current.split(/\r?\n/).some((line) => line.trim() === '.claude/settings.local.json')) return;
-    appendFileSync(exclude, `${current && !current.endsWith('\n') ? '\n' : ''}.claude/settings.local.json\n`);
+    if (current.split(/\r?\n/).some((line) => line.trim() === relative)) return;
+    appendFileSync(exclude, `${current && !current.endsWith('\n') ? '\n' : ''}${relative}\n`);
   } catch {
     // Not a git checkout, or not writable: the file is still correct.
   }
@@ -751,14 +752,14 @@ export function scheduleFold({ dir, root, transcriptPath, sessionId, env = proce
  * One line for the session start, only when something changed since it was
  * last announced -- and then marked announced, so it is said once.
  */
-export function takeNotice(dir, { now = Date.now() } = {}) {
-  const store = loadStore(dir);
+export function takeNotice(dir, { now = Date.now(), file = STORE_FILE, what = 'tool', undo = 'token-optimizer-learned toolprune restore' } = {}) {
+  const store = loadStore(dir, file);
   const change = store.lastChange;
   const fresh = change && change.at > (store.announcedAt || 0);
   const auto = store.autoRestored || [];
   const parts = [];
   if (fresh && change.added?.length) {
-    parts.push(`left out ${change.added.length} tool(s) unused in this repository: ${change.added.join(', ')}`);
+    parts.push(`left out ${change.added.length} ${what}(s) unused in this repository: ${change.added.join(', ')}`);
   }
   if (fresh && change.removed?.length) parts.push(`gave back ${change.removed.join(', ')}`);
   if (auto.length) parts.push(`restored ${auto.join(', ')} after a session needed it`);
@@ -766,11 +767,11 @@ export function takeNotice(dir, { now = Date.now() } = {}) {
   store.announcedAt = now;
   store.autoRestored = [];
   try {
-    saveStore(dir, store);
+    saveStore(dir, store, file);
   } catch {
     // Unsaved: it is said again next session, which is the safe direction.
   }
-  return `token-optimizer tool pruning: ${parts.join('; ')}. Undo: token-optimizer-learned toolprune restore.`;
+  return `token-optimizer ${what} pruning: ${parts.join('; ')}. Undo: ${undo}.`;
 }
 
 export const WAITER_FILE = 'toolprune.waiter';

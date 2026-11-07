@@ -7,6 +7,7 @@
  *   token-optimizer-learned toolprune           the pruned, pending and restored tools, with evidence
  *   token-optimizer-learned toolprune restore [Tool ...]   give tools back (all when none named); never pruned again
  *   token-optimizer-learned toolprune fold      fold finished sessions and decide now
+ *     add --codex to any toolprune command for Codex capability pruning (.codex/config.toml)
  *   token-optimizer-learned statusline install  record quota usage from Claude Code's status line
  *                                               (wraps an existing status line; prints a quota line otherwise)
  *   token-optimizer-learned statusline uninstall  put the previous status line back
@@ -34,6 +35,7 @@ import {
   toolpruneSettings,
 } from '../hooks-core/toolprune.mjs';
 import { learnedLocation } from '../hooks-core/toolprune.mjs';
+import { CODEX_STORE_FILE, restoreCodex, runCodexFold } from '../hooks-core/codexprune.mjs';
 
 const TAP = join(dirname(fileURLToPath(import.meta.url)), 'statusline-tap.mjs');
 const TAP_MARKER = 'statusline-tap.mjs';
@@ -89,10 +91,11 @@ export function claudeProjectDir(root, home = homedir()) {
 }
 
 function parseArgs(argv) {
-  const args = { positional: [], json: false, cwd: process.cwd() };
+  const args = { positional: [], json: false, codex: false, cwd: process.cwd() };
   for (let index = 0; index < argv.length; index += 1) {
     const value = argv[index];
     if (value === '--json') args.json = true;
+    else if (value === '--codex') args.codex = true;
     else if (value === '--cwd') args.cwd = argv[++index] || args.cwd;
     else args.positional.push(value);
   }
@@ -124,6 +127,16 @@ export function collectStatus(cwd, { env = process.env } = {}) {
       restored: store.restored,
       blocked: store.blocked,
     },
+    codexprune: (() => {
+      const codex = loadStore(dir, CODEX_STORE_FILE);
+      return {
+        sessionsFolded: codex.sessions.length,
+        applied: codex.applied.map((name) => ({ name, ...evidenceFor(codex, name) })),
+        pending: candidates(codex, prune).filter((item) => !codex.applied.includes(item.name) && !codex.restored.includes(item.name)),
+        restored: codex.restored,
+        blocked: codex.blocked,
+      };
+    })(),
     loopguard: {
       enabled: guard.enabled,
       judge: guard.judge,
@@ -164,6 +177,14 @@ export function renderStatus(status) {
   for (const item of prune.pending) lines.push(`  pending   ${item.name}  (unused for ${item.prompts} prompts / ${item.sessions} sessions; written once sessions here are idle)`);
   if (prune.restored.length) lines.push(`  restored  ${prune.restored.join(', ')}  (never pruned again)`);
   if (prune.blocked) lines.push(`  not written: ${prune.blocked}`);
+  const codex = status.codexprune;
+  if (codex?.sessionsFolded) {
+    lines.push('', `Codex capability pruning: ${prune.mode}; ${codex.sessionsFolded} Codex session(s) learned from`);
+    for (const item of codex.applied) lines.push(`  switched off  ${item.name}  (unused for ${item.prompts} prompts / ${item.sessions} sessions)`);
+    for (const item of codex.pending) lines.push(`  pending       ${item.name}  (unused for ${item.prompts} prompts / ${item.sessions} sessions)`);
+    if (codex.restored.length) lines.push(`  restored  ${codex.restored.join(', ')}  (never switched off again)`);
+    if (codex.blocked) lines.push(`  not written: ${codex.blocked}`);
+  }
   const guard = status.loopguard;
   const envelope = guard.envelope.ready
     ? `usual turn ${Math.round(guard.envelope.median)} calls, p90 ${Math.round(guard.envelope.p90)}`
@@ -193,6 +214,15 @@ async function main(argv) {
     }
     if (action === 'uninstall') console.log(result.absent ? 'the tap was not installed' : result.restored ? 'previous status line restored' : 'status line removed');
     else console.log(result.already ? 'already installed' : result.wrapped ? 'installed, wrapping your existing status line' : 'installed');
+    return 0;
+  }
+  if (command === 'toolprune' && action === 'restore' && args.codex) {
+    const result = restoreCodex({ dir, root, ids: names });
+    console.log(result.ok ? `restored: ${result.restored.join(', ') || '(nothing was switched off)'}` : `not restored: ${result.reason}`);
+    return result.ok ? 0 : 1;
+  }
+  if (command === 'toolprune' && action === 'fold' && args.codex) {
+    console.log(JSON.stringify(runCodexFold({ dir, root }), null, 2));
     return 0;
   }
   if (command === 'toolprune' && action === 'restore') {

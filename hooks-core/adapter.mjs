@@ -129,6 +129,7 @@ import { nextPacedContinuation, recordWindowActivity, pacerEnabled } from './quo
 import { artifactPath, capture } from './expand.mjs';
 import { applyHoldout } from './injection-holdout.mjs';
 import { learnedLocation, scheduleFold, takeNotice } from './toolprune.mjs';
+import { scheduleCodexFold, takeCodexNotice } from './codexprune.mjs';
 import { onToolFailure, recordTurnEnd } from './loopguard.mjs';
 
 /**
@@ -1547,6 +1548,13 @@ async function runHook(clientName, event, invocation) {
     if (clientName === 'claude-code' && sessionId && transcriptPath) {
       scheduleFold({ dir: learned.dir, root: learned.root, transcriptPath, sessionId });
       const notice = takeNotice(learned.dir);
+      if (notice) output = { ...(output || {}), systemMessage: notice };
+    }
+    // Codex has capability switches rather than a per-tool deny list
+    // (codexprune.mjs); its rollouts are read from ~/.codex/sessions.
+    if (clientName === 'codex') {
+      scheduleCodexFold({ dir: learned.dir, root: learned.root });
+      const notice = takeCodexNotice(learned.dir);
       if (notice) output = { ...(output || {}), systemMessage: notice };
     }
     if (output) emit(output);

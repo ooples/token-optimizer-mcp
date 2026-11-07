@@ -1362,9 +1362,10 @@ request (verified on Claude Code 2.1.319: 173 tools to 171). The list is written
 only after the repository's other sessions have been idle for 60 minutes. A
 deny rule reaches sessions that are already running, so writing it while a
 warm session is mid-flight would make that session re-write its cache. The
-file and shell tools, AskUserQuestion, plan mode, ToolSearch, Skill and this
-package's own tools are never pruned. Rules you wrote are never removed or
-adopted.
+file and shell tools, AskUserQuestion, plan mode, ToolSearch, Skill, WebFetch,
+WebSearch and this package's own tools are never pruned. A pruned web tool would
+never be asked for, so the automatic restore below could never bring it back.
+Rules you wrote are never removed or adopted.
 
 Pruning is reversible without a command. A session whose model reaches for a
 pruned tool, or whose user names one, gets it back at the next fold, and that
@@ -1373,6 +1374,20 @@ background from `claude -p`'s init event. The process is killed before any model
 call, so the read costs no money or quota. Sessions launched outside a
 repository, such as from a home directory, get their own store keyed on the
 launch directory.
+
+**Codex.** Codex has capability switches instead of a per-tool deny list. On
+the same evidence rule, read from Codex's own session logs in `~/.codex/sessions`,
+it switches off the sub-agent tools (`features.multi_agent`, `agents.enabled`)
+and image viewing (`features.view_image`) in a repository that never uses them.
+The switches go in a marked block at the top of that repository's
+`.codex/config.toml`. Measured on codex-cli 0.167.0, the sub-agent switch alone
+cut each request's standing prompt from 72,078 to 60,579 bytes (−16%). Codex
+reads project config only for projects it trusts, so an untrusted repository
+stays a proposal. The file is left alone when it is tracked by git, or when it
+already defines a `[features]` or `[agents]` table (writing it twice would stop
+Codex starting). The global `~/.codex/config.toml` is never written. Asking for
+sub-agents in so many words, or attaching a screenshot, gives the capability
+back for good. Undo: `token-optimizer-learned toolprune restore --codex`.
 
 **Loop guard.** On a failed call (`PostToolUseFailure`), the guard looks at the
 current turn. The same failure signature four times in one turn, or a turn
