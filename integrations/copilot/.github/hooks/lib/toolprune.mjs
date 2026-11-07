@@ -596,10 +596,17 @@ export function runFold({ dir, root, transcriptDir, currentSession = null, env =
   store.pending = newlyWanted;
   store.blocked = null;
 
-  const quiet = idleMs(transcriptDir, currentSession, { now }) >= settings.quietMinutes * 60_000;
+  // EVERY session counts, the one that launched this fold included. A deny
+  // rule reaches sessions that are already running (verified on 2.1.319), so a
+  // write while any of them is live changes its tool list mid-conversation and
+  // re-writes its cached prefix. The launching session is always live, so a
+  // fold started at a session start never writes a new prune itself; the
+  // detached waiter (`waitAndApply`) writes it once everything has gone quiet.
+  const quiet = idleMs(transcriptDir, null, { now }) >= settings.quietMinutes * 60_000;
   const mustRemove = store.applied.some((name) => !keepApplied.includes(name));
-  // Removing a prune is always safe to do at once: it only gives a tool back,
-  // and a wrong prune costs more every session it stays.
+  // Removing a prune is done at once, even with sessions live: it costs at most
+  // one cache re-write, and a wrongly pruned tool costs a failed call in every
+  // session it stays missing from.
   if (settings.mode === 'auto' && (mustRemove || (quiet && newlyWanted.length))) {
     const target = quiet ? [...keepApplied, ...newlyWanted] : keepApplied;
     const result = writeDenyList(root, store.applied, target);
@@ -762,6 +769,58 @@ export function takeNotice(dir, { now = Date.now() } = {}) {
   return `token-optimizer tool pruning: ${parts.join('; ')}. Undo: token-optimizer-learned toolprune restore.`;
 }
 
+export const WAITER_FILE = 'toolprune.waiter';
+export const WAIT_POLL_MS = 5 * 60 * 1000;
+export const WAIT_MAX_MS = 24 * 60 * 60 * 1000;
+
+/** Take the per-repository waiter slot; false when a live waiter already holds it. */
+export function takeWaiter(dir, { now = Date.now() } = {}) {
+  const path = join(dir, WAITER_FILE);
+  try {
+    const held = JSON.parse(readFileSync(path, 'utf8'));
+    if (held && now - (held.heartbeat || 0) < WAIT_POLL_MS * 2 && held.pid !== process.pid) return false;
+  } catch {
+    // Free.
+  }
+  try {
+    mkdirSync(dir, { recursive: true });
+    writeAtomically(path, JSON.stringify({ pid: process.pid, heartbeat: now }));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function releaseWaiter(dir) {
+  try {
+    const held = JSON.parse(readFileSync(join(dir, WAITER_FILE), 'utf8'));
+    if (held?.pid === process.pid) writeAtomically(join(dir, WAITER_FILE), JSON.stringify({ pid: 0, heartbeat: 0 }));
+  } catch {
+    // Nothing held.
+  }
+}
+
+/**
+ * Hold a pending deny list until every session of the repository has been idle
+ * for the quiet period, then write it. One waiter per repository; gives up after
+ * a day, and the next session start tries again.
+ */
+export async function waitAndApply({ dir, root, transcriptDir, env = process.env, sleep = (ms) => new Promise((r) => setTimeout(r, ms)), clock = Date.now }) {
+  if (toolpruneSettings(env).mode !== 'auto') return null;
+  const started = clock();
+  if (!takeWaiter(dir, { now: started })) return null;
+  try {
+    for (;;) {
+      const summary = runFold({ dir, root, transcriptDir, currentSession: null, env, now: clock() });
+      if (!summary.pending?.length || summary.blocked || clock() - started > WAIT_MAX_MS) return summary;
+      await sleep(WAIT_POLL_MS);
+      if (!takeWaiter(dir, { now: clock() })) return summary;
+    }
+  } finally {
+    releaseWaiter(dir);
+  }
+}
+
 async function backgroundMain(argv) {
   const [dir, root, transcriptDir, currentSession] = argv;
   const store = loadStore(dir);
@@ -778,7 +837,8 @@ async function backgroundMain(argv) {
       saveStore(dir, latest);
     }
   }
-  runFold({ dir, root, transcriptDir, currentSession: currentSession || null });
+  const summary = runFold({ dir, root, transcriptDir, currentSession: currentSession || null });
+  if (summary.pending?.length) await waitAndApply({ dir, root, transcriptDir });
 }
 
 if (process.argv[2] === '--fold' && process.argv[1] && fileURLToPath(import.meta.url) === resolvePath(process.argv[1])) {

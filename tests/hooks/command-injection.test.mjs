@@ -64,6 +64,16 @@ afterEach(() => {
 });
 
 describe('forCommand', () => {
+  it('delivers one copy of a claim recorded twice under two keys', () => {
+    const claim = 'Use the 0.37.0 build, never 0.27.0.';
+    seed({ key: 'f-build-a', claim, trigger: '\\bnpx\\s+jest\\b' });
+    seed({ key: 'f-build-b', claim: ` ${claim.toUpperCase()} `, trigger: '\\bnpx\\s+jest\\b' });
+
+    const out = forCommand(dir, load(dir), 'npx jest tests/unit/foo.test.ts', { sessionId: 's1' });
+
+    expect(out.toLowerCase().split('use the 0.37.0 build').length - 1).toBe(1);
+  });
+
   it('delivers a triggered finding for the command that is about to run', () => {
     seed({
       key: 'f-npm-test',

@@ -126,6 +126,28 @@ export function normalizeError(text) {
     .slice(0, 240);
 }
 
+/**
+ * Results that are an error to the host but not a failure of the work: the
+ * person interrupted, declined a permission, or a hook (this package's own
+ * refusals among them) redirected the call. Counting them would make a session
+ * that is simply being steered look like a loop -- and this package's refusals
+ * differ only in the path, which the signature masks, so four refusals of four
+ * different files would otherwise read as one failure repeated four times.
+ */
+const NOT_A_FAILURE = [
+  /TOKEN_OPTIMIZER_MODE/,
+  /\[Request interrupted by user/i,
+  /\[Tool call interrupted/i,
+  /The user doesn't want to proceed with this tool use/i,
+  /tool use was rejected/i,
+  /hook (?:error|blocked)|blocked by (?:a )?(?:PreToolUse )?hook/i,
+];
+
+export function isSteering(errorText) {
+  const text = String(errorText ?? '');
+  return NOT_A_FAILURE.some((pattern) => pattern.test(text));
+}
+
 export function failureSignature(toolName, errorText) {
   const normalized = normalizeError(errorText);
   return {
@@ -229,8 +251,13 @@ export function currentTurn(transcriptPath, { tailBytes = TAIL_BYTES } = {}) {
         if (block?.type !== 'tool_result') continue;
         const call = byId.get(String(block.tool_use_id || ''));
         if (!call) continue;
+        const body = resultText(block);
+        if (block.is_error === true && isSteering(body)) {
+          call.ok = null;
+          continue;
+        }
         call.ok = block.is_error !== true;
-        if (!call.ok) call.sig = failureSignature(call.name, resultText(block));
+        if (!call.ok) call.sig = failureSignature(call.name, body);
       }
     }
   }
@@ -588,6 +615,7 @@ export async function onToolFailure({ dir, sessionId, transcriptPath, payload = 
   // The failing call may not be in the transcript yet; count it from the payload.
   const name = String(payload.tool_name || payload.toolName || 'tool');
   const error = typeof payload.error === 'string' ? payload.error : JSON.stringify(payload.error ?? '');
+  if (payload.is_interrupt === true || payload.isInterrupt === true || isSteering(error)) return null;
   const id = String(payload.tool_use_id || payload.toolUseId || '');
   const known = id && turn.calls.some((call) => call.id === id);
   const calls = known

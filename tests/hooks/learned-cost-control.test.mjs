@@ -132,6 +132,8 @@ describe('billing mode', () => {
     expect(billingMode({ client: 'claude-code', env: { ANTHROPIC_API_KEY: 'x' }, home }).mode).toBe('api');
     expect(billingMode({ client: 'claude-code', env: { CLAUDE_CODE_USE_BEDROCK: '1' }, home }).mode).toBe('api');
     expect(billingMode({ client: 'claude-code', env: {}, home }).mode).toBe('unknown');
+    writeFileSync(join(home, '.claude.json'), JSON.stringify({ oauthAccount: { billingType: 'enterprise_invoice' } }));
+    expect(billingMode({ client: 'claude-code', env: {}, home }).mode).toBe('unknown');
   });
 
   test('the explicit override always wins', () => {
@@ -245,6 +247,31 @@ describe('tool pruning', () => {
     expect(takeNotice(dir)).toBeNull();
   });
 
+  test('a fold never writes a new prune while any session, its own included, is live; the waiter does once all are quiet', async () => {
+    const { waitAndApply } = await import('../../hooks-core/toolprune.mjs');
+    const transcripts = fresh('transcripts');
+    const root = fresh('root');
+    const dir = fresh('state');
+    const paths = [];
+    for (let index = 0; index < 5; index += 1) paths.push(session(transcripts, `s${index}`, 3, ['Read']));
+    for (const path of paths) idle(path);
+    const live = session(transcripts, 'live', 1, ['Read']);
+    const store = loadStore(dir);
+    store.catalog = { tools: ['Read', 'WebFetch'], probedAt: Date.now(), clientVersion: 'x' };
+    writeFileSync(join(dir, 'toolprune.json'), JSON.stringify(store));
+    // Launched from the live session: it is excluded from the evidence but not from the idle check.
+    const held = runFold({ dir, root, transcriptDir: transcripts, currentSession: 'live', env: {} });
+    expect(held.pending).toEqual(['WebFetch']);
+    expect(held.applied).toEqual([]);
+    let slept = 0;
+    const summary = await waitAndApply({
+      dir, root, transcriptDir: transcripts, env: {},
+      sleep: async () => { slept += 1; idle(live); },
+    });
+    expect(slept).toBe(1);
+    expect(summary.applied).toEqual(['WebFetch']);
+  });
+
   test('a session that reaches for a pruned tool gives it back, and it is never pruned again', () => {
     const transcripts = fresh('transcripts');
     const root = fresh('root');
@@ -356,6 +383,23 @@ describe('loop guard', () => {
     expect(classify(failingTurn(6, true))).toBe('none');
   });
 
+  test('refusals, interrupts and rejections are steering, not failures', async () => {
+    const dir = fresh('graph');
+    const path = join(dir, 't.jsonl');
+    const rows = [prompt('read the files')];
+    for (let index = 0; index < 5; index += 1) {
+      rows.push(call(`r${index}`, 'Read', { file_path: `/repo/f${index}.ts` }));
+      rows.push(result(`r${index}`, `Read of /repo/f${index}.ts refused: use smart_read. (Not what you wanted? TOKEN_OPTIMIZER_MODE=assist stops refusals and keeps everything else on.)`, true));
+    }
+    writeTranscript(path, rows);
+    const stats = turnStats(currentTurn(path).calls);
+    expect(stats.failures).toBe(0);
+    expect(classifyTurn(stats, envelopeSummary({ turns: [] }, loopguardSettings({})), loopguardSettings({})).level).toBe('none');
+    const payload = { tool_name: 'Read', error: 'refused (TOKEN_OPTIMIZER_MODE=assist ...)' };
+    expect(await onToolFailure({ dir, sessionId: 'steer', transcriptPath: path, payload, env: {} })).toBeNull();
+    expect(await onToolFailure({ dir, sessionId: 'steer', transcriptPath: path, payload: { tool_name: 'Bash', error: 'x', is_interrupt: true }, env: {} })).toBeNull();
+  });
+
   test('a turn starts at the person’s last prompt', () => {
     const dir = fresh('turns');
     const path = join(dir, 't.jsonl');
@@ -464,7 +508,17 @@ describe('injection holdout', () => {
     for (let k = 0; k < MIN_WITHHELD + 4; k += 1) put('graph', 60 + (k % 5));
     writeFileSync(join(dir, OUTCOMES_FILE), JSON.stringify({ sessions: reversed }));
     expect(analyze(dir).find((item) => item.cls === 'graph').verdict).toBe('pays-for-itself');
+    // Same milestone as the gating look: no second look, so no flip-flop.
+    expect(decide(dir).gated).toEqual(['graph']);
+    // At the next milestone the reversed evidence is acted on.
+    for (let k = 0; k < 4; k += 1) put('graph', 60 + (k % 5));
+    writeFileSync(join(dir, OUTCOMES_FILE), JSON.stringify({ sessions: reversed }));
     expect(decide(dir).gated).toEqual([]);
+  });
+
+  test('Holm keeps the family-wise error at alpha across classes', async () => {
+    const { holm } = await import('../../hooks-core/injection-holdout.mjs');
+    expect(holm([0.01, 0.04, null, 0.03])).toEqual([0.03, 0.06, null, 0.06]);
   });
 
   test('too few sessions is collecting, never a verdict', () => {

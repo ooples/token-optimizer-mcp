@@ -86,11 +86,21 @@ const estimate = (text) => Math.ceil(String(text || '').length / 4);
  */
 function fit(findings, budget) {
   const kept = [];
+  const claims = new Set();
   let spent = 0;
   for (const finding of findings) {
+    // ONE COPY OF A CLAIM. The same sentence is often recorded twice -- by two
+    // sessions, or under two anchors -- and each copy has its own key, so the
+    // key-based gates let both through: measured live, one block carried an
+    // identical feedback line twice. A repeat tells the model nothing and is
+    // billed on every later request, and it spends budget a distinct claim
+    // could have used. The first (best-ranked) copy is the one kept.
+    const claim = String(finding.claim ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
+    if (claim && claims.has(claim)) continue;
     const cost = estimate(render(finding));
     if (spent + cost > budget) continue;
     kept.push(finding);
+    if (claim) claims.add(claim);
     spent += cost;
   }
   return { kept, spent };

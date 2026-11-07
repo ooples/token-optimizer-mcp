@@ -82,7 +82,10 @@ function claudeMode(env, home) {
     return { mode: 'subscription', source: `claude.json:${billingType}` };
   }
   if (set(env.ANTHROPIC_API_KEY)) return { mode: 'api', source: 'env:ANTHROPIC_API_KEY' };
-  if (billingType) return { mode: 'api', source: `claude.json:${billingType}` };
+  // A login with a billing type this does not recognise (an enterprise or
+  // invoiced seat, say) is still a plan with a quota more often than not;
+  // calling it API would price quota as dollars. Say unknown, never guess.
+  if (billingType) return { mode: 'unknown', source: `claude.json:${billingType}` };
   return { mode: 'unknown', source: 'no-signal' };
 }
 

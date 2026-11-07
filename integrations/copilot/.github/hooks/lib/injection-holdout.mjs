@@ -104,9 +104,13 @@ export function armFor(sessionId, settings = holdoutSettings()) {
 export function loadPolicy(dir) {
   try {
     const parsed = JSON.parse(readFileSync(join(dir, POLICY_FILE), 'utf8'));
-    return { gated: Array.isArray(parsed?.gated) ? parsed.gated : [], decidedAt: parsed?.decidedAt || 0 };
+    return {
+      gated: Array.isArray(parsed?.gated) ? parsed.gated : [],
+      decidedAt: parsed?.decidedAt || 0,
+      looks: parsed?.looks && typeof parsed.looks === 'object' ? parsed.looks : {},
+    };
   } catch {
-    return { gated: [] };
+    return { gated: [], looks: {} };
   }
 }
 
@@ -191,31 +195,79 @@ const mean = (values) => values.reduce((sum, value) => sum + value, 0) / values.
  * "served" sessions are the ordinary ones. For a gated class the roles swap:
  * its enrolled sessions are the ones that SERVED it.
  */
+/**
+ * Holm step-down adjustment: the family-wise error stays at `ALPHA` across all
+ * classes tested together. Eight classes tested one by one at 0.05 would wrongly
+ * gate a useful class about a third of the time.
+ */
+export function holm(pValues) {
+  const order = pValues
+    .map((p, index) => ({ p, index }))
+    .filter((item) => item.p != null)
+    .sort((a, b) => a.p - b.p);
+  const adjusted = pValues.map(() => null);
+  let running = 0;
+  order.forEach((item, rank) => {
+    running = Math.max(running, Math.min(1, (order.length - rank) * item.p));
+    adjusted[item.index] = running;
+  });
+  return adjusted;
+}
+
+/** The smallest power of two at or below n, from MIN_WITHHELD up; 0 below it. */
+export function milestone(n) {
+  if (n < MIN_WITHHELD) return 0;
+  let step = MIN_WITHHELD;
+  while (step * 2 <= n) step *= 2;
+  return step;
+}
+
+// Session cost is heavy-tailed: one long debugging session outweighs twenty
+// ordinary ones. The test runs on log cost, where a class's effect is a ratio.
+const logCost = (value) => Math.log(Math.max(value, 1e-9));
+
 export function analyze(dir, { policy = loadPolicy(dir) } = {}) {
   const outcomes = Object.values(loadOutcomes(dir).sessions).filter((row) => row.g === HOLDOUT_GENERATION);
-  const ordinary = outcomes.filter((row) => row.arm === 'none').map((row) => row.costPerPrompt);
+  const ordinary = outcomes.filter((row) => row.arm === 'none').map((row) => logCost(row.costPerPrompt));
   const gated = new Set(policy.gated);
   const rows = [];
   for (const cls of WITHHOLDABLE) {
-    const enrolled = outcomes.filter((row) => row.arm === cls).map((row) => row.costPerPrompt);
+    const enrolled = outcomes.filter((row) => row.arm === cls).map((row) => logCost(row.costPerPrompt));
     const isGated = gated.has(cls);
     const withheld = isGated ? ordinary : enrolled;
     const served = isGated ? enrolled : ordinary;
-    const row = { cls, gated: isGated, withheld: withheld.length, served: served.length, verdict: 'collecting', p: null, effect: null };
+    const row = {
+      cls,
+      gated: isGated,
+      withheld: withheld.length,
+      served: served.length,
+      enrolled: enrolled.length,
+      verdict: 'collecting',
+      p: null,
+      pAdjusted: null,
+      effect: null,
+    };
     const enough = isGated
       ? served.length >= MIN_WITHHELD && withheld.length >= MIN_SERVED
       : withheld.length >= MIN_WITHHELD && served.length >= MIN_SERVED;
     if (enough) {
-      const p = permutationP(served, withheld, { seed: 0x5eed + WITHHOLDABLE.indexOf(cls) });
-      // Relative change in cost per prompt when the class is withheld.
-      const effect = mean(withheld) / mean(served) - 1;
-      row.p = p;
-      row.effect = effect;
-      if (p != null && p < ALPHA) row.verdict = effect < 0 ? 'costs-more-than-it-saves' : 'pays-for-itself';
-      else row.verdict = 'no-detectable-effect';
+      row.p = permutationP(served, withheld, { seed: 0x5eed + WITHHOLDABLE.indexOf(cls) });
+      // Geometric-mean ratio of cost per prompt, withheld over served, minus one.
+      row.effect = Math.exp(mean(withheld) - mean(served)) - 1;
     }
     rows.push(row);
   }
+  const adjusted = holm(rows.map((row) => row.p));
+  rows.forEach((row, index) => {
+    if (row.p == null) return;
+    row.pAdjusted = adjusted[index];
+    row.verdict =
+      row.pAdjusted < ALPHA
+        ? row.effect < 0
+          ? 'costs-more-than-it-saves'
+          : 'pays-for-itself'
+        : 'no-detectable-effect';
+  });
   return rows;
 }
 
@@ -224,15 +276,25 @@ export function decide(dir, { now = Date.now() } = {}) {
   const policy = loadPolicy(dir);
   const rows = analyze(dir, { policy });
   const gated = new Set(policy.gated);
+  const looks = { ...(policy.looks || {}) };
+  let looked = false;
   for (const row of rows) {
+    // A DECISION ONLY AT A MILESTONE. Re-testing on every fold is peeking: the
+    // chance that some look crosses the threshold by luck grows with every
+    // session. Deciding only when the enrolled count reaches a new power of two
+    // bounds the looks per class to a handful over its whole life.
+    const mark = milestone(row.enrolled);
+    if (!mark || (looks[row.cls] || 0) >= mark) continue;
+    looks[row.cls] = mark;
+    looked = true;
     if (row.verdict === 'costs-more-than-it-saves') gated.add(row.cls);
     if (row.verdict === 'pays-for-itself') gated.delete(row.cls);
   }
   const next = [...gated].sort();
-  if (next.join(',') !== [...policy.gated].sort().join(',')) {
+  if (looked || next.join(',') !== [...policy.gated].sort().join(',')) {
     try {
       mkdirSync(dir, { recursive: true });
-      writeAtomically(join(dir, POLICY_FILE), JSON.stringify({ gated: next, decidedAt: now }));
+      writeAtomically(join(dir, POLICY_FILE), JSON.stringify({ gated: next, decidedAt: now, looks }));
     } catch {
       // Undecided: the next fold tries again.
     }
