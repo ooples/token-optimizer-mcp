@@ -1349,6 +1349,84 @@ mistakes: what an overpowered model wastes, and what an underpowered one costs
 in retries. A tier that needs a retry in more than half its episodes is excluded
 at any price, because four cheap turns that fail are not cheap.
 
+### Learned cost control: pruning, loop guard, holdout, and the quota you actually pay with
+
+Four controls learn from this repository's own finished sessions. They act on
+what a session *loads* and *how it fails*, which the compression above does not
+reach. None of them needs a model call to work.
+
+**Tool pruning.** A tool unused for 10 prompts across 2 or more sessions (or for
+5 sessions) is written as a bare-name `permissions.deny` rule into the project's
+`.claude/settings.local.json`. That removes its definition from every later
+request (verified on Claude Code 2.1.319: 173 tools to 171). The list is written
+only after the repository's other sessions have been idle for 60 minutes. A
+deny rule reaches sessions that are already running, so writing it while a
+warm session is mid-flight would make that session re-write its cache. The
+file and shell tools, AskUserQuestion, plan mode, ToolSearch, Skill and this
+package's own tools are never pruned. Rules you wrote are never removed or
+adopted.
+
+Pruning is reversible without a command. A session whose model reaches for a
+pruned tool, or whose user names one, gets it back at the next fold, and that
+tool is never pruned again. The catalog of tools a session loads is read in the
+background from `claude -p`'s init event. The process is killed before any model
+call, so the read costs no money or quota. Sessions launched outside a
+repository, such as from a home directory, get their own store keyed on the
+launch directory.
+
+**Loop guard.** On a failed call (`PostToolUseFailure`), the guard looks at the
+current turn. The same failure signature four times in one turn, or a turn
+churning past 2.5x this repository's usual length, is redirected at once. Three
+repeats, or many failures in a long turn, count as suspect. A suspect turn is
+redirected straight away, or sent to an optional judge
+(`TOKEN_OPTIMIZER_LOOPGUARD_JUDGE=on`, run through your own `claude` CLI and
+accounted). The redirect names the failure, and it carries what the knowledge
+graph already holds about the files involved: the dead ends and working commands
+an earlier session recorded. Each turn gets one redirect. After that, the person
+sees one line saying how to interrupt the turn; the guard never stops a turn
+itself. It acts from the first session, since identical repeated failures are a
+loop in any repository.
+
+**Injection holdout.** Every kind of context these hooks inject is billed on
+every later request of the session. One session in ten withholds exactly one
+class (session index, standing rules, graph findings, advisories, guidance, and
+so on). Its cache-aware cost per prompt is then compared against ordinary
+sessions with a permutation test. A class that sessions are measurably cheaper
+without is gated. The test keeps running in reverse, so a wrong gate undoes
+itself. The tool policy, crash notices and anything else a session needs to work
+are never withheld. Set `TOKEN_OPTIMIZER_INJECTION_HOLDOUT=off` to opt out; a
+benchmark arm turns it off automatically.
+
+**Billing mode and quota pacing.** Billing mode is detected per client, without
+opening a credential file. Claude Code's non-secret `oauthAccount.billingType` is
+the signal, alongside API-key and cloud-provider environment variables;
+`TOKEN_OPTIMIZER_BILLING` overrides it. API users are optimized for cache-aware
+cost per task. Subscription users are optimized for finished work per unit of
+quota. Under the default `TOKEN_OPTIMIZER_SUBSCRIPTION_POLICY=pace`, leftover
+capacity is spent (by continuing a session that stopped with unverified edits)
+only when **both** of these hold:
+
+- the 5-hour window is under 90% used;
+- the week is on pace (weekly use is no more than the share of the week
+  elapsed).
+
+Capacity "left over" today is otherwise taken from later in the week. The
+numbers come from Claude Code's own status-line payload (`rate_limits`), which
+hooks never see. Run `token-optimizer-learned statusline install` to record
+them; it wraps any status line you already have. With no data it holds rather
+than guesses. `suggest` and `report` turn pacing off.
+
+```
+token-optimizer-learned status                   # all four, with evidence
+token-optimizer-learned toolprune restore [Tool] # give tools back
+token-optimizer-learned statusline install       # let pacing see real quota
+```
+
+What is verified and what is not: the mechanisms are covered by tests and by the
+probes named above. Their effect on end-to-end task cost has **not** been
+measured yet. The holdout exists to measure exactly that on your own sessions,
+and it reports "collecting" until it has enough of them.
+
 ### Waste detection that becomes a ratchet
 
 A report is read once and forgotten. Here a detection produces a **durable,

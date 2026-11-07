@@ -21,6 +21,7 @@
  */
 import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { writeAtomically } from './policy.mjs';
+import { paceDecision } from './quota-policy.mjs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 
@@ -101,15 +102,22 @@ function candidateBacklogFiles(cwd, env = process.env) {
 /**
  * Determine the next autonomous continuation prompt at Stop, or null if none.
  */
-export function nextPacedContinuation({ cwd, state, now = Date.now(), env = process.env }) {
-  if (!pacerEnabled(env)) return null;
+export function nextPacedContinuation({ cwd, state, now = Date.now(), env = process.env, client = 'claude-code', home }) {
+  // Explicit configuration paces as it always has. Otherwise a subscription
+  // under the default `pace` policy paces only when real usage leaves room in
+  // the 5-hour window AND the week (quota-policy.mjs).
+  const explicit = pacerEnabled(env);
+  const paced = explicit ? null : paceDecision({ client, env, now, home });
+  if (!explicit && !paced.allowed) return null;
   const configuredLimit = Number(env.TOKEN_OPTIMIZER_MAX_CONTINUATIONS ?? 3);
   const maxCont = Number.isFinite(configuredLimit) ? Math.max(0, Math.floor(configuredLimit)) : 3;
   const status = recordWindowActivity({ calls: 0, edits: 0, now, env });
-  const windowTag = `[window: ${status.calls} calls used, ${status.remainingMinutes}m until ${status.windowHours}h reset]`;
+  const windowTag = paced
+    ? `[quota: ${paced.reason}]`
+    : `[window: ${status.calls} calls used, ${status.remainingMinutes}m until ${status.windowHours}h reset]`;
 
   // 1. Unverified edits gate
-  const maximize = /^(1|true|yes|on)$/i.test(
+  const maximize = Boolean(paced?.allowed) || /^(1|true|yes|on)$/i.test(
     String(env.TOKEN_OPTIMIZER_MAXIMIZE_SUBSCRIPTION ?? '').trim()
   );
   const unverified = Number(state.edits || 0) > Number(state.verifiedEdits || 0);

@@ -127,6 +127,9 @@ import { isVerificationCommand } from './verification.mjs';
 import { recordOnBoard, recordReadOnBoard } from './blackboard.mjs';
 import { nextPacedContinuation, recordWindowActivity, pacerEnabled } from './quota-pacer.mjs';
 import { artifactPath, capture } from './expand.mjs';
+import { applyHoldout } from './injection-holdout.mjs';
+import { learnedLocation, scheduleFold, takeNotice } from './toolprune.mjs';
+import { onToolFailure, recordTurnEnd } from './loopguard.mjs';
 
 /**
  * An outline rewrite for this call, in the client's own input shape, or null.
@@ -1375,7 +1378,50 @@ async function runHook(clientName, event, invocation) {
 
   if (mode() === MODE_OFF) process.exit(0);
 
+  // A process this package started itself -- the tool-catalog probe or the
+  // loop guard's judge -- is not the person's session: nothing to optimize,
+  // learn from or announce there, and recursing into it would fork forever.
+  if (process.env.TOKEN_OPTIMIZER_SIDECALL) {
+    if (event === 'stop') emit({});
+    process.exit(0);
+  }
+
   const features = featuresForArm();
+
+  // THE LOOP GUARD, on a failed tool call. Claude Code reports a failed call --
+  // a non-zero exit, a tool error -- through PostToolUseFailure, never through
+  // PostToolUse, so this is the only place a failing loop is visible as it
+  // happens. Its answer must name the event it answers or the host drops it.
+  if (event === 'post-tool-failure') {
+    const input = await readPayloadResult({ timeoutMs: 1000 });
+    const raw = input.payload || {};
+    invocation.bind(raw, null, input.bytes);
+    if (input.status !== 'ok') invocation.noteInput(input.status, input.bytes);
+    const sessionId = raw.session_id ?? raw.sessionId ?? 'default';
+    const cwd = raw.cwd || process.cwd();
+    try {
+      const result = await onToolFailure({
+        dir: learnedLocation(cwd).dir,
+        sessionId,
+        transcriptPath: raw.transcript_path ?? raw.transcriptPath ?? null,
+        payload: raw,
+      });
+      if (result) {
+        const output = {};
+        if (result.additionalContext) {
+          output.hookSpecificOutput = {
+            hookEventName: 'PostToolUseFailure',
+            additionalContext: result.additionalContext,
+          };
+        }
+        if (result.systemMessage) output.systemMessage = result.systemMessage;
+        emit(output);
+      }
+    } catch {
+      // The guard is advice; a defect in it must never touch the session.
+    }
+    process.exit(0);
+  }
   if (event === 'pre-invocation' && isAntigravity) {
     const input = await readPayloadResult({ timeoutMs: 250 });
     const raw = input.payload || {};
@@ -1482,7 +1528,27 @@ async function runHook(clientName, event, invocation) {
         // Retrieval is optional context; the policy must still reach the model.
       }
     }
-    const output = contextOutput(client, eventName, sessionContext(blocks));
+    // EVERY CLASS OF INJECTED CONTEXT HAS TO EARN ITS PLACE (injection-holdout.mjs):
+    // a small share of sessions withholds one class so its effect on session
+    // cost is measured, and a class shown to cost more than it saves is gated.
+    // Claude Code only: it is the client whose transcripts the background fold
+    // reads, so it is the only one where a withheld class buys a measurement.
+    // Withholding anywhere else would cost context and learn nothing.
+    const learned = learnedLocation(cwd);
+    const served = applyHoldout(blocks.map((block) => ({ ...block, cls: block.id })), {
+      dir: clientName === 'claude-code' ? learned.dir : null,
+      sessionId,
+    });
+    let output = contextOutput(client, eventName, sessionContext(served));
+    // LEARNED TOOL PRUNING (toolprune.mjs): finished sessions are folded in the
+    // background, and what changed is said to the PERSON, once, as a visible
+    // line -- not to the model, whose context it would only cost.
+    const transcriptPath = raw.transcript_path ?? raw.transcriptPath ?? null;
+    if (clientName === 'claude-code' && sessionId && transcriptPath) {
+      scheduleFold({ dir: learned.dir, root: learned.root, transcriptPath, sessionId });
+      const notice = takeNotice(learned.dir);
+      if (notice) output = { ...(output || {}), systemMessage: notice };
+    }
     if (output) emit(output);
     process.exit(0);
   }
@@ -1525,6 +1591,15 @@ async function runHook(clientName, event, invocation) {
       });
     } catch {
       // Evidence is best effort and must never stop a session from finishing.
+    }
+    try {
+      // THE LOOP GUARD'S ENVELOPE: a turn that ended well teaches it how long a
+      // good turn runs in this repository (loopguard.mjs).
+      if (transcriptPath) {
+        recordTurnEnd(learnedLocation(cwd).dir, transcriptPath);
+      }
+    } catch {
+      // A turn that cannot be measured is simply not learned from.
     }
     try {
       // THE KEEP-WARM FEEDBACK ARM, at the boundary where a turn has just
@@ -1681,7 +1756,7 @@ async function runHook(clientName, event, invocation) {
       !raw.stopHookActive &&
       !(clientName === 'cursor' && Number(raw.loop_count ?? raw.loopCount ?? 0) > 0)
     ) {
-      const paced = nextPacedContinuation({ cwd, state });
+      const paced = nextPacedContinuation({ cwd, state, client: clientName });
       if (paced) {
         stopPrompt = paced;
         saveState(sessionId, state, agentScope);
@@ -2188,15 +2263,30 @@ async function runHook(clientName, event, invocation) {
     }
     if (overWindow) state.overWindowNoted = true;
   }
-  const context = [
-    advisory,
-    graphContext,
-    guided ? recordingGuidance() : null,
-    recordingContext,
-    pendingHarvest,
-    overWindow,
-  ]
-    .filter(Boolean)
+  // Through the injection holdout, so each class is measured against what it
+  // costs (injection-holdout.mjs). recordingContext is not a class: it is the
+  // reply to the model's own wiki_write, and withholding it would be withholding
+  // a tool result.
+  let holdoutDir = null;
+  if (clientName === 'claude-code') {
+    try {
+      holdoutDir = learnedLocation(payload.cwd || process.cwd()).dir;
+    } catch {
+      holdoutDir = null;
+    }
+  }
+  const context = applyHoldout(
+    [
+      { cls: 'advisory', text: advisory },
+      { cls: 'graph', text: graphContext },
+      { cls: 'guidance', text: guided ? recordingGuidance() : null },
+      { cls: 'recording', text: recordingContext },
+      { cls: 'harvest-nudge', text: pendingHarvest },
+      { cls: 'over-window', text: overWindow },
+    ],
+    { dir: holdoutDir, sessionId: payload.session_id }
+  )
+    .map((part) => part.text)
     .join('\n\n');
   if (context && !canDeliverToolContext && client.contextStyle === 'antigravity-ephemeral') {
     state.pendingHarvest = [state.pendingHarvest, context].filter(Boolean).join('\n\n');
