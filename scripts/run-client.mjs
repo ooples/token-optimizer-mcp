@@ -107,6 +107,42 @@ function merge(a, b) {
   return a;
 }
 
+/**
+ * Whether Claude Code will already load this product's MCP server through the
+ * token-optimizer PLUGIN, for a launch in `projectRoot`.
+ *
+ * The managed launcher used to pass `--mcp-config` with a standalone
+ * `token-optimizer` server unconditionally. With the plugin enabled -- the
+ * normal install -- every session then ran two servers and listed all 19 tools
+ * twice (`token-optimizer` beside `plugin:token-optimizer:token-optimizer`),
+ * found loading even in an empty directory. Settings are read in Claude Code's
+ * precedence order (user, project, local); a file that does not parse counts
+ * as saying nothing, so a broken settings file falls back to injecting, which
+ * is the safe direction: a duplicate costs tokens, a missing server costs the
+ * product.
+ */
+export function claudePluginProvidesMcp({ env = process.env, projectRoot = process.cwd(), home = homedir() } = {}) {
+  const configDir = env.CLAUDE_CONFIG_DIR || join(home, '.claude');
+  const enabled = {};
+  for (const path of [
+    join(configDir, 'settings.json'),
+    join(projectRoot, '.claude', 'settings.json'),
+    join(projectRoot, '.claude', 'settings.local.json'),
+  ]) {
+    let parsed;
+    try {
+      parsed = readConfig(path, JSON.parse);
+    } catch {
+      continue;
+    }
+    const plugins = parsed?.enabledPlugins;
+    if (plugins && typeof plugins === 'object' && !Array.isArray(plugins)) {
+      for (const [id, value] of Object.entries(plugins)) enabled[id] = value;
+    }
+  }
+  return Object.entries(enabled).some(([id, value]) => /^token-optimizer@/.test(id) && value === true);
+}
+
 export function codexRoute(args, env) {
   const home = env.CODEX_HOME || join(homedir(), '.codex');
   args = args.slice(
@@ -455,7 +491,7 @@ export async function runClient(
               `mcp_servers.token-optimizer.env.${name}=${literal(childEnv[name])}`
             );
         }
-      } else if (client === 'claude') {
+      } else if (client === 'claude' && !claudePluginProvidesMcp({ env, projectRoot })) {
         forwarded.push(
           '--mcp-config',
           JSON.stringify({
