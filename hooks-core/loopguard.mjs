@@ -66,6 +66,7 @@ import {
 import { tmpdir } from 'node:os';
 import { join, resolve as resolvePath } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { failureInOutput, maskedRunner } from './piped-failure.mjs';
 import { writeAtomically } from './policy.mjs';
 import { stateRoot } from './runtime-switch.mjs';
 import { safeLine } from './safe-text.mjs';
@@ -236,6 +237,9 @@ export function currentTurn(transcriptPath, { tailBytes = TAIL_BYTES } = {}) {
           name: block.name,
           path: block.input?.file_path || block.input?.notebook_path || null,
           command: typeof block.input?.command === 'string' ? block.input.command.slice(0, 200) : null,
+          // Read from the WHOLE command: the pipe that hides the exit status is
+          // usually at the end, past where `command` is cut.
+          masked: maskedRunner(block.input?.command),
           ok: null,
           sig: null,
         };
@@ -256,6 +260,16 @@ export function currentTurn(transcriptPath, { tailBytes = TAIL_BYTES } = {}) {
         }
         call.ok = block.is_error !== true;
         if (!call.ok) call.sig = failureSignature(call.name, body);
+        else if (call.masked) {
+          // `npm test | tail` exits 0 whatever the tests did (piped-failure.mjs).
+          // Keyed on the runner's summary line, so the same red run repeated is
+          // one repeating failure rather than a run of fresh successes.
+          const hidden = failureInOutput(body);
+          if (hidden) {
+            call.ok = false;
+            call.sig = failureSignature(call.name, hidden.line);
+          }
+        }
       }
     }
   }

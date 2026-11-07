@@ -23,6 +23,7 @@ import {
   unlinkSync, openSync, readSync, closeSync, appendFileSync,
 } from 'node:fs';
 import { join } from 'node:path';
+import { failureInOutput, maskedRunner } from './piped-failure.mjs';
 import { redact } from './redact.mjs';
 import { withWriteLease } from './maintenance.mjs';
 import { rejected } from './store-write.mjs';
@@ -638,8 +639,10 @@ export function turnEvidence(transcriptPath, { scanBytes = 8 * 1024 * 1024 } = {
  * is injected into model context and exported to markdown.
  *
  * @returns {Array<{command: string, output: string, exit: number|null,
- *   at: number, toolCallId: string|null}>} in transcript order, so a caller can
- *   sort it beside `tool-outcome` events without re-ordering.
+ *   at: number, toolCallId: string|null, masked?: true}>} in transcript order,
+ *   so a caller can sort it beside `tool-outcome` events without re-ordering.
+ *   `masked` marks a failure a pipe hid from the client, which therefore
+ *   recorded the same call as a success.
  */
 export function failedResultsFromTranscript(transcriptPath, options = {}) {
   const { max = FAILED_MAX, scanBytes = FAILED_SCAN_BYTES() } = options || {};
@@ -652,6 +655,8 @@ export function failedResultsFromTranscript(transcriptPath, options = {}) {
   // the id is the same string `episodeMeta` reads into `toolCallId`, so the same
   // key also deduplicates against events on clients that do report failures.
   const commands = new Map();
+  // Calls whose exit status a pipe hid, read from the full command text.
+  const masked = new Set();
   const failures = [];
 
   for (const line of text.split('\n')) {
@@ -673,13 +678,34 @@ export function failedResultsFromTranscript(transcriptPath, options = {}) {
         const command = block.input?.command;
         if (typeof command !== 'string' || !command.trim()) continue;
         commands.set(String(block.id), command.slice(0, ANCHOR_MAX));
+        if (maskedRunner(command)) masked.add(String(block.id));
       }
       continue;
     }
 
     if (role !== 'user') continue;
     for (const block of content) {
-      if (!block || block.type !== 'tool_result' || block.is_error !== true) continue;
+      if (!block || block.type !== 'tool_result') continue;
+      if (block.is_error !== true) {
+        // A FAILURE THE CLIENT RECORDED AS A SUCCESS: a runner behind a filter
+        // (piped-failure.mjs). `masked` tells derive to turn the success event
+        // for this call into the failure, rather than dropping this copy as a
+        // duplicate of it.
+        const id = String(block.tool_use_id || '');
+        if (!masked.has(id) || typeof block.content !== 'string') continue;
+        const hidden = failureInOutput(block.content);
+        const command = commands.get(id);
+        if (!hidden || !command) continue;
+        failures.push({
+          command,
+          output: redact(block.content.trim(), { max: FAILED_OUTPUT_MAX }),
+          exit: null,
+          masked: true,
+          at: Date.parse(entry.timestamp || '') || 0,
+          toolCallId: id,
+        });
+        continue;
+      }
       // Only a STRING result can be an exit-code report; every failed Claude
       // Code result observed was one, and a structured body is a shape this
       // classifier has not measured, so it is refused rather than guessed at.

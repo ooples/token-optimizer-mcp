@@ -1010,6 +1010,85 @@ const toolResult = (id, content, at) => ({
   toolUseResult: `Error: ${content}`,
 });
 
+/** A result the client recorded as a success: no `is_error`, no exit line. */
+const okResult = (id, content, at) => ({
+  type: 'user',
+  message: { role: 'user', content: [{ type: 'tool_result', content, tool_use_id: id }] },
+  timestamp: at,
+});
+
+describe('a failure a pipe hid from the client', () => {
+  // `npm run deploy -- --retry 2>&1 | tail -5` exits with tail's 0, so Claude
+  // Code records it as a success and PostToolUse fires with success: true. Paired
+  // with the real failure before it, that event read as the retry FIXING the
+  // deploy -- a false lesson at the command detector's confidence.
+  const retry = 'npm run deploy -- --retry 2>&1 | tail -5';
+  const scenario = () => {
+    withManifest();
+    recordToolOutcome(dir, {
+      kind: 'tool-outcome',
+      surface: 'command',
+      anchor: retry,
+      toolCallId: 'toolu_2',
+      success: true,
+      at: Date.parse('2026-08-26T10:01:01.000Z'),
+    });
+    return transcriptFile([
+      toolUse('toolu_1', 'npm run deploy', '2026-08-26T10:00:00.000Z'),
+      toolResult('toolu_1', 'Exit code 1\nconnection refused by host', '2026-08-26T10:00:01.000Z'),
+      toolUse('toolu_2', retry, '2026-08-26T10:01:00.000Z'),
+      okResult('toolu_2', 'npm ERR! code ELIFECYCLE\nnpm ERR! errno 1', '2026-08-26T10:01:01.000Z'),
+    ]);
+  };
+
+  it('is read from the transcript as a failure, marked as one the client saw succeed', () => {
+    const failures = failedResultsFromTranscript(scenario());
+    expect(failures.map((f) => [f.toolCallId, f.exit, f.masked ?? false])).toEqual([
+      ['toolu_1', 1, false],
+      ['toolu_2', null, true],
+    ]);
+  });
+
+  it('takes the false success out of the run, so the real fix after it still pairs', () => {
+    // Left in, the masked "success" consumed the deploy failure and was then
+    // refused as a pipeline, so the genuine green run that followed paired with
+    // nothing and the lesson was lost.
+    const path = scenario();
+    recordToolOutcome(dir, {
+      kind: 'tool-outcome',
+      surface: 'command',
+      anchor: 'npm run deploy -- --retry 2>&1',
+      toolCallId: 'toolu_3',
+      success: true,
+      at: Date.parse('2026-08-26T10:02:01.000Z'),
+    });
+    const claims = run({ transcriptPath: path })
+      .candidates.filter((c) => c.type === 'command')
+      .map((c) => c.claim);
+    expect(claims).toEqual([
+      '`npm run deploy -- --retry 2>&1` succeeded in this project where `npm run deploy` failed',
+    ]);
+  });
+
+  it('keeps `2>&1` a single attempt, which is how agents write most commands', () => {
+    withManifest();
+    outcome('npm run deploy', { success: false, output: 'connection refused', at: 1 });
+    outcome('npm run deploy -- --retry 2>&1', { success: true, at: 2 });
+    expect(run().candidates.filter((c) => c.type === 'command').map((c) => c.claim)).toEqual([
+      '`npm run deploy -- --retry 2>&1` succeeded in this project where `npm run deploy` failed',
+    ]);
+  });
+
+  it('leaves the same pipeline alone when the run passed', () => {
+    withManifest();
+    const path = transcriptFile([
+      toolUse('toolu_9', 'npm test 2>&1 | tail -5', '2026-08-26T10:00:00.000Z'),
+      okResult('toolu_9', 'Tests:       12 passed, 12 total', '2026-08-26T10:00:01.000Z'),
+    ]);
+    expect(failedResultsFromTranscript(path)).toEqual([]);
+  });
+});
+
 describe('a failure that exists only in the transcript', () => {
   it('reads a failed Bash result the way Claude Code actually writes one', () => {
     const path = transcriptFile([

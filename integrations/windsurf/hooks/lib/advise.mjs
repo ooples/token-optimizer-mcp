@@ -198,6 +198,16 @@ export function commandSegments(command) {
       started = true;
       continue;
     }
+    // A REDIRECTION'S `&` IS NOT AN OPERATOR: `2>&1`, `>&2`, `&>log`, as
+    // shell-split.mjs reads them. Splitting there cut every `cmd 2>&1` into
+    // `cmd 2>` and `1`, so derive's single-attempt guard (hasAttemptIdentity)
+    // refused the most common command shape an agent writes, and every lesson
+    // about it, while its own comment promised `2>&1` keeps its identity.
+    if (ch === '&' && (command[i - 1] === '>' || command[i - 1] === '<' || command[i + 1] === '>')) {
+      current += ch;
+      started = true;
+      continue;
+    }
     // UNQUOTED ONLY -- reaching here means the quote branches above did not.
     if (ch === '|' || ch === ';' || ch === '&' || ch === '\n') {
       endSegment();

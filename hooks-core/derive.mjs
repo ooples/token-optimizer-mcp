@@ -883,10 +883,27 @@ export function derive(dir, options = {}) {
       };
 
       let transcriptFailures = [];
+      const masked = new Set();
       try {
         transcriptFailures = failedResultsFromTranscript(transcriptPath).filter(
-          (failure) => failure.command.trim() && !alreadyRecorded(failure)
+          (failure) => {
+            if (!failure.command.trim()) return false;
+            // A FAILURE A PIPE HID (piped-failure.mjs) is neither half of a pair.
+            // The client recorded it as a success, which is false, and it cannot
+            // be the failure half either: a pipeline names no single attempt
+            // (`hasAttemptIdentity`), so the only claim it could make is "`x`
+            // succeeded where `x | tail` failed" -- the pipe dressed up as the
+            // cause. Left as a success it consumed the real failure before it,
+            // and the genuine fix that followed paired with nothing.
+            if (failure.masked) {
+              if (failure.toolCallId) masked.add(failure.toolCallId);
+              return false;
+            }
+            return !alreadyRecorded(failure);
+          }
         );
+        if (masked.size)
+          outcomes = outcomes.filter((o) => !o.toolCallId || !masked.has(o.toolCallId));
       } catch {
         // The reader is an extra source, never a reason the detector stops.
       }
@@ -897,7 +914,8 @@ export function derive(dir, options = {}) {
           exit: failure.exit,
           at: failure.at,
           toolCallId: failure.toolCallId,
-          // Read from `Exit code N`, which is the only shape the reader admits.
+          // Read from `Exit code N`, which is the only shape admitted here;
+          // masked failures were taken out above.
           failed: true,
         });
       }
