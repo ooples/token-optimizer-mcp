@@ -37,6 +37,7 @@
  */
 
 import { readdirSync, statSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { readMetrics, rereadsByAnchor } from './metrics.mjs';
 import {
@@ -47,7 +48,8 @@ import {
 import { redact } from './redact.mjs';
 import { selectForConsolidation } from './consolidate.mjs';
 import { writeHarvested } from './harvest-write.mjs';
-import { load } from './wiki.mjs';
+import { load, unrootedRoot } from './wiki.mjs';
+import { canonicalPath } from './paths.mjs';
 import { ORIGIN_HARVESTED } from './curate.mjs';
 // Counting only -- see `searchGap` below. The SAME extractor the router advises
 // from, so what this counts as a search and what the advisory treats as one
@@ -490,6 +492,47 @@ const DOTNET_MARKER = /\.(sln|slnx|csproj|fsproj|vbproj)$/i;
  */
 
 /**
+ * Where a USER-LEVEL correction is anchored when the session had no project.
+ *
+ * MEASURED: the unrooted store on this machine logged 1,891 derive runs, 225
+ * candidates and 0 written findings -- every one of them a person's correction
+ * ("stop running tests locally ...", "do all five issues in one PR"), refused
+ * because the unrooted root is a directory and `projectAnchor` had no file to
+ * offer. `projectRootFromActivity` rescues sessions that worked in a
+ * repository; it cannot rescue a correction about how to work AT ALL, which
+ * belongs to no repository.
+ *
+ * The person's own instruction file is what such a correction is about: it is
+ * where the standing instructions it corrects live. It is a real file, inside
+ * home and outside every repository, so `resolveAnchor`'s unrooted boundary
+ * accepts it; and `feedback` is outside staleness's CONTENT_DEPENDENT set, so
+ * editing the file does not mark the correction stale. Only used for
+ * corrections: a command claim from a homeless session still has nothing it is
+ * about, and stays refused.
+ *
+ * Null when the person has no instruction file -- the refusal stands.
+ */
+export const USER_INSTRUCTION_FILES = Object.freeze([
+  ['CLAUDE.md'],
+  ['.claude', 'CLAUDE.md'],
+  ['AGENTS.md'],
+  ['.codex', 'AGENTS.md'],
+]);
+
+export function userInstructionsAnchor(home = homedir()) {
+  if (!home) return null;
+  for (const parts of USER_INSTRUCTION_FILES) {
+    const path = join(home, ...parts);
+    try {
+      if (statSync(path).isFile()) return path;
+    } catch {
+      // Not this one.
+    }
+  }
+  return null;
+}
+
+/**
  * The project a session actually worked in, read off what it touched.
  *
  * WHY THE SESSION'S CWD IS THE WRONG ANSWER. `adapter.mjs` resolves the root
@@ -725,6 +768,12 @@ export function derive(dir, options = {}) {
   // the same node and the duplicate collapse in `writeHarvested` can recognise
   // the same lesson across sessions.
   const anchorPath = projectAnchor(projectRoot);
+  // A correction made in a session with no project is about the person's way
+  // of working, and is anchored to their instruction file (see
+  // `userInstructionsAnchor`). Every other claim keeps the project anchor.
+  const unanchorable =
+    projectRoot && anchorPath === projectRoot && canonicalPath(projectRoot) === canonicalPath(unrootedRoot());
+  const correctionAnchor = (unanchorable && (options?.userAnchor ?? userInstructionsAnchor())) || anchorPath;
 
   const seen = new Set();
   const add = (candidate) => {
@@ -1015,7 +1064,7 @@ export function derive(dir, options = {}) {
           confidenceLabel: labelFor(CONFIDENCE.correction),
           scope: 'project',
           invalidators: ['the user later asks for the corrected behaviour'],
-          anchors: [anchorPath],
+          anchors: [correctionAnchor],
           derivedBy: 'correction',
           sessionId,
           at: Date.parse(turn.at || '') || Date.now(),

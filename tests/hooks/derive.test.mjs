@@ -35,7 +35,9 @@ import {
   putEdge,
   nodeId,
   projectRootFor,
+  unrootedRoot,
 } from '../../hooks-core/wiki.mjs';
+import { CONFIRMED_CONFIDENCE, writeHarvested } from '../../hooks-core/harvest-write.mjs';
 import { registerProject, projectIdFor } from '../../hooks-core/projects.mjs';
 import { sessionActivity } from '../../hooks-core/adapter.mjs';
 import { indexFile } from '../../hooks-core/staleness.mjs';
@@ -50,6 +52,7 @@ import {
   commandBody,
   commandProgram,
   projectAnchor,
+  userInstructionsAnchor,
 } from '../../hooks-core/derive.mjs';
 
 let dir;
@@ -211,6 +214,83 @@ describe('a command that failed and then succeeded', () => {
     );
     expect(byDerivation.get('command-transition')).toBe(CONFIDENCE.command);
     expect(byDerivation.get('test-transition')).toBe(CONFIDENCE.test);
+  });
+});
+
+/**
+ * Corrections from a session with no project.
+ *
+ * Measured on the machine this was written on: the unrooted store logged 1,891
+ * derive runs, 225 candidates and ZERO written findings. Every candidate was a
+ * person's correction, anchored to the unrooted root -- a directory, which
+ * `indexFile` cannot read -- so all of them were refused.
+ */
+describe('a correction made outside any project', () => {
+  it("is anchored to the person's own instruction file", () => {
+    const userFile = join(dir, 'CLAUDE.md');
+    writeFileSync(userFile, '# rules\n');
+    archiveTurns('s', [
+      { role: 'user', text: 'fix the flaky test' },
+      { role: 'assistant', text: 'done', tools: [] },
+      { role: 'user', text: 'no, do all five issues in one PR' },
+    ]);
+    outcome('deploy', { success: false, output: 'connection refused by host', at: 1 });
+    outcome('deploy --retry', { success: true, at: 2 });
+
+    const candidates = run({ projectRoot: unrootedRoot(), userAnchor: userFile }).candidates;
+    const feedback = candidates.find((c) => c.type === 'feedback');
+    expect(feedback.anchors).toEqual([userFile]);
+    // A command claim from a homeless session has nothing it is about: it
+    // keeps the unresolvable root, and stays refused.
+    expect(candidates.find((c) => c.type === 'command').anchors).toEqual([unrootedRoot()]);
+  });
+
+  it('keeps the project anchor inside a project', () => {
+    const manifest = withManifest();
+    archiveTurns('s', [{ role: 'user', text: 'no, use npm test rather than npx jest' }]);
+    const feedback = run({ userAnchor: join(dir, 'elsewhere.md') }).candidates.find((c) => c.type === 'feedback');
+    expect(feedback.anchors).toEqual([manifest]);
+  });
+
+  it('finds the first instruction file the person has, or none', () => {
+    const home = join(dir, 'home');
+    mkdirSync(join(home, '.claude'), { recursive: true });
+    expect(userInstructionsAnchor(home)).toBeNull();
+    writeFileSync(join(home, '.claude', 'CLAUDE.md'), 'x');
+    expect(userInstructionsAnchor(home)).toBe(join(home, '.claude', 'CLAUDE.md'));
+    writeFileSync(join(home, 'CLAUDE.md'), 'x');
+    expect(userInstructionsAnchor(home)).toBe(join(home, 'CLAUDE.md'));
+  });
+});
+
+describe('a lesson re-derived in independent sessions', () => {
+  const lesson = (manifest) => ({
+    type: 'command',
+    claim: '`npm test -- x` succeeded in this project where `npx jest x` failed',
+    confidence: CONFIDENCE.test,
+    confidenceLabel: 'speculative',
+    anchors: [manifest],
+  });
+  const stored = () => storedFindings().find((node) => node.type === 'command');
+
+  it('is raised to confirmed on the third authoritative session, and not before', () => {
+    const manifest = withManifest();
+    for (const [index, session] of ['a', 'b', 'c'].entries()) {
+      writeHarvested(dir, [lesson(manifest)], { projectRoot: dir, sessionId: session, authoritativeSessionId: session });
+      if (index < 2) expect(stored().confidence).toBe(CONFIDENCE.test);
+    }
+    expect(stored().confidence).toBe(CONFIRMED_CONFIDENCE);
+    expect(stored().confirmedBy).toEqual(['a', 'b', 'c']);
+    expect(storedFindings().filter((node) => node.type === 'command')).toHaveLength(1);
+  });
+
+  it('is not confirmed by the same session twice, nor by a model-typed session id', () => {
+    const manifest = withManifest();
+    writeHarvested(dir, [lesson(manifest)], { projectRoot: dir, sessionId: 'a', authoritativeSessionId: 'a' });
+    writeHarvested(dir, [lesson(manifest)], { projectRoot: dir, sessionId: 'a', authoritativeSessionId: 'a' });
+    writeHarvested(dir, [lesson(manifest)], { projectRoot: dir, sessionId: 'invented-1' });
+    writeHarvested(dir, [lesson(manifest)], { projectRoot: dir, sessionId: 'invented-2' });
+    expect(stored().confidence).toBe(CONFIDENCE.test);
   });
 });
 
