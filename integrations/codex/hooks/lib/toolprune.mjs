@@ -95,6 +95,10 @@ export const CATALOG_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 export const KEEP = Object.freeze([
   'Read', 'Write', 'Edit', 'MultiEdit', 'NotebookRead', 'Bash', 'PowerShell', 'Glob', 'Grep',
   'LS', 'AskUserQuestion', 'EnterPlanMode', 'ExitPlanMode', 'ToolSearch', 'Skill', 'Task', 'Agent',
+  // A person's reach outside the repository. Pruned, the model does not ask for
+  // them -- it falls back to curl or says it cannot search -- so the automatic
+  // restore, which waits for a failed call or a typed name, would never fire.
+  'WebFetch', 'WebSearch',
 ]);
 
 const num = (value, fallback) => {

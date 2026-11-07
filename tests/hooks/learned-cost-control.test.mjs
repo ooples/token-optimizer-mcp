@@ -157,26 +157,28 @@ describe('billing mode', () => {
 describe('tool pruning', () => {
   test('a tool unused over the evidence threshold becomes a candidate; a used one does not', () => {
     let store = loadStore(fresh('store'));
-    store.catalog.tools = ['Read', 'WebFetch', 'NotebookEdit'];
+    store.catalog.tools = ['Read', 'CronList', 'NotebookEdit'];
     for (let index = 0; index < 2; index += 1) {
       store = foldSession(store, { sessionId: `s${index}`, prompts: 6, used: ['Read', 'NotebookEdit'], lastAt: index + 1 });
     }
     const names = candidates(store, toolpruneSettings({})).map((item) => item.name);
-    expect(names).toEqual(['WebFetch']);
+    expect(names).toEqual(['CronList']);
   });
 
   test('one long session alone never decides', () => {
     let store = loadStore(fresh('store'));
-    store.catalog.tools = ['WebFetch'];
+    store.catalog.tools = ['CronList'];
     store = foldSession(store, { sessionId: 's0', prompts: 500, used: [], lastAt: 1 });
     expect(candidates(store, toolpruneSettings({}))).toEqual([]);
   });
 
   test('the keep list, this package’s own tools and user-allowed tools are never pruned', () => {
     let store = loadStore(fresh('store'));
-    store.catalog.tools = ['AskUserQuestion', 'mcp__plugin_token-optimizer_token-optimizer__smart_read', 'WebSearch', 'Cron'];
+    // WebFetch and WebSearch are kept: a pruned web tool is never requested, so
+    // the automatic restore (which fires on a failed call) could never fire.
+    store.catalog.tools = ['AskUserQuestion', 'mcp__plugin_token-optimizer_token-optimizer__smart_read', 'WebFetch', 'WebSearch', 'NotebookEdit', 'Cron'];
     for (let index = 0; index < 6; index += 1) store = foldSession(store, { sessionId: `s${index}`, prompts: 5, used: [], lastAt: index + 1 });
-    const names = candidates(store, toolpruneSettings({}), new Set(['WebSearch'])).map((item) => item.name);
+    const names = candidates(store, toolpruneSettings({}), new Set(['NotebookEdit'])).map((item) => item.name);
     expect(names).toEqual(['Cron']);
   });
 
@@ -185,15 +187,15 @@ describe('tool pruning', () => {
     mkdirSync(join(root, '.claude'));
     writeFileSync(
       join(root, '.claude', 'settings.local.json'),
-      JSON.stringify({ permissions: { deny: ['WebFetch', 'Bash(rm:*)'], allow: ['Read'] }, other: 1 })
+      JSON.stringify({ permissions: { deny: ['CronList', 'Bash(rm:*)'], allow: ['Read'] }, other: 1 })
     );
-    const first = writeDenyList(root, [], ['WebFetch', 'Cron']);
+    const first = writeDenyList(root, [], ['CronList', 'Cron']);
     expect(first.ok).toBe(true);
     expect(first.owned).toEqual(['Cron']);
     const removed = writeDenyList(root, first.owned, []);
     expect(removed.ok).toBe(true);
     const settings = JSON.parse(readFileSync(join(root, '.claude', 'settings.local.json'), 'utf8'));
-    expect(settings.permissions.deny).toEqual(['WebFetch', 'Bash(rm:*)']);
+    expect(settings.permissions.deny).toEqual(['CronList', 'Bash(rm:*)']);
     expect(settings.permissions.allow).toEqual(['Read']);
     expect(settings.other).toBe(1);
   });
@@ -229,21 +231,21 @@ describe('tool pruning', () => {
     const paths = [];
     for (let index = 0; index < 5; index += 1) paths.push(session(transcripts, `s${index}`, 3, ['Read', 'Bash']));
     const store = loadStore(dir);
-    store.catalog = { tools: ['Read', 'Bash', 'WebFetch'], probedAt: Date.now(), clientVersion: 'x' };
+    store.catalog = { tools: ['Read', 'Bash', 'CronList'], probedAt: Date.now(), clientVersion: 'x' };
     writeFileSync(join(dir, 'toolprune.json'), JSON.stringify(store));
 
     // Sessions written just now: not idle, so the list is held.
     const busy = runFold({ dir, root, transcriptDir: transcripts, currentSession: null, env });
-    expect(busy.pending).toEqual(['WebFetch']);
+    expect(busy.pending).toEqual(['CronList']);
     expect(busy.applied).toEqual([]);
 
     for (const path of paths) idle(path);
     const quiet = runFold({ dir, root, transcriptDir: transcripts, currentSession: null, env });
-    expect(quiet.applied).toEqual(['WebFetch']);
+    expect(quiet.applied).toEqual(['CronList']);
     const settings = JSON.parse(readFileSync(join(root, '.claude', 'settings.local.json'), 'utf8'));
-    expect(settings.permissions.deny).toEqual(['WebFetch']);
+    expect(settings.permissions.deny).toEqual(['CronList']);
     const notice = takeNotice(dir);
-    expect(notice).toMatch(/WebFetch/);
+    expect(notice).toMatch(/CronList/);
     expect(takeNotice(dir)).toBeNull();
   });
 
@@ -257,11 +259,11 @@ describe('tool pruning', () => {
     for (const path of paths) idle(path);
     const live = session(transcripts, 'live', 1, ['Read']);
     const store = loadStore(dir);
-    store.catalog = { tools: ['Read', 'WebFetch'], probedAt: Date.now(), clientVersion: 'x' };
+    store.catalog = { tools: ['Read', 'CronList'], probedAt: Date.now(), clientVersion: 'x' };
     writeFileSync(join(dir, 'toolprune.json'), JSON.stringify(store));
     // Launched from the live session: it is excluded from the evidence but not from the idle check.
     const held = runFold({ dir, root, transcriptDir: transcripts, currentSession: 'live', env: {} });
-    expect(held.pending).toEqual(['WebFetch']);
+    expect(held.pending).toEqual(['CronList']);
     expect(held.applied).toEqual([]);
     let slept = 0;
     const summary = await waitAndApply({
@@ -269,7 +271,7 @@ describe('tool pruning', () => {
       sleep: async () => { slept += 1; idle(live); },
     });
     expect(slept).toBe(1);
-    expect(summary.applied).toEqual(['WebFetch']);
+    expect(summary.applied).toEqual(['CronList']);
   });
 
   test('a session that reaches for a pruned tool gives it back, and it is never pruned again', () => {
@@ -279,35 +281,35 @@ describe('tool pruning', () => {
     const paths = [];
     for (let index = 0; index < 5; index += 1) paths.push(session(transcripts, `s${index}`, 3, ['Read']));
     const store = loadStore(dir);
-    store.catalog = { tools: ['Read', 'WebFetch'], probedAt: Date.now(), clientVersion: 'x' };
+    store.catalog = { tools: ['Read', 'CronList'], probedAt: Date.now(), clientVersion: 'x' };
     writeFileSync(join(dir, 'toolprune.json'), JSON.stringify(store));
     for (const path of paths) idle(path);
-    expect(runFold({ dir, root, transcriptDir: transcripts, env: {} }).applied).toEqual(['WebFetch']);
+    expect(runFold({ dir, root, transcriptDir: transcripts, env: {} }).applied).toEqual(['CronList']);
 
     // The next session's model calls it and is told it does not exist.
     const needy = join(transcripts, 'needy.jsonl');
     writeTranscript(needy, [
       prompt('fetch the docs page'),
-      call('n1', 'WebFetch', { url: 'https://example.com' }),
-      result('n1', 'Error: No such tool available: WebFetch', true),
+      call('n1', 'CronList', { url: 'https://example.com' }),
+      result('n1', 'Error: No such tool available: CronList', true),
     ]);
     idle(needy);
     const after = runFold({ dir, root, transcriptDir: transcripts, env: {} });
     expect(after.applied).toEqual([]);
-    expect(after.restored).toContain('WebFetch');
+    expect(after.restored).toContain('CronList');
     const settings = JSON.parse(readFileSync(join(root, '.claude', 'settings.local.json'), 'utf8'));
     expect(settings.permissions.deny).toEqual([]);
-    expect(takeNotice(dir)).toMatch(/restored WebFetch/);
+    expect(takeNotice(dir)).toMatch(/restored CronList/);
   });
 
   test('a person naming a pruned tool in a prompt gives it back', () => {
     const transcripts = fresh('transcripts');
     const usage = (() => {
       const path = join(transcripts, 'x.jsonl');
-      writeTranscript(path, [prompt('please use WebFetch for this')]);
-      return sessionUsage(path, { mentionCandidates: ['WebFetch'] });
+      writeTranscript(path, [prompt('please use CronList for this')]);
+      return sessionUsage(path, { mentionCandidates: ['CronList'] });
     })();
-    expect(usage.mentioned).toEqual(['WebFetch']);
+    expect(usage.mentioned).toEqual(['CronList']);
   });
 
   test('client-written messages are not prompts', () => {
@@ -326,12 +328,12 @@ describe('tool pruning', () => {
     const root = fresh('root');
     const dir = fresh('state');
     const store = loadStore(dir);
-    const written = writeDenyList(root, [], ['Cron', 'WebFetch']);
+    const written = writeDenyList(root, [], ['Cron', 'CronList']);
     store.applied = written.owned;
     writeFileSync(join(dir, 'toolprune.json'), JSON.stringify(store));
     expect(restoreTools({ dir, root, names: ['Cron'] }).restored).toEqual(['Cron']);
     const after = loadStore(dir);
-    expect(after.applied).toEqual(['WebFetch']);
+    expect(after.applied).toEqual(['CronList']);
     expect(after.restored).toEqual(['Cron']);
   });
 
