@@ -19,8 +19,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import {
+  NOTICE_REPEAT_MS,
   recentToolHookLatency,
   slowHookNotice,
+  takeSlowHookNotice,
 } from '../../hooks-core/hook-latency.mjs';
 
 const ROOT = process.cwd();
@@ -192,6 +194,48 @@ function sessionStart(entry, logDir, node = null) {
   return r.stdout;
 }
 
+describe('takeSlowHookNotice says it once per condition', () => {
+  const slow = { runs: 70, p90Ms: 90_000, killed: 0, slowestPhase: { name: 'deciding', ms: 80_000 } };
+
+  test('announces, then stays silent while the condition is unchanged', () => {
+    const dir = logs({ runs: fast(1) });
+    expect(takeSlowHookNotice({ dir, now: NOW, latency: slow })).toContain('have been slow');
+    // Counts drift between sessions; the condition does not.
+    const drifted = { ...slow, runs: 90, p90Ms: 120_000 };
+    expect(takeSlowHookNotice({ dir, now: NOW + 60_000, latency: drifted })).toBeNull();
+  });
+
+  test('announces again when what is slow changes', () => {
+    const dir = logs({ runs: fast(1) });
+    takeSlowHookNotice({ dir, now: NOW, latency: slow });
+    const moved = { ...slow, slowestPhase: { name: 'loading the hook', ms: 80_000 } };
+    expect(takeSlowHookNotice({ dir, now: NOW + 1, latency: moved })).toContain('loading the hook');
+    const killedToo = { ...moved, killed: 3 };
+    expect(takeSlowHookNotice({ dir, now: NOW + 2, latency: killedToo })).toContain('killed');
+  });
+
+  test('announces again after a week', () => {
+    const dir = logs({ runs: fast(1) });
+    takeSlowHookNotice({ dir, now: NOW, latency: slow });
+    expect(takeSlowHookNotice({ dir, now: NOW + NOTICE_REPEAT_MS - 1, latency: slow })).toBeNull();
+    expect(takeSlowHookNotice({ dir, now: NOW + NOTICE_REPEAT_MS, latency: slow })).toContain('have been slow');
+  });
+
+  test('records nothing while hooks are fast, so the first slow session still hears it', () => {
+    const dir = logs({ runs: fast(1) });
+    const quiet = { runs: 70, p90Ms: 400, killed: 0, slowestPhase: null };
+    expect(takeSlowHookNotice({ dir, now: NOW, latency: quiet })).toBeNull();
+    expect(readdirSync(dir)).not.toContain('slow-hook-notice.json');
+    expect(takeSlowHookNotice({ dir, now: NOW + 1, latency: slow })).toContain('have been slow');
+  });
+
+  test('an unreadable record announces rather than suppresses', () => {
+    const dir = logs({ runs: fast(1) });
+    writeFileSync(join(dir, 'slow-hook-notice.json'), '{not json');
+    expect(takeSlowHookNotice({ dir, now: NOW, latency: slow })).toContain('have been slow');
+  });
+});
+
 describe.each([
   ['plugin/hooks/session-start.mjs'],
   ['integrations/codex/hooks/session-start.mjs'],
@@ -201,10 +245,14 @@ describe.each([
     ...Array.from({ length: 20 }, () => ({ ms: 90_000 })),
   ];
 
-  test('names slow hooks', () => {
-    expect(sessionStart(entry, logs({ runs: slowRuns() }))).toContain(
+  test('names slow hooks once, not every session', () => {
+    const dir = logs({ runs: slowRuns() });
+    expect(sessionStart(entry, dir)).toContain(
       "token-optimizer's hooks have been slow"
     );
+    const second = sessionStart(entry, dir);
+    expect(second).toContain('Token optimization is active');
+    expect(second).not.toContain('have been slow');
   });
 
   test('says nothing while hooks are fast', () => {

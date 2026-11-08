@@ -34,7 +34,7 @@ import {
 import { restorationPlan } from './lib/restore.mjs';
 import { applyQuietEnv } from './lib/quiet-env.mjs';
 import { resumeIfDue } from './lib/migrate.mjs';
-import { slowHookNotice } from './lib/hook-latency.mjs';
+import { takeSlowHookNotice } from './lib/hook-latency.mjs';
 import { nodeFloorNotice } from './lib/node-floor.mjs';
 import { serverCrashNotice } from './lib/server-crash.mjs';
 import { otherSessionsNotice } from './lib/context-window.mjs';
@@ -223,7 +223,7 @@ if (crashed) blocks.push({ id: 'server-crash', volatility: 0, text: crashed });
 const oldNode = nodeFloorNotice();
 if (oldNode) blocks.push({ id: 'node-floor', volatility: 0, text: oldNode });
 // The floor notice already names the likeliest cause of slow hooks.
-const slowHooks = oldNode ? null : slowHookNotice();
+const slowHooks = oldNode ? null : takeSlowHookNotice();
 if (slowHooks) blocks.push({ id: 'hook-latency', volatility: 4, text: slowHooks });
 // Other sessions still running on a larger compaction window than the user
 // configured: each of their turns re-reads the excess (context-window.mjs).

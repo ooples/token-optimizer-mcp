@@ -119,7 +119,7 @@ import { registerProject, registeredProjects } from './projects.mjs';
 import { runStopHarvest } from './stop-harvest.mjs';
 import { applyQuietEnv } from './quiet-env.mjs';
 import { resumeIfDue } from './migrate.mjs';
-import { slowHookNotice } from './hook-latency.mjs';
+import { takeSlowHookNotice } from './hook-latency.mjs';
 import { nodeFloorNotice } from './node-floor.mjs';
 import { serverCrashNotice } from './server-crash.mjs';
 import { CHECK_EVERY_CALLS, overWindowNotice } from './context-window.mjs';
@@ -1014,24 +1014,14 @@ export function policyText(
   if (tools.has('smart_write'))
     routes.push(`- Writing a file larger than ~${kb} KB -> smart_write`);
 
-  // SAY WHICH GRADE OF EVIDENCE THIS IS (#469). "Positive runtime inventory
-  // evidence" was emitted for an install-time default that no host had
-  // confirmed, so a session was told 19 tools were proven while none of them
-  // could be called. The two cases now read differently, and the weaker one
-  // tells the model what to do when a call comes back with no such tool --
-  // which is the only way it finds out, since nothing else in the session will
-  // tell it.
-  const connection =
-    tools.size > 0 && registrationProven
-      ? `The host named ${tools.size} optimizer MCP tool(s) as registered for this session.`
-      : tools.size > 0
-        ? // Counted rather than "the tools below", because assist mode
-          // suppresses the routing list and the sentence must not promise one
-          // that is not there.
-          `This install declares ${tools.size} optimizer MCP tool(s); the host has not confirmed them for this session. If a call reports no such tool, use the built-in tool and do not call that one again.`
-        : registrationProven
-          ? 'The host supplied a proven empty optimizer MCP inventory for this session.'
-          : 'This hook received no positive evidence that optimizer MCP tools are registered in this session.';
+  // THE EVIDENCE GRADE IS NOT NARRATED (#469, 2026-11-07). It stays exact in
+  // `toolEvidence`; the prose that reported it at every session start -- "the
+  // host named N tools", "declares N tools; the host has not confirmed them" --
+  // described our plumbing and changed no decision. The SWE-bench pilot priced
+  // that kind of text: ~1,400 tokens of plugin context, written at the 1-hour
+  // cache rate and re-read every turn, made the plugin arm 1.23x control on
+  // short tasks. Only the instruction with a behaviour attached survives (see
+  // `unconfirmed`), and only where tools are recommended without proof.
   // ASSIST SAYS NOTHING ABOUT ROUTING. The routing list plus its "these are
   // recommendations" tail cost ~800 bytes of context in every session, and
   // under assist they advise about a mechanism that is switched off -- which is
@@ -1054,20 +1044,19 @@ export function policyText(
         ? '\n\nA built-in call is denied only when its exact replacement has positive registration evidence. A second attempt at the same target remains available.'
         : '\n\nThese are recommendations; the built-in tools remain available.'
       : '';
-  const utilities = [
-    tools.has('optimize_session')
-      ? 'When the context window gets tight, call optimize_session.'
-      : null,
-    tools.has('get_optimization_report')
-      ? 'Use get_optimization_report for measured savings.'
-      : null,
-  ]
-    .filter(Boolean)
-    .join(' ');
+  const unconfirmed =
+    advertiseRouting && routes.length && !registrationProven
+      ? '\n\nIf one of these reports no such tool, use the built-in tool and do not call it again.'
+      : '';
+  // NO UTILITY LINE. optimize_session is named in the MCP server instructions
+  // every client receives at initialization, so repeating it here was paid
+  // twice; get_optimization_report is a report for the person, not a step for
+  // the model, and naming it changed no decision.
   // THE RECORDING GUIDANCE IS DELIVERED LATER, NOT HERE (#357, M5): see
   // recordingGuidance. A session that never does real work never pays for it.
 
-  return `# Token optimization is active\n\n${outputDiscipline()}\n\n${connection}${routing}${enforcement}${utilities ? `\n\n${utilities}` : ''}${projectBriefing()}`;
+  const discipline = outputDiscipline();
+  return `# Token optimization is active${discipline ? `\n\n${discipline}` : ''}${routing}${enforcement}${unconfirmed}${projectBriefing()}`;
 }
 
 /**
@@ -1499,7 +1488,7 @@ async function runHook(clientName, event, invocation) {
     const oldNode = nodeFloorNotice();
     if (oldNode) blocks.push({ id: 'node-floor', volatility: 0, text: oldNode });
     // The floor notice already names the likeliest cause of slow hooks.
-    const slowHooks = oldNode ? null : slowHookNotice();
+    const slowHooks = oldNode ? null : takeSlowHookNotice();
     if (slowHooks) blocks.push({ id: 'hook-latency', volatility: 4, text: slowHooks });
     // Reduce at the source before anything runs: quiet defaults for the tools
     // the agent will call, through the env file Claude Code sources for every

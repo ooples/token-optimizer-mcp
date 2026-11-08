@@ -42,19 +42,29 @@ const SERVER_INSTRUCTIONS =
 // (hooks-core/policy.mjs). CLAUDE_PLUGIN_ROOT is set by Claude Code's plugin
 // runtime and by nothing else, and a plugin install always ships the hooks;
 // each stdio server process serves one client, so the choice is made once.
+//
+// SHORTER, 2026-11-07. Measured in the SWE-bench pilot: this text plus the
+// SessionStart policy were part of ~1,400 tokens of fixed plugin context that
+// made the plugin arm 1.23x control on short tasks. Same three instructions,
+// half the words; the code-mode catalog advice below never applied to Claude
+// Code, so a plugin install no longer carries it.
 export const PLUGIN_INSTRUCTIONS =
-  "This install's hooks already compact the output of the built-in Read, Grep " +
-  'and Bash tools, so use the built-in tools for ordinary reads and searches. ' +
-  'Do not load these tools with ToolSearch just to read or search: every ' +
-  'mid-session load re-writes the prompt cache. Load one only for what the ' +
-  'built-in tools cannot do -- smart_edit for a large multi-site edit, ' +
-  'optimize_session when context is tight, wiki_write for a durable non-obvious ' +
-  'conclusion -- or when a hook refuses a built-in call and names one of these ' +
-  'tools instead (enforce mode does this for large reads); then load it and ' +
-  'use it. Never call or redirect to an unlisted schema.';
+  "Built-in Read, Grep and Bash output is already compacted by this install's " +
+  'hooks; use those for ordinary reads and searches. Load one of these tools ' +
+  'with ToolSearch only for what they cannot do -- smart_edit for a large ' +
+  'multi-site edit, optimize_session when context is tight, wiki_write for a ' +
+  'durable non-obvious finding -- or when a hook names one; each load re-writes ' +
+  'the prompt cache. Never call an unlisted schema.';
+
+/** Code-mode hosts list every server's catalog through one tool. */
+const CODE_MODE_DISCOVERY =
+  ' Discover only the schema for the tool you need. In code-mode hosts with ' +
+  'ALL_TOOLS, filter by the exact tool-name suffix (for example __smart_read) ' +
+  'and print that entry only. To discover names, list names without descriptions ' +
+  'first. Broad catalog dumps can exhaust the context budget.';
 
 export function instructionsFor(env: NodeJS.ProcessEnv = process.env): string {
   return String(env.CLAUDE_PLUGIN_ROOT ?? '').trim()
     ? PLUGIN_INSTRUCTIONS
-    : SERVER_INSTRUCTIONS;
+    : SERVER_INSTRUCTIONS + CODE_MODE_DISCOVERY;
 }
