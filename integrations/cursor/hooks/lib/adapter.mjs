@@ -977,11 +977,15 @@ export const GUIDANCE_AFTER_CALLS = 10;
  * (M5): it is the largest part of that block, and it only matters once there is
  * something to record, so it is now delivered once, on the first post-tool
  * event after the session shows real work, and a session that never gets that
- * far never pays for it. The wording is unchanged, because it was measured --
- * see the last paragraph.
+ * far never pays for it.
+ *
+ * SHORTER, 2026-11-08: the first two paragraphs were condensed from ~880 to
+ * ~490 characters with every instruction kept (what to record, the anchor rule
+ * the tool enforces, evidence / confidence / scope / invalidators). The last
+ * paragraph is untouched, because it is the measured one: 0.3 against 0.9.
  */
 export function recordingGuidance() {
-  return `## Record what you work out\n\nCall wiki_write when you establish something durable about this project, while\nyou still hold the context. Every claim needs at least one anchor -- a real file\npath, or path#symbol -- because an unanchored claim can never be checked against\nthe code again and would be served as current forever; unanchored writes are\nrefused.\n\nWorth recording: a decision and why the alternative was rejected, a failure and\nwhat actually caused it, a command that turned out to be the one that works.\nNot worth recording: what the code plainly says. Every wiki_write must include\nthe concrete evidence, when it applies, a calibrated confidence label, its\nscope, and what would invalidate it. Prefer the thing someone had to work out,\nbecause that exists nowhere in the source tree.\n\nRECORD BEFORE YOU ANSWER, NEVER AFTER. Your final message must be the answer to\nthe task -- never a confirmation that you saved a note. Measured: a run whose\nlast message was "Recorded. The finding captured: ..." scored 0.3 where the\nidentical task answered directly scored 0.9. The work had been done correctly\nand the artifact was written; only the last message was wrong, and the last\nmessage is what a verifier, a reviewer and the person who asked all read.${extractionNotice()}`;
+  return `## Record what you work out\n\nWhen you establish something durable about this project -- a\ndecision and why the alternative was rejected, a failure and what actually caused\nit, the command that turned out to work -- call wiki_write while you still hold\nthe context. Anchor every claim to a real file path or path#symbol; unanchored\nwrites are refused. Include the evidence, a calibrated confidence label, its\nscope, and what would invalidate it. Skip what the code plainly says.\n\nRECORD BEFORE YOU ANSWER, NEVER AFTER. Your final message must be the answer to\nthe task -- never a confirmation that you saved a note. Measured: a run whose\nlast message was "Recorded. The finding captured: ..." scored 0.3 where the\nidentical task answered directly scored 0.9. The work had been done correctly\nand the artifact was written; only the last message was wrong, and the last\nmessage is what a verifier, a reviewer and the person who asked all read.${extractionNotice()}`;
 }
 
 export function policyText(
