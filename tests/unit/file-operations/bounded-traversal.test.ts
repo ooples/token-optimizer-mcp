@@ -332,3 +332,36 @@ describe('smart_grep survives a dense file', () => {
     }
   }, 120_000);
 });
+
+describe('smart_grep reads each file once and still skips binary content', () => {
+  // The walk used to open every file twice: an async prefix probe for a NUL
+  // byte, then the full read. The probe now runs on the buffer the search reads
+  // anyway, so these pin that it still decides the same way.
+  it('skips a text-named file with a NUL in its first 8 KB, and searches one with a NUL beyond it', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'grep-binary-probe-'));
+    // Outside the searched tree: the database is itself a file to grep.
+    const cacheDir = mkdtempSync(join(tmpdir(), 'grep-binary-probe-cache-'));
+    const probeCache = new CacheEngine(join(cacheDir, 'cache.db'), 10);
+    try {
+      writeFileSync(join(root, 'plain.txt'), 'needle\n');
+      writeFileSync(join(root, 'early-nul.txt'), 'needle\0rest\n');
+      writeFileSync(join(root, 'late-nul.txt'), `${'a'.repeat(8192)}\0\nneedle\n`);
+      const tool = new SmartGrepTool(probeCache, new TokenCounter(), new MetricsCollector());
+
+      const skipping = await tool.grep('needle', { cwd: root, useCache: false });
+      expect(skipping.success).toBe(true);
+      const hit = (r: typeof skipping) =>
+        [...new Set((r.matches ?? []).map((m) => m.file.replace(/\\/g, '/').split('/').pop()))].sort();
+      expect(hit(skipping)).toEqual(['late-nul.txt', 'plain.txt']);
+      expect(skipping.metadata.filesSearched).toBe(2);
+
+      const all = await tool.grep('needle', { cwd: root, useCache: false, skipBinary: false });
+      expect(hit(all)).toEqual(['early-nul.txt', 'late-nul.txt', 'plain.txt']);
+      expect(all.metadata.filesSearched).toBe(3);
+    } finally {
+      probeCache.close();
+      rmSync(root, { recursive: true, force: true });
+      rmSync(cacheDir, { recursive: true, force: true });
+    }
+  });
+});
