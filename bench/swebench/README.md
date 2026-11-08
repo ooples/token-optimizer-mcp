@@ -12,6 +12,13 @@ so that a win cannot come from anything except the plugin.
 - **Order fixed before anything runs.** An instance's two arms run back to back,
   with a seeded coin deciding which goes first, so neither arm systematically
   gets the warmer provider cache or the quieter hour.
+- **Both arms start warm.** Before a batch, each arm runs one unscored session
+  (logged to `warmup.jsonl`; `--no-warm` skips it). Control's cross-session
+  prompt prefix is the stock `claude -p` one, which other traffic keeps warm;
+  the plugin arm's exists only here. In pilot 4 that cold start alone was 9,556
+  of the plugin arm's 17,156 extra cache-write tokens over ten pairs: a cost of
+  the batch order, not of the product, since a user's own sessions keep their
+  prefix warm too.
 - **Isolation, verified by probe.** Each run gets a fresh worktree at the
   instance's `base_commit` and a throwaway `CLAUDE_CONFIG_DIR`, so the host's
   plugins, memory, settings and MCP servers load in neither arm. The parent

@@ -4,7 +4,7 @@
  *
  *   node bench/swebench/run.mjs fetch  [--dataset verified|lite]
  *   node bench/swebench/run.mjs plan   --n 50 --seed 7 [--reps 1] [--model sonnet] [--budget-usd 3]
- *   node bench/swebench/run.mjs run    [--limit K] [--dry-run]
+ *   node bench/swebench/run.mjs run    [--limit K] [--dry-run] [--no-warm]
  *   node bench/swebench/run.mjs evaluate            prints the official evaluator commands
  *   node bench/swebench/run.mjs report [--eval control=<report.json> --eval token-optimizer=<report.json>]
  *
@@ -51,7 +51,7 @@ function parseArgs(argv) {
       continue;
     }
     const name = token.slice(2);
-    if (['dry-run', 'confirm-spend', 'keep-worktrees'].includes(name)) {
+    if (['dry-run', 'confirm-spend', 'keep-worktrees', 'no-warm'].includes(name)) {
       args[name] = true;
       continue;
     }
@@ -253,6 +253,51 @@ function runAgent({ claude, cwd, prompt, model, budgetUsd, configDir, pluginDir,
   });
 }
 
+/**
+ * One unscored session per arm before the batch, so neither arm starts cold.
+ *
+ * WHY. The first request of every session reads the prefix both arms share
+ * across sessions -- tools and the opening system blocks -- from the prompt
+ * cache, if any recent session wrote it. Control's prefix is the stock
+ * `claude -p` one, which other traffic on the account keeps warm; the plugin
+ * arm's (tools shaped by the proxy) exists only in this benchmark. In pilot 4
+ * that alone made the plugin arm's first run write 14,810 cache tokens against
+ * control's 6,015 -- 9,556 of the arm's 17,156 extra cache-write tokens over
+ * ten pairs -- a cost of the benchmark's ordering, not of the product: an
+ * installed user's own sessions keep their prefix warm the same way. Warming
+ * both arms makes the batch measure steady state for both. The warm-up rows go
+ * to warmup.jsonl, never results.jsonl; `--no-warm` skips them.
+ */
+async function warmArm(work, { arm, claude, plan, pluginDir }) {
+  const dir = join(work, 'runs', `_warm__${arm}`);
+  rmSync(dir, { recursive: true, force: true });
+  const cwd = join(dir, 'cwd');
+  mkdirSync(cwd, { recursive: true });
+  const configDir = join(dir, 'config');
+  stageConfig(configDir, process.env);
+  try {
+    const routedVia = ARMS[arm].plugin ? await installRoute(work, configDir, arm) : null;
+    const { code, out } = await runAgent({
+      claude,
+      cwd,
+      prompt: 'Reply with the single word ok.',
+      model: plan.model,
+      budgetUsd: Math.min(plan.budgetUsd, 0.25),
+      configDir,
+      pluginDir: ARMS[arm].plugin ? pluginDir : null,
+      arm,
+      timeoutMs: 5 * 60_000,
+      logPath: join(dir, 'stream.jsonl'),
+    });
+    const result = resultEvent(out);
+    const row = { planId: plan.id, arm, warmup: true, routedVia, exit: code, costUsd: result?.total_cost_usd ?? null, usage: result?.usage ?? null, at: new Date().toISOString() };
+    appendFileSync(join(work, 'warmup.jsonl'), `${JSON.stringify(row)}\n`);
+    console.log(`warm-up ${arm.padEnd(16)} $${row.costUsd ?? '?'} (unscored)`);
+  } finally {
+    rmSync(configDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 500 });
+  }
+}
+
 async function runPlan(work, args) {
   const plan = readJson(join(work, 'plan.json'));
   if (!plan) throw new Error('no plan.json; run `plan` first');
@@ -269,6 +314,11 @@ async function runPlan(work, args) {
   const pluginDir = plan.arms.some((arm) => ARMS[arm]?.plugin) ? stagePlugin(work) : null;
   const claude = resolveClaude(args.claude);
   console.log(`binary under test: ${claude}`);
+  if (!args['dry-run'] && !args['no-warm']) {
+    for (const arm of [...new Set(batch.map((item) => item.arm))]) {
+      await warmArm(work, { arm, claude, plan, pluginDir });
+    }
+  }
   for (const item of batch) {
     const instance = instances.get(item.instanceId);
     if (!instance) throw new Error(`instance ${item.instanceId} not in the cache`);
