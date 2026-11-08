@@ -56,19 +56,7 @@ tool call itself.
   Do not delegate it to another model, and do not invent a finding merely to
   populate the graph.
 - Applicable findings are injected automatically when their file or command is
-  touched. Use **`wiki_read`** for an explicit lookup.
-
-## Storing bulky content out of context
-
-- **`optimize_text`** — compress a large text blob under a `key` and keep it in
-  the external cache instead of your context; retrieve it later by key. Reports
-  `tokensSaved`. Good for logs, large outputs, or reference material you don't
-  need inline right now.
-
-- **`compress_text`** — Brotli+base64 compression. **Byte** reduction only:
-  the base64 output usually has **more** LLM tokens than the input, so use it
-  for **at-rest storage/caching, not for putting back into context.** The tool
-  returns `increasesTokens` + a warning when that's the case.
+  touched. Use **`wiki_query`** for an explicit lookup.
 
 ## Rules of thumb
 
@@ -77,6 +65,4 @@ tool call itself.
    you need).
 3. Editing a large file → `smart_edit`.
 4. Context getting tight → `optimize_session`, then continue.
-5. Need to stash bulky output → `optimize_text` (by key), not `compress_text`
-   into context.
-6. Small files/one-off reads → the built-in tools are fine; don't add overhead.
+5. Small files/one-off reads → the built-in tools are fine; don't add overhead.

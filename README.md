@@ -2734,15 +2734,19 @@ The PowerShell hooks have been optimized to reduce overhead from 50-70ms to <10m
 
 Control hook behavior with these environment variables:
 
-The MCP server exposes a 19-tool core catalog by default so tool schemas do not
-consume a large share of the model context. Set
-`TOKEN_OPTIMIZER_TOOL_PROFILE=full` before starting the server to expose all 104
-specialized tools. `TOKEN_OPTIMIZER_TOOL_PROFILE=core` is the explicit form of
+The MCP server exposes a 10-tool core catalog by default so tool schemas do not
+consume a large share of the model context: the tools that were actually called
+across measured Claude Code and Codex sessions, plus `expand` and `wiki_query`,
+which the hooks name. Set
+`TOKEN_OPTIMIZER_TOOL_PROFILE=full` before starting the server to expose all 108
+specialized tools, including the audit and doctor tools. `TOKEN_OPTIMIZER_TOOL_PROFILE=core` is the explicit form of
 the default. Live graph capture uses
 `TOKEN_OPTIMIZER_TOOL_PROFILE=continuity`, which exposes only capture and query.
 The extended `cognitive` profile adds checkpoints, outcomes, and receipt
 attestation. The native-token audit measures 480 startup tokens for continuity,
-694 for extended cognitive, 4,815 for core, and 30,125 for full. Stateful
+694 for extended cognitive, 4,815 for the former 19-tool core, and 30,125 for
+full; the 10-tool core cut the default `tools/list` payload from 27,368 to
+20,326 characters. Stateful
 consumers normally receive zero MCP tools: host pre-action delivery adds only
 the selected capsule through the client lifecycle channel. Other enabled MCP
 servers add their own schemas independently.
