@@ -2705,7 +2705,7 @@ await analyze_project_tokens({
 Token Optimizer works with stdio-capable MCP clients and includes first-party setup guidance for:
 
 - **OpenAI Codex** - Direct MCP setup or the bundled plugin, skill, and hooks
-- **Claude Code** - Direct MCP setup or the bundled plugin, skill, and hooks
+- **Claude Code** - Direct MCP setup or the bundled plugin and hooks
 - **GitHub Copilot CLI** - MCP configuration, AGENTS.md guidance, and repository hooks
 - **Google Gemini CLI** - Direct MCP setup or the bundled context-and-hooks extension
 - **OpenCode** - Local MCP configuration, AGENTS.md instructions, and compaction plugin
