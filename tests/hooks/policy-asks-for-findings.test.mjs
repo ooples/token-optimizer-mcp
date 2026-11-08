@@ -130,14 +130,24 @@ describe('the standing policy states what will extract findings after the sessio
     expect(text).toMatch(/never file contents/i);
   });
 
-  it('on a machine with no credential, states the consequence and names the free option', () => {
-    // THE DEFAULT STATE, and the whole reason this line exists. `off:no-key` is
-    // CI, corporate laptops and every subscription-only login.
+  it('on a machine with no credential, states the consequence; the free option is named by doctor', async () => {
+    // THE DEFAULT STATE: `off:no-key` is CI, corporate laptops and every
+    // subscription-only login. The model is told the consequence, which is why
+    // it should record. The setting that adds an extractor is advice for the
+    // person, so since 2026-11-08 it is in doctor's harvest check (and the
+    // README), not in every session's context.
     const text = recordingGuidance();
 
     expect(text).toMatch(/no separate extractor will run/i);
     expect(text).toMatch(/derived locally/i);
-    expect(text).toMatch(/TOKEN_OPTIMIZER_HARVEST_ENDPOINT/);
+    expect(text).not.toMatch(/TOKEN_OPTIMIZER_HARVEST_ENDPOINT/);
+
+    const { probeHarvest } = await import(
+      pathToFileURL(join(process.cwd(), 'hooks-core', 'doctor.mjs')).href
+    );
+    const advice = probeHarvest().map((check) => check.detail).join('\n');
+    expect(advice).toMatch(/TOKEN_OPTIMIZER_HARVEST_ENDPOINT/);
+    expect(advice).toMatch(/free and private/i);
   });
 
   it('does not argue with a deliberate opt-out, but still states the consequence', () => {

@@ -877,13 +877,15 @@ function extractionNotice() {
       );
     default:
       // off:no-key, and any mode a future harvest adds: no extractor is running
-      // and nobody chose that, so the free option is worth naming.
+      // and nobody chose that. The consequence is stated because it is why the
+      // model should record. The free option (TOKEN_OPTIMIZER_HARVEST_ENDPOINT at
+      // a local model) is NOT named here since 2026-11-08: it is advice for the
+      // person, which the model cannot act on, and it rode on every session that
+      // edited anything. doctor's harvest check and the README name it instead.
       return (
         '\n\nNo separate extractor will run after this session, so a conclusion you do not record ' +
         'is not written down in words anywhere. Findings are still derived locally from exit ' +
-        'codes, red-to-green transitions and corrections. Pointing ' +
-        'TOKEN_OPTIMIZER_HARVEST_ENDPOINT at a local model adds semantic extraction, free and ' +
-        'private.'
+        'codes, red-to-green transitions and corrections.'
       );
   }
 }
