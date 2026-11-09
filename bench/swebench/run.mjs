@@ -249,6 +249,12 @@ function resetLearnedRepo(mirror, repoDir, commit) {
     git(['--git-dir', mirror, 'worktree', 'add', '--detach', '--force', repoDir, commit]);
     return;
   }
+  // A RUN KILLED MID-CHECKOUT LEAVES index.lock, and every later reset then
+  // fails ("Unable to create ... index.lock: File exists") -- seen when the
+  // machine ran out of memory and the pilot was killed. Runs are sequential and
+  // this checkout is the plan's own, so a lock found here has no live owner.
+  const gitDir = git(['rev-parse', '--absolute-git-dir'], { cwd: repoDir }).trim();
+  rmSync(join(gitDir, 'index.lock'), { force: true });
   git(['checkout', '--force', '--detach', commit], { cwd: repoDir });
   git(['clean', '-ffdx', '-e', '.claude'], { cwd: repoDir });
 }
