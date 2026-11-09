@@ -94,7 +94,6 @@ import {
   toolSearchOutcomesFromTranscript,
   turnEvidence,
 } from './transcript.mjs';
-import { harvestMode } from './harvest.mjs';
 import { canonicalPath, isFsSafePath } from './paths.mjs';
 import {
   isSubstantive,
@@ -823,76 +822,6 @@ function emit(object) {
 }
 
 /**
- * What will and will not extract findings after this session, in one sentence.
- *
- * THE STATE WAS ONLY EVER LEGIBLE FROM THE DOCTOR, and the doctor is a place
- * someone visits after they already suspect something is wrong. A user watching
- * a graph fill with structural nodes and no verdicts has no reason to suspect
- * anything, which is the failure this project has now measured twice.
- *
- * IT IS ADDRESSED TO THE MODEL, NOT ONLY TO THE READER, which is why it earns a
- * place in the prefix rather than a systemMessage. "Nothing else will write this
- * down in words" changes what the model does with a conclusion it is holding;
- * "here is a configuration variable" would not.
- *
- * CACHE-SAFE: derived from configuration, so it differs between sessions only
- * when the configuration does -- the same standard the rest of this block is
- * held to, and it carries no digits for `stableText` to reject.
- *
- * A local endpoint is named FIRST in the off case on purpose. It is the option
- * that costs nothing and sends nothing, and it was the one buried deepest.
- */
-function extractionNotice() {
-  switch (harvestMode()) {
-    case 'local':
-      return (
-        '\n\nA local model endpoint is configured, so semantic extraction also runs after this ' +
-        'session -- free and private, with nothing leaving this machine.'
-      );
-    case 'remote':
-      return (
-        '\n\nA credential is configured, so fallback extraction also runs after this session from ' +
-        'a bounded digest: paths, commands, prompts and conclusions, never file contents.'
-      );
-    case 'host-cli':
-      // The extractor is this client's own headless CLI, which the user opted
-      // into. Worth its own case rather than folding into `remote`: no
-      // credential is involved, and the digest goes to the same vendor that
-      // already ran the session, which is a materially different disclosure.
-      return (
-        '\n\nSemantic extraction also runs after this session through this client\'s own CLI, ' +
-        'from a bounded digest: paths, commands, prompts and conclusions, never file contents.'
-      );
-    case 'off:mode':
-      // The whole optimizer is off and this text is not emitted anyway. Saying
-      // anything here would be noise stacked on an explicit choice.
-      return '';
-    case 'off:opted-out':
-      // A DELIBERATE CHOICE, SO NO PITCH. The consequence is stated because the
-      // model needs it; the setting that would reverse it is not, because
-      // arguing with a configured decision on every session is how a notice
-      // stops being read. doctor.mjs draws the same line for the same reason.
-      return (
-        '\n\nFallback extraction is off by configuration, so a conclusion you do not record is ' +
-        'not written down in words anywhere. Findings are still derived locally from exit codes, ' +
-        'red-to-green transitions and corrections.'
-      );
-    default:
-      // off:no-key, and any mode a future harvest adds: no extractor is running
-      // and nobody chose that. The consequence is stated because it is why the
-      // model should record. The free option (TOKEN_OPTIMIZER_HARVEST_ENDPOINT at
-      // a local model) is NOT named here since 2026-11-08: it is advice for the
-      // person, which the model cannot act on, and it rode on every session that
-      // edited anything. doctor's harvest check and the README name it instead.
-      return (
-        '\n\nNo separate extractor will run after this session, so a conclusion you do not record ' +
-        'is not written down in words anywhere. Findings are still derived locally from exit ' +
-        'codes, red-to-green transitions and corrections.'
-      );
-  }
-}
-
-/**
  * Fold what this session has OBSERVED about tool reachability into its state.
  *
  * Called from every branch that then reads the inventory, because an inventory
@@ -981,13 +910,19 @@ export const GUIDANCE_AFTER_CALLS = 10;
  * event after the session shows real work, and a session that never gets that
  * far never pays for it.
  *
- * SHORTER, 2026-11-08: the first two paragraphs were condensed from ~880 to
- * ~490 characters with every instruction kept (what to record, the anchor rule
- * the tool enforces, evidence / confidence / scope / invalidators). The last
- * paragraph is untouched, because it is the measured one: 0.3 against 0.9.
+ * ONE LINE, 2026-11-09. On the 15-pair learned SWE-bench pilot the ~1,000
+ * character block was injected in 8 of 13 plugin sessions and the model made 0
+ * wiki_write calls (0 calls to any optimizer tool). It keeps the instruction --
+ * what to record, the anchor the tool enforces, and the measured last-message
+ * rule (0.3 vs 0.9) -- and drops the per-mode extraction notice: that is about
+ * the person's configuration, and doctor's harvest check says it to them.
  */
 export function recordingGuidance() {
-  return `## Record what you work out\n\nWhen you establish something durable about this project -- a\ndecision and why the alternative was rejected, a failure and what actually caused\nit, the command that turned out to work -- call wiki_write while you still hold\nthe context. Anchor every claim to a real file path or path#symbol; unanchored\nwrites are refused. Include the evidence, a calibrated confidence label, its\nscope, and what would invalidate it. Skip what the code plainly says.\n\nRECORD BEFORE YOU ANSWER, NEVER AFTER. Your final message must be the answer to\nthe task -- never a confirmation that you saved a note. Measured: a run whose\nlast message was "Recorded. The finding captured: ..." scored 0.3 where the\nidentical task answered directly scored 0.9. The work had been done correctly\nand the artifact was written; only the last message was wrong, and the last\nmessage is what a verifier, a reviewer and the person who asked all read.${extractionNotice()}`;
+  return (
+    '## Record what you work out\n\nA durable finding -- a decision and the rejected alternative, ' +
+    "a failure's real cause, the command that worked -- goes to wiki_write with a real file anchor, " +
+    'before your answer, never as your last message.'
+  );
 }
 
 export function policyText(
