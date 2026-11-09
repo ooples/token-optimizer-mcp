@@ -129,6 +129,11 @@ export function isOwnTool(name) {
   return /^mcp__.*token[-_]?optimizer.*__/i.test(String(name));
 }
 
+/** `text` as a literal inside a regular expression: a tool name may hold any metacharacter. */
+function escapeRegExp(text) {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 // ---------------------------------------------------------------------------
 // The per-repository store.
 
@@ -289,7 +294,7 @@ export function sessionUsage(transcriptPath, { maxBytes = MAX_FOLD_BYTES, mentio
     if (!isPrompt(entry, typed)) continue;
     prompts += 1;
     for (const name of watch) {
-      if (new RegExp(`\\b${name.replace(/[-]/g, '\\-')}\\b`).test(typed)) mentioned.add(name);
+      if (new RegExp(`\\b${escapeRegExp(name)}\\b`).test(typed)) mentioned.add(name);
     }
   }
 
