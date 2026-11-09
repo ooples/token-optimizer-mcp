@@ -9,6 +9,8 @@
  * multi-agent switches below written to the project's `.codex/config.toml` --
  * 16% of the standing prefix, re-read on every turn of every session. Across 50
  * real sessions on this machine the sub-agent tools were never called once.
+ * tool_suggest, apps and sleep_tool (2026-11-08) cut a further 7.3%, measured
+ * from a trusted project's config.toml; see CODEX_CAPABILITIES.
  *
  * HOW IT DIFFERS FROM CLAUDE CODE PRUNING (toolprune.mjs). Codex has no
  * per-tool deny list; it has capability switches. So the unit here is a
@@ -89,6 +91,38 @@ export const CODEX_CAPABILITIES = Object.freeze([
     namespace: null,
     itemType: 'ImageView',
     mention: /\.(?:png|jpe?g|gif|webp|bmp)\b|\bscreenshots?\b/i,
+  }),
+  // Measured with `codex debug prompt-input` on 0.167.0 (71,679 bytes baseline):
+  //   tool_suggest -2,159: request_plugin_install plus a <recommended_plugins>
+  //     advert for plugins that are NOT installed -- no use to the repository.
+  //   apps -4,335: the ChatGPT apps deferred namespaces (mcp__codex_apps__*)
+  //     plus that same advert.
+  //   sleep_tool -881: the clock.sleep tool.
+  // NOT `plugins`: it also drops the skills instructions, which would take
+  // this package's own Codex skill with it.
+  Object.freeze({
+    id: 'tool_suggest',
+    keys: Object.freeze([['features', 'tool_suggest']]),
+    tools: new Set(['request_plugin_install']),
+    namespace: null,
+    mention: /\brequest_plugin_install\b|\brecommended plugins?\b|\binstall (?:the |a |an )?[\w.-]+ plugin\b|\bplugins? to install\b/i,
+  }),
+  Object.freeze({
+    id: 'apps',
+    keys: Object.freeze([['features', 'apps']]),
+    tools: new Set(),
+    namespace: null,
+    // Calls arrive as `_search_issues` in namespace `mcp__codex_apps__github`.
+    namespacePrefix: 'mcp__codex_apps',
+    mention: /\bmcp__codex_apps\b|\bchatgpt (?:apps?|spaces?|connectors?)\b|\bcodex apps?\b|\bconnectors?\b/i,
+  }),
+  Object.freeze({
+    id: 'sleep_tool',
+    keys: Object.freeze([['features', 'sleep_tool']]),
+    tools: new Set(['sleep']),
+    namespace: 'clock',
+    // Not "wait" or "poll" on their own: the shell can sleep too, and a restore is permanent.
+    mention: /\bclock\.sleep\b|\bsleep tool\b|\bwait (?:for )?\d+\s*(?:ms|s|secs?|seconds?|mins?|minutes?)\b/i,
   }),
 ]);
 
@@ -173,6 +207,9 @@ function namespaceOf(name) {
 export function capabilityOfCall(name, namespace = '') {
   const space = namespace || namespaceOf(name);
   const bare = bareName(name);
+  for (const cap of CODEX_CAPABILITIES) {
+    if (cap.namespacePrefix && (String(space).startsWith(cap.namespacePrefix) || String(name).startsWith(cap.namespacePrefix))) return cap.id;
+  }
   // An MCP server's own `send_message` is not a sub-agent tool.
   if (String(space).startsWith('mcp__') || String(name).startsWith('mcp__')) return null;
   for (const cap of CODEX_CAPABILITIES) {

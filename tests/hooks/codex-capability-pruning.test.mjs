@@ -91,6 +91,40 @@ describe('reading a rollout', () => {
     expect(said('spawn a process and wait for it')).toEqual([]);
   });
 
+  test('the plugin-install, apps and sleep calls are recognised by their real shapes', () => {
+    // As recorded in real 0.167.0 rollouts on this machine.
+    expect(capabilityOfCall('sleep', 'clock')).toBe('sleep_tool');
+    expect(capabilityOfCall('_search_issues', 'mcp__codex_apps__github')).toBe('apps');
+    expect(capabilityOfCall('mcp__codex_apps__github._search_issues')).toBe('apps');
+    expect(capabilityOfCall('request_plugin_install')).toBe('tool_suggest');
+    // Another MCP server's `sleep` is not Codex's clock.
+    expect(capabilityOfCall('sleep', 'mcp__timer__')).toBeNull();
+    expect(capabilityOfCall('sleep', 'timers')).toBeNull();
+  });
+
+  test('a repository that sleeps or uses apps keeps them; the plugin advert goes', () => {
+    const ctx = setup();
+    rollout(ctx.sessions, 's1', ctx.root, { calls: [{ name: 'sleep', namespace: 'clock' }] });
+    rollout(ctx.sessions, 's2', ctx.root, { calls: [{ name: '_search_issues', namespace: 'mcp__codex_apps__github' }] });
+    const applied = fold(ctx).applied;
+    expect(applied).toContain('tool_suggest');
+    expect(applied).not.toContain('sleep_tool');
+    expect(applied).not.toContain('apps');
+  });
+
+  test('only specific words ask for the new capabilities back', () => {
+    const ctx = setup();
+    const said = (text) =>
+      codexSessionUsage(rollout(ctx.sessions, `w${(counter += 1)}`, ctx.root, { prompts: 1, said: text }), {
+        mentionCandidates: ['tool_suggest', 'apps', 'sleep_tool'],
+      }).mentioned.sort();
+    expect(said('install the figma plugin')).toEqual(['tool_suggest']);
+    expect(said('use the GitHub connector for this')).toEqual(['apps']);
+    expect(said('wait 30 seconds, then check')).toEqual(['sleep_tool']);
+    expect(said('fix the app crash and wait for CI')).toEqual([]);
+    expect(said('the process should sleep less')).toEqual([]);
+  });
+
   test('typed prompts, code-mode extension calls and image views are all seen', () => {
     const ctx = setup();
     const path = rollout(ctx.sessions, 'a', ctx.root, {
@@ -121,10 +155,13 @@ describe('the decision', () => {
     rollout(ctx.sessions, 's1', ctx.root, { items: [{ type: 'ImageView', path: 'file:///a.png' }] });
     rollout(ctx.sessions, 's2', ctx.root);
     const summary = fold(ctx);
-    expect(summary.applied).toEqual(['multi_agent']);
+    expect(summary.applied).toEqual(['multi_agent', 'tool_suggest', 'apps', 'sleep_tool']);
     const text = readFileSync(configPath(ctx.root), 'utf8');
     expect(text).toMatch(/^# >>> token-optimizer/);
     expect(text).toContain('features.multi_agent = false\nagents.enabled = false\n');
+    expect(text).toContain('features.tool_suggest = false\n');
+    expect(text).toContain('features.apps = false\n');
+    expect(text).toContain('features.sleep_tool = false\n');
     expect(text).not.toContain('view_image');
     expect(readFileSync(join(ctx.root, '.git', 'info', 'exclude'), 'utf8')).toContain('.codex/config.toml');
   });
@@ -147,7 +184,7 @@ describe('the decision', () => {
     const ctx = setup();
     rollout(ctx.sessions, 's1', ctx.root, { items: [IMAGE] });
     rollout(ctx.sessions, 's2', ctx.root);
-    expect(fold(ctx).applied).toEqual(['multi_agent']);
+    expect(fold(ctx).applied).toEqual(['multi_agent', 'tool_suggest', 'apps', 'sleep_tool']);
     rollout(ctx.sessions, 's3', ctx.root, { prompts: 1, said: 'spawn sub-agents to do these in parallel' });
     const after = fold(ctx);
     expect(after.applied).not.toContain('multi_agent');
@@ -243,9 +280,10 @@ describe('the config file', () => {
     const ctx = setup();
     rollout(ctx.sessions, 's1', ctx.root, { items: [IMAGE] });
     rollout(ctx.sessions, 's2', ctx.root);
-    expect(fold(ctx).applied).toEqual(['multi_agent']);
-    expect(restoreCodex({ dir: ctx.dir, root: ctx.root, home: ctx.home }).restored).toEqual(['multi_agent']);
+    expect(fold(ctx).applied).toEqual(['multi_agent', 'tool_suggest', 'apps', 'sleep_tool']);
+    expect(restoreCodex({ dir: ctx.dir, root: ctx.root, home: ctx.home }).restored).toEqual(['multi_agent', 'tool_suggest', 'apps', 'sleep_tool']);
     rollout(ctx.sessions, 's3', ctx.root);
-    expect(fold(ctx).applied).not.toContain('multi_agent');
+    const again = fold(ctx).applied;
+    for (const id of ['multi_agent', 'tool_suggest', 'apps', 'sleep_tool']) expect(again).not.toContain(id);
   });
 });

@@ -1377,11 +1377,16 @@ launch directory.
 
 **Codex.** Codex has capability switches instead of a per-tool deny list. On
 the same evidence rule, read from Codex's own session logs in `~/.codex/sessions`,
-it switches off the sub-agent tools (`features.multi_agent`, `agents.enabled`)
-and image viewing (`features.view_image`) in a repository that never uses them.
+it switches off the capabilities a repository never uses: the sub-agent tools
+(`features.multi_agent`, `agents.enabled`), image viewing (`features.view_image`),
+the advert for uninstalled plugins (`features.tool_suggest`), ChatGPT apps
+(`features.apps`) and the sleep tool (`features.sleep_tool`).
 The switches go in a marked block at the top of that repository's
 `.codex/config.toml`. Measured on codex-cli 0.167.0, the sub-agent switch alone
-cut each request's standing prompt from 72,078 to 60,579 bytes (−16%). Codex
+cut each request's standing prompt from 72,078 to 60,579 bytes (−16%). In a trusted
+project's config, the last three together cut it another 7.3% (71,768 to 66,550 bytes).
+`features.plugins` is never touched, because it also removes the skills
+instructions. Codex
 reads project config only for projects it trusts, so an untrusted repository
 stays a proposal. The file is left alone when it is tracked by git, or when it
 already defines a `[features]` or `[agents]` table (writing it twice would stop
