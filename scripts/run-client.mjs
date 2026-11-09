@@ -21,6 +21,8 @@ import { claudeRoute } from './claude-routing.mjs';
 import { sessionRouting } from './session-routing.mjs';
 import { claudeManagedRouting } from './managed-policy.mjs';
 import { projectRootFor } from '../hooks-core/wiki.mjs';
+import { learnedLocation } from '../hooks-core/toolprune.mjs';
+import { copilotExclusions } from '../hooks-core/copilotprune.mjs';
 import {
   clientForCommand,
   proxyEnvFor,
@@ -507,6 +509,15 @@ export async function runClient(
       // Other clients configure MCP in their own files and reject an unknown flag outright, which
       // would turn a launch into a usage error. Their MCP registration is the installer's job; this
       // wrapper only routes them.
+    }
+    // LEARNED COPILOT TOOL PRUNING (copilotprune.mjs). `--excluded-tools` is a
+    // launch flag only -- no setting carries it -- so this launcher is the one
+    // place it can be delivered. Appended last because the flag is variadic.
+    if (clientId === 'copilot' && !management) {
+      const learned = learnedLocation(projectRoot);
+      const pruning = copilotExclusions({ args, env, dir: learned.dir, root: learned.root });
+      forwarded.push(...pruning.args);
+      if (pruning.notice) process.stderr.write(`${pruning.notice}\n`);
     }
     // No shell string: user prompts, quotes and metacharacters stay argv data.
     // CLI flags must precede an explicit end-of-options delimiter.

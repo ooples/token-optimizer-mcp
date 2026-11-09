@@ -8,6 +8,7 @@
  *   token-optimizer-learned toolprune restore [Tool ...]   give tools back (all when none named); never pruned again
  *   token-optimizer-learned toolprune fold      fold finished sessions and decide now
  *     add --codex to any toolprune command for Codex capability pruning (.codex/config.toml)
+ *     add --copilot for Copilot CLI tool pruning (--excluded-tools, added by the managed launcher)
  *   token-optimizer-learned statusline install  record quota usage from Claude Code's status line
  *                                               (wraps an existing status line; prints a quota line otherwise)
  *   token-optimizer-learned statusline uninstall  put the previous status line back
@@ -36,6 +37,7 @@ import {
 } from '../hooks-core/toolprune.mjs';
 import { learnedLocation } from '../hooks-core/toolprune.mjs';
 import { CODEX_STORE_FILE, restoreCodex, runCodexFold } from '../hooks-core/codexprune.mjs';
+import { copilotStatus, restoreCopilot, runCopilotFold } from '../hooks-core/copilotprune.mjs';
 
 const TAP = join(dirname(fileURLToPath(import.meta.url)), 'statusline-tap.mjs');
 const TAP_MARKER = 'statusline-tap.mjs';
@@ -91,11 +93,12 @@ export function claudeProjectDir(root, home = homedir()) {
 }
 
 function parseArgs(argv) {
-  const args = { positional: [], json: false, codex: false, cwd: process.cwd() };
+  const args = { positional: [], json: false, codex: false, copilot: false, cwd: process.cwd() };
   for (let index = 0; index < argv.length; index += 1) {
     const value = argv[index];
     if (value === '--json') args.json = true;
     else if (value === '--codex') args.codex = true;
+    else if (value === '--copilot') args.copilot = true;
     else if (value === '--cwd') args.cwd = argv[++index] || args.cwd;
     else args.positional.push(value);
   }
@@ -137,6 +140,7 @@ export function collectStatus(cwd, { env = process.env } = {}) {
         blocked: codex.blocked,
       };
     })(),
+    copilotprune: copilotStatus(dir, env),
     loopguard: {
       enabled: guard.enabled,
       judge: guard.judge,
@@ -185,6 +189,13 @@ export function renderStatus(status) {
     if (codex.restored.length) lines.push(`  restored  ${codex.restored.join(', ')}  (never switched off again)`);
     if (codex.blocked) lines.push(`  not written: ${codex.blocked}`);
   }
+  const copilot = status.copilotprune;
+  if (copilot?.sessionsFolded) {
+    lines.push('', `Copilot tool pruning: ${copilot.mode}; ${copilot.sessionsFolded} Copilot session(s) learned from; applied by the managed \`copilot\` launcher`);
+    for (const item of copilot.applied) lines.push(`  left out  ${item.name}  (unused for ${item.prompts} prompts / ${item.sessions} sessions)`);
+    for (const item of copilot.pending) lines.push(`  proposed  ${item.name}  (unused for ${item.prompts} prompts / ${item.sessions} sessions)`);
+    if (copilot.restored.length) lines.push(`  restored  ${copilot.restored.join(', ')}  (never left out again)`);
+  }
   const guard = status.loopguard;
   const envelope = guard.envelope.ready
     ? `usual turn ${Math.round(guard.envelope.median)} calls, p90 ${Math.round(guard.envelope.p90)}`
@@ -214,6 +225,15 @@ async function main(argv) {
     }
     if (action === 'uninstall') console.log(result.absent ? 'the tap was not installed' : result.restored ? 'previous status line restored' : 'status line removed');
     else console.log(result.already ? 'already installed' : result.wrapped ? 'installed, wrapping your existing status line' : 'installed');
+    return 0;
+  }
+  if (command === 'toolprune' && action === 'restore' && args.copilot) {
+    const result = restoreCopilot({ dir, names });
+    console.log(`restored: ${result.restored.join(', ') || '(nothing was left out)'}`);
+    return 0;
+  }
+  if (command === 'toolprune' && action === 'fold' && args.copilot) {
+    console.log(JSON.stringify(runCopilotFold({ dir, root }), null, 2));
     return 0;
   }
   if (command === 'toolprune' && action === 'restore' && args.codex) {

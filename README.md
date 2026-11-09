@@ -1389,6 +1389,25 @@ Codex starting). The global `~/.codex/config.toml` is never written. Asking for
 sub-agents in so many words, or attaching a screenshot, gives the capability
 back for good. Undo: `token-optimizer-learned toolprune restore --codex`.
 
+**GitHub Copilot CLI.** Copilot's tool list can only be cut with a launch flag:
+`--excluded-tools` has no setting a repository or hook could write. So the
+managed `copilot` command adds it. On the same evidence rule, read from
+Copilot's own session logs (`~/.copilot/session-state/*/events.jsonl`, or
+`$COPILOT_HOME`), it leaves out the built-in tools a repository never used,
+such as image generation, dynamic workflows, the session SQL tools and the
+GitHub MCP server's search tools. Measured on Copilot CLI 1.0.107, leaving out
+20 of the 28 tools cut a session's first request from 26,748 to 12,762 input
+tokens, and its AI credits from 7.04 to 3.43. Every persisted Copilot setting
+moved it by 560 tokens at most. The shell, file and search tools, the
+sub-agent tools, `web_fetch` and `skill` are never left out, and nothing is left
+out when you pass `--available-tools` or `--excluded-tools` yourself. A tool
+that is left out cannot be called, so the restore signal is asking for it:
+typing its name, or for example "generate an image" or "Copilot Spaces". That
+gives it back for good. A Copilot started without the managed command keeps
+every tool, and its sessions still count as evidence. Status:
+`token-optimizer-learned status`. Undo: `token-optimizer-learned toolprune
+restore --copilot`.
+
 **Loop guard.** On a failed call (`PostToolUseFailure`), the guard looks at the
 current turn. The same failure signature four times in one turn, or a turn
 churning past 2.5x this repository's usual length, is redirected at once. Three
