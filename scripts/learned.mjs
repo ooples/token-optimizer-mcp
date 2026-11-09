@@ -37,7 +37,7 @@ import {
 } from '../hooks-core/toolprune.mjs';
 import { learnedLocation } from '../hooks-core/toolprune.mjs';
 import { CODEX_STORE_FILE, restoreCodex, runCodexFold } from '../hooks-core/codexprune.mjs';
-import { copilotStatus, restoreCopilot, runCopilotFold } from '../hooks-core/copilotprune.mjs';
+import { copilotStatus, leanSwitchState, restoreCopilot, restoreLeanSwitches, runCopilotFold } from '../hooks-core/copilotprune.mjs';
 
 const TAP = join(dirname(fileURLToPath(import.meta.url)), 'statusline-tap.mjs');
 const TAP_MARKER = 'statusline-tap.mjs';
@@ -141,6 +141,7 @@ export function collectStatus(cwd, { env = process.env } = {}) {
       };
     })(),
     copilotprune: copilotStatus(dir, env),
+    copilotLeanSwitches: leanSwitchState(env),
     loopguard: {
       enabled: guard.enabled,
       judge: guard.judge,
@@ -196,6 +197,11 @@ export function renderStatus(status) {
     for (const item of copilot.pending) lines.push(`  proposed  ${item.name}  (unused for ${item.prompts} prompts / ${item.sessions} sessions)`);
     if (copilot.restored.length) lines.push(`  restored  ${copilot.restored.join(', ')}  (never left out again)`);
   }
+  const lean = status.copilotLeanSwitches;
+  if (lean?.copilotInstalled) {
+    const off = lean.switches.filter((item) => item.off).map((item) => `${item.key}${item.writtenHere ? ' (written here)' : ''}`);
+    lines.push(`Copilot user switches: ${lean.mode}${lean.declined ? ', restored and not written again' : ''}; off: ${off.join(', ') || 'none'}`);
+  }
   const guard = status.loopguard;
   const envelope = guard.envelope.ready
     ? `usual turn ${Math.round(guard.envelope.median)} calls, p90 ${Math.round(guard.envelope.p90)}`
@@ -230,6 +236,11 @@ async function main(argv) {
   if (command === 'toolprune' && action === 'restore' && args.copilot) {
     const result = restoreCopilot({ dir, names });
     console.log(`restored: ${result.restored.join(', ') || '(nothing was left out)'}`);
+    // No names = everything, the user-level lean switches included.
+    if (!names.length) {
+      const lean = restoreLeanSwitches();
+      if (lean.restored.length) console.log(`copilot switches restored: ${lean.restored.join(', ')} (${lean.how})`);
+    }
     return 0;
   }
   if (command === 'toolprune' && action === 'fold' && args.copilot) {

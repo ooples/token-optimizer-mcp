@@ -22,7 +22,7 @@ import { sessionRouting } from './session-routing.mjs';
 import { claudeManagedRouting } from './managed-policy.mjs';
 import { projectRootFor } from '../hooks-core/wiki.mjs';
 import { learnedLocation } from '../hooks-core/toolprune.mjs';
-import { copilotExclusions } from '../hooks-core/copilotprune.mjs';
+import { applyLeanSwitches, copilotExclusions } from '../hooks-core/copilotprune.mjs';
 import {
   clientForCommand,
   proxyEnvFor,
@@ -518,6 +518,12 @@ export async function runClient(
       const pruning = copilotExclusions({ args, env, dir: learned.dir, root: learned.root });
       forwarded.push(...pruning.args);
       if (pruning.notice) process.stderr.write(`${pruning.notice}\n`);
+      // Opt-in (TOKEN_OPTIMIZER_COPILOT_LEAN_SWITCHES=write): four user switches
+      // Copilot reads at session start, written only where the person left them unset.
+      if (!env.TOKEN_OPTIMIZER_SIDECALL) {
+        const lean = applyLeanSwitches({ env });
+        if (lean.notice) process.stderr.write(`${lean.notice}\n`);
+      }
     }
     // No shell string: user prompts, quotes and metacharacters stay argv data.
     // CLI flags must precede an explicit end-of-options delimiter.

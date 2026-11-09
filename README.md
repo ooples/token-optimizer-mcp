@@ -1425,6 +1425,19 @@ every tool, and its sessions still count as evidence. Status:
 `token-optimizer-learned status`. Undo: `token-optimizer-learned toolprune
 restore --copilot`.
 
+Four Copilot user settings (`askUser`, `connectors`, `contextManagementTools`,
+`imageGeneration`) together cost those 560 tokens per request. They are your
+user-level settings, not a repository's, so they are only reported by
+`token-optimizer doctor` unless you opt in with
+`TOKEN_OPTIMIZER_COPILOT_LEAN_SWITCHES=write` (default `off`). Then the managed
+`copilot` command writes `false` for each one still unset in
+`$COPILOT_HOME/settings.json`. It never overrides a value you set (so
+`copilot config imageGeneration true` keeps it on for good) and never touches a
+file that is not strict JSON. `token-optimizer-learned toolprune restore
+--copilot` undoes it: the original file byte for byte if you have not edited it
+since, otherwise only the switches it wrote. After that they are not written
+again.
+
 **Loop guard.** On a failed call (`PostToolUseFailure`), the guard looks at the
 current turn. The same failure signature four times in one turn, or a turn
 churning past 2.5x this repository's usual length, is redirected at once. Three

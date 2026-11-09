@@ -42,9 +42,9 @@
  * Configuration: the TOKEN_OPTIMIZER_TOOLPRUNE* variables (toolprune.mjs).
  */
 
-import { closeSync, openSync, readdirSync, readFileSync, readSync, statSync } from 'node:fs';
+import { closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, readSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { belongsTo } from './codexprune.mjs';
 import {
   candidates,
@@ -321,3 +321,161 @@ export function copilotExclusions({ args = [], env = process.env, dir, root, sta
   }
 }
 
+
+/*
+ * LEAN USER SWITCHES (opt-in). Four Copilot user settings put tools and text on
+ * every request that a coding session rarely uses. Measured on Copilot CLI
+ * 1.0.107 against a 26,748-token first request, switching all four off saved
+ * 560 tokens (~2%) -- small next to `--excluded-tools`, and they live in the
+ * person's USER settings, not a repository's, so they are written only when
+ * TOKEN_OPTIMIZER_COPILOT_LEAN_SWITCHES=write. `doctor` reports them either way.
+ *
+ * NEVER OVERRIDES A CHOICE. Only a key absent from settings.json is written, so
+ * `copilot config imageGeneration true` wins for good. A settings.json that is
+ * not strict JSON is left untouched.
+ *
+ * RESTORE is `token-optimizer-learned toolprune restore --copilot`. When the
+ * file is still exactly what was written, the original bytes come back (or the
+ * file is removed if there was none); when the person edited it since, only the
+ * keys written here that still read `false` are removed. Either way the switches
+ * are not written again until the opt-in is turned off and on.
+ */
+export const COPILOT_LEAN_SWITCHES = Object.freeze({
+  askUser: false,
+  connectors: false,
+  contextManagementTools: false,
+  imageGeneration: false,
+});
+export const LEAN_SWITCHES_SAVING_TOKENS = 560;
+export const LEAN_SWITCH_MODES = Object.freeze(['off', 'write']);
+
+/** `off` unless the person opted in; an unknown value is `off`. */
+export function leanSwitchMode(env = process.env) {
+  const value = String(env.TOKEN_OPTIMIZER_COPILOT_LEAN_SWITCHES ?? '').trim().toLowerCase();
+  return LEAN_SWITCH_MODES.includes(value) ? value : 'off';
+}
+
+export function copilotSettingsPath(env = process.env) {
+  return join(copilotHome(env), 'settings.json');
+}
+
+/** The original settings bytes and what was written, kept outside Copilot's home. */
+export function leanSwitchesRecordPath(env = process.env) {
+  return join(env.TOKEN_OPTIMIZER_HOME || join(homedir(), '.token-optimizer'), 'copilot-lean-switches.json');
+}
+
+function readJsonObject(path) {
+  if (!existsSync(path)) return { exists: false, bytes: null, value: {} };
+  const bytes = readFileSync(path, 'utf8');
+  try {
+    const value = JSON.parse(bytes);
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return { exists: true, bytes, value: null };
+    return { exists: true, bytes, value };
+  } catch {
+    return { exists: true, bytes, value: null };
+  }
+}
+
+function writeAtomic(path, text) {
+  mkdirSync(dirname(path), { recursive: true });
+  const temp = `${path}.${process.pid}.tmp`;
+  writeFileSync(temp, text);
+  renameSync(temp, path);
+}
+
+function declineFurtherWrites(recordPath) {
+  writeAtomic(recordPath, `${JSON.stringify({ declined: true, written: [] }, null, 2)}\n`);
+}
+
+/** Read-only: what each switch is now, and whether this package wrote it. */
+export function leanSwitchState(env = process.env) {
+  const path = copilotSettingsPath(env);
+  const settings = readJsonObject(path);
+  const record = readJsonObject(leanSwitchesRecordPath(env)).value || {};
+  const written = Array.isArray(record.written) ? record.written : [];
+  const switches = Object.keys(COPILOT_LEAN_SWITCHES).map((key) => {
+    const value = settings.value ? settings.value[key] : undefined;
+    return { key, value, off: value === false, writtenHere: written.includes(key) };
+  });
+  return {
+    path,
+    mode: leanSwitchMode(env),
+    copilotInstalled: existsSync(copilotHome(env)),
+    readable: settings.value !== null,
+    declined: record.declined === true,
+    switches,
+  };
+}
+
+/**
+ * Write the absent switches when opted in. Never throws: a failure costs the
+ * saving, not the launch. Returns the line to show the person, if any.
+ */
+export function applyLeanSwitches({ env = process.env } = {}) {
+  try {
+    if (leanSwitchMode(env) !== 'write') return { changed: false, notice: null };
+    const recordPath = leanSwitchesRecordPath(env);
+    const record = readJsonObject(recordPath).value || {};
+    if (record.declined === true) return { changed: false, notice: null };
+    const path = copilotSettingsPath(env);
+    const settings = readJsonObject(path);
+    if (settings.value === null) return { changed: false, notice: null, reason: 'settings.json is not strict JSON' };
+    const absent = Object.keys(COPILOT_LEAN_SWITCHES).filter((key) => !Object.hasOwn(settings.value, key));
+    if (!absent.length) return { changed: false, notice: null };
+    const next = { ...settings.value };
+    for (const key of absent) next[key] = COPILOT_LEAN_SWITCHES[key];
+    const text = `${JSON.stringify(next, null, 2)}\n`;
+    const earlier = Array.isArray(record.written) && record.written.length > 0;
+    // The record goes first, so a crash between the two writes still leaves a way back.
+    writeAtomic(
+      recordPath,
+      `${JSON.stringify(
+        {
+          existed: earlier ? record.existed : settings.exists,
+          bytes: earlier ? record.bytes : settings.bytes,
+          written: [...new Set([...(record.written || []), ...absent])],
+          lastWritten: text,
+        },
+        null,
+        2
+      )}\n`
+    );
+    writeAtomic(path, text);
+    return {
+      changed: true,
+      written: absent,
+      notice:
+        `token-optimizer: switched off Copilot ${absent.join(', ')} in ${path} ` +
+        `(~${LEAN_SWITCHES_SAVING_TOKENS} tokens per request for all four). Undo: ${UNDO}`,
+    };
+  } catch {
+    return { changed: false, notice: null };
+  }
+}
+
+/** Undo `applyLeanSwitches`, and do not write them again. */
+export function restoreLeanSwitches({ env = process.env } = {}) {
+  const recordPath = leanSwitchesRecordPath(env);
+  const record = readJsonObject(recordPath).value;
+  if (!record || !Array.isArray(record.written) || !record.written.length) {
+    if (leanSwitchMode(env) === 'write') declineFurtherWrites(recordPath);
+    return { restored: [], how: 'nothing was written' };
+  }
+  const path = copilotSettingsPath(env);
+  const current = readJsonObject(path);
+  let how;
+  if (current.exists && current.bytes === record.lastWritten) {
+    if (record.existed) writeAtomic(path, record.bytes);
+    else rmSync(path, { force: true });
+    how = record.existed ? 'original settings.json restored byte for byte' : 'settings.json removed (there was none before)';
+  } else if (current.value && current.exists) {
+    const next = { ...current.value };
+    for (const key of record.written) if (next[key] === false) delete next[key];
+    writeAtomic(path, `${JSON.stringify(next, null, 2)}\n`);
+    how = 'settings.json was edited since; removed only the switches written here';
+  } else {
+    how = 'settings.json is missing or not strict JSON; left as it is';
+  }
+  declineFurtherWrites(recordPath);
+  return { restored: record.written, how };
+}

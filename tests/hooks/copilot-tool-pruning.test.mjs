@@ -11,18 +11,23 @@
  */
 
 import { afterAll, describe, expect, test } from '@jest/globals';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
+  applyLeanSwitches,
   choosesOwnTools,
   COPILOT_KEEP,
   copilotExclusions,
   copilotSessionUsage,
+  leanSwitchMode,
+  leanSwitchState,
   mentions,
   restoreCopilot,
+  restoreLeanSwitches,
   runCopilotFold,
 } from '../../hooks-core/copilotprune.mjs';
+import { probeCopilotSwitches } from '../../hooks-core/doctor.mjs';
 import { learnedLocation } from '../../hooks-core/toolprune.mjs';
 import { runClient } from '../../scripts/run-client.mjs';
 
@@ -200,5 +205,118 @@ describe('delivery', () => {
     expect(flag).toBe(2);
     expect(argv.slice(flag + 1)).toContain('image_generation');
     expect(argv.slice(flag + 1)).not.toContain('powershell');
+  });
+});
+
+/**
+ * The four lean user switches are the person's settings, so they are written
+ * only on opt-in, never over a value the person set, and undone exactly: the
+ * original bytes when the file is untouched since, only our keys when not.
+ */
+describe('copilot lean user switches', () => {
+  const lean = (extra = {}) => {
+    const home = fresh('lean-home');
+    const tokenHome = fresh('lean-token-home');
+    return {
+      home,
+      settings: join(home, 'settings.json'),
+      env: { COPILOT_HOME: home, TOKEN_OPTIMIZER_HOME: tokenHome, TOKEN_OPTIMIZER_COPILOT_LEAN_SWITCHES: 'write', ...extra },
+    };
+  };
+
+  test('writes nothing unless opted in, and an unknown value is off', () => {
+    for (const value of [undefined, '', 'yes', 'on']) {
+      const { env, settings } = lean({ TOKEN_OPTIMIZER_COPILOT_LEAN_SWITCHES: value });
+      if (value === undefined) delete env.TOKEN_OPTIMIZER_COPILOT_LEAN_SWITCHES;
+      expect(leanSwitchMode(env)).toBe('off');
+      expect(applyLeanSwitches({ env }).changed).toBe(false);
+      expect(existsSync(settings)).toBe(false);
+    }
+  });
+
+  test('writes only the unset switches and keeps every other setting', () => {
+    const { env, settings } = lean();
+    const original = '{\n  "askUser": true,\n  "theme": "dark"\n}\n';
+    writeFileSync(settings, original);
+    const result = applyLeanSwitches({ env });
+    expect(result.changed).toBe(true);
+    expect(result.written).toEqual(['connectors', 'contextManagementTools', 'imageGeneration']);
+    expect(result.notice).toMatch(/Undo: token-optimizer-learned toolprune restore --copilot/);
+    const now = JSON.parse(readFileSync(settings, 'utf8'));
+    expect(now).toEqual({ askUser: true, theme: 'dark', connectors: false, contextManagementTools: false, imageGeneration: false });
+    // A second launch has nothing left to write.
+    expect(applyLeanSwitches({ env }).changed).toBe(false);
+  });
+
+  test('restore returns the original bytes when the file is untouched since', () => {
+    const { env, settings } = lean();
+    const original = '{"theme":"dark"}';
+    writeFileSync(settings, original);
+    applyLeanSwitches({ env });
+    const undone = restoreLeanSwitches({ env });
+    expect(undone.restored).toEqual(['askUser', 'connectors', 'contextManagementTools', 'imageGeneration']);
+    expect(readFileSync(settings, 'utf8')).toBe(original);
+    // ...and does not write them again while the opt-in stays on.
+    expect(applyLeanSwitches({ env }).changed).toBe(false);
+    expect(readFileSync(settings, 'utf8')).toBe(original);
+    expect(leanSwitchState(env).declined).toBe(true);
+  });
+
+  test('restore removes the file it created', () => {
+    const { env, settings } = lean();
+    applyLeanSwitches({ env });
+    expect(existsSync(settings)).toBe(true);
+    restoreLeanSwitches({ env });
+    expect(existsSync(settings)).toBe(false);
+  });
+
+  test('restore after the person edited the file removes only our still-false keys', () => {
+    const { env, settings } = lean();
+    writeFileSync(settings, '{"theme":"dark"}');
+    applyLeanSwitches({ env });
+    const edited = JSON.parse(readFileSync(settings, 'utf8'));
+    edited.imageGeneration = true;
+    edited.model = 'x';
+    writeFileSync(settings, JSON.stringify(edited));
+    restoreLeanSwitches({ env });
+    expect(JSON.parse(readFileSync(settings, 'utf8'))).toEqual({ theme: 'dark', imageGeneration: true, model: 'x' });
+  });
+
+  test('a settings.json that is not strict JSON is never written', () => {
+    const { env, settings } = lean();
+    const text = '// mine\n{ "theme": "dark" }\n';
+    writeFileSync(settings, text);
+    expect(applyLeanSwitches({ env }).changed).toBe(false);
+    expect(readFileSync(settings, 'utf8')).toBe(text);
+    expect(leanSwitchState(env).readable).toBe(false);
+  });
+
+  test('doctor names the switches that are on and how to turn them off', () => {
+    const { env, settings, home } = lean({ TOKEN_OPTIMIZER_COPILOT_LEAN_SWITCHES: 'off' });
+    writeFileSync(settings, '{"askUser":false}');
+    const [check] = probeCopilotSwitches(env);
+    expect(check.warn).toBe(true);
+    expect(check.detail).toMatch(/^connectors, contextManagementTools, imageGeneration are on/);
+    expect(check.remedy).toMatch(/`copilot config connectors false`/);
+    expect(check.remedy).not.toMatch(/askUser/);
+    expect(check.remedy).toMatch(/TOKEN_OPTIMIZER_COPILOT_LEAN_SWITCHES=write/);
+    writeFileSync(settings, JSON.stringify({ askUser: false, connectors: false, contextManagementTools: false, imageGeneration: false }));
+    expect(probeCopilotSwitches(env)[0].warn).toBeUndefined();
+    rmSync(home, { recursive: true, force: true });
+    expect(probeCopilotSwitches(env)).toEqual([]);
+  });
+
+  test('the managed launcher writes them on opt-in, before Copilot starts', async () => {
+    const { env, settings } = lean({ TOKEN_OPTIMIZER_PROXY: '0', TOKEN_OPTIMIZER_TOOLPRUNE: 'off' });
+    const fakeDir = fresh('lean-fake');
+    const file = join(fakeDir, 'seen.json');
+    const script = join(fakeDir, 'fake-copilot.mjs');
+    writeFileSync(
+      script,
+      `import fs from 'node:fs'; fs.writeFileSync(${JSON.stringify(file)}, fs.readFileSync(${JSON.stringify(settings)}, 'utf8'));`
+    );
+    const code = await runClient('copilot', [script, '-p', 'hello'], { env: { ...process.env, ...env }, command: process.execPath });
+    expect(code).toBe(0);
+    expect(JSON.parse(readFileSync(file, 'utf8'))).toEqual({ askUser: false, connectors: false, contextManagementTools: false, imageGeneration: false });
   });
 });
