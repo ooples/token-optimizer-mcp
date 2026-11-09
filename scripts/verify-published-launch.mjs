@@ -23,11 +23,14 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const PACKAGE = '@ooples/token-optimizer-mcp';
+// The default (core) profile's working tools. install_doctor is served only with
+// TOKEN_OPTIMIZER_TOOL_PROFILE=full since 3bb1b929 (never called in 134 measured
+// sessions); `token-optimizer-doctor` is the same examination from the CLI.
 const REQUIRED_TOOLS = [
   'smart_read',
   'smart_grep',
   'smart_edit',
-  'install_doctor',
+  'wiki_write',
 ];
 
 function argument(name, fallback = '') {

@@ -2268,7 +2268,7 @@ npm run doctor
 This feeds a synthetic payload to the real hook binary and asserts a large read
 is refused and a small one is not, that session-start emits the policy, that the
 graph directory is writable, and that the MCP server starts and lists its tools.
-Every failure names its own fix. There is also an `install_doctor` MCP tool.
+Every failure names its own fix. The same examination is an `install_doctor` MCP tool, served with `TOKEN_OPTIMIZER_TOOL_PROFILE=full`.
 
 **Turn enforcement off, instantly.** Every refusal says this, so you never have
 to come back here to find it:
