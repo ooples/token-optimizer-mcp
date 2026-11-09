@@ -14,10 +14,10 @@
  *
  * THE MOVE. A paragraph of that turn which already appeared, byte for byte, in
  * an EARLIER session goes into one extra system block, in its original order.
- * The rest stays in messages[1]. The system prompt comes before the opening
- * user turn and its marker (sibling-prefix.ts puts one at the end of the
- * shared opening run), so the moved text becomes part of a prefix the next
- * session reads at 0.1x instead of writing at 2x.
+ * The rest stays in messages[1]. The block carries a cache marker, so the
+ * moved text becomes part of a prefix the next session reads at 0.1x instead
+ * of writing at 2x. Where in the system prompt it goes is placeHoisted's
+ * decision, below.
  *
  * WHY "AN EARLIER SESSION", AND NOT A LIST OF HEADINGS. What is stable depends
  * on the install: other plugins add SessionStart text, a learned-pruning
@@ -213,6 +213,68 @@ function withoutMarker(block: Block): Block {
   return copy;
 }
 
+/** The API's limit on cache_control markers per request. */
+const MAX_CACHE_MARKERS = 4;
+
+/** Every cache marker in the request: tools, system and message blocks. */
+function markerCount(request: ProviderRequest): number {
+  const marked = (b: unknown): number =>
+    (b as Block | null)?.cache_control ? 1 : 0;
+  let count = 0;
+  for (const tool of request.tools ?? []) count += marked(tool);
+  if (Array.isArray(request.system))
+    for (const block of request.system) count += marked(block);
+  for (const message of request.messages ?? [])
+    if (Array.isArray(message?.content))
+      for (const block of message.content) count += marked(block);
+  return count;
+}
+
+/**
+ * WHERE THE MOVED TEXT GOES, which decides who can read it.
+ *
+ * Claude Code's last system block is per PROJECT, not per install: it names
+ * the project's memory directory, under the config directory. So a prefix
+ * entry that ends after it is shared only by sessions of the same project.
+ *
+ *  - A SYSTEM PROMPT AN EARLIER SESSION SENT (the same project again): the
+ *    moved text goes after it and takes its marker. One entry then holds the
+ *    tools, the system prompt and the moved text; measured on repeated
+ *    sessions of one project, a new session wrote 508 tokens instead of 4,301.
+ *  - A SYSTEM PROMPT NOT SEEN BEFORE (a new project, or a fresh config
+ *    directory): the moved text goes BEFORE it, with a marker of its own, so
+ *    the entry it ends is the same in every project. Measured across four
+ *    repositories the moved text was byte-identical while that system block
+ *    was not, so placing it after the block shared nothing. The client's own
+ *    markers stay where they were, so if the moved text ever changes, the
+ *    tools entry before it still hits. This adds one marker, so it is taken
+ *    only when the request is below the API's four.
+ *
+ * Both choices are stable within a session: the system prompt is recorded
+ * with the first session that sent it, exactly as paragraphs are.
+ */
+function placeHoisted(
+  system: Block[],
+  hoisted: string,
+  sameProject: boolean,
+  markers: number
+): Block[] {
+  const last = system[system.length - 1];
+  const marker = last?.cache_control;
+  if (!marker) return [...system, { type: 'text', text: hoisted }];
+  if (!sameProject && markers < MAX_CACHE_MARKERS)
+    return [
+      ...system.slice(0, -1),
+      { type: 'text', text: hoisted, cache_control: marker },
+      last,
+    ];
+  return [
+    ...system.slice(0, -1),
+    withoutMarker(last),
+    { type: 'text', text: hoisted, cache_control: marker },
+  ];
+}
+
 const none = (request: ProviderRequest): HoistResult => ({
   request,
   hoistedChars: 0,
@@ -240,6 +302,14 @@ export function hoistStableContext(
       moved.push(paragraph);
     else kept.push(paragraph);
   }
+  // The system prompt is on record from the first request too, so the next
+  // session of this project knows it has been here (see placeHoisted).
+  const system = request.system as Block[];
+  const lastText = system[system.length - 1]?.text;
+  const sameProject =
+    typeof lastText === 'string' &&
+    lastText !== '' &&
+    ledger.seenElsewhere(`system:${lastText}`, session);
   ledger.flush();
   const hoisted = moved.join(SEPARATOR);
   const remaining = kept.join(SEPARATOR);
@@ -252,24 +322,10 @@ export function hoistStableContext(
       ? [{ ...current.block, text: remaining }]
       : remaining,
   };
-  // THE SYSTEM PROMPT'S OWN MARKER MOVES ONTO THE MOVED TEXT, so the shared
-  // entry ends after it. Left where it was, the moved text would be cached
-  // only by a later marker, after the opening user turn -- and that turn
-  // carries git status, which changes between sessions. Moving the marker
-  // keeps the count the client chose (the API allows four).
-  const system = request.system as Block[];
-  const last = system[system.length - 1];
-  const marker = last?.cache_control;
-  const head = marker
-    ? [...system.slice(0, -1), withoutMarker(last)]
-    : [...system];
-  const added: Block = marker
-    ? { type: 'text', text: hoisted, cache_control: marker }
-    : { type: 'text', text: hoisted };
   return {
     request: {
       ...request,
-      system: [...head, added],
+      system: placeHoisted(system, hoisted, sameProject, markerCount(request)),
       messages: [
         ...messages.slice(0, index),
         replaced,

@@ -39,7 +39,8 @@ function request(
   session: string | null,
   cwd: string,
   form: 'array' | 'string',
-  date?: string
+  date?: string,
+  project = 'p1'
 ): ProviderRequest {
   const text = opening(cwd, date);
   return {
@@ -51,14 +52,18 @@ function request(
     system: [
       { type: 'text', text: 'billing' },
       { type: 'text', text: 'identity', cache_control: cc },
-      { type: 'text', text: 'the system prompt', cache_control: cc },
+      {
+        type: 'text',
+        text: `the system prompt; memory for ${project}`,
+        cache_control: cc,
+      },
     ],
     messages: [
       {
         role: 'user',
         content: [
           { type: 'text', text: 'memory' },
-          { type: 'text', text: 'attribution', cache_control: cc },
+          { type: 'text', text: 'attribution' },
           { type: 'text', text: 'the task' },
         ],
       },
@@ -85,8 +90,9 @@ describe('hoistStableContext', () => {
     const out = hoistStableContext(request('s1', '/a', 'array'), ledger);
     expect(out.hoistedChars).toBe(0);
     expect(systemOf(out.request)).toHaveLength(3);
-    // The MCP section is two paragraphs: its heading and its body.
-    expect(ledger.size).toBe(7);
+    // Seven paragraphs (the MCP section is two: heading and body), and the
+    // system prompt, which tells the next session it is the same project.
+    expect(ledger.size).toBe(8);
   });
 
   it('never moves a paragraph within the session that first sent it', () => {
@@ -132,6 +138,64 @@ describe('hoistStableContext', () => {
     ).toEqual(cc);
     // The input is not mutated.
     expect(systemOf(input)[2].cache_control).toEqual(cc);
+  });
+
+  it('in a project not seen before, puts the moved text before its system prompt with a marker of its own', () => {
+    const ledger = new ParagraphLedger();
+    hoistStableContext(request('s1', '/a', 'array', undefined, 'p1'), ledger);
+    const input = request('s2', '/b', 'array', undefined, 'p2');
+    const out = hoistStableContext(input, ledger);
+    const system = systemOf(out.request);
+    expect(system).toHaveLength(4);
+    expect(system[2].text).toContain('deferred tools');
+    expect(system[2].cache_control).toEqual(cc);
+    // The client's own markers stay where they were.
+    expect(system[1].cache_control).toEqual(cc);
+    expect(system[3].text).toBe('the system prompt; memory for p2');
+    expect(system[3].cache_control).toEqual(cc);
+    expect(markers(out.request)).toBe(markers(input) + 1);
+  });
+
+  it('keeps that placement for the whole session, then switches once the project repeats', () => {
+    const ledger = new ParagraphLedger();
+    hoistStableContext(request('s1', '/a', 'array', undefined, 'p1'), ledger);
+    const first = hoistStableContext(
+      request('s2', '/b', 'array', undefined, 'p2'),
+      ledger
+    );
+    const later = hoistStableContext(
+      request('s2', '/b', 'string', undefined, 'p2'),
+      ledger
+    );
+    expect(JSON.stringify(later.request.system)).toBe(
+      JSON.stringify(first.request.system)
+    );
+    // The next session in p2 sees a system prompt an earlier session sent.
+    const next = hoistStableContext(
+      request('s3', '/c', 'array', undefined, 'p2'),
+      ledger
+    );
+    const system = systemOf(next.request);
+    expect(system[2].text).toBe('the system prompt; memory for p2');
+    expect(system[2].cache_control).toBeUndefined();
+    expect(system[3].cache_control).toEqual(cc);
+  });
+
+  it('never adds a fifth marker: with four already, the moved text takes the system marker instead', () => {
+    const ledger = new ParagraphLedger();
+    const full = (s: string, cwd: string, project: string) => {
+      const r = request(s, cwd, 'array', undefined, project);
+      return {
+        ...r,
+        tools: [{ name: 'Read', cache_control: cc }],
+      } as unknown as ProviderRequest;
+    };
+    hoistStableContext(full('s1', '/a', 'p1'), ledger);
+    const input = full('s2', '/b', 'p2');
+    const out = hoistStableContext(input, ledger);
+    expect(markers(input)).toBe(4);
+    expect(markers(out.request)).toBe(4);
+    expect(systemOf(out.request)[3].text).toContain('deferred tools');
   });
 
   it('gives the same system prompt whether the turn arrives as an array or a string', () => {
