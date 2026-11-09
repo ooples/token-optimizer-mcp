@@ -1454,8 +1454,8 @@ the signal, alongside API-key and cloud-provider environment variables;
 `TOKEN_OPTIMIZER_BILLING` overrides it. API users are optimized for cache-aware
 cost per task. Subscription users are optimized for finished work per unit of
 quota. Under the default `TOKEN_OPTIMIZER_SUBSCRIPTION_POLICY=pace`, leftover
-capacity is spent (by continuing a session that stopped with unverified edits)
-only when **both** of these hold:
+capacity is spent (by continuing with a queued backlog task) only when **both**
+of these hold:
 
 - the 5-hour window is under 90% used;
 - the week is on pace (weekly use is no more than the share of the week
@@ -1466,6 +1466,11 @@ numbers come from Claude Code's own status-line payload (`rate_limits`), which
 hooks never see. Run `token-optimizer-learned statusline install` to record
 them; it wraps any status line you already have. With no data it holds rather
 than guesses. `suggest` and `report` turn pacing off.
+
+`pace-verify` adds one continuation per session that asks the model to run the
+tests after unverified edits. It is opt-in. In a 15-pair learned SWE-bench
+pilot it fired in 8 of 13 sessions and added 33% turns and 29% cost. It changed
+no outcome: both arms resolved the same 12 of 15.
 
 ```
 token-optimizer-learned status                   # all four, with evidence

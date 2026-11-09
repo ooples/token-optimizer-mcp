@@ -23,7 +23,12 @@
  * suggesting, never to guessing.
  *
  * Policies (TOKEN_OPTIMIZER_SUBSCRIPTION_POLICY):
- *   pace     default. Weekly-aware pacing when the usage data allows it.
+ *   pace         default. Weekly-aware pacing when the usage data allows it:
+ *                backlog continuations only.
+ *   pace-verify  pace, plus one "verify your edits" continuation per session.
+ *                Opt-in: in a 15-pair learned SWE-bench pilot it fired in 8 of
+ *                13 sessions, added 33% turns and 29% cost, and changed no
+ *                outcome (12/15 resolved in both arms, the same twelve).
  *   suggest  never paces; status names the option.
  *   report   never paces and says nothing about it.
  * TOKEN_OPTIMIZER_MAXIMIZE_SUBSCRIPTION=1 remains the explicit override that
@@ -36,7 +41,9 @@ import { billingMode } from './billing.mjs';
 import { writeAtomically } from './policy.mjs';
 import { stateRoot } from './runtime-switch.mjs';
 
-export const SUBSCRIPTION_POLICIES = Object.freeze(['pace', 'suggest', 'report']);
+export const SUBSCRIPTION_POLICIES = Object.freeze(['pace', 'pace-verify', 'suggest', 'report']);
+/** The policies that pace at all. */
+const PACING = new Set(['pace', 'pace-verify']);
 export const RATE_LIMITS_FILE = 'rate-limits.json';
 export const MAX_AGE_MS = 15 * 60 * 1000;
 export const FIVE_HOUR_CEILING = 90;
@@ -129,7 +136,7 @@ export function paceDecision({ client = 'claude-code', env = process.env, now = 
   if (billing.mode !== 'subscription') {
     return { allowed: false, reason: `billing is ${billing.mode}`, policy, mode: billing.mode };
   }
-  if (policy !== 'pace') return { allowed: false, reason: `policy is ${policy}`, policy, mode: billing.mode };
+  if (!PACING.has(policy)) return { allowed: false, reason: `policy is ${policy}`, policy, mode: billing.mode };
   const headroom = quotaHeadroom(readRateLimits({ now, env }), { now });
   return { allowed: headroom.ok, reason: headroom.reason, policy, mode: billing.mode };
 }

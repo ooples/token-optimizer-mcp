@@ -697,14 +697,14 @@ describe('weekly-aware subscription pacing', () => {
     expect(quotaHeadroom(null, { now }).ok).toBe(false);
   });
 
-  test('the pacer continues an unverified session only with fresh data, on a subscription, under policy pace', async () => {
+  test('the pacer continues an unverified session only with fresh data, on a subscription, under policy pace-verify', async () => {
     const { recordRateLimits } = await import('../../hooks-core/quota-policy.mjs');
     const { nextPacedContinuation } = await import('../../hooks-core/quota-pacer.mjs');
     const now = Date.now();
     const stateDir = fresh('pace-state');
     const home = subscriptionHome();
     {
-      const env = { TOKEN_OPTIMIZER_STATE_DIR: stateDir };
+      const env = { TOKEN_OPTIMIZER_STATE_DIR: stateDir, TOKEN_OPTIMIZER_SUBSCRIPTION_POLICY: 'pace-verify' };
       const unverified = () => ({ edits: 2, verifiedEdits: 0, editedFiles: ['a.ts'] });
 
       // No data yet: hold.
@@ -713,6 +713,10 @@ describe('weekly-aware subscription pacing', () => {
       recordRateLimits(limitsAt(now, 20, 10, 4), { now, env });
       const continued = nextPacedContinuation({ cwd: work, home, state: unverified(), now, env });
       expect(continued).toMatch(/quota: 5h 20%/);
+      // The DEFAULT policy, same room: no verification turn. It bought no outcome
+      // and cost 29% on the learned pilot, so it is opt-in.
+      const { TOKEN_OPTIMIZER_SUBSCRIPTION_POLICY: _verify, ...byDefault } = env;
+      expect(nextPacedContinuation({ cwd: work, home, state: unverified(), now, env: byDefault })).toBeNull();
 
       // Ahead of weekly pace: hold even with the 5-hour window nearly empty.
       recordRateLimits(limitsAt(now, 5, 80, 4), { now, env });

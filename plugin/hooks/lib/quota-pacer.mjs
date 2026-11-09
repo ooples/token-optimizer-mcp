@@ -119,9 +119,13 @@ export function nextPacedContinuation({ cwd, state, now = Date.now(), env = proc
     : `[window: ${status.calls} calls used, ${status.remainingMinutes}m until ${status.windowHours}h reset]`;
 
   // 1. Unverified edits gate
-  const maximize = Boolean(paced?.allowed) || /^(1|true|yes|on)$/i.test(
-    String(env.TOKEN_OPTIMIZER_MAXIMIZE_SUBSCRIPTION ?? '').trim()
-  );
+  // OPT-IN, NOT PART OF DEFAULT PACING (subscriptionPolicy 'pace-verify', or the
+  // explicit maximize override). Measured on a 15-pair learned SWE-bench pilot:
+  // this continuation fired in 8 of 13 sessions, added 33% turns and 29% cost,
+  // and changed no outcome -- the same 12 of 15 resolved in both arms.
+  const maximize =
+    (Boolean(paced?.allowed) && paced.policy === 'pace-verify') ||
+    /^(1|true|yes|on)$/i.test(String(env.TOKEN_OPTIMIZER_MAXIMIZE_SUBSCRIPTION ?? '').trim());
   const unverified = Number(state.edits || 0) > Number(state.verifiedEdits || 0);
   if (maximize && unverified && !state.verificationContinued) {
     state.verificationContinued = true;
