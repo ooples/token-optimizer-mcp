@@ -37,7 +37,7 @@ export const DATASETS = Object.freeze({
  * TOKEN_OPTIMIZER_* variables. An API key, when present, is kept: it decides
  * the billing mode on purpose.
  */
-export function armEnv(parent, { arm, configDir }) {
+export function armEnv(parent, { arm, configDir, productHome }) {
   const env = {};
   for (const [key, value] of Object.entries(parent)) {
     if (key === 'ANTHROPIC_BASE_URL' || key === 'ANTHROPIC_AUTH_TOKEN') continue;
@@ -52,8 +52,22 @@ export function armEnv(parent, { arm, configDir }) {
   // plugin arm and not in the control arm when probed: 46 tool definitions
   // billed to one arm only. Off in both.
   env.ENABLE_CLAUDEAI_MCP_SERVERS = 'false';
+  // THE PLUGIN ARM'S PROXY IS THE BUILD UNDER TEST, NOT THE ONE INSTALLED ON
+  // THE MACHINE. Routing reuses whatever supervisor answers on the control
+  // port, and on the machine this was written on that was the installed 7.9.0
+  // serving the user's own sessions: pilot 5 measured that proxy, not this
+  // checkout's. Its own home and ports make the snapshot start its own
+  // supervisor, and leave the user's live one alone.
+  if (known.plugin && productHome) {
+    env.TOKEN_OPTIMIZER_HOME = productHome;
+    env.TOKEN_OPTIMIZER_PROXY_CONTROL_PORT = String(BENCH_PORTS.control);
+    env.TOKEN_OPTIMIZER_PROXY_ROUTE_BASE = String(BENCH_PORTS.routeBase);
+  }
   return env;
 }
+
+/** The bench's own supervisor ports: outside the installed defaults (16999, 17000-17999). */
+export const BENCH_PORTS = Object.freeze({ control: 24999, routeBase: 25000 });
 
 /** Whether a run's MCP debug log shows the token-optimizer server connecting. */
 export function mcpConnected(debugLog) {

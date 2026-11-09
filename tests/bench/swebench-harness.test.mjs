@@ -7,6 +7,7 @@ import { describe, expect, test } from '@jest/globals';
 import {
   ARMS,
   armEnv,
+  BENCH_PORTS,
   costUnits,
   isShim,
   mcnemar,
@@ -63,6 +64,20 @@ describe('fairness', () => {
       TOKEN_OPTIMIZER_EXPERIMENT_ARM: 'baseline',
       ENABLE_CLAUDEAI_MCP_SERVERS: 'false',
     });
+  });
+
+  test("the plugin arm runs its own proxy supervisor, never the machine's installed one", () => {
+    const parent = { PATH: '/bin', TOKEN_OPTIMIZER_HOME: '/home/u/.token-optimizer', TOKEN_OPTIMIZER_PROXY_CONTROL_PORT: '16999' };
+    const plugin = armEnv(parent, { arm: 'token-optimizer', configDir: '/c', productHome: '/work/home' });
+    expect(plugin.TOKEN_OPTIMIZER_HOME).toBe('/work/home');
+    expect(plugin.TOKEN_OPTIMIZER_PROXY_CONTROL_PORT).toBe(String(BENCH_PORTS.control));
+    expect(plugin.TOKEN_OPTIMIZER_PROXY_ROUTE_BASE).toBe(String(BENCH_PORTS.routeBase));
+    // Outside the installed defaults: control 16999, routes 17000-17999.
+    expect(BENCH_PORTS.control).not.toBe(16999);
+    expect(BENCH_PORTS.routeBase >= 18000 || BENCH_PORTS.routeBase + 1000 <= 17000).toBe(true);
+    const control = armEnv(parent, { arm: 'control', configDir: '/c', productHome: '/work/home' });
+    expect(control.TOKEN_OPTIMIZER_HOME).toBeUndefined();
+    expect(control.TOKEN_OPTIMIZER_PROXY_CONTROL_PORT).toBeUndefined();
   });
 
   test('every arm passes an experiment arm the MCP server accepts', async () => {

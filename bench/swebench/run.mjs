@@ -129,6 +129,24 @@ async function fetchInstances(work, datasetKey) {
 // ---------------------------------------------------------------------------
 // run
 
+/**
+ * Stop the supervisor a previous campaign started in the bench's own home
+ * (lib.mjs armEnv), so this campaign's routing starts one from the new
+ * snapshot instead of reusing a proxy built from older code. The state file
+ * is written only by that supervisor; the user's live one keeps its own.
+ */
+function stopBenchSupervisor(work) {
+  const state = join(work, 'home', 'proxy-supervisor.json');
+  if (!existsSync(state)) return;
+  try {
+    const { pid } = JSON.parse(readFileSync(state, 'utf8'));
+    if (Number.isInteger(pid) && pid > 0) process.kill(pid);
+  } catch {
+    // Already gone, or a file from a supervisor that never finished starting.
+  }
+  rmSync(state, { force: true });
+}
+
 /** A plugin copy whose MCP server is THIS checkout's build, not the published @latest. */
 function stagePlugin(work) {
   const server = join(REPO, 'dist', 'server', 'index.js');
@@ -142,6 +160,7 @@ function stagePlugin(work) {
   // The layout is kept: the server reads ../../package.json relative to itself
   // for its version, and that package.json's "type" is what makes dist/*.js ESM.
   const snapshot = join(work, 'build');
+  stopBenchSupervisor(work);
   rmSync(snapshot, { recursive: true, force: true });
   cpSync(join(REPO, 'dist'), join(snapshot, 'dist'), { recursive: true });
   cpSync(join(REPO, 'package.json'), join(snapshot, 'package.json'));
@@ -186,7 +205,7 @@ function stageConfig(dir, env) {
 async function installRoute(work, configDir, arm) {
   const module = join(work, 'build', 'dist', 'proxy', 'default-routing.js');
   const { maintainDefaultRouting } = await import(pathToFileURL(module).href);
-  const result = await maintainDefaultRouting(armEnv(process.env, { arm, configDir }), { switchTiming: 'now' });
+  const result = await maintainDefaultRouting(armEnv(process.env, { arm, configDir, productHome: join(work, 'home') }), { switchTiming: 'now' });
   if (result.status !== 'written' && result.status !== 'unchanged') {
     throw new Error(`could not route the ${arm} arm through the proxy (status ${result.status}); the arm would not be the product`);
   }
@@ -224,7 +243,7 @@ export function resolveClaude(explicit, env = process.env) {
   throw new Error('no Claude Code binary found on PATH; pass --claude <path>');
 }
 
-function runAgent({ claude, cwd, prompt, model, budgetUsd, configDir, pluginDir, arm, timeoutMs, logPath }) {
+function runAgent({ claude, cwd, prompt, model, budgetUsd, configDir, pluginDir, arm, timeoutMs, logPath, productHome }) {
   return new Promise((resolveRun) => {
     // The prompt goes on stdin: an issue body is multi-line and full of quotes,
     // which no argv quoting survives intact on every platform.
@@ -235,7 +254,7 @@ function runAgent({ claude, cwd, prompt, model, budgetUsd, configDir, pluginDir,
     if (pluginDir) args.push('--plugin-dir', pluginDir, '--debug', 'mcp', '--debug-file', join(dirname(logPath), 'debug.log'));
     const child = spawn(claude, args, {
       cwd,
-      env: armEnv(process.env, { arm, configDir }),
+      env: armEnv(process.env, { arm, configDir, productHome }),
       windowsHide: true,
     });
     child.stdin.end(prompt);
@@ -288,6 +307,7 @@ async function warmArm(work, { arm, claude, plan, pluginDir }) {
       arm,
       timeoutMs: 5 * 60_000,
       logPath: join(dir, 'stream.jsonl'),
+      productHome: join(work, 'home'),
     });
     const result = resultEvent(out);
     const row = { planId: plan.id, arm, warmup: true, routedVia, exit: code, costUsd: result?.total_cost_usd ?? null, usage: result?.usage ?? null, at: new Date().toISOString() };
@@ -346,6 +366,7 @@ async function runPlan(work, args) {
       arm: item.arm,
       timeoutMs: plan.timeoutMinutes * 60_000,
       logPath: join(runDir, 'stream.jsonl'),
+      productHome: join(work, 'home'),
     });
     const result = resultEvent(out);
     const patch = stripTestChanges(git(['diff', instance.base_commit], { cwd: repoDir }));
