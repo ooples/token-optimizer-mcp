@@ -1370,7 +1370,18 @@ Rules you wrote are never removed or adopted.
 
 Pruning is reversible without a command. A session whose model reaches for a
 pruned tool, or whose user names one, gets it back at the next fold, and that
-tool is never pruned again. The catalog of tools a session loads is read in the
+tool is never pruned again.
+
+The `Agent` tool is prunable. Claude Code 2.1.3xx already defers almost every
+other tool, and `Agent` was the largest definition still sent inline with every
+request: 5,189 characters, about 1,250 tokens. Once pruned, the model cannot
+reach for it, and people ask for "agents", not `Agent`. So the Stop hook reads
+the turn's prompt whenever `Agent` is pruned. If the prompt asks for agents
+("use two agents", "spawn a sub-agent"), the hook restores the tool at once and
+continues the turn, so the request is served in the same turn. A bare "in
+parallel" does not count: a wrong match would cost a turn and the prune.
+
+The catalog of tools a session loads is read in the
 background from `claude -p`'s init event. The process is killed before any model
 call, so the read costs no money or quota. Sessions launched outside a
 repository, such as from a home directory, get their own store keyed on the

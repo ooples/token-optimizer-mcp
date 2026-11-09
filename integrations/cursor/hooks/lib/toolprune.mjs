@@ -19,9 +19,9 @@
  * `.claude/settings.local.json` -- verified to remove the tool from the request,
  * the same as `--disallowed-tools` -- and only:
  *
- *   * when every OTHER session of the repository has been idle for
- *     `quietMinutes`. A running session keeps its tools, but a conversation
- *     RESUMED after its tool list changes re-writes its whole history to the
+ *   * when every session of the repository has been idle for `quietMinutes`.
+ *     A deny rule reaches a RUNNING session too (verified on 2.1.319), and its
+ *     tool list changing mid-conversation re-writes its whole history to the
  *     cache instead of reading it. After an idle hour that cache has expired
  *     anyway, so the change costs nothing it would not already have cost;
  *   * never for a tool on the keep list (the file and shell tools the rest of
@@ -94,12 +94,38 @@ export const CATALOG_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
  */
 export const KEEP = Object.freeze([
   'Read', 'Write', 'Edit', 'MultiEdit', 'NotebookRead', 'Bash', 'PowerShell', 'Glob', 'Grep',
-  'LS', 'AskUserQuestion', 'EnterPlanMode', 'ExitPlanMode', 'ToolSearch', 'Skill', 'Task', 'Agent',
+  'LS', 'AskUserQuestion', 'EnterPlanMode', 'ExitPlanMode', 'ToolSearch', 'Skill',
   // A person's reach outside the repository. Pruned, the model does not ask for
   // them -- it falls back to curl or says it cannot search -- so the automatic
   // restore, which waits for a failed call or a typed name, would never fire.
   'WebFetch', 'WebSearch',
 ]);
+
+/**
+ * Prunable, but given back IN THE SAME TURN when the person asks for them.
+ *
+ * WHY AGENT IS NOT ON THE KEEP LIST. Claude Code 2.1.3xx already defers almost
+ * every tool, so in a captured request the only inline definitions left were
+ * the file and shell tools, ToolSearch, Skill -- and Agent, at 5,189 characters
+ * (~1,250 tokens), sent with every request. Keeping it made learned pruning
+ * remove roughly nothing on a current host. Codex pruning already switches its
+ * sub-agent tools off; they were unused in all 50 Codex sessions measured.
+ *
+ * WHY IT NEEDS A LIVE RESTORE. Pruned, the model cannot reach for it, so the
+ * fold's restore -- a failed call, or the name typed with its capital -- never
+ * fires: a person writes "use agents", not "Agent". The Stop hook therefore
+ * reads the turn's prompt (only when one of these is applied) and, on a match,
+ * restores at once and continues the turn (`restoreForPrompt`).
+ *
+ * PRECISION OVER RECALL. A false match costs a continuation turn and the prune,
+ * for good, in that repository; a miss costs the work being done in one thread
+ * instead of several, and the person's next "use agents" still matches. So
+ * "in parallel" alone ("run the tests in parallel") and "the agent module" do
+ * not count; a request for agents does.
+ */
+const AGENT_REQUEST =
+  /\b(?:sub-?agents?|agent\s+teams?|(?:an?|one|two|three|four|five|several|multiple|some|more|parallel|separate|background|\d+)\s+(?:sub-?)?agents\b|(?:an?|one)\s+(?:sub-?)?agent\s+(?:to|for)\b|agents?\s+in\s+parallel|(?:use|spawn|launch|dispatch|start)\s+(?:the\s+|some\s+|an?\s+)?(?:sub-?)?agents?\b|(?:Agent|Task)\s+tool)/i;
+export const LIVE_RESTORE = Object.freeze({ Agent: AGENT_REQUEST, Task: AGENT_REQUEST });
 
 const num = (value, fallback) => {
   const parsed = Number(value);
@@ -651,6 +677,44 @@ export function restoreTools({ dir, root, names = [] }) {
   store.pending = store.pending.filter((name) => !store.restored.includes(name));
   saveStore(dir, store);
   return { ok: true, restored: giveBack };
+}
+
+/** The applied prunes a prompt asks for: a LIVE_RESTORE phrase, or the tool's own name. */
+export function promptAsksFor(prompt, applied) {
+  const text = String(prompt || '');
+  if (!text) return [];
+  return applied.filter((name) => {
+    const phrase = LIVE_RESTORE[name];
+    if (phrase && phrase.test(text)) return true;
+    return /^[A-Za-z][\w-]{2,}$/.test(name) && new RegExp(`\\b${escapeRegExp(name)}\\b`).test(text);
+  });
+}
+
+/** True when a prune that can be restored live is applied -- the Stop hook's cheap gate. */
+export function hasLiveRestorable(dir) {
+  return loadStore(dir).applied.some((name) => Object.hasOwn(LIVE_RESTORE, name));
+}
+
+/**
+ * Restore, at once, every applied prune this turn's prompt asked for.
+ *
+ * A deny rule's removal reaches a running session (verified on 2.1.319), so
+ * the tool is back for the turn's continuation. That costs one re-write of the
+ * cached prefix; a person who asked for agents and was told there are none
+ * costs more. Recorded like any restore: never pruned again in this repository.
+ *
+ * @returns {string[]} the names given back
+ */
+export function restoreForPrompt({ dir, root, prompt }) {
+  const store = loadStore(dir);
+  const names = promptAsksFor(prompt, store.applied);
+  if (!names.length) return [];
+  const result = restoreTools({ dir, root, names });
+  if (!result.ok) return [];
+  const after = loadStore(dir);
+  after.autoRestored = [...new Set([...(after.autoRestored || []), ...result.restored])];
+  saveStore(dir, after);
+  return result.restored;
 }
 
 // ---------------------------------------------------------------------------

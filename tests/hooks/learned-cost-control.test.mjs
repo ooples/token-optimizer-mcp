@@ -50,7 +50,10 @@ import {
   candidates,
   costUnitsOf,
   foldSession,
+  learnedLocation,
   loadStore,
+  promptAsksFor,
+  restoreForPrompt,
   restoreTools,
   runFold,
   sessionUsage,
@@ -337,6 +340,63 @@ describe('tool pruning', () => {
     expect(after.restored).toEqual(['Cron']);
   });
 
+  test('Agent is prunable: five sessions without it make it a candidate', () => {
+    let store = loadStore(fresh('state'));
+    for (let index = 0; index < 5; index += 1) {
+      store = foldSession(store, { sessionId: `s${index}`, prompts: 1, used: ['Bash'], lastAt: index + 1 });
+    }
+    store.catalog.tools = ['Agent', 'Task', 'Bash', 'Skill'];
+    expect(candidates(store, toolpruneSettings({})).map((item) => item.name)).toEqual(['Agent', 'Task']);
+  });
+
+  test('a request for agents matches; prose that merely mentions one does not', () => {
+    for (const asks of [
+      'use agents to review these three files',
+      'spawn a sub-agent for the tests',
+      'Use 3 agents',
+      'launch an agent',
+      'have an agent to check the docs',
+      'run these as agents in parallel',
+      'do this with subagents',
+      'call the Agent tool',
+    ]) {
+      expect([asks, promptAsksFor(asks, ['Agent', 'Bash'])]).toEqual([asks, ['Agent']]);
+    }
+    for (const prose of [
+      'run the tests in parallel',
+      'the user agent header is wrong',
+      'fix agent.py so it parses',
+      'rename the agent module',
+      'parallelize the loop',
+    ]) {
+      expect([prose, promptAsksFor(prose, ['Agent'])]).toEqual([prose, []]);
+    }
+    // Only APPLIED prunes are ever restored.
+    expect(promptAsksFor('use agents', ['CronList'])).toEqual([]);
+  });
+
+  test('restoreForPrompt gives Agent back at once, keeps the rest, and never prunes it again', () => {
+    const root = fresh('root');
+    const dir = fresh('state');
+    let store = loadStore(dir);
+    for (let index = 0; index < 5; index += 1) {
+      store = foldSession(store, { sessionId: `s${index}`, prompts: 1, used: ['Bash'], lastAt: index + 1 });
+    }
+    store.catalog.tools = ['Agent', 'CronList'];
+    store.applied = writeDenyList(root, [], ['Agent', 'CronList']).owned;
+    writeFileSync(join(dir, 'toolprune.json'), JSON.stringify(store));
+    // Positive control: the evidence alone still wants Agent pruned.
+    expect(candidates(store, toolpruneSettings({})).map((item) => item.name)).toEqual(['Agent', 'CronList']);
+    expect(restoreForPrompt({ dir, root, prompt: 'rename the agent module' })).toEqual([]);
+    expect(restoreForPrompt({ dir, root, prompt: 'use two agents for this' })).toEqual(['Agent']);
+    const settings = JSON.parse(readFileSync(join(root, '.claude', 'settings.local.json'), 'utf8'));
+    expect(settings.permissions.deny).toEqual(['CronList']);
+    const after = loadStore(dir);
+    expect(after.restored).toContain('Agent');
+    expect(after.autoRestored).toContain('Agent');
+    expect(candidates(after, toolpruneSettings({})).map((item) => item.name)).toEqual(['CronList']);
+  });
+
   test('usage is counted from the last row per message id', () => {
     const transcripts = fresh('transcripts');
     const path = join(transcripts, 'x.jsonl');
@@ -560,6 +620,41 @@ describe('wiring', () => {
     const output = JSON.parse(run.stdout);
     expect(output.hookSpecificOutput.hookEventName).toBe('PostToolUseFailure');
     expect(output.hookSpecificOutput.additionalContext).toMatch(/Loop guard/);
+  });
+
+  test('a turn that asks for a pruned Agent gets it back and continues, once', () => {
+    const cwd = fresh('live-restore');
+    const wiki = join(cwd, 'wiki');
+    const env = { ...process.env, TOKEN_OPTIMIZER_STATE_DIR: fresh('live-state'), TOKEN_OPTIMIZER_WIKI_DIR: wiki };
+    const saved = process.env.TOKEN_OPTIMIZER_WIKI_DIR;
+    process.env.TOKEN_OPTIMIZER_WIKI_DIR = wiki;
+    const learned = learnedLocation(cwd);
+    if (saved === undefined) delete process.env.TOKEN_OPTIMIZER_WIKI_DIR;
+    else process.env.TOKEN_OPTIMIZER_WIKI_DIR = saved;
+    mkdirSync(learned.dir, { recursive: true });
+    const store = loadStore(learned.dir);
+    store.applied = writeDenyList(learned.root, [], ['Agent']).owned;
+    writeFileSync(join(learned.dir, 'toolprune.json'), JSON.stringify(store));
+    const path = join(cwd, 't.jsonl');
+    writeTranscript(path, [prompt('use two agents to review src and tests')]);
+    const stop = (extra = {}) =>
+      JSON.parse(
+        spawnSync(process.execPath, [join(ROOT, 'plugin', 'hooks', 'stop.mjs')], {
+          input: JSON.stringify({ hook_event_name: 'Stop', session_id: 'live', transcript_path: path, cwd, ...extra }),
+          env,
+          encoding: 'utf8',
+        }).stdout
+      );
+    // A continuation never restores or blocks: it cannot loop.
+    expect(stop({ stop_hook_active: true }).decision).toBeUndefined();
+    expect(loadStore(learned.dir).applied).toEqual(['Agent']);
+    const output = stop();
+    expect(output.decision).toBe('block');
+    expect(output.reason).toMatch(/Agent tool .* restored/);
+    const settings = JSON.parse(readFileSync(join(learned.root, '.claude', 'settings.local.json'), 'utf8'));
+    expect(settings.permissions.deny).toEqual([]);
+    // Restored for good: the same prompt at the next Stop changes nothing.
+    expect(stop().reason ?? '').not.toMatch(/restored/);
   });
 
   test('a process this package started itself is never optimized', () => {

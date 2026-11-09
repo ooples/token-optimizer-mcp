@@ -130,7 +130,7 @@ import { recordOnBoard, recordReadOnBoard } from './blackboard.mjs';
 import { nextPacedContinuation, recordWindowActivity, pacerEnabled } from './quota-pacer.mjs';
 import { artifactPath, capture } from './expand.mjs';
 import { applyHoldout } from './injection-holdout.mjs';
-import { learnedLocation, scheduleFold, takeNotice } from './toolprune.mjs';
+import { hasLiveRestorable, learnedLocation, restoreForPrompt, scheduleFold, takeNotice } from './toolprune.mjs';
 import { scheduleCodexFold, takeCodexNotice } from './codexprune.mjs';
 import { onToolFailure, recordTurnEnd } from './loopguard.mjs';
 
@@ -1606,6 +1606,29 @@ async function runHook(clientName, event, invocation) {
     } catch {
       // A turn that cannot be measured is simply not learned from.
     }
+    // THE LIVE RESTORE (toolprune.mjs, LIVE_RESTORE). A pruned Agent cannot be
+    // reached for, so a person who asks for agents would be told there are
+    // none. Claude Code only: the turn's prompt is read from its transcript, and
+    // only when such a prune is applied, so an ordinary Stop pays one small
+    // JSON read. Never on a continuation, so it cannot loop.
+    let liveRestore = null;
+    if (clientName === 'claude-code' && transcriptPath && !raw.stop_hook_active && !raw.stopHookActive) {
+      try {
+        const learned = learnedLocation(cwd);
+        if (hasLiveRestorable(learned.dir)) {
+          const restored = restoreForPrompt({
+            dir: learned.dir,
+            root: learned.root,
+            prompt: turnEvidence(transcriptPath)?.opening,
+          });
+          if (restored.length) {
+            liveRestore = `The ${restored.join(' and ')} tool was pruned in this repository for disuse and is now restored, because this request asks for it. If the request needs it and the work is not done, continue with it now; otherwise just say the work is done.`;
+          }
+        }
+      } catch {
+        // A restore that fails leaves the prune; the fold restores on a typed name.
+      }
+    }
     try {
       // THE KEEP-WARM FEEDBACK ARM, at the boundary where a turn has just
       // ended -- which is the only place the arrival question can be answered.
@@ -1813,6 +1836,8 @@ async function runHook(clientName, event, invocation) {
       // one from ending.
     }
 
+    // After the harvest's own deferral, which would otherwise drop it.
+    if (liveRestore && client.stopDecision) stopPrompt = stopPrompt ? `${liveRestore}\n\n${stopPrompt}` : liveRestore;
     if (stopPrompt && client.stopStyle === 'followup') {
       emit({ followup_message: stopPrompt, ...(harvestNotice ? { systemMessage: harvestNotice } : {}) });
     } else {
