@@ -52,6 +52,9 @@ export const SURFACE_INTERVAL_MS =
 export const DEFAULT_CAPACITY =
   Number(process.env.TOKEN_OPTIMIZER_CONTEXT_CAPACITY) || 200_000;
 
+/** Requests since the last compaction before a growth rate is measured: two steps. */
+export const MIN_GROWTH_POINTS = 3;
+
 /** Context windows a session can be running against, smallest first. */
 const KNOWN_WINDOWS = [200_000, 1_000_000];
 
@@ -75,9 +78,30 @@ export function sessionUsage(transcriptPath, { capacity = DEFAULT_CAPACITY } = {
   }
   if (!turns?.length) return null;
 
-  const last = turns[turns.length - 1];
-  const used = (last.read || 0) + (last.written || 0) + (last.input || 0);
+  // ONE POINT PER REQUEST. Claude Code writes a row per content block of a
+  // response, each carrying the same usage, so consecutive equal sizes are one
+  // request.
+  const sizes = [];
+  for (const turn of turns) {
+    const size = (turn.read || 0) + (turn.written || 0) + (turn.input || 0);
+    if (size && size !== sizes[sizes.length - 1]) sizes.push(size);
+  }
+  // SINCE THE LAST COMPACTION: a context that shrank by more than 30% was
+  // compacted or cleared, and growth before that says nothing about now.
+  let start = 0;
+  for (let index = 1; index < sizes.length; index += 1) {
+    if (sizes[index] < sizes[index - 1] * 0.7) start = index;
+  }
+  const run = sizes.slice(start);
+  const used = run[run.length - 1];
   if (!used) return null;
+  // GROWTH PER REQUEST, NOT SIZE PER REQUEST. `used / turns` charged the fixed
+  // prefix -- system prompt and tools, 25-30k tokens -- to the turns taken so
+  // far: one request into a session, 30k of 200k read as "~5 turns to
+  // compaction", and the model was told so on its first failed command
+  // (measured on a live session, 2026-11-09). The context grows by what each
+  // request adds; two growth steps are the least that make a rate.
+  const perTurn = run.length >= MIN_GROWTH_POINTS ? (used - run[0]) / (run.length - 1) : null;
 
   // A CONTEXT ALREADY PAST THE ASSUMED WINDOW PROVES THE WINDOW IS LARGER. The
   // ceiling is not in the transcript, so it is defaulted -- but a request that
@@ -96,7 +120,7 @@ export function sessionUsage(transcriptPath, { capacity = DEFAULT_CAPACITY } = {
     capacity = larger;
   }
 
-  return { used, capacity, turns: turns.length };
+  return { used, capacity, turns: run.length, perTurn };
 }
 
 /**

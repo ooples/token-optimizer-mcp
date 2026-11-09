@@ -182,12 +182,15 @@ export function shadowAvoided(events) {
  * @param turns    Turns taken to consume it.
  * @param touches  Intercepted touches in this session. Required for the counterfactual: it is
  *                 what converts a per-TOUCH saving into a per-TURN one.
+ * @param perTurn  Tokens the context grows by per turn, measured. Without it there is no runway.
  */
-export function runway({ used, capacity, turns, touches }, rate) {
+export function runway({ used, capacity, turns, touches, perTurn }, rate) {
   if (!capacity || !turns || used == null) return null;
 
-  const perTurn = used / turns;
-  if (perTurn <= 0) return null;
+  // THE MEASURED GROWTH PER TURN (surface.mjs#sessionUsage), never `used / turns`,
+  // which charged the fixed prefix to the turns taken and, one request into a
+  // session, forecast compaction within ~5 turns. No rate, no runway.
+  if (!(perTurn > 0)) return null;
 
   const remaining = Math.max(0, capacity - used);
   const withGraph = Math.floor(remaining / perTurn);

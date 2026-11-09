@@ -481,7 +481,8 @@ describe('loop guard', () => {
       const payload = { tool_name: 'Bash', tool_use_id: 'new', error: 'Exit code 1\nError: expected 3 to equal 4', tool_input: { command: 'npm test' } };
       const first = await onToolFailure({ dir, sessionId: 'loop-1', transcriptPath: path, payload, env: {} });
       expect(first.additionalContext).toMatch(/Loop guard/);
-      expect(first.additionalContext).toMatch(/expected # to equal #/);
+      // As the error read: the masked signature hid the numbers the fix needs.
+      expect(first.additionalContext).toContain('The failure that keeps returning: Error: expected 3 to equal 4');
       const second = await onToolFailure({ dir, sessionId: 'loop-1', transcriptPath: path, payload, env: {} });
       expect(second.systemMessage).toMatch(/Press Esc/);
       expect(await onToolFailure({ dir, sessionId: 'loop-1', transcriptPath: path, payload, env: {} })).toBeNull();
@@ -620,6 +621,8 @@ describe('wiring', () => {
     const output = JSON.parse(run.stdout);
     expect(output.hookSpecificOutput.hookEventName).toBe('PostToolUseFailure');
     expect(output.hookSpecificOutput.additionalContext).toMatch(/Loop guard/);
+    // The error as it read, numbers and all -- not its "expected # to equal #" signature.
+    expect(output.hookSpecificOutput.additionalContext).toContain('expected 3 to equal 4');
   });
 
   test('a turn that asks for a pruned Agent gets it back and continues, once', () => {

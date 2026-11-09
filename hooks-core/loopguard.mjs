@@ -147,11 +147,25 @@ export function isSteering(errorText) {
   return NOT_A_FAILURE.some((pattern) => pattern.test(text));
 }
 
+/**
+ * `key` and `text` are the normalized error, which is what makes two runs the
+ * same failure. `raw` is the error as it read, for the redirect: quoting the
+ * normalized form showed a live model "config.version must be #, got #" for an
+ * error that said "must be 3, got 2" -- the very numbers the fix depends on.
+ */
 export function failureSignature(toolName, errorText) {
   const normalized = normalizeError(errorText);
+  const raw = String(errorText ?? '')
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line && !/^exit code \d+$/i.test(line))
+    .slice(0, 2)
+    .join(' | ')
+    .slice(0, 240);
   return {
     key: createHash('sha256').update(`${toolName}\u0000${normalized}`).digest('hex').slice(0, 16),
     text: normalized,
+    raw,
   };
 }
 
@@ -293,6 +307,8 @@ export function turnStats(calls) {
       failures += 1;
       const entry = repeats.get(call.sig.key) || { count: 0, text: call.sig.text, tool: call.name, paths: new Set() };
       entry.count += 1;
+      // The latest wording: the numbers in it are the current ones.
+      if (call.sig.raw) entry.raw = call.sig.raw;
       if (call.path) entry.paths.add(call.path);
       repeats.set(call.sig.key, entry);
       if (index > lastEdit) failureAfterLastEdit = true;
@@ -445,7 +461,8 @@ export function redirectText(stats, reason, findings = []) {
   ];
   // Tool output and stored claims are untrusted text: one line each, so
   // neither can forge a line of this message (safe-text.mjs).
-  if (stats.top?.text) lines.push(`The failure that keeps returning: ${safeLine(stats.top.text)}`);
+  const failure = stats.top?.raw || stats.top?.text;
+  if (failure) lines.push(`The failure that keeps returning: ${safeLine(failure)}`);
   lines.push(
     'Stop repeating the last approach. Re-read that error, name the assumption behind the last fix and test it directly, or try a different route. If you are blocked on something only the user can answer, ask.'
   );
