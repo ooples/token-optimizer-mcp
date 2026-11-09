@@ -2160,13 +2160,15 @@ export function probeCopilotSwitches(env = process.env) {
   const on = state.switches.filter((item) => !item.off).map((item) => item.key);
   if (!on.length) return [ok(name, 'all four are off')];
   const commands = on.map((key) => `\`copilot config ${key} false\``).join(', ');
+  // INFORMATIONAL, NOT A WARNING: an optional ~2% saving on a healthy install
+  // must not add to the warning count every Copilot user sees.
   return [
-    warn(
+    ok(
       name,
       `${on.join(', ')} ${on.length === 1 ? 'is' : 'are'} on; all four off measured ~${LEAN_SWITCHES_SAVING_TOKENS} ` +
-        `fewer tokens per Copilot request${state.declined ? ' (you restored them, so they are not written again)' : ''}`,
-      `run ${commands}, or set TOKEN_OPTIMIZER_COPILOT_LEAN_SWITCHES=write to let the managed \`copilot\` ` +
-        'launcher write the unset ones (undo: token-optimizer-learned toolprune restore --copilot)'
+        `fewer tokens per Copilot request${state.declined ? ' (you restored them, so they are not written again)' : ''}. ` +
+        `Optional: run ${commands}, or set TOKEN_OPTIMIZER_COPILOT_LEAN_SWITCHES=write to let the managed ` +
+        '`copilot` launcher write the unset ones (undo: token-optimizer-learned toolprune restore --copilot)'
     ),
   ];
 }
