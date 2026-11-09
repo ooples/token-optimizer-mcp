@@ -4,7 +4,7 @@
  *
  *   node bench/swebench/run.mjs fetch  [--dataset verified|lite]
  *   node bench/swebench/run.mjs plan   --n 50 --seed 7 [--reps 1] [--model sonnet] [--budget-usd 3]
- *   node bench/swebench/run.mjs run    [--limit K] [--dry-run] [--no-warm]
+ *   node bench/swebench/run.mjs run    [--limit K] [--dry-run] [--no-warm]   K counts runs, not pairs: N pairs is --limit 2N
  *   node bench/swebench/run.mjs evaluate            prints the official evaluator commands
  *   node bench/swebench/run.mjs report [--eval control=<report.json> --eval token-optimizer=<report.json>]
  *
