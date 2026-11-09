@@ -1081,6 +1081,7 @@ all.
 | `TOKEN_OPTIMIZER_LEAN_HANDOFF`         | off        | a subagent's report over 4,000 characters reaches the lead lean; also needs `Agent\|Task` in the PostToolUse matcher |
 | `TOKEN_OPTIMIZER_REPO_ASK`             | off        | a `repo_ask "<question>"` shell command for agents, named in their briefing |
 | `TOKEN_OPTIMIZER_PROXY_SHARE_PREFIX`   | on         | a cache marker before each subagent's task, so siblings share their prefix  |
+| `TOKEN_OPTIMIZER_PROXY_HOIST_CONTEXT`  | on         | opening-context paragraphs an earlier session already sent move into the shared cached prefix; a new session's first request wrote 4,301 tokens to cache, now 508 |
 | `TOKEN_OPTIMIZER_PROXY_COLD_GATE`      | on         | a sibling's first request waits (up to 12 s) to read the first one's cache   |
 | `TOKEN_OPTIMIZER_PROXY_KEEPWARM`       | on         | a capped read-back ping keeps a large conversation's cache warm when idle   |
 | `TOKEN_OPTIMIZER_OUTPUT_COMPACT`       | on         | Bash and Grep results over 6 KB compacted, Grep grouped by file; full text kept |

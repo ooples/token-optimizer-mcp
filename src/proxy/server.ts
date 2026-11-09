@@ -61,6 +61,12 @@ import {
   shareSiblingPrefix,
   sharePrefixMode,
 } from '../compress/sibling-prefix.js';
+import {
+  ParagraphLedger,
+  paragraphLedgerFile,
+  hoistContextEnabled,
+  hoistStableContext,
+} from '../compress/hoist-stable.js';
 import { coldKey, coldGateEnabled, enterColdGate } from './cold-gate.js';
 import {
   isSubagentRequest,
@@ -938,6 +944,20 @@ function compressBodyOnce(
     }
   }
 
+  // THE SESSION-INVARIANT OPENING CONTEXT MOVES INTO THE SHARED PREFIX, so a
+  // new session reads it instead of writing it again. Before the sibling
+  // marker, which counts the markers this leaves. See hoist-stable.ts.
+  let hoistedChars = 0;
+  if (hoistContextEnabled()) {
+    try {
+      const out = hoistStableContext(parsed, paragraphLedger);
+      parsed = out.request;
+      hoistedChars = out.hoistedChars;
+    } catch {
+      hoistedChars = 0;
+    }
+  }
+
   // SIBLING AGENTS SHARE THEIR IDENTICAL LEADING CONTEXT through the prompt
   // cache: one more cache marker before each agent's own task, so the next
   // sibling reads what the first one wrote. See sibling-prefix.ts.
@@ -1137,6 +1157,7 @@ function compressBodyOnce(
     routedModel ||
     trimmedChars > 0 ||
     sharedPrefix !== 'none' ||
+    hoistedChars > 0 ||
     taskPackChars > 0 ||
     prefetchChars > 0;
   // WORTH THE RISK, not merely smaller. See MIN_SAVING_SHARE: a rewrite that
@@ -1660,6 +1681,8 @@ const taskBlocks = new WeakMap<
   Buffer,
   { kind: 'pack' | 'prefetch'; text: string }[]
 >();
+/** Which session first sent each opening-context paragraph (hoist-stable.ts). */
+const paragraphLedger = new ParagraphLedger(paragraphLedgerFile());
 
 let keepWarmInstance: KeepWarm | null = null;
 function warmer(): KeepWarm {
