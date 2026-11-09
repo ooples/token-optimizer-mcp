@@ -5,6 +5,8 @@
  *   node bench/swebench/run.mjs fetch  [--dataset verified|lite]
  *   node bench/swebench/run.mjs plan   --n 50 --seed 7 [--reps 1] [--model sonnet] [--budget-usd 3]
  *                                      [--learned --repo django/django]   one repository, learned state kept (see README)
+ *                                      [--continue-learned]   a new learned sample in the same work dir, on unused instances
+ *                                      [--mode assist|advise|enforce|off]   the plugin arm's posture (default: the product's)
  *   node bench/swebench/run.mjs run    [--limit K] [--dry-run] [--no-warm]   K counts runs, not pairs: N pairs is --limit 2N
  *   node bench/swebench/run.mjs evaluate            prints the official evaluator commands
  *   node bench/swebench/run.mjs report [--eval control=<report.json> --eval token-optimizer=<report.json>]
@@ -28,6 +30,8 @@ import {
   armEnv,
   costUnits,
   instancesOf,
+  predictionsFile,
+  PRODUCT_MODES,
   isShim,
   transcriptDirFor,
   mcpConnected,
@@ -55,7 +59,7 @@ function parseArgs(argv) {
       continue;
     }
     const name = token.slice(2);
-    if (['dry-run', 'confirm-spend', 'keep-worktrees', 'no-warm', 'learned'].includes(name)) {
+    if (['dry-run', 'confirm-spend', 'keep-worktrees', 'no-warm', 'learned', 'continue-learned'].includes(name)) {
       args[name] = true;
       continue;
     }
@@ -260,11 +264,11 @@ function resetLearnedRepo(mirror, repoDir, commit) {
 }
 
 /** The product's between-session fold, in the arm's environment (fold.mjs). */
-function foldLearned({ claude, pluginDir, repoDir, configDir, arm, productHome }) {
+function foldLearned({ claude, pluginDir, repoDir, configDir, arm, productHome, mode = null }) {
   const run = spawnSync(
     process.execPath,
     [join(HERE, 'fold.mjs'), join(pluginDir, 'hooks', 'lib'), repoDir, transcriptDirFor(configDir, repoDir), claude],
-    { env: armEnv(process.env, { arm, configDir, productHome }), encoding: 'utf8', windowsHide: true, timeout: 120_000 }
+    { env: armEnv(process.env, { arm, configDir, productHome, mode }), encoding: 'utf8', windowsHide: true, timeout: 120_000 }
   );
   try {
     return JSON.parse(run.stdout.trim().split('\n').pop());
@@ -304,7 +308,7 @@ export function resolveClaude(explicit, env = process.env) {
   throw new Error('no Claude Code binary found on PATH; pass --claude <path>');
 }
 
-function runAgent({ claude, cwd, prompt, model, budgetUsd, configDir, pluginDir, arm, timeoutMs, logPath, productHome, persist = false }) {
+function runAgent({ claude, cwd, prompt, model, budgetUsd, configDir, pluginDir, arm, timeoutMs, logPath, productHome, mode = null, persist = false }) {
   return new Promise((resolveRun) => {
     // The prompt goes on stdin: an issue body is multi-line and full of quotes,
     // which no argv quoting survives intact on every platform.
@@ -315,7 +319,7 @@ function runAgent({ claude, cwd, prompt, model, budgetUsd, configDir, pluginDir,
     if (pluginDir) args.push('--plugin-dir', pluginDir, '--debug', 'mcp', '--debug-file', join(dirname(logPath), 'debug.log'));
     const child = spawn(claude, args, {
       cwd,
-      env: armEnv(process.env, { arm, configDir, productHome }),
+      env: armEnv(process.env, { arm, configDir, productHome, mode }),
       windowsHide: true,
     });
     child.stdin.end(prompt);
@@ -369,6 +373,7 @@ async function warmArm(work, { arm, claude, plan, pluginDir }) {
       timeoutMs: 5 * 60_000,
       logPath: join(dir, 'stream.jsonl'),
       productHome: join(work, 'home'),
+      mode: plan.mode ?? null,
     });
     const result = resultEvent(out);
     const row = { planId: plan.id, arm, warmup: true, routedVia, exit: code, costUsd: result?.total_cost_usd ?? null, usage: result?.usage ?? null, at: new Date().toISOString() };
@@ -446,6 +451,7 @@ async function runPlan(work, args) {
       timeoutMs: plan.timeoutMinutes * 60_000,
       logPath: join(runDir, 'stream.jsonl'),
       productHome: join(work, 'home'),
+      mode: plan.mode ?? null,
       persist: Boolean(place),
     });
     const result = resultEvent(out);
@@ -472,13 +478,13 @@ async function runPlan(work, args) {
       at: new Date().toISOString(),
     };
     if (place && ARMS[item.arm].plugin) {
-      const fold = foldLearned({ claude, pluginDir, repoDir, configDir, arm: item.arm, productHome: join(work, 'home') });
+      const fold = foldLearned({ claude, pluginDir, repoDir, configDir, arm: item.arm, productHome: join(work, 'home'), mode: plan.mode ?? null });
       writeFileSync(place.foldFile, JSON.stringify(fold, null, 2));
       row.foldAfter = { applied: fold.applied ?? null, pending: fold.pending ?? null, restored: fold.restored ?? null, blocked: fold.blocked ?? null, error: fold.error ?? null };
     }
     appendFileSync(join(work, 'results.jsonl'), `${JSON.stringify(row)}\n`);
     appendFileSync(
-      join(work, `predictions-${item.arm}.jsonl`),
+      join(work, predictionsFile(plan, item.arm)),
       `${JSON.stringify({ instance_id: item.instanceId, model_name_or_path: `${item.arm}-${plan.id}`, model_patch: patch })}\n`
     );
     console.log(`${item.arm.padEnd(16)} ${item.instanceId}: $${row.costUsd ?? '?'} ${row.turns ?? '?'} turns, patch ${patch.length} B`);
@@ -528,7 +534,7 @@ function report(work, args) {
   const complete = [...byInstance.entries()].filter(([, arms]) => arms.control && arms['token-optimizer']);
   const dollars = pairedRatio(complete.map(([, arms]) => [arms.control.costUsd, arms['token-optimizer'].costUsd]));
   const units = pairedRatio(complete.map(([, arms]) => [arms.control.costUnits, arms['token-optimizer'].costUnits]));
-  const lines = [`plan ${plan.id} (${plan.dataset}, ${plan.model}, seed ${plan.seed}): ${complete.length} complete pairs of ${plan.order.length / plan.arms.length}`];
+  const lines = [`plan ${plan.id} (${plan.dataset}, ${plan.model}, seed ${plan.seed}, mode ${plan.mode ?? "default"}${plan.continues ? `, continues ${plan.continues}` : ""}): ${complete.length} complete pairs of ${plan.order.length / plan.arms.length}`];
   const fmt = (r) => (r.ratio == null ? 'n/a' : `${r.ratio.toFixed(3)}x${r.low != null ? ` [95% CI ${r.low.toFixed(3)}-${r.high.toFixed(3)}]` : ''}`);
   const unconnected = complete.filter(([, arms]) => arms['token-optimizer'].mcpConnected === false).length;
   if (unconnected) lines.push(`WARNING: the token-optimizer MCP server never connected in ${unconnected} plugin-arm run(s); those runs measured hooks only`);
@@ -580,11 +586,29 @@ async function main(argv) {
     const seed = Number(args.seed) || 1;
     const arms = Object.keys(ARMS);
     if (args.learned && !args.repo) throw new Error('--learned needs --repo owner/name: what is learned is per repository');
-    const pool = args.learned ? instancesOf(instances, args.repo) : instances;
+    if (args.mode && !PRODUCT_MODES.includes(args.mode)) throw new Error(`--mode is one of ${PRODUCT_MODES.join(', ')}`);
+    const existing = readJson(join(work, 'plan.json'));
+    // CONTINUE A LEARNED PLAN: a new sample in the SAME work directory, so the
+    // product's learned state (keyed by the kept checkout's path) carries over,
+    // on instances no earlier plan here has run -- every pair is measured after
+    // the learning, not partly during it.
+    let continues = null;
+    let used = new Set();
+    if (args['continue-learned']) {
+      if (!args.learned) throw new Error('--continue-learned needs --learned');
+      if (!existing?.learned || existing.repo !== args.repo) {
+        throw new Error(`--continue-learned needs an existing learned plan for ${args.repo} in this work directory`);
+      }
+      continues = existing.id;
+      used = new Set(readJsonl(join(work, 'results.jsonl')).map((row) => row.instanceId));
+    }
+    const pool = (args.learned ? instancesOf(instances, args.repo) : instances).filter((item) => !used.has(item.instance_id));
     if (!pool.length) throw new Error(`no instances of ${args.repo} in ${dataset}`);
     const sample = sampleInstances(pool, { n, seed });
     const plan = {
       ...(args.learned ? { learned: true, repo: args.repo } : {}),
+      ...(args.mode ? { mode: args.mode } : {}),
+      ...(continues ? { continues } : {}),
       dataset,
       seed,
       model: args.model || 'sonnet',
@@ -594,8 +618,7 @@ async function main(argv) {
       order: runOrder(sample.map((item) => item.instance_id), arms, { reps: Number(args.reps) || 1, seed }),
     };
     plan.id = planId(plan);
-    const existing = readJson(join(work, 'plan.json'));
-    if (existing && existing.id !== plan.id && readJsonl(join(work, 'results.jsonl')).some((row) => row.planId === existing.id)) {
+    if (!continues && existing && existing.id !== plan.id && readJsonl(join(work, 'results.jsonl')).some((row) => row.planId === existing.id)) {
       throw new Error(`plan ${existing.id} already has results; use a new --work directory`);
     }
     writeFileSync(join(work, 'plan.json'), JSON.stringify(plan, null, 2));
@@ -607,7 +630,7 @@ async function main(argv) {
     const plan = readJson(join(work, 'plan.json'));
     for (const arm of plan?.arms || []) {
       console.log(
-        `python -m swebench.harness.run_evaluation --dataset_name ${DATASETS[plan.dataset]} --predictions_path ${join(work, `predictions-${arm}.jsonl`)} --run_id ${arm}-${plan.id} --max_workers 4`
+        `python -m swebench.harness.run_evaluation --dataset_name ${DATASETS[plan.dataset]} --predictions_path ${join(work, predictionsFile(plan, arm))} --run_id ${arm}-${plan.id} --max_workers 4`
       );
     }
     return 0;

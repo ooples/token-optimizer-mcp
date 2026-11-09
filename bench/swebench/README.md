@@ -85,6 +85,18 @@ sequential benchmark never has a quiet hour, and nothing else is live, so the
 wait is the only thing skipped. The report adds the ratio before and after the
 first prune landed, and what was pruned.
 
+That split is chosen by the data, so it is a hypothesis. `--continue-learned`
+tests it: a new plan in the same work directory keeps the learned state (it is
+keyed by the kept checkout's path), samples only instances no earlier plan there
+ran, and writes its own `predictions-<arm>-<plan id>.jsonl`. Every pair is then
+measured after the learning.
+
+### Product modes
+
+`--mode assist|advise|enforce|off` sets `TOKEN_OPTIMIZER_MODE` in the plugin arm
+only (control has no product). Without it the arm runs the product's default,
+which is what every earlier plan measured, and those plans keep their ids.
+
 ## Caveats
 
 - **The agent runs on the host** with `bypassPermissions`, in a clone of a

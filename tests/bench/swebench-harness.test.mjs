@@ -22,6 +22,8 @@ import {
   mcpConnected,
   pairedRatio,
   planId,
+  predictionsFile,
+  PRODUCT_MODES,
   resultEvent,
   runOrder,
   sampleInstances,
@@ -235,5 +237,59 @@ describe('statistics', () => {
     expect(result).toMatchObject({ onlyControl: 1, onlyTreatment: 9 });
     expect(result.p).toBeCloseTo((2 * (1 + 10)) / 1024, 10);
     expect(mcnemar([[true, true]]).p).toBe(1);
+  });
+});
+
+const RUN = join(process.cwd(), 'bench', 'swebench', 'run.mjs');
+
+describe('product modes and continued learned plans', () => {
+  test('the mode reaches the plugin arm only, and an unknown one is refused', () => {
+    const parent = { PATH: 'x', TOKEN_OPTIMIZER_MODE: 'enforce' };
+    // The parent's own setting never leaks into either arm.
+    expect(armEnv(parent, { arm: 'token-optimizer', configDir: 'c' }).TOKEN_OPTIMIZER_MODE).toBeUndefined();
+    expect(armEnv(parent, { arm: 'token-optimizer', configDir: 'c', mode: 'advise' }).TOKEN_OPTIMIZER_MODE).toBe('advise');
+    expect(armEnv(parent, { arm: 'control', configDir: 'c', mode: 'advise' }).TOKEN_OPTIMIZER_MODE).toBeUndefined();
+    expect(() => armEnv(parent, { arm: 'token-optimizer', configDir: 'c', mode: 'enforced' })).toThrow(/unknown mode/);
+    expect(PRODUCT_MODES).toEqual(['assist', 'advise', 'enforce', 'off']);
+  });
+
+  test('mode and continuation change the plan id; a plan without them keeps its id', () => {
+    const base = { dataset: 'verified', seed: 1, model: 'sonnet', order: [{ instanceId: 'a', arm: 'control', rep: 0 }] };
+    const before = createHash('sha256').update(JSON.stringify(base)).digest('hex').slice(0, 12);
+    expect(planId(base)).toBe(before);
+    expect(planId({ ...base, mode: 'enforce' })).not.toBe(before);
+    expect(planId({ ...base, mode: 'enforce' })).not.toBe(planId({ ...base, mode: 'advise' }));
+    expect(planId({ ...base, continues: 'abc' })).not.toBe(before);
+  });
+
+  test('a continued plan gets its own predictions file; others keep the name', () => {
+    expect(predictionsFile({ id: 'p1' }, 'control')).toBe('predictions-control.jsonl');
+    expect(predictionsFile({ id: 'p2', continues: 'p1' }, 'control')).toBe('predictions-control-p2.jsonl');
+  });
+
+  test('plan --continue-learned samples only instances no earlier plan here ran', () => {
+    const work = mkdtempSync(join(tmpdir(), 'swebench-continue-'));
+    try {
+      writeFileSync(join(work, 'instances-verified.json'), JSON.stringify(instances));
+      const plan = (...extra) =>
+        spawnSync(process.execPath, [RUN, 'plan', '--work', work, '--learned', '--repo', 'django/django', ...extra], { encoding: 'utf8' });
+      expect(plan('--n', '15', '--seed', '7').status).toBe(0);
+      const first = JSON.parse(readFileSync(join(work, 'plan.json'), 'utf8'));
+      const ran = [...new Set(first.order.map((item) => item.instanceId))];
+      writeFileSync(join(work, 'results.jsonl'), ran.map((instanceId) => JSON.stringify({ planId: first.id, instanceId, arm: 'control' })).join('\n') + '\n');
+      // Without the flag, a second plan over existing results is refused, as before.
+      expect(plan('--n', '15', '--seed', '8').status).not.toBe(0);
+      const next = plan('--n', '15', '--seed', '8', '--continue-learned', '--mode', 'assist');
+      expect(next.status).toBe(0);
+      const second = JSON.parse(readFileSync(join(work, 'plan.json'), 'utf8'));
+      expect(second.continues).toBe(first.id);
+      expect(second.mode).toBe('assist');
+      const sampled = new Set(second.order.map((item) => item.instanceId));
+      expect(sampled.size).toBe(15);
+      for (const id of ran) expect(sampled.has(id)).toBe(false);
+      expect(plan('--n', '5', '--mode', 'strict').status).not.toBe(0);
+    } finally {
+      rmSync(work, { recursive: true, force: true });
+    }
   });
 });

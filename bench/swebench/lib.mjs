@@ -38,7 +38,14 @@ export const DATASETS = Object.freeze({
  * TOKEN_OPTIMIZER_* variables. An API key, when present, is kept: it decides
  * the billing mode on purpose.
  */
-export function armEnv(parent, { arm, configDir, productHome }) {
+/**
+ * The product's postures (hooks-core/policy.mjs), for `plan --mode`. A plan
+ * without a mode runs the product's default, which is what every plan made
+ * before this option measured.
+ */
+export const PRODUCT_MODES = Object.freeze(['assist', 'advise', 'enforce', 'off']);
+
+export function armEnv(parent, { arm, configDir, productHome, mode = null }) {
   const env = {};
   for (const [key, value] of Object.entries(parent)) {
     if (key === 'ANTHROPIC_BASE_URL' || key === 'ANTHROPIC_AUTH_TOKEN') continue;
@@ -63,6 +70,11 @@ export function armEnv(parent, { arm, configDir, productHome }) {
     env.TOKEN_OPTIMIZER_HOME = productHome;
     env.TOKEN_OPTIMIZER_PROXY_CONTROL_PORT = String(BENCH_PORTS.control);
     env.TOKEN_OPTIMIZER_PROXY_ROUTE_BASE = String(BENCH_PORTS.routeBase);
+  }
+  // The posture under test, in the plugin arm only: control has no product.
+  if (known.plugin && mode) {
+    if (!PRODUCT_MODES.includes(mode)) throw new Error(`unknown mode ${mode}; one of ${PRODUCT_MODES.join(', ')}`);
+    env.TOKEN_OPTIMIZER_MODE = mode;
   }
   return env;
 }
@@ -155,6 +167,8 @@ export function planId(plan) {
   const fields = { dataset: plan.dataset, seed: plan.seed, model: plan.model, order: plan.order };
   // Only when set, so every plan made before the learned mode keeps its id.
   if (plan.learned) Object.assign(fields, { learned: true, repo: plan.repo });
+  if (plan.mode) fields.mode = plan.mode;
+  if (plan.continues) fields.continues = plan.continues;
   return createHash('sha256').update(JSON.stringify(fields)).digest('hex').slice(0, 12);
 }
 
@@ -176,6 +190,15 @@ export function agentArgs({ model, budgetUsd, persist = false }) {
 /** Where Claude Code keeps the transcripts of sessions launched in `cwd`. */
 export function transcriptDirFor(configDir, cwd) {
   return join(configDir, 'projects', String(cwd).replace(/[^A-Za-z0-9]/g, '-'));
+}
+
+/**
+ * Where an arm's predictions go. A plan that continues another in the same
+ * work directory gets its own file, so grading it does not re-grade (or mix in)
+ * the earlier plan's patches; every other plan keeps the original name.
+ */
+export function predictionsFile(plan, arm) {
+  return plan.continues ? `predictions-${arm}-${plan.id}.jsonl` : `predictions-${arm}.jsonl`;
 }
 
 /** Instances of one repository, for the learned mode: what is learned is per repository. */
