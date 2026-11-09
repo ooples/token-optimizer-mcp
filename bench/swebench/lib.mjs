@@ -9,6 +9,7 @@
  */
 
 import { createHash } from 'node:crypto';
+import { join } from 'node:path';
 
 /** The arms. A closed set: an arm is an installed configuration, not a label. */
 export const ARMS = Object.freeze({
@@ -151,10 +152,35 @@ export function runKey({ instanceId, arm, rep }) {
 
 /** A fingerprint of the plan, recorded with every result so two plans never mix. */
 export function planId(plan) {
-  return createHash('sha256')
-    .update(JSON.stringify({ dataset: plan.dataset, seed: plan.seed, model: plan.model, order: plan.order }))
-    .digest('hex')
-    .slice(0, 12);
+  const fields = { dataset: plan.dataset, seed: plan.seed, model: plan.model, order: plan.order };
+  // Only when set, so every plan made before the learned mode keeps its id.
+  if (plan.learned) Object.assign(fields, { learned: true, repo: plan.repo });
+  return createHash('sha256').update(JSON.stringify(fields)).digest('hex').slice(0, 12);
+}
+
+/**
+ * The `claude -p` arguments for one run.
+ *
+ * `persist` keeps the session transcript. The ordinary pilots pass
+ * `--no-session-persistence`, and with it the plugin arm had no transcript, so
+ * everything that learns from one -- the loop guard, tool pruning's fold, the
+ * injection holdout, derive -- ran blind in every pilot. The learned mode
+ * persists in BOTH arms.
+ */
+export function agentArgs({ model, budgetUsd, persist = false }) {
+  const args = ['-p', '--output-format', 'stream-json', '--verbose', '--model', model, '--max-budget-usd', String(budgetUsd), '--permission-mode', 'bypassPermissions'];
+  if (!persist) args.push('--no-session-persistence');
+  return args;
+}
+
+/** Where Claude Code keeps the transcripts of sessions launched in `cwd`. */
+export function transcriptDirFor(configDir, cwd) {
+  return join(configDir, 'projects', String(cwd).replace(/[^A-Za-z0-9]/g, '-'));
+}
+
+/** Instances of one repository, for the learned mode: what is learned is per repository. */
+export function instancesOf(instances, repo) {
+  return instances.filter((item) => item.repo === repo);
 }
 
 /** What the agent is told: the issue, and the one rule SWE-bench scores on. */

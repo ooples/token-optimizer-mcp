@@ -4,6 +4,7 @@
  *
  *   node bench/swebench/run.mjs fetch  [--dataset verified|lite]
  *   node bench/swebench/run.mjs plan   --n 50 --seed 7 [--reps 1] [--model sonnet] [--budget-usd 3]
+ *                                      [--learned --repo django/django]   one repository, learned state kept (see README)
  *   node bench/swebench/run.mjs run    [--limit K] [--dry-run] [--no-warm]   K counts runs, not pairs: N pairs is --limit 2N
  *   node bench/swebench/run.mjs evaluate            prints the official evaluator commands
  *   node bench/swebench/run.mjs report [--eval control=<report.json> --eval token-optimizer=<report.json>]
@@ -22,10 +23,13 @@ import { homedir } from 'node:os';
 import { delimiter, dirname, join, resolve as resolvePath } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import {
+  agentArgs,
   ARMS,
   armEnv,
   costUnits,
+  instancesOf,
   isShim,
+  transcriptDirFor,
   mcpConnected,
   DATASETS,
   mcnemar,
@@ -51,7 +55,7 @@ function parseArgs(argv) {
       continue;
     }
     const name = token.slice(2);
-    if (['dry-run', 'confirm-spend', 'keep-worktrees', 'no-warm'].includes(name)) {
+    if (['dry-run', 'confirm-spend', 'keep-worktrees', 'no-warm', 'learned'].includes(name)) {
       args[name] = true;
       continue;
     }
@@ -182,6 +186,11 @@ function stageConfig(dir, env) {
   rmSync(dir, { recursive: true, force: true });
   mkdirSync(dir, { recursive: true });
   writeFileSync(join(dir, 'settings.json'), `${JSON.stringify({ includeCoAuthoredBy: false }, null, 2)}\n`);
+  return stageCredentials(dir, env);
+}
+
+/** Only the credential, into a config directory that is kept (the learned mode's). */
+function stageCredentials(dir, env) {
   if (env.ANTHROPIC_API_KEY) return 'api';
   const host = join(env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude'), '.credentials.json');
   const creds = readJson(host);
@@ -210,6 +219,52 @@ async function installRoute(work, configDir, arm) {
     throw new Error(`could not route the ${arm} arm through the proxy (status ${result.status}); the arm would not be the product`);
   }
   return result.url;
+}
+
+/**
+ * The learned mode's per-arm places: one repository directory and one config
+ * directory, kept across every instance of the plan.
+ *
+ * WHY. Tool pruning learns per repository -- a store keyed on the project
+ * root, and a deny list in that root's `.claude/settings.local.json` -- from
+ * the transcripts in the config directory. The ordinary mode gives every run a
+ * new worktree path and a new config, so every run is a first session in a new
+ * repository: in pilots 3-7 pruning never had the five sessions it needs, and
+ * no store was ever written. Here each arm keeps one checkout, reset to each
+ * instance's base commit, and one config, so the plugin arm reaches the state
+ * an installed user is in after a week in one repository. Control keeps the
+ * same places, so the arms differ only in the product.
+ */
+function learnedPlace(work, arm) {
+  const base = join(work, 'learned', arm);
+  return { base, repoDir: join(base, 'repo'), configDir: join(base, 'config'), foldFile: join(base, 'fold.json') };
+}
+
+/**
+ * The kept checkout, at `commit`, with nothing the last run left behind --
+ * except `.claude/`, where the product's deny list lives.
+ */
+function resetLearnedRepo(mirror, repoDir, commit) {
+  if (!existsSync(join(repoDir, '.git'))) {
+    git(['--git-dir', mirror, 'worktree', 'add', '--detach', '--force', repoDir, commit]);
+    return;
+  }
+  git(['checkout', '--force', '--detach', commit], { cwd: repoDir });
+  git(['clean', '-ffdx', '-e', '.claude'], { cwd: repoDir });
+}
+
+/** The product's between-session fold, in the arm's environment (fold.mjs). */
+function foldLearned({ claude, pluginDir, repoDir, configDir, arm, productHome }) {
+  const run = spawnSync(
+    process.execPath,
+    [join(HERE, 'fold.mjs'), join(pluginDir, 'hooks', 'lib'), repoDir, transcriptDirFor(configDir, repoDir), claude],
+    { env: armEnv(process.env, { arm, configDir, productHome }), encoding: 'utf8', windowsHide: true, timeout: 120_000 }
+  );
+  try {
+    return JSON.parse(run.stdout.trim().split('\n').pop());
+  } catch {
+    return { error: (run.stderr || run.stdout || `exit ${run.status}`).slice(0, 400) };
+  }
 }
 
 function ensureMirror(work, repo) {
@@ -243,11 +298,11 @@ export function resolveClaude(explicit, env = process.env) {
   throw new Error('no Claude Code binary found on PATH; pass --claude <path>');
 }
 
-function runAgent({ claude, cwd, prompt, model, budgetUsd, configDir, pluginDir, arm, timeoutMs, logPath, productHome }) {
+function runAgent({ claude, cwd, prompt, model, budgetUsd, configDir, pluginDir, arm, timeoutMs, logPath, productHome, persist = false }) {
   return new Promise((resolveRun) => {
     // The prompt goes on stdin: an issue body is multi-line and full of quotes,
     // which no argv quoting survives intact on every platform.
-    const args = ['-p', '--output-format', 'stream-json', '--verbose', '--model', model, '--max-budget-usd', String(budgetUsd), '--permission-mode', 'bypassPermissions', '--no-session-persistence'];
+    const args = agentArgs({ model, budgetUsd, persist });
     // The plugin arm logs MCP activity, so every row can say whether the
     // server under test was actually connected (it is still `pending` at the
     // init event, and nothing else in stream-json reports it).
@@ -331,6 +386,13 @@ async function runPlan(work, args) {
     console.log('refusing to spend without --confirm-spend');
     return 2;
   }
+  if (plan.learned) {
+    // The learned config directories are kept, so a run that throws must not
+    // leave a credential copy in one: dropped on any exit, error included.
+    process.on('exit', () => {
+      for (const arm of plan.arms) rmSync(join(learnedPlace(work, arm).configDir, '.credentials.json'), { force: true });
+    });
+  }
   const pluginDir = plan.arms.some((arm) => ARMS[arm]?.plugin) ? stagePlugin(work) : null;
   const claude = resolveClaude(args.claude);
   console.log(`binary under test: ${claude}`);
@@ -343,17 +405,28 @@ async function runPlan(work, args) {
     const instance = instances.get(item.instanceId);
     if (!instance) throw new Error(`instance ${item.instanceId} not in the cache`);
     const runDir = join(work, 'runs', `${item.instanceId}__${item.arm}__${item.rep}`);
-    const repoDir = join(runDir, 'repo');
+    const place = plan.learned ? learnedPlace(work, item.arm) : null;
+    const repoDir = place ? place.repoDir : join(runDir, 'repo');
+    const configDir = place ? place.configDir : join(runDir, 'config');
     if (args['dry-run']) {
-      console.log(`[dry-run] ${item.arm.padEnd(16)} ${item.instanceId} @ ${instance.base_commit.slice(0, 10)}  ${ARMS[item.arm].plugin ? `--plugin-dir ${pluginDir}` : '(no plugin)'}`);
+      console.log(`[dry-run] ${item.arm.padEnd(16)} ${item.instanceId} @ ${instance.base_commit.slice(0, 10)}  ${ARMS[item.arm].plugin ? `--plugin-dir ${pluginDir}` : '(no plugin)'}${place ? `  in ${repoDir}` : ''}`);
       continue;
     }
     const mirror = ensureMirror(work, instance.repo);
     rmSync(runDir, { recursive: true, force: true });
     mkdirSync(runDir, { recursive: true });
-    git(['--git-dir', mirror, 'worktree', 'add', '--detach', '--force', repoDir, instance.base_commit]);
-    const billing = stageConfig(join(runDir, 'config'), process.env);
-    const routedVia = ARMS[item.arm].plugin ? await installRoute(work, join(runDir, 'config'), item.arm) : null;
+    let billing;
+    if (place) {
+      resetLearnedRepo(mirror, repoDir, instance.base_commit);
+      billing = existsSync(join(configDir, 'settings.json')) ? stageCredentials(configDir, process.env) : stageConfig(configDir, process.env);
+    } else {
+      git(['--git-dir', mirror, 'worktree', 'add', '--detach', '--force', repoDir, instance.base_commit]);
+      billing = stageConfig(configDir, process.env);
+    }
+    const routedVia = ARMS[item.arm].plugin ? await installRoute(work, configDir, item.arm) : null;
+    // What the product had learned when this run started: the last fold's
+    // applied list (none before the first fold).
+    const prunedAtStart = place && ARMS[item.arm].plugin ? readJson(place.foldFile, {})?.applied || [] : null;
     const started = Date.now();
     const { code, out } = await runAgent({
       claude,
@@ -361,12 +434,13 @@ async function runPlan(work, args) {
       prompt: promptFor(instance),
       model: plan.model,
       budgetUsd: plan.budgetUsd,
-      configDir: join(runDir, 'config'),
+      configDir,
       pluginDir: ARMS[item.arm].plugin ? pluginDir : null,
       arm: item.arm,
       timeoutMs: plan.timeoutMinutes * 60_000,
       logPath: join(runDir, 'stream.jsonl'),
       productHome: join(work, 'home'),
+      persist: Boolean(place),
     });
     const result = resultEvent(out);
     const patch = stripTestChanges(git(['diff', instance.base_commit], { cwd: repoDir }));
@@ -388,8 +462,14 @@ async function runPlan(work, args) {
       mcpConnected: ARMS[item.arm].plugin
         ? mcpConnected(existsSync(join(runDir, 'debug.log')) ? readFileSync(join(runDir, 'debug.log'), 'utf8') : '')
         : null,
+      ...(place ? { learned: true, prunedAtStart } : {}),
       at: new Date().toISOString(),
     };
+    if (place && ARMS[item.arm].plugin) {
+      const fold = foldLearned({ claude, pluginDir, repoDir, configDir, arm: item.arm, productHome: join(work, 'home') });
+      writeFileSync(place.foldFile, JSON.stringify(fold, null, 2));
+      row.foldAfter = { applied: fold.applied ?? null, pending: fold.pending ?? null, restored: fold.restored ?? null, blocked: fold.blocked ?? null, error: fold.error ?? null };
+    }
     appendFileSync(join(work, 'results.jsonl'), `${JSON.stringify(row)}\n`);
     appendFileSync(
       join(work, `predictions-${item.arm}.jsonl`),
@@ -397,7 +477,11 @@ async function runPlan(work, args) {
     );
     console.log(`${item.arm.padEnd(16)} ${item.instanceId}: $${row.costUsd ?? '?'} ${row.turns ?? '?'} turns, patch ${patch.length} B`);
     // The credential copy goes whatever else is kept.
-    rmSync(join(runDir, 'config'), { recursive: true, force: true, maxRetries: 5, retryDelay: 500 });
+    if (place) {
+      rmSync(join(configDir, '.credentials.json'), { force: true, maxRetries: 5, retryDelay: 500 });
+      continue;
+    }
+    rmSync(configDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 500 });
     if (!args['keep-worktrees']) {
       try {
         git(['--git-dir', mirror, 'worktree', 'remove', '--force', repoDir]);
@@ -444,6 +528,17 @@ function report(work, args) {
   if (unconnected) lines.push(`WARNING: the token-optimizer MCP server never connected in ${unconnected} plugin-arm run(s); those runs measured hooks only`);
   lines.push(`cost (USD, API-equivalent), token-optimizer / control: ${fmt(dollars)}`);
   lines.push(`cost (cache-aware units),   token-optimizer / control: ${fmt(units)}`);
+  if (plan.learned) {
+    // Before and after the product had learned something to act on: the
+    // comparison the learned mode exists for.
+    for (const [label, learnedYet] of [['nothing pruned yet', false], ['with a learned prune', true]]) {
+      const subset = complete.filter(([, arms]) => (arms['token-optimizer'].prunedAtStart || []).length > 0 === learnedYet);
+      const ratio = pairedRatio(subset.map(([, arms]) => [arms.control.costUsd, arms['token-optimizer'].costUsd]));
+      lines.push(`  ${label.padEnd(22)} ${String(subset.length).padStart(2)} pairs: ${fmt(ratio)}`);
+    }
+    const last = rows.filter((row) => row.foldAfter).at(-1)?.foldAfter;
+    if (last) lines.push(`  pruned after the last run: ${(last.applied || []).join(', ') || 'nothing'}${last.error ? ` (fold error: ${last.error})` : ''}`);
+  }
   if (resolved.size === 2) {
     const ids = complete.map(([key]) => key.split('::')[0]);
     const control = resolved.get('control');
@@ -478,8 +573,12 @@ async function main(argv) {
     const n = Number(args.n) || 50;
     const seed = Number(args.seed) || 1;
     const arms = Object.keys(ARMS);
-    const sample = sampleInstances(instances, { n, seed });
+    if (args.learned && !args.repo) throw new Error('--learned needs --repo owner/name: what is learned is per repository');
+    const pool = args.learned ? instancesOf(instances, args.repo) : instances;
+    if (!pool.length) throw new Error(`no instances of ${args.repo} in ${dataset}`);
+    const sample = sampleInstances(pool, { n, seed });
     const plan = {
+      ...(args.learned ? { learned: true, repo: args.repo } : {}),
       dataset,
       seed,
       model: args.model || 'sonnet',

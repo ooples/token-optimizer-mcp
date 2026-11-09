@@ -4,12 +4,20 @@
  */
 
 import { describe, expect, test } from '@jest/globals';
+import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import {
+  agentArgs,
   ARMS,
   armEnv,
   BENCH_PORTS,
   costUnits,
+  instancesOf,
   isShim,
+  transcriptDirFor,
   mcnemar,
   mcpConnected,
   pairedRatio,
@@ -19,6 +27,8 @@ import {
   sampleInstances,
   stripTestChanges,
 } from '../../bench/swebench/lib.mjs';
+
+const FOLD = join(process.cwd(), 'bench', 'swebench', 'fold.mjs');
 
 const instances = [];
 for (const [repo, count] of [['django/django', 40], ['sympy/sympy', 10], ['psf/requests', 3]]) {
@@ -105,6 +115,70 @@ describe('fairness', () => {
     const base = { dataset: 'verified', seed: 1, model: 'sonnet', order: [{ instanceId: 'a', arm: 'control', rep: 0 }] };
     expect(planId(base)).toBe(planId({ ...base }));
     expect(planId(base)).not.toBe(planId({ ...base, model: 'opus' }));
+    // The learned mode is a different measurement; a plan without it keeps its id.
+    const before = createHash('sha256').update(JSON.stringify(base)).digest('hex').slice(0, 12);
+    expect(planId(base)).toBe(before);
+    expect(planId({ ...base, learned: false })).toBe(before);
+    expect(planId({ ...base, learned: true, repo: 'django/django' })).not.toBe(planId(base));
+    expect(planId({ ...base, learned: true, repo: 'django/django' })).not.toBe(planId({ ...base, learned: true, repo: 'sympy/sympy' }));
+  });
+});
+
+describe('the learned mode', () => {
+  test('runs keep their transcripts only in the learned mode', () => {
+    expect(agentArgs({ model: 'sonnet', budgetUsd: 3 })).toContain('--no-session-persistence');
+    expect(agentArgs({ model: 'sonnet', budgetUsd: 3, persist: true })).not.toContain('--no-session-persistence');
+  });
+
+  test('a transcript directory is where Claude Code writes it', () => {
+    // Observed: a session in ...\scratchpad\live\restore\repo wrote to
+    // projects\C--Users-yolan-AppData-...-scratchpad-live-restore-repo.
+    expect(transcriptDirFor('/cfg', 'C:\\Users\\u\\w\\repo')).toBe(join('/cfg', 'projects', 'C--Users-u-w-repo'));
+    // Observed: ...\source\repos\AiDotNet.Tensors wrote to ...-repos-AiDotNet-Tensors.
+    expect(transcriptDirFor('/cfg', 'C:\\Users\\u\\repos\\AiDotNet.Tensors')).toBe(join('/cfg', 'projects', 'C--Users-u-repos-AiDotNet-Tensors'));
+  });
+
+  test('a plan draws from one repository', () => {
+    const django = instancesOf(instances, 'django/django');
+    expect(django).toHaveLength(40);
+    expect(new Set(sampleInstances(django, { n: 9, seed: 7 }).map((item) => item.repo))).toEqual(new Set(['django/django']));
+  });
+
+  test('the fold prunes from sessions just written, as if the quiet hour had passed', () => {
+    const work = mkdtempSync(join(tmpdir(), 'learned-fold-'));
+    try {
+      const cwd = join(work, 'repo');
+      const wiki = join(work, 'wiki');
+      const transcripts = join(work, 'transcripts');
+      mkdirSync(cwd, { recursive: true });
+      mkdirSync(transcripts, { recursive: true });
+      spawnSync('git', ['init', '-q'], { cwd });
+      const env = { ...process.env, TOKEN_OPTIMIZER_WIKI_DIR: wiki, TOKEN_OPTIMIZER_STATE_DIR: join(work, 'state') };
+      delete env.TOKEN_OPTIMIZER_TOOLPRUNE;
+      delete env.TOKEN_OPTIMIZER_TOOLPRUNE_QUIET_MINUTES;
+      // A fresh catalog, so no probe runs.
+      const storeDir = wiki;
+      mkdirSync(storeDir, { recursive: true });
+      writeFileSync(join(storeDir, 'toolprune.json'), JSON.stringify({
+        version: 1, catalog: { tools: ['Agent', 'Bash', 'Read'], probedAt: Date.now(), clientVersion: null },
+        sessions: [], applied: [], restored: [], pending: [], lastApplyAt: 0, blocked: null,
+      }));
+      for (let index = 0; index < 5; index += 1) {
+        const rows = [
+          { type: 'user', uuid: `u${index}`, timestamp: new Date(Date.now() - (5 - index) * 1000).toISOString(), message: { role: 'user', content: `task ${index}` } },
+          { type: 'assistant', uuid: `a${index}`, timestamp: new Date().toISOString(), message: { role: 'assistant', id: `m${index}`, content: [{ type: 'tool_use', id: `t${index}`, name: 'Bash', input: {} }] } },
+        ];
+        writeFileSync(join(transcripts, `s${index}.jsonl`), `${rows.map((row) => JSON.stringify(row)).join('\n')}\n`);
+      }
+      const run = spawnSync(process.execPath, [FOLD, join(process.cwd(), 'plugin', 'hooks', 'lib'), cwd, transcripts, 'no-such-claude'], { env, encoding: 'utf8' });
+      const summary = JSON.parse(run.stdout);
+      expect(summary.dir).toBe(storeDir);
+      expect(summary.applied).toEqual(['Agent']);
+      const settings = JSON.parse(readFileSync(join(cwd, '.claude', 'settings.local.json'), 'utf8'));
+      expect(settings.permissions.deny).toEqual(['Agent']);
+    } finally {
+      rmSync(work, { recursive: true, force: true, maxRetries: 3, retryDelay: 50 });
+    }
   });
 });
 

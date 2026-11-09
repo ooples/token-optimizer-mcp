@@ -62,6 +62,29 @@ plan is skipped. With `ANTHROPIC_API_KEY` set the runs are API-billed.
 Otherwise the host's subscription login is copied into each run's throwaway
 config, only the `claudeAiOauth` entry, and deleted after the run.
 
+### The learned mode
+
+```bash
+node bench/swebench/run.mjs plan --learned --repo django/django --n 15 --seed 7 --work bench/swebench/.work-learned
+```
+
+The ordinary mode measures a first session in a new repository: every run gets
+a new worktree path and a new config directory, with
+`--no-session-persistence`. That is the product at its worst. It pays its fixed
+context and has learned nothing. Tool pruning learns per repository, from at
+least 5 sessions' transcripts, and the loop guard, the injection holdout and
+derive all read the transcript. None of them could act in an ordinary run.
+
+`--learned` keeps one checkout and one config directory per arm for the whole
+plan. The checkout is reset to each instance's base commit, with untracked
+files removed except `.claude/`, where the deny list lives. Both arms keep
+their transcripts. After each plugin-arm run, `fold.mjs` runs the product's own
+fold from the build snapshot, with its clock moved past the 60-minute quiet
+window. An installed product waits that hour before it writes a prune. A
+sequential benchmark never has a quiet hour, and nothing else is live, so the
+wait is the only thing skipped. The report adds the ratio before and after the
+first prune landed, and what was pruned.
+
 ## Caveats
 
 - **The agent runs on the host** with `bypassPermissions`, in a clone of a
