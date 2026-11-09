@@ -51,7 +51,7 @@ node bench/swebench/run.mjs fetch               # 500 Verified instances, free
 node bench/swebench/run.mjs plan --n 50 --seed 7 --model sonnet --budget-usd 3
 node bench/swebench/run.mjs run --dry-run       # prints every run, spends nothing
 node bench/swebench/run.mjs run --confirm-spend [--limit 10]
-node bench/swebench/run.mjs evaluate            # prints the official evaluator commands (needs Docker + `pip install swebench`)
+node bench/swebench/run.mjs evaluate            # prints the official evaluator commands (needs Docker + `pip install "swebench<5"`; 5.x expects an `image` column the princeton-nlp dataset lacks)
 node bench/swebench/run.mjs report --eval control=<report.json> --eval token-optimizer=<report.json>
 ```
 
