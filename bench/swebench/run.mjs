@@ -28,6 +28,7 @@ import {
   agentArgs,
   ARMS,
   armEnv,
+  BENCH_PORTS,
   costUnits,
   instancesOf,
   predictionsFile,
@@ -143,20 +144,67 @@ async function fetchInstances(work, datasetKey) {
  * snapshot instead of reusing a proxy built from older code. The state file
  * is written only by that supervisor; the user's live one keeps its own.
  */
-function stopBenchSupervisor(work) {
+async function stopBenchSupervisor(work) {
   const state = join(work, 'home', 'proxy-supervisor.json');
-  if (!existsSync(state)) return;
-  try {
-    const { pid } = JSON.parse(readFileSync(state, 'utf8'));
-    if (Number.isInteger(pid) && pid > 0) process.kill(pid);
-  } catch {
-    // Already gone, or a file from a supervisor that never finished starting.
+  if (existsSync(state)) {
+    try {
+      const { pid } = JSON.parse(readFileSync(state, 'utf8'));
+      if (Number.isInteger(pid) && pid > 0) process.kill(pid);
+    } catch {
+      // Already gone, or a file from a supervisor that never finished starting.
+    }
+    rmSync(state, { force: true });
   }
-  rmSync(state, { force: true });
+  // THE PORT IS SHARED BY EVERY WORK DIRECTORY. A supervisor started by another
+  // one -- pilot 7's, built that morning -- kept answering on it, and every
+  // later campaign routed through it: two learned pilots measured an older
+  // proxy than the build under test, and its paragraph ledger lived in the
+  // other work directory. Whatever answers on the bench's own control port is
+  // a bench supervisor (the installed one uses 16999), so it goes too.
+  for (let attempt = 0; attempt < 50; attempt += 1) {
+    const pid = await benchSupervisorPid();
+    if (pid === null) return;
+    try {
+      if (attempt === 0) process.kill(pid);
+    } catch {
+      // Exited between the health reply and the kill.
+    }
+    await new Promise((done) => setTimeout(done, 200));
+  }
+  throw new Error(`a supervisor still answers on the bench control port ${BENCH_PORTS.control}; stop it before running`);
+}
+
+/** The pid of whatever supervisor answers on the bench control port, or null. */
+async function benchSupervisorPid() {
+  try {
+    const response = await fetch(`http://127.0.0.1:${BENCH_PORTS.control}/__token-optimizer/health`, { signal: AbortSignal.timeout(2000) });
+    const body = await response.json();
+    return Number.isInteger(body?.pid) ? body.pid : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Refuse to measure through a proxy that is not this campaign's: the
+ * supervisor answering on the bench port must be the one this work
+ * directory's home recorded, which runs the snapshot staged for this run.
+ */
+async function assertOwnSupervisor(work) {
+  let live = null;
+  let recorded = null;
+  // The supervisor publishes its state file just after it starts serving.
+  for (let attempt = 0; attempt < 25; attempt += 1) {
+    live = await benchSupervisorPid();
+    recorded = readJson(join(work, 'home', 'proxy-supervisor.json'))?.pid ?? null;
+    if (live !== null && live === recorded) return;
+    await new Promise((done) => setTimeout(done, 200));
+  }
+  throw new Error(`the bench proxy is not this run's (answering pid ${live}, this work directory's ${recorded}); the plugin arm would not measure the build under test`);
 }
 
 /** A plugin copy whose MCP server is THIS checkout's build, not the published @latest. */
-function stagePlugin(work) {
+async function stagePlugin(work) {
   const server = join(REPO, 'dist', 'server', 'index.js');
   if (!existsSync(server)) throw new Error(`no build at ${server}; run npm run build first`);
   const staged = join(work, 'plugin');
@@ -168,7 +216,7 @@ function stagePlugin(work) {
   // The layout is kept: the server reads ../../package.json relative to itself
   // for its version, and that package.json's "type" is what makes dist/*.js ESM.
   const snapshot = join(work, 'build');
-  stopBenchSupervisor(work);
+  await stopBenchSupervisor(work);
   rmSync(snapshot, { recursive: true, force: true });
   cpSync(join(REPO, 'dist'), join(snapshot, 'dist'), { recursive: true });
   cpSync(join(REPO, 'package.json'), join(snapshot, 'package.json'));
@@ -361,6 +409,7 @@ async function warmArm(work, { arm, claude, plan, pluginDir }) {
   stageConfig(configDir, process.env);
   try {
     const routedVia = ARMS[arm].plugin ? await installRoute(work, configDir, arm) : null;
+    if (routedVia) await assertOwnSupervisor(work);
     const { code, out } = await runAgent({
       claude,
       cwd,
@@ -404,7 +453,7 @@ async function runPlan(work, args) {
       for (const arm of plan.arms) rmSync(join(learnedPlace(work, arm).configDir, '.credentials.json'), { force: true });
     });
   }
-  const pluginDir = plan.arms.some((arm) => ARMS[arm]?.plugin) ? stagePlugin(work) : null;
+  const pluginDir = plan.arms.some((arm) => ARMS[arm]?.plugin) ? await stagePlugin(work) : null;
   const claude = resolveClaude(args.claude);
   console.log(`binary under test: ${claude}`);
   if (!args['dry-run'] && !args['no-warm']) {
@@ -435,6 +484,7 @@ async function runPlan(work, args) {
       billing = stageConfig(configDir, process.env);
     }
     const routedVia = ARMS[item.arm].plugin ? await installRoute(work, configDir, item.arm) : null;
+    if (routedVia) await assertOwnSupervisor(work);
     // What the product had learned when this run started: the last fold's
     // applied list (none before the first fold).
     const prunedAtStart = place && ARMS[item.arm].plugin ? readJson(place.foldFile, {})?.applied || [] : null;
