@@ -61,6 +61,7 @@ import {
   shareSiblingPrefix,
   sharePrefixMode,
 } from '../compress/sibling-prefix.js';
+import { proxyEnabled } from './enabled.js';
 import {
   ParagraphLedger,
   paragraphLedgerFile,
@@ -383,11 +384,9 @@ export interface ProxySummary {
   readonly messageCount?: number;
 }
 
-/** Enabled by default; explicit opt-outs and the global kill switch win. */
-export function proxyEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
-  if (env.TOKEN_OPTIMIZER_MODE?.trim().toLowerCase() === 'off') return false;
-  return !/^(0|false|no|off)$/i.test(env.TOKEN_OPTIMIZER_PROXY?.trim() || '');
-}
+// Defined in enabled.ts so routing maintenance can ask without importing this
+// module and the compression stack behind it; re-exported for every caller.
+export { proxyEnabled };
 
 /** How many proxies this process has started; see spillRootFor. */
 let proxiesStarted = 0;

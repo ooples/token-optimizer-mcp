@@ -6,7 +6,7 @@ import {
   type RoutingResult,
 } from './default-routing.js';
 import { spawnRoutingCommit, type SessionIdentity } from './routing-commit.js';
-import { proxyEnabled } from './server.js';
+import { proxyEnabled } from './enabled.js';
 import { applyCompactWindow } from './compact-window.js';
 import { readFileSync } from 'node:fs';
 import {

@@ -20,6 +20,9 @@ const SERVER = join(process.cwd(), 'dist', 'server', 'index.js');
 const work = mkdtempSync(join(tmpdir(), 'startup-deps-'));
 afterAll(() => rmSync(work, { recursive: true, force: true }));
 
+/** How long the server runs after answering, so its post-handshake imports finish. */
+const SETTLE_MS = 3000;
+
 const HEAVY = ['@typescript-eslint', 'graphlib', 'lodash', 'yaml', '@iarna', '@babel', 'tiktoken'];
 
 /** Runs the server for `calls`, then closes stdin and returns replies plus every CJS module it loaded. */
@@ -54,6 +57,7 @@ function session(name, calls, env = {}) {
     });
     const replies = new Map();
     let buffer = '';
+    let closing = false;
     const timer = setTimeout(() => {
       child.kill();
       reject(new Error(`server did not answer: ${[...expected].filter((id) => !replies.has(id))}`));
@@ -72,7 +76,17 @@ function session(name, calls, env = {}) {
           /* not a JSON-RPC line */
         }
       }
-      if ([...expected].every((id) => replies.has(id))) child.stdin.end();
+      // NOT AT ONCE: the server starts background work right after its handshake
+      // (routing maintenance, telemetry flush), each a dynamic import. Closing
+      // stdin the moment the replies arrived raced those imports, so a slow
+      // machine exited before they loaded anything and passed, while CI's Linux
+      // runners failed: routing maintenance pulled in @babel/parser through
+      // supervisor.ts -> server.ts. Waiting lets the dump see what a real
+      // session's server holds.
+      if (!closing && [...expected].every((id) => replies.has(id))) {
+        closing = true;
+        setTimeout(() => child.stdin.end(), SETTLE_MS);
+      }
     });
     child.on('exit', () => {
       clearTimeout(timer);
