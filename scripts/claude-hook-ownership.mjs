@@ -4,6 +4,23 @@ import { WIRING } from '../hooks-core/wire.mjs';
 
 const json = (path) => JSON.parse(readFileSync(path, 'utf8'));
 
+/** Whether a plugin manifest hook runs plugin/hooks/<file>. Two spellings are the
+ * plugin's own: the exec form ("command": "node", "args": [script]), which
+ * spawns node with no shell, so Windows needs no Git Bash, and the older shell
+ * form (`node "${CLAUDE_PLUGIN_ROOT}/hooks/<file>"`) that earlier versions shipped. */
+export function isPluginHookFor(hook, file) {
+  if (!hook || hook.type !== 'command') return false;
+  const script = `\${CLAUDE_PLUGIN_ROOT}/hooks/${file}`;
+  if (
+    hook.command === 'node' &&
+    Array.isArray(hook.args) &&
+    hook.args.length === 1 &&
+    hook.args[0] === script
+  )
+    return true;
+  return hook.command === `node "${script}"`;
+}
+
 /** Remove exact installer registrations only when an enabled installed plugin
  * demonstrably provides the same event and matcher. Unknown/custom hooks stay. */
 export function dedupeClaudePluginHooks(settings, settingsPath) {
@@ -30,12 +47,7 @@ export function dedupeClaudePluginHooks(settings, settingsPath) {
             (manifest.hooks?.[event] || []).some(
               (group) =>
                 (group.matcher ?? null) === matcher &&
-                group.hooks?.some(
-                  (hook) =>
-                    hook.type === 'command' &&
-                    hook.command ===
-                      `node "\${CLAUDE_PLUGIN_ROOT}/hooks/${file}"`
-                )
+                group.hooks?.some((hook) => isPluginHookFor(hook, file))
             )
           )
             covered.add(event);

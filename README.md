@@ -376,6 +376,14 @@ what enforces; adding the server alone just gives the model tools it can ignore.
 
 That is the entire installation. [All sixteen clients →](#installation)
 
+**Requirement:** the plugin's hooks and its MCP server run on Node.js 18 or later, and `node` must be on the PATH of
+the Claude Code process.
+- **If you just installed Node.js** (or Git), start Claude Code again from a new terminal so it picks up the new PATH.
+- **Hooks without Node:** they run `node` directly, with no shell, so Windows needs no Git Bash for them. If `node`
+  cannot start, they let the tool call through (`"onFailure": "continue"`): you lose the savings, not the session.
+- **MCP server without Node:** it fails to connect (`/mcp` shows it) until Node is reachable. Claude Code retries it
+  automatically, or press Reconnect in `/mcp`.
+
 Then, whenever you want to know what to do next:
 
 ```text
