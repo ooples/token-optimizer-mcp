@@ -29,9 +29,11 @@ const HEAVY = ['@typescript-eslint', 'graphlib', 'lodash', 'yaml', '@iarna', '@b
 function session(name, calls, env = {}) {
   const dump = join(work, `${name}-modules.json`);
   const preload = join(work, `${name}-preload.cjs`);
+  // The preload is constant text; the dump path reaches it through the
+  // environment, so no path is ever spliced into code.
   writeFileSync(
     preload,
-    `process.on('exit', () => require('fs').writeFileSync(${JSON.stringify(dump)}, JSON.stringify(Object.keys(require.cache))));\n`
+    "process.on('exit', () => require('fs').writeFileSync(process.env.STARTUP_DEPS_MODULE_DUMP, JSON.stringify(Object.keys(require.cache))));\n"
   );
   const messages = [
     { jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'startup-test', version: '1' } } },
@@ -50,6 +52,7 @@ function session(name, calls, env = {}) {
         TOKEN_OPTIMIZER_LOG_DIR: join(work, `${name}-logs`),
         TOKEN_OPTIMIZER_WIKI_DIR: join(work, `${name}-wiki`),
         TOKEN_OPTIMIZER_SHARED_DIR: join(work, `${name}-wiki`),
+        STARTUP_DEPS_MODULE_DUMP: dump,
         ...env,
       },
       stdio: ['pipe', 'pipe', 'ignore'],
