@@ -18,6 +18,11 @@ import { describe, it, expect } from '@jest/globals';
 import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { isPluginHookFor } from '../../scripts/claude-hook-ownership.mjs';
+import {
+  CLAUDE_CODE_EXEC_FORM_FLOOR,
+  parseClaudeCodeVersion,
+  probeClaudeCodeHooks,
+} from '../../hooks-core/doctor.mjs';
 
 const pluginRoot = join(process.cwd(), 'plugin');
 const manifest = JSON.parse(readFileSync(join(pluginRoot, 'hooks', 'hooks.json'), 'utf8'));
@@ -78,5 +83,42 @@ describe('isPluginHookFor', () => {
     ).toBe(false);
     expect(isPluginHookFor({ type: 'prompt', command: 'node' }, file)).toBe(false);
     expect(isPluginHookFor(null, file)).toBe(false);
+  });
+});
+
+// Claude Code added exec-form hooks in 2.1.139. An older one ignores `args`, runs bare `node`,
+// and every plugin hook silently does nothing. hooks.json cannot declare a minimum client
+// version, so the doctor has to say so.
+describe('the doctor checks Claude Code can run exec-form hooks', () => {
+  const plugin = { method: 'plugin' };
+
+  it('reads the version `claude --version` prints', () => {
+    expect(parseClaudeCodeVersion('2.1.322 (Claude Code)\n')).toBe('2.1.322');
+    expect(parseClaudeCodeVersion('not a version')).toBeNull();
+    expect(parseClaudeCodeVersion(null)).toBeNull();
+  });
+
+  it('fails a Claude Code older than the exec-form release, and says how to fix it', () => {
+    const [check] = probeClaudeCodeHooks({ install: plugin, versionText: '2.1.138 (Claude Code)' });
+    expect(check.pass).toBe(false);
+    expect(check.detail).toContain(CLAUDE_CODE_EXEC_FORM_FLOOR);
+    expect(check.remedy).toMatch(/claude update/);
+  });
+
+  it('passes the exec-form release itself and anything newer', () => {
+    for (const version of [CLAUDE_CODE_EXEC_FORM_FLOOR, '2.1.322', '2.2.0', '3.0.0']) {
+      const [check] = probeClaudeCodeHooks({ install: plugin, versionText: version });
+      expect(check.pass).toBe(true);
+      expect(check.warn).toBeUndefined();
+    }
+  });
+
+  it('says nothing when the version is unknown, or the install is not the plugin', () => {
+    expect(probeClaudeCodeHooks({ install: plugin, versionText: null })).toEqual([]);
+    expect(probeClaudeCodeHooks({ install: { method: 'script' }, versionText: '2.0.0' })).toEqual([]);
+  });
+
+  it('pins the floor to the release that added exec form', () => {
+    expect(CLAUDE_CODE_EXEC_FORM_FLOOR).toBe('2.1.139');
   });
 });

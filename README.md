@@ -376,8 +376,13 @@ what enforces; adding the server alone just gives the model tools it can ignore.
 
 That is the entire installation. [All sixteen clients →](#installation)
 
-**Requirement:** the plugin's hooks and its MCP server run on Node.js 18 or later, and `node` must be on the PATH of
-the Claude Code process.
+**Requirements:**
+- **Node.js 22.14.0 or later**, for the plugin's hooks and its MCP server. `node` must be on the PATH of the Claude
+  Code process.
+- **Claude Code 2.1.139 or later.** The hooks use the exec form (`"command": "node", "args": [...]`), which Claude
+  Code added in 2.1.139. An older Claude Code ignores `args`, so the hooks do nothing and nothing says so;
+  `install_doctor` (or `npx token-optimizer-doctor`) reports it. Their fail-open setting (`"onFailure": "continue"`)
+  is read from 2.1.295, and continuing is also the default for an exec-form hook that cannot start.
 - **If you just installed Node.js** (or Git), start Claude Code again from a new terminal so it picks up the new PATH.
 - **Hooks without Node:** they run `node` directly, with no shell, so Windows needs no Git Bash for them. If `node`
   cannot start, they let the tool call through (`"onFailure": "continue"`): you lose the savings, not the session.

@@ -926,6 +926,64 @@ export function semverBelow(a, b) {
   return x.pre.length < y.pre.length;
 }
 
+/**
+ * The first Claude Code release that runs exec-form hooks (`command` + `args`, no shell).
+ * The plugin's hooks.json uses that form, and an older Claude Code ignores `args` and runs
+ * bare `node`, which fails without a word: every hook is a no-op and nothing is optimized.
+ * hooks.json cannot declare a minimum client version, so the doctor is where it is caught.
+ */
+export const CLAUDE_CODE_EXEC_FORM_FLOOR = '2.1.139';
+
+/** `claude --version` prints "2.1.322 (Claude Code)"; anything else reads as unknown. */
+export function parseClaudeCodeVersion(text) {
+  const match = /^\s*(\d+\.\d+\.\d+)\b/.exec(String(text ?? ''));
+  return match ? match[1] : null;
+}
+
+/**
+ * Whether this Claude Code runs the plugin's hooks. Only asked for a Claude Code plugin
+ * install: script installs write their own hooks, and other clients never read hooks.json.
+ * An unknown version is not reported -- the doctor does not guess.
+ */
+export function probeClaudeCodeHooks({ install, versionText } = {}) {
+  if (install?.method !== 'plugin') return [];
+  const version = parseClaudeCodeVersion(versionText);
+  if (!version) return [];
+  const name = 'Claude Code runs the plugin hooks';
+  return compareVersions(version, CLAUDE_CODE_EXEC_FORM_FLOOR) < 0
+    ? [
+        bad(
+          name,
+          `Claude Code ${version} predates exec-form hooks (${CLAUDE_CODE_EXEC_FORM_FLOOR}), so every plugin hook is skipped`,
+          'update Claude Code (`claude update`) and restart it'
+        ),
+      ]
+    : [ok(name, `Claude Code ${version}`)];
+}
+
+/** Reads `claude --version` without blocking the event loop; null when it cannot. */
+export function readClaudeCodeVersion({ timeoutMs = 5000 } = {}) {
+  return new Promise((resolve) => {
+    try {
+      execFile(
+        'claude',
+        ['--version'],
+        {
+          encoding: 'utf8',
+          timeout: timeoutMs,
+          windowsHide: true,
+          // npm installs on Windows put a claude.cmd shim on PATH, which only a shell can run.
+          // The arguments are fixed literals, so the shell sees nothing from the outside.
+          shell: process.platform === 'win32',
+        },
+        (error, stdout) => resolve(error ? null : stdout)
+      );
+    } catch {
+      resolve(null);
+    }
+  });
+}
+
 export function probeVersion({
   install,
   crossClient,
@@ -2221,19 +2279,21 @@ export async function diagnose({
   const crossClient =
     install.method === 'plugin' ? null : detectInstall({ pluginsDir, root });
 
-  const [enforcement, sessionStart, serverChecks, supervisor] =
+  const [enforcement, sessionStart, serverChecks, supervisor, claudeCodeVersion] =
     await Promise.all([
       probeEnforcement({ root, workspace, install }),
       probeSessionStart({ root, workspace, install }),
       skipServer ? Promise.resolve([]) : probeServer({ root }),
       // One loopback request with a short timeout; it shares no state with the others.
       probeSupervisor(process.env, { clientName, client: clientRequested }),
+      install.method === 'plugin' ? readClaudeCodeVersion() : Promise.resolve(null),
     ]);
 
   const checks = [
     ...probeMode({ settingsPath }),
     ...checklist({ root, settingsPath, install }),
     ...probeVersion({ install, crossClient }),
+    ...probeClaudeCodeHooks({ install, versionText: claudeCodeVersion }),
     ...probeHarvest(),
     ...supervisor,
     ...probeProxy(process.env, { clientName, client: clientRequested }),
