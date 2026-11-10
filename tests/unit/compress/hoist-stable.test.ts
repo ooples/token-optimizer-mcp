@@ -223,6 +223,19 @@ describe('hoistStableContext', () => {
     expect(openingText(out.request)).toContain('Today is 2026-11-09.');
   });
 
+  it('still moves the context when every paragraph repeats: the same project on the same day', () => {
+    const ledger = new ParagraphLedger();
+    hoistStableContext(request('s1', '/same', 'array'), ledger);
+    const second = hoistStableContext(request('s2', '/same', 'array'), ledger);
+    const third = hoistStableContext(request('s3', '/same', 'array'), ledger);
+    // All but the last paragraph move; the turn keeps the date line, never empty.
+    expect(second.hoistedChars).toBeGreaterThanOrEqual(MIN_HOISTED_CHARS);
+    expect(openingText(second.request).trim()).toBe('Today is 2026-11-09.');
+    // Identical in every later session, so the prefix that holds it is read, not written.
+    expect(JSON.stringify(systemOf(third.request))).toBe(JSON.stringify(systemOf(second.request)));
+    expect(openingText(third.request)).toBe(openingText(second.request));
+  });
+
   it('declines without a session id, below the floor, or when nothing would remain', () => {
     const ledger = new ParagraphLedger();
     hoistStableContext(request(null, '/a', 'array'), ledger);

@@ -263,10 +263,15 @@ function stageCredentials(dir, env) {
  * It calls the product's own routing code, from the same build snapshot the
  * arm runs, with the timing the installer uses.
  */
+/** `run --capture <dir>`: the bench proxy writes request bodies there (diagnosis only). */
+let proxyCapture = null;
+
 async function installRoute(work, configDir, arm) {
   const module = join(work, 'build', 'dist', 'proxy', 'default-routing.js');
   const { maintainDefaultRouting } = await import(pathToFileURL(module).href);
-  const result = await maintainDefaultRouting(armEnv(process.env, { arm, configDir, productHome: join(work, 'home') }), { switchTiming: 'now' });
+  const env = armEnv(process.env, { arm, configDir, productHome: join(work, 'home') });
+  if (proxyCapture) env.TOKEN_OPTIMIZER_PROXY_CAPTURE = proxyCapture;
+  const result = await maintainDefaultRouting(env, { switchTiming: 'now' });
   if (result.status !== 'written' && result.status !== 'unchanged') {
     throw new Error(`could not route the ${arm} arm through the proxy (status ${result.status}); the arm would not be the product`);
   }
@@ -434,6 +439,7 @@ async function warmArm(work, { arm, claude, plan, pluginDir }) {
 }
 
 async function runPlan(work, args) {
+  proxyCapture = args.capture ? resolvePath(args.capture) : null;
   const plan = readJson(join(work, 'plan.json'));
   if (!plan) throw new Error('no plan.json; run `plan` first');
   const instances = new Map((readJson(join(work, `instances-${plan.dataset}.json`), []) || []).map((item) => [item.instance_id, item]));

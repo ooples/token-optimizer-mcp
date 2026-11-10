@@ -311,6 +311,18 @@ export function hoistStableContext(
     lastText !== '' &&
     ledger.seenElsewhere(`system:${lastText}`, session);
   ledger.flush();
+  // EVERY PARAGRAPH SEEN BEFORE IS THE COMMON CASE, NOT AN EDGE: the same
+  // project on the same day sends the same working directory, date and budget
+  // lines. Declining whenever nothing would remain switched the hoist off in
+  // exactly that case -- measured on a kept SWE-bench checkout, every new
+  // session read 7,447 prefix tokens and wrote ~4,600, where fresh checkouts
+  // (whose working-directory line differs) read ~11,900 and wrote ~3,200. The
+  // turn must not be left empty, so its last paragraph stays where it was; the
+  // rest is identical in every such session, so the moved text is too.
+  if (kept.every((paragraph) => paragraph.trim() === '') && moved.length > 1) {
+    const last = moved.pop();
+    if (last !== undefined) kept.push(last);
+  }
   const hoisted = moved.join(SEPARATOR);
   const remaining = kept.join(SEPARATOR);
   if (hoisted.length < MIN_HOISTED_CHARS || remaining.trim() === '')
