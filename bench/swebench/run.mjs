@@ -266,10 +266,10 @@ function stageCredentials(dir, env) {
 /** `run --capture <dir>`: the bench proxy writes request bodies there (diagnosis only). */
 let proxyCapture = null;
 
-async function installRoute(work, configDir, arm) {
+async function installRoute(work, configDir, arm, mode = null) {
   const module = join(work, 'build', 'dist', 'proxy', 'default-routing.js');
   const { maintainDefaultRouting } = await import(pathToFileURL(module).href);
-  const env = armEnv(process.env, { arm, configDir, productHome: join(work, 'home') });
+  const env = armEnv(process.env, { arm, configDir, productHome: join(work, 'home'), mode });
   if (proxyCapture) env.TOKEN_OPTIMIZER_PROXY_CAPTURE = proxyCapture;
   const result = await maintainDefaultRouting(env, { switchTiming: 'now' });
   if (result.status !== 'written' && result.status !== 'unchanged') {
@@ -413,7 +413,8 @@ async function warmArm(work, { arm, claude, plan, pluginDir }) {
   const configDir = join(dir, 'config');
   stageConfig(configDir, process.env);
   try {
-    const routedVia = ARMS[arm].plugin ? await installRoute(work, configDir, arm) : null;
+    // `off` turns the proxy off too, so the product routes nothing: measured as such.
+    const routedVia = ARMS[arm].plugin && plan.mode !== 'off' ? await installRoute(work, configDir, arm, plan.mode ?? null) : null;
     if (routedVia) await assertOwnSupervisor(work);
     const { code, out } = await runAgent({
       claude,
@@ -489,7 +490,7 @@ async function runPlan(work, args) {
       git(['--git-dir', mirror, 'worktree', 'add', '--detach', '--force', repoDir, instance.base_commit]);
       billing = stageConfig(configDir, process.env);
     }
-    const routedVia = ARMS[item.arm].plugin ? await installRoute(work, configDir, item.arm) : null;
+    const routedVia = ARMS[item.arm].plugin && plan.mode !== 'off' ? await installRoute(work, configDir, item.arm, plan.mode ?? null) : null;
     if (routedVia) await assertOwnSupervisor(work);
     // What the product had learned when this run started: the last fold's
     // applied list (none before the first fold).
