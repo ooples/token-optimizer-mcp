@@ -35,7 +35,7 @@ import {
 import { request as httpRequest } from 'node:http';
 import { connect } from 'node:net';
 import { homedir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { isAbsolute, join, resolve } from 'node:path';
 import { harvestMode, harvestFailure } from './harvest.mjs';
 import {
   proxyEnvFor,
@@ -923,6 +923,141 @@ export function semverBelow(a, b) {
     if (!pn && p !== q) return p < q;
   }
   return x.pre.length < y.pre.length;
+}
+
+/**
+ * The first Claude Code release that runs exec-form hooks (`command` + `args`, no shell).
+ * The plugin's hooks.json uses that form, and an older Claude Code ignores `args` and runs
+ * bare `node`, which fails without a word: every hook is a no-op and nothing is optimized.
+ * hooks.json cannot declare a minimum client version, so the doctor is where it is caught.
+ */
+export const CLAUDE_CODE_EXEC_FORM_FLOOR = '2.1.139';
+
+/** `claude --version` prints "2.1.322 (Claude Code)"; anything else reads as unknown. */
+export function parseClaudeCodeVersion(text) {
+  const match = /^\s*(\d+\.\d+\.\d+)\b/.exec(String(text ?? ''));
+  return match ? match[1] : null;
+}
+
+/**
+ * Whether the hooks.json in `hooksDir` uses exec form: true if any hook has an `args` array,
+ * false if it parsed and none do (a shell-form plugin from before this change), null if it
+ * could not be read (the checklist reports a missing manifest on its own).
+ */
+export function hooksUseExecForm(hooksDir) {
+  const manifest = hooksDir ? readJson(join(hooksDir, 'hooks.json')) : null;
+  const events = manifest?.hooks;
+  if (!events || typeof events !== 'object') return null;
+  return Object.values(events).some(
+    (groups) =>
+      Array.isArray(groups) &&
+      groups.some(
+        (group) =>
+          Array.isArray(group?.hooks) &&
+          group.hooks.some((hook) => Array.isArray(hook?.args))
+      )
+  );
+}
+
+/**
+ * Whether this Claude Code runs the plugin's hooks. Only asked for a Claude Code plugin
+ * install whose INSTALLED manifest is exec form: script installs write their own hooks, other
+ * clients never read hooks.json, and an older shell-form plugin cache runs on any version.
+ * A version that could not be read is a warning, not silence: the other hook probes spawn
+ * process.execPath directly, so they pass even when this client skips every hook.
+ */
+export function probeClaudeCodeHooks({
+  install,
+  versionText,
+  execForm = hooksUseExecForm(install?.hooksDir),
+} = {}) {
+  if (install?.method !== 'plugin' || execForm !== true) return [];
+  const name = 'Claude Code runs the plugin hooks';
+  const version = parseClaudeCodeVersion(versionText);
+  if (!version) {
+    return [
+      warn(
+        name,
+        `could not read \`claude --version\`, so whether this Claude Code runs exec-form hooks (${CLAUDE_CODE_EXEC_FORM_FLOOR} or later) is unverified`,
+        `run \`claude --version\` and update Claude Code (\`claude update\`) if it is older than ${CLAUDE_CODE_EXEC_FORM_FLOOR}`
+      ),
+    ];
+  }
+  return compareVersions(version, CLAUDE_CODE_EXEC_FORM_FLOOR) < 0
+    ? [
+        bad(
+          name,
+          `Claude Code ${version} predates exec-form hooks (${CLAUDE_CODE_EXEC_FORM_FLOOR}), so every plugin hook is skipped`,
+          'update Claude Code (`claude update`) and restart it'
+        ),
+      ]
+    : [ok(name, `Claude Code ${version}`)];
+}
+
+/**
+ * The absolute path of the `claude` executable, found ONLY in absolute PATH directories.
+ *
+ * Never the working directory: Windows' own lookup (and cmd.exe's) tries the current directory
+ * before PATH, so a repository carrying a `claude.cmd` would run when the doctor is started
+ * inside it. Relative PATH entries ("." or "") are skipped for the same reason. On Windows the
+ * native installer's claude.exe wins over npm's claude.cmd shim, as PATHEXT orders them.
+ */
+export function resolveClaudeExecutable({
+  env = process.env,
+  platform = process.platform,
+  cwd = process.cwd(),
+} = {}) {
+  const windows = platform === 'win32';
+  const separator = windows ? ';' : ':';
+  const names = windows ? ['claude.exe', 'claude.cmd'] : ['claude'];
+  const here = resolve(cwd).toLowerCase();
+  const pathValue = env.PATH ?? env.Path ?? '';
+  for (const raw of pathValue.split(separator)) {
+    const dir = raw.trim().replace(/^"(.*)"$/, '$1');
+    if (!dir || !isAbsolute(dir)) continue;
+    if (resolve(dir).toLowerCase() === here) continue;
+    for (const name of names) {
+      const candidate = join(dir, name);
+      try {
+        if (statSync(candidate).isFile()) return candidate;
+      } catch {
+        // not in this directory
+      }
+    }
+  }
+  return null;
+}
+
+/** Reads `claude --version` without blocking the event loop; null when it cannot. */
+export function readClaudeCodeVersion({ timeoutMs = 5000, executable = resolveClaudeExecutable() } = {}) {
+  return new Promise((done) => {
+    if (!executable) return done(null);
+    const finish = (error, stdout) => done(error ? null : stdout);
+    try {
+      if (/\.(cmd|bat)$/i.test(executable)) {
+        // A .cmd shim can only be run by cmd.exe. It gets the ABSOLUTE path, so cmd.exe does no
+        // lookup of its own; /d skips AutoRun, and the path comes from PATH, not from input.
+        // /s strips the FIRST and LAST quote on the line, so the whole command gets an outer pair
+        // and the path keeps its own: without it, a path with spaces ("C:\Program Files\...")
+        // is cut at the first space and the read fails.
+        execFile(
+          process.env.ComSpec || 'cmd.exe',
+          ['/d', '/s', '/c', `""${executable}" --version"`],
+          { encoding: 'utf8', timeout: timeoutMs, windowsHide: true, windowsVerbatimArguments: true },
+          finish
+        );
+      } else {
+        execFile(
+          executable,
+          ['--version'],
+          { encoding: 'utf8', timeout: timeoutMs, windowsHide: true },
+          finish
+        );
+      }
+    } catch {
+      done(null);
+    }
+  });
 }
 
 export function probeVersion({
@@ -2249,19 +2384,21 @@ export async function diagnose({
   const crossClient =
     install.method === 'plugin' ? null : detectInstall({ pluginsDir, root });
 
-  const [enforcement, sessionStart, serverChecks, supervisor] =
+  const [enforcement, sessionStart, serverChecks, supervisor, claudeCodeVersion] =
     await Promise.all([
       probeEnforcement({ root, workspace, install }),
       probeSessionStart({ root, workspace, install }),
       skipServer ? Promise.resolve([]) : probeServer({ root }),
       // One loopback request with a short timeout; it shares no state with the others.
       probeSupervisor(process.env, { clientName, client: clientRequested }),
+      install.method === 'plugin' ? readClaudeCodeVersion() : Promise.resolve(null),
     ]);
 
   const checks = [
     ...probeMode({ settingsPath }),
     ...checklist({ root, settingsPath, install }),
     ...probeVersion({ install, crossClient }),
+    ...probeClaudeCodeHooks({ install, versionText: claudeCodeVersion }),
     ...probeHarvest(),
     ...supervisor,
     ...probeProxy(process.env, { clientName, client: clientRequested }),
