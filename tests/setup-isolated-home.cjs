@@ -105,3 +105,11 @@ process.env.TOKEN_OPTIMIZER_PROXY_AUTOSTART = '0';
 // Startup migration has its own isolated integration coverage; ordinary server probes must
 // never inspect or update the developer's actual launchers and shell profiles.
 process.env.TOKEN_OPTIMIZER_AUTO_REPAIR = '0';
+// The injection holdout withholds one context class (advisory, graph, guidance, ...) for a share of
+// sessions, picked by a hash of the session id (injection-holdout.mjs). A test that spawns a hook
+// with a random session id therefore lost its expected context in about 1 run in 75: "once" holds
+// across hook processes failed on CI with empty output, and replaying the captured session id
+// through applyHoldout showed the advisory withheld, and served with the holdout off. Suites that
+// test the holdout pass explicit settings to holdoutSettings/applyHoldout, so this default does not
+// reach them.
+process.env.TOKEN_OPTIMIZER_INJECTION_HOLDOUT = '0';

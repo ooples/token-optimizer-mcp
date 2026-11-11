@@ -26,14 +26,20 @@ const MODULE = join(ROOT, 'dist', 'proxy', 'token-accounting.js');
 const WORKER = join(ROOT, 'dist', 'proxy', 'token-accounting-worker.js');
 const PROXY = pathToFileURL(join(ROOT, 'dist', 'proxy', 'server.js')).href;
 
+/**
+ * Newest mtime of any .ts under a directory, walked recursively.
+ *
+ * Only .ts: tsc compiles nothing else into dist/ (no allowJs). src/ also holds
+ * the hook runtime, scripts and eval data, and counting those made an edit to
+ * any of them read as a stale build -- the same filter mcp-stdio-contract uses.
+ */
 function newestMtime(dir: string): number {
   let newest = 0;
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const path = join(dir, entry.name);
-    newest = Math.max(
-      newest,
-      entry.isDirectory() ? newestMtime(path) : statSync(path).mtimeMs
-    );
+    if (entry.isDirectory()) newest = Math.max(newest, newestMtime(path));
+    else if (entry.name.endsWith('.ts'))
+      newest = Math.max(newest, statSync(path).mtimeMs);
   }
   return newest;
 }
