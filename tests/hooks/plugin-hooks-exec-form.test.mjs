@@ -218,6 +218,25 @@ describe('the doctor resolves claude outside the working directory', () => {
     });
   });
 
+  // cmd.exe /s strips the outermost quote pair, so a shim under "C:\Program Files\..." was cut
+  // at the space and the version read failed. Windows only: a .cmd needs cmd.exe.
+  (process.platform === 'win32' ? it : it.skip)(
+    'reads the version from a .cmd shim whose path has spaces',
+    async () => {
+      const root = mkdtempSync(join(tmpdir(), 'claude-shim-'));
+      try {
+        const dir = join(root, 'Program Files', 'npm');
+        mkdirSync(dir, { recursive: true });
+        const shim = join(dir, 'claude.cmd');
+        writeFileSync(shim, '@echo off\r\necho 2.1.322 (Claude Code)\r\n');
+        const text = await readClaudeCodeVersion({ executable: shim });
+        expect(parseClaudeCodeVersion(text)).toBe('2.1.322');
+      } finally {
+        rmSync(root, { recursive: true, force: true });
+      }
+    }
+  );
+
   it('reads no version when no claude was found, instead of running a bare name', async () => {
     await expect(readClaudeCodeVersion({ executable: null })).resolves.toBeNull();
   });

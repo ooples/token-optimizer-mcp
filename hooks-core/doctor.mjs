@@ -1037,9 +1037,12 @@ export function readClaudeCodeVersion({ timeoutMs = 5000, executable = resolveCl
       if (/\.(cmd|bat)$/i.test(executable)) {
         // A .cmd shim can only be run by cmd.exe. It gets the ABSOLUTE path, so cmd.exe does no
         // lookup of its own; /d skips AutoRun, and the path comes from PATH, not from input.
+        // /s strips the FIRST and LAST quote on the line, so the whole command gets an outer pair
+        // and the path keeps its own: without it, a path with spaces ("C:\Program Files\...")
+        // is cut at the first space and the read fails.
         execFile(
           process.env.ComSpec || 'cmd.exe',
-          ['/d', '/s', '/c', `"${executable}" --version`],
+          ['/d', '/s', '/c', `""${executable}" --version"`],
           { encoding: 'utf8', timeout: timeoutMs, windowsHide: true, windowsVerbatimArguments: true },
           finish
         );
