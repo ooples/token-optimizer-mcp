@@ -38,6 +38,7 @@ import {
   copyFileSync,
   existsSync,
   mkdirSync,
+  readdirSync,
   readFileSync,
   renameSync,
   rmSync,
@@ -96,10 +97,35 @@ export interface RoutingResult {
     | 'unavailable'
     | 'foreign-proxy'
     | 'user-owned'
-    | 'caller-endpoint';
+    | 'caller-endpoint'
+    | 'deferred';
   readonly path?: string;
   readonly url?: string;
   readonly upstream?: string;
+}
+
+/**
+ * When a write that moves a working client onto the route may land.
+ *
+ * WHY THIS EXISTS. Claude Code re-reads `env` from settings.json while it is running, so writing
+ * the route switches every live session's endpoint between two requests. Claude Code does not send
+ * the same request to a loopback endpoint as to Anthropic's own (the first system block, the cache
+ * breakpoints), so the switch throws away everything the session had cached after the tool
+ * definitions. Measured 2026-11-07: a two-command headless task cost $0.060 against $0.030 for the
+ * session that installed the route, and $0.025 for every session after it.
+ *
+ *   'now'           -- write immediately: the installer, which a user runs on purpose.
+ *   'when-no-session' -- the MCP server's startup path, inside a session that has already begun:
+ *                     report `deferred` with the URL and let the caller commit it once no
+ *                     session would be switched mid-conversation.
+ *
+ * A REPAIR IS NEVER DEFERRED. When the file already names our route and only the port moved, the
+ * live sessions are pointed at a port nobody serves, and the write is what makes them work again.
+ */
+export type RouteSwitchTiming = 'now' | 'when-no-session';
+
+export interface RoutingOptions {
+  readonly switchTiming?: RouteSwitchTiming;
 }
 
 const DEFAULT_UPSTREAM = 'https://api.anthropic.com';
@@ -377,6 +403,89 @@ function record(env: NodeJS.ProcessEnv, entry: RoutingEntry | null): void {
   }
 }
 
+function pidAlive(pid: number): boolean {
+  if (!Number.isInteger(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return (error as NodeJS.ErrnoException)?.code === 'EPERM';
+  }
+}
+
+/**
+ * Process ids of the Claude Code sessions that read this settings file and are running now, other
+ * than the one asking.
+ *
+ * From Claude Code's own registry, `<config>/sessions/<pid>.json`, as hooks-core/context-window.mjs
+ * reads it. A file whose process has exited is left behind by a crash, so liveness is checked rather
+ * than presence. A reused pid reads as a live session, which errs toward waiting -- the safe side.
+ * `null` when there is no registry to read: the caller cannot tell, and must not assume none.
+ *
+ * THE ASKING SESSION IS MATCHED TWO WAYS. Claude Code starts an MCP server directly, so its parent
+ * pid is the session's; it also passes CLAUDE_CODE_SESSION_ID. Either alone misses a case -- a
+ * launcher shim between them changes the parent, and /clear changes the registry's session id --
+ * and a missed match reads our own session as somebody else's, which would defer for ever.
+ */
+export interface LiveClaudeSession {
+  readonly pid: number;
+  readonly sessionId?: string;
+}
+
+/**
+ * Every Claude Code session reading this settings file that is running now, the asking one included.
+ * `null` when the registry cannot be read.
+ */
+export function liveClaudeSessionEntries(
+  env: NodeJS.ProcessEnv = process.env
+): LiveClaudeSession[] | null {
+  const dir = join(dirname(claudeSettingsFile(env)), 'sessions');
+  let names: string[];
+  try {
+    names = readdirSync(dir).filter((name) => /^\d+\.json$/.test(name));
+  } catch (error) {
+    // No registry at all is a client that has never run a session here, which is "none".
+    return (error as NodeJS.ErrnoException)?.code === 'ENOENT' ? [] : null;
+  }
+  const live: LiveClaudeSession[] = [];
+  for (const name of names) {
+    const entry = readJson(join(dir, name)) as {
+      pid?: unknown;
+      sessionId?: unknown;
+    } | null;
+    const pid = Number(entry?.pid ?? name.slice(0, -'.json'.length));
+    if (!pidAlive(pid)) continue;
+    live.push(
+      typeof entry?.sessionId === 'string'
+        ? { pid, sessionId: entry.sessionId }
+        : { pid }
+    );
+  }
+  return live;
+}
+
+/** Whether a registry entry is the session asking (see `liveClaudeSessions`). */
+export function isSelfSession(
+  entry: LiveClaudeSession,
+  self: { readonly pids?: readonly number[]; readonly sessionId?: string }
+): boolean {
+  return (
+    (self.pids ?? []).includes(entry.pid) ||
+    (!!self.sessionId && entry.sessionId === self.sessionId)
+  );
+}
+
+export function liveClaudeSessions(
+  env: NodeJS.ProcessEnv = process.env,
+  self: { readonly pids?: readonly number[]; readonly sessionId?: string } = {}
+): number[] | null {
+  const entries = liveClaudeSessionEntries(env);
+  if (entries === null) return null;
+  return entries
+    .filter((entry) => !isSelfSession(entry, self))
+    .map((entry) => entry.pid);
+}
+
 /**
  * Take our entry back out, restoring what was there before.
  *
@@ -422,7 +531,8 @@ export function removeDefaultRouting(
  */
 export async function applyDefaultRouting(
   route: (upstream: string) => Promise<string | null>,
-  env: NodeJS.ProcessEnv = process.env
+  env: NodeJS.ProcessEnv = process.env,
+  { switchTiming = 'now' }: RoutingOptions = {}
 ): Promise<RoutingResult> {
   const path = claudeSettingsFile(env);
   if (!defaultRoutingAllowed(env)) {
@@ -511,6 +621,12 @@ export async function applyDefaultRouting(
     return { status: 'unchanged', path, url, upstream };
   }
 
+  // Everything above is reconciliation of a route the client is already on. From here the file
+  // changes VARIABLE, and whether that switches a working client is what decides the timing.
+  const onOurRoute = !!recorded && latest.env?.[VARIABLE] === recorded.value;
+  if (!onOurRoute && switchTiming === 'when-no-session')
+    return { status: 'deferred', path, url, upstream };
+
   const createdEnv = recorded ? recorded.createdEnv : latest.env === undefined;
   latest.env = { ...latest.env, [VARIABLE]: url };
   // Written when we want it, taken out when it is ours and asserting it has become wrong, and
@@ -596,7 +712,8 @@ export function callerChoseEndpoint(
  * none of them is a reason to fail whatever called this.
  */
 export async function maintainDefaultRouting(
-  env: NodeJS.ProcessEnv = process.env
+  env: NodeJS.ProcessEnv = process.env,
+  options: RoutingOptions = {}
 ): Promise<RoutingResult> {
   // A PROCESS STARTED WITH ITS OWN ENDPOINT MUST NOT EDIT THE GLOBAL ONE. Our MCP server inherits
   // the client's environment, so a client launched with ANTHROPIC_BASE_URL pointed somewhere other
@@ -610,7 +727,8 @@ export async function maintainDefaultRouting(
     const { ensureRoute } = await import('./supervisor.js');
     return await applyDefaultRouting(
       (upstream) => ensureRoute(upstream, env),
-      env
+      env,
+      options
     );
   } catch {
     return { status: 'unavailable' };

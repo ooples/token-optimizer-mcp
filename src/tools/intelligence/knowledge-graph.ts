@@ -23,8 +23,16 @@ import { createHash } from 'crypto';
 import { CacheEngine } from '../../core/cache-engine.js';
 import { TokenCounter } from '../../core/token-counter.js';
 import { MetricsCollector } from '../../core/metrics.js';
-import graphlibPkg from 'graphlib';
-const { Graph, alg } = graphlibPkg;
+import { createRequire } from 'node:module';
+import type graphlibTypes from 'graphlib';
+// LOADED ON FIRST USE (2026-11-08). The MCP server builds every tool at
+// startup, and Claude Code waits for the server before composing a session's
+// first prompt: measured 2,243 ms to connect, ~2 s of it module loading. This
+// dependency is only needed when its tool actually runs.
+const requireLazy = createRequire(import.meta.url);
+const graphlib = (): typeof graphlibTypes =>
+  requireLazy('graphlib') as typeof graphlibTypes;
+type Graph = InstanceType<typeof graphlibTypes.Graph>;
 import {
   forceSimulation,
   forceLink,
@@ -189,7 +197,7 @@ interface GraphData {
     type: string;
     properties?: Record<string, any>;
   }>;
-  graphlib: InstanceType<typeof Graph>;
+  graphlib: Graph;
 }
 
 interface Community {
@@ -349,7 +357,7 @@ export class KnowledgeGraphTool {
     const relations = options.relations || [];
 
     // Create graphlib instance
-    const g = new Graph({ directed: true });
+    const g = new (graphlib().Graph)({ directed: true });
 
     // Create node map
     const nodes = new Map<
@@ -527,7 +535,10 @@ export class KnowledgeGraphTool {
     switch (algorithm) {
       case 'shortest': {
         // Use Dijkstra's algorithm
-        const shortestPath = alg.dijkstra(graphData.graphlib, options.sourceId);
+        const shortestPath = graphlib().alg.dijkstra(
+          graphData.graphlib,
+          options.sourceId
+        );
         if (shortestPath[options.targetId]) {
           const pathNodes = this.reconstructPath(
             shortestPath,

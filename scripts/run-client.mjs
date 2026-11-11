@@ -21,6 +21,8 @@ import { claudeRoute } from './claude-routing.mjs';
 import { sessionRouting } from './session-routing.mjs';
 import { claudeManagedRouting } from './managed-policy.mjs';
 import { projectRootFor } from '../hooks-core/wiki.mjs';
+import { learnedLocation } from '../hooks-core/toolprune.mjs';
+import { applyLeanSwitches, copilotExclusions } from '../hooks-core/copilotprune.mjs';
 import {
   clientForCommand,
   proxyEnvFor,
@@ -105,6 +107,42 @@ function merge(a, b) {
     } else a[key] = value;
   }
   return a;
+}
+
+/**
+ * Whether Claude Code will already load this product's MCP server through the
+ * token-optimizer PLUGIN, for a launch in `projectRoot`.
+ *
+ * The managed launcher used to pass `--mcp-config` with a standalone
+ * `token-optimizer` server unconditionally. With the plugin enabled -- the
+ * normal install -- every session then ran two servers and listed all 19 tools
+ * twice (`token-optimizer` beside `plugin:token-optimizer:token-optimizer`),
+ * found loading even in an empty directory. Settings are read in Claude Code's
+ * precedence order (user, project, local); a file that does not parse counts
+ * as saying nothing, so a broken settings file falls back to injecting, which
+ * is the safe direction: a duplicate costs tokens, a missing server costs the
+ * product.
+ */
+export function claudePluginProvidesMcp({ env = process.env, projectRoot = process.cwd(), home = homedir() } = {}) {
+  const configDir = env.CLAUDE_CONFIG_DIR || join(home, '.claude');
+  const enabled = {};
+  for (const path of [
+    join(configDir, 'settings.json'),
+    join(projectRoot, '.claude', 'settings.json'),
+    join(projectRoot, '.claude', 'settings.local.json'),
+  ]) {
+    let parsed;
+    try {
+      parsed = readConfig(path, JSON.parse);
+    } catch {
+      continue;
+    }
+    const plugins = parsed?.enabledPlugins;
+    if (plugins && typeof plugins === 'object' && !Array.isArray(plugins)) {
+      for (const [id, value] of Object.entries(plugins)) enabled[id] = value;
+    }
+  }
+  return Object.entries(enabled).some(([id, value]) => /^token-optimizer@/.test(id) && value === true);
 }
 
 export function codexRoute(args, env) {
@@ -455,7 +493,7 @@ export async function runClient(
               `mcp_servers.token-optimizer.env.${name}=${literal(childEnv[name])}`
             );
         }
-      } else if (client === 'claude') {
+      } else if (client === 'claude' && !claudePluginProvidesMcp({ env, projectRoot })) {
         forwarded.push(
           '--mcp-config',
           JSON.stringify({
@@ -471,6 +509,21 @@ export async function runClient(
       // Other clients configure MCP in their own files and reject an unknown flag outright, which
       // would turn a launch into a usage error. Their MCP registration is the installer's job; this
       // wrapper only routes them.
+    }
+    // LEARNED COPILOT TOOL PRUNING (copilotprune.mjs). `--excluded-tools` is a
+    // launch flag only -- no setting carries it -- so this launcher is the one
+    // place it can be delivered. Appended last because the flag is variadic.
+    if (clientId === 'copilot' && !management) {
+      const learned = learnedLocation(projectRoot);
+      const pruning = copilotExclusions({ args, env, dir: learned.dir, root: learned.root });
+      forwarded.push(...pruning.args);
+      if (pruning.notice) process.stderr.write(`${pruning.notice}\n`);
+      // Opt-in (TOKEN_OPTIMIZER_COPILOT_LEAN_SWITCHES=write): four user switches
+      // Copilot reads at session start, written only where the person left them unset.
+      if (!env.TOKEN_OPTIMIZER_SIDECALL) {
+        const lean = applyLeanSwitches({ env });
+        if (lean.notice) process.stderr.write(`${lean.notice}\n`);
+      }
     }
     // No shell string: user prompts, quotes and metacharacters stay argv data.
     // CLI flags must precede an explicit end-of-options delimiter.

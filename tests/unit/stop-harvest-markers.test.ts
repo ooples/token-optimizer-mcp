@@ -63,6 +63,9 @@ function runHook(sessionId: string) {
   delete env.TOKEN_OPTIMIZER_HARVEST;
   delete env.TOKEN_OPTIMIZER_HARVEST_ENDPOINT;
   delete env.TOKEN_OPTIMIZER_MODE;
+  // No credential: the reason is then `off:no-key` wherever this runs.
+  delete env.ANTHROPIC_API_KEY;
+  delete env.TOKEN_OPTIMIZER_API_KEY;
 
   return spawnSync(process.execPath, [HOOK], {
     input: JSON.stringify({
@@ -84,8 +87,10 @@ describe('stop-harvest marker location', () => {
     const dir = join(state, 'token-optimizer');
     expect(existsSync(dir)).toBe(true);
 
+    // The off-reason notice is remembered per MACHINE: the reason is the
+    // machine's state, so it is keyed on the reason, not the session.
     const written = readdirSync(dir);
-    expect(written).toContain('harvest-notice-session-abc-123');
+    expect(written).toContain('harvest-notice-off_no-key');
   });
 
   it('does not let a session id escape the marker directory', () => {
@@ -104,19 +109,22 @@ describe('stop-harvest marker location', () => {
     expect(written.length).toBeGreaterThan(0);
     for (const name of written) {
       expect(dirname(resolve(dir, name))).toBe(resolve(dir));
+      expect(name).not.toMatch(/evil/);
     }
     expect(existsSync(join(work, 'evil'))).toBe(false);
   });
 
-  it('says it once per session rather than on every Stop', () => {
-    const first = runHook('session-repeat');
-    const second = runHook('session-repeat');
+  it('says it once per machine per week, not once per session', () => {
+    const first = runHook('session-one');
+    const again = runHook('session-one');
+    const another = runHook('session-two');
 
     expect(first.status).toBe(0);
-    expect(second.status).toBe(0);
-    // The notice explains why no findings exist; repeating it every turn would
-    // make it noise, which is how it would end up ignored.
-    expect(first.stdout).toContain('token-optimizer:');
-    expect(second.stdout).not.toContain('token-optimizer:');
+    // The notice explains why no findings exist; repeating it every session
+    // made it noise -- two live sessions in a row ended on it -- which is how
+    // it would end up ignored.
+    expect(first.stdout).toContain('token-optimizer: finding-extraction is on but has no credential');
+    expect(again.stdout).not.toContain('token-optimizer:');
+    expect(another.stdout).not.toContain('token-optimizer:');
   });
 });

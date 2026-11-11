@@ -94,7 +94,6 @@ import {
   toolSearchOutcomesFromTranscript,
   turnEvidence,
 } from './transcript.mjs';
-import { harvestMode } from './harvest.mjs';
 import { canonicalPath, isFsSafePath } from './paths.mjs';
 import {
   isSubstantive,
@@ -119,7 +118,7 @@ import { registerProject, registeredProjects } from './projects.mjs';
 import { runStopHarvest } from './stop-harvest.mjs';
 import { applyQuietEnv } from './quiet-env.mjs';
 import { resumeIfDue } from './migrate.mjs';
-import { slowHookNotice } from './hook-latency.mjs';
+import { takeSlowHookNotice } from './hook-latency.mjs';
 import { nodeFloorNotice } from './node-floor.mjs';
 import { serverCrashNotice } from './server-crash.mjs';
 import { CHECK_EVERY_CALLS, overWindowNotice } from './context-window.mjs';
@@ -129,6 +128,10 @@ import { isVerificationCommand } from './verification.mjs';
 import { recordOnBoard, recordReadOnBoard } from './blackboard.mjs';
 import { nextPacedContinuation, recordWindowActivity, pacerEnabled } from './quota-pacer.mjs';
 import { artifactPath, capture } from './expand.mjs';
+import { applyHoldout } from './injection-holdout.mjs';
+import { hasLiveRestorable, learnedLocation, restoreForPrompt, scheduleFold, takeNotice } from './toolprune.mjs';
+import { scheduleCodexFold, takeCodexNotice } from './codexprune.mjs';
+import { onToolFailure, recordTurnEnd } from './loopguard.mjs';
 
 /**
  * An outline rewrite for this call, in the client's own input shape, or null.
@@ -819,74 +822,6 @@ function emit(object) {
 }
 
 /**
- * What will and will not extract findings after this session, in one sentence.
- *
- * THE STATE WAS ONLY EVER LEGIBLE FROM THE DOCTOR, and the doctor is a place
- * someone visits after they already suspect something is wrong. A user watching
- * a graph fill with structural nodes and no verdicts has no reason to suspect
- * anything, which is the failure this project has now measured twice.
- *
- * IT IS ADDRESSED TO THE MODEL, NOT ONLY TO THE READER, which is why it earns a
- * place in the prefix rather than a systemMessage. "Nothing else will write this
- * down in words" changes what the model does with a conclusion it is holding;
- * "here is a configuration variable" would not.
- *
- * CACHE-SAFE: derived from configuration, so it differs between sessions only
- * when the configuration does -- the same standard the rest of this block is
- * held to, and it carries no digits for `stableText` to reject.
- *
- * A local endpoint is named FIRST in the off case on purpose. It is the option
- * that costs nothing and sends nothing, and it was the one buried deepest.
- */
-function extractionNotice() {
-  switch (harvestMode()) {
-    case 'local':
-      return (
-        '\n\nA local model endpoint is configured, so semantic extraction also runs after this ' +
-        'session -- free and private, with nothing leaving this machine.'
-      );
-    case 'remote':
-      return (
-        '\n\nA credential is configured, so fallback extraction also runs after this session from ' +
-        'a bounded digest: paths, commands, prompts and conclusions, never file contents.'
-      );
-    case 'host-cli':
-      // The extractor is this client's own headless CLI, which the user opted
-      // into. Worth its own case rather than folding into `remote`: no
-      // credential is involved, and the digest goes to the same vendor that
-      // already ran the session, which is a materially different disclosure.
-      return (
-        '\n\nSemantic extraction also runs after this session through this client\'s own CLI, ' +
-        'from a bounded digest: paths, commands, prompts and conclusions, never file contents.'
-      );
-    case 'off:mode':
-      // The whole optimizer is off and this text is not emitted anyway. Saying
-      // anything here would be noise stacked on an explicit choice.
-      return '';
-    case 'off:opted-out':
-      // A DELIBERATE CHOICE, SO NO PITCH. The consequence is stated because the
-      // model needs it; the setting that would reverse it is not, because
-      // arguing with a configured decision on every session is how a notice
-      // stops being read. doctor.mjs draws the same line for the same reason.
-      return (
-        '\n\nFallback extraction is off by configuration, so a conclusion you do not record is ' +
-        'not written down in words anywhere. Findings are still derived locally from exit codes, ' +
-        'red-to-green transitions and corrections.'
-      );
-    default:
-      // off:no-key, and any mode a future harvest adds: no extractor is running
-      // and nobody chose that, so the free option is worth naming.
-      return (
-        '\n\nNo separate extractor will run after this session, so a conclusion you do not record ' +
-        'is not written down in words anywhere. Findings are still derived locally from exit ' +
-        'codes, red-to-green transitions and corrections. Pointing ' +
-        'TOKEN_OPTIMIZER_HARVEST_ENDPOINT at a local model adds semantic extraction, free and ' +
-        'private.'
-      );
-  }
-}
-
-/**
  * Fold what this session has OBSERVED about tool reachability into its state.
  *
  * Called from every branch that then reads the inventory, because an inventory
@@ -973,11 +908,21 @@ export const GUIDANCE_AFTER_CALLS = 10;
  * (M5): it is the largest part of that block, and it only matters once there is
  * something to record, so it is now delivered once, on the first post-tool
  * event after the session shows real work, and a session that never gets that
- * far never pays for it. The wording is unchanged, because it was measured --
- * see the last paragraph.
+ * far never pays for it.
+ *
+ * ONE LINE, 2026-11-09. On the 15-pair learned SWE-bench pilot the ~1,000
+ * character block was injected in 8 of 13 plugin sessions and the model made 0
+ * wiki_write calls (0 calls to any optimizer tool). It keeps the instruction --
+ * what to record, the anchor the tool enforces, and the measured last-message
+ * rule (0.3 vs 0.9) -- and drops the per-mode extraction notice: that is about
+ * the person's configuration, and doctor's harvest check says it to them.
  */
 export function recordingGuidance() {
-  return `## Record what you work out\n\nCall wiki_write when you establish something durable about this project, while\nyou still hold the context. Every claim needs at least one anchor -- a real file\npath, or path#symbol -- because an unanchored claim can never be checked against\nthe code again and would be served as current forever; unanchored writes are\nrefused.\n\nWorth recording: a decision and why the alternative was rejected, a failure and\nwhat actually caused it, a command that turned out to be the one that works.\nNot worth recording: what the code plainly says. Every wiki_write must include\nthe concrete evidence, when it applies, a calibrated confidence label, its\nscope, and what would invalidate it. Prefer the thing someone had to work out,\nbecause that exists nowhere in the source tree.\n\nRECORD BEFORE YOU ANSWER, NEVER AFTER. Your final message must be the answer to\nthe task -- never a confirmation that you saved a note. Measured: a run whose\nlast message was "Recorded. The finding captured: ..." scored 0.3 where the\nidentical task answered directly scored 0.9. The work had been done correctly\nand the artifact was written; only the last message was wrong, and the last\nmessage is what a verifier, a reviewer and the person who asked all read.${extractionNotice()}`;
+  return (
+    '## Record what you work out\n\nA durable finding -- a decision and the rejected alternative, ' +
+    "a failure's real cause, the command that worked -- goes to wiki_write with a real file anchor, " +
+    'before your answer, never as your last message.'
+  );
 }
 
 export function policyText(
@@ -1010,24 +955,14 @@ export function policyText(
   if (tools.has('smart_write'))
     routes.push(`- Writing a file larger than ~${kb} KB -> smart_write`);
 
-  // SAY WHICH GRADE OF EVIDENCE THIS IS (#469). "Positive runtime inventory
-  // evidence" was emitted for an install-time default that no host had
-  // confirmed, so a session was told 19 tools were proven while none of them
-  // could be called. The two cases now read differently, and the weaker one
-  // tells the model what to do when a call comes back with no such tool --
-  // which is the only way it finds out, since nothing else in the session will
-  // tell it.
-  const connection =
-    tools.size > 0 && registrationProven
-      ? `The host named ${tools.size} optimizer MCP tool(s) as registered for this session.`
-      : tools.size > 0
-        ? // Counted rather than "the tools below", because assist mode
-          // suppresses the routing list and the sentence must not promise one
-          // that is not there.
-          `This install declares ${tools.size} optimizer MCP tool(s); the host has not confirmed them for this session. If a call reports no such tool, use the built-in tool and do not call that one again.`
-        : registrationProven
-          ? 'The host supplied a proven empty optimizer MCP inventory for this session.'
-          : 'This hook received no positive evidence that optimizer MCP tools are registered in this session.';
+  // THE EVIDENCE GRADE IS NOT NARRATED (#469, 2026-11-07). It stays exact in
+  // `toolEvidence`; the prose that reported it at every session start -- "the
+  // host named N tools", "declares N tools; the host has not confirmed them" --
+  // described our plumbing and changed no decision. The SWE-bench pilot priced
+  // that kind of text: ~1,400 tokens of plugin context, written at the 1-hour
+  // cache rate and re-read every turn, made the plugin arm 1.23x control on
+  // short tasks. Only the instruction with a behaviour attached survives (see
+  // `unconfirmed`), and only where tools are recommended without proof.
   // ASSIST SAYS NOTHING ABOUT ROUTING. The routing list plus its "these are
   // recommendations" tail cost ~800 bytes of context in every session, and
   // under assist they advise about a mechanism that is switched off -- which is
@@ -1050,20 +985,19 @@ export function policyText(
         ? '\n\nA built-in call is denied only when its exact replacement has positive registration evidence. A second attempt at the same target remains available.'
         : '\n\nThese are recommendations; the built-in tools remain available.'
       : '';
-  const utilities = [
-    tools.has('optimize_session')
-      ? 'When the context window gets tight, call optimize_session.'
-      : null,
-    tools.has('get_optimization_report')
-      ? 'Use get_optimization_report for measured savings.'
-      : null,
-  ]
-    .filter(Boolean)
-    .join(' ');
+  const unconfirmed =
+    advertiseRouting && routes.length && !registrationProven
+      ? '\n\nIf one of these reports no such tool, use the built-in tool and do not call it again.'
+      : '';
+  // NO UTILITY LINE. optimize_session is named in the MCP server instructions
+  // every client receives at initialization, so repeating it here was paid
+  // twice; get_optimization_report is a report for the person, not a step for
+  // the model, and naming it changed no decision.
   // THE RECORDING GUIDANCE IS DELIVERED LATER, NOT HERE (#357, M5): see
   // recordingGuidance. A session that never does real work never pays for it.
 
-  return `# Token optimization is active\n\n${outputDiscipline()}\n\n${connection}${routing}${enforcement}${utilities ? `\n\n${utilities}` : ''}${projectBriefing()}`;
+  const discipline = outputDiscipline();
+  return `# Token optimization is active${discipline ? `\n\n${discipline}` : ''}${routing}${enforcement}${unconfirmed}${projectBriefing()}`;
 }
 
 /**
@@ -1377,7 +1311,50 @@ async function runHook(clientName, event, invocation) {
 
   if (mode() === MODE_OFF) process.exit(0);
 
+  // A process this package started itself -- the tool-catalog probe or the
+  // loop guard's judge -- is not the person's session: nothing to optimize,
+  // learn from or announce there, and recursing into it would fork forever.
+  if (process.env.TOKEN_OPTIMIZER_SIDECALL) {
+    if (event === 'stop') emit({});
+    process.exit(0);
+  }
+
   const features = featuresForArm();
+
+  // THE LOOP GUARD, on a failed tool call. Claude Code reports a failed call --
+  // a non-zero exit, a tool error -- through PostToolUseFailure, never through
+  // PostToolUse, so this is the only place a failing loop is visible as it
+  // happens. Its answer must name the event it answers or the host drops it.
+  if (event === 'post-tool-failure') {
+    const input = await readPayloadResult({ timeoutMs: 1000 });
+    const raw = input.payload || {};
+    invocation.bind(raw, null, input.bytes);
+    if (input.status !== 'ok') invocation.noteInput(input.status, input.bytes);
+    const sessionId = raw.session_id ?? raw.sessionId ?? 'default';
+    const cwd = raw.cwd || process.cwd();
+    try {
+      const result = await onToolFailure({
+        dir: learnedLocation(cwd).dir,
+        sessionId,
+        transcriptPath: raw.transcript_path ?? raw.transcriptPath ?? null,
+        payload: raw,
+      });
+      if (result) {
+        const output = {};
+        if (result.additionalContext) {
+          output.hookSpecificOutput = {
+            hookEventName: 'PostToolUseFailure',
+            additionalContext: result.additionalContext,
+          };
+        }
+        if (result.systemMessage) output.systemMessage = result.systemMessage;
+        emit(output);
+      }
+    } catch {
+      // The guard is advice; a defect in it must never touch the session.
+    }
+    process.exit(0);
+  }
   if (event === 'pre-invocation' && isAntigravity) {
     const input = await readPayloadResult({ timeoutMs: 250 });
     const raw = input.payload || {};
@@ -1452,7 +1429,7 @@ async function runHook(clientName, event, invocation) {
     const oldNode = nodeFloorNotice();
     if (oldNode) blocks.push({ id: 'node-floor', volatility: 0, text: oldNode });
     // The floor notice already names the likeliest cause of slow hooks.
-    const slowHooks = oldNode ? null : slowHookNotice();
+    const slowHooks = oldNode ? null : takeSlowHookNotice();
     if (slowHooks) blocks.push({ id: 'hook-latency', volatility: 4, text: slowHooks });
     // Reduce at the source before anything runs: quiet defaults for the tools
     // the agent will call, through the env file Claude Code sources for every
@@ -1484,7 +1461,34 @@ async function runHook(clientName, event, invocation) {
         // Retrieval is optional context; the policy must still reach the model.
       }
     }
-    const output = contextOutput(client, eventName, sessionContext(blocks));
+    // EVERY CLASS OF INJECTED CONTEXT HAS TO EARN ITS PLACE (injection-holdout.mjs):
+    // a small share of sessions withholds one class so its effect on session
+    // cost is measured, and a class shown to cost more than it saves is gated.
+    // Claude Code only: it is the client whose transcripts the background fold
+    // reads, so it is the only one where a withheld class buys a measurement.
+    // Withholding anywhere else would cost context and learn nothing.
+    const learned = learnedLocation(cwd);
+    const served = applyHoldout(blocks.map((block) => ({ ...block, cls: block.id })), {
+      dir: clientName === 'claude-code' ? learned.dir : null,
+      sessionId,
+    });
+    let output = contextOutput(client, eventName, sessionContext(served));
+    // LEARNED TOOL PRUNING (toolprune.mjs): finished sessions are folded in the
+    // background, and what changed is said to the PERSON, once, as a visible
+    // line -- not to the model, whose context it would only cost.
+    const transcriptPath = raw.transcript_path ?? raw.transcriptPath ?? null;
+    if (clientName === 'claude-code' && sessionId && transcriptPath) {
+      scheduleFold({ dir: learned.dir, root: learned.root, transcriptPath, sessionId });
+      const notice = takeNotice(learned.dir);
+      if (notice) output = { ...(output || {}), systemMessage: notice };
+    }
+    // Codex has capability switches rather than a per-tool deny list
+    // (codexprune.mjs); its rollouts are read from ~/.codex/sessions.
+    if (clientName === 'codex') {
+      scheduleCodexFold({ dir: learned.dir, root: learned.root });
+      const notice = takeCodexNotice(learned.dir);
+      if (notice) output = { ...(output || {}), systemMessage: notice };
+    }
     if (output) emit(output);
     process.exit(0);
   }
@@ -1527,6 +1531,38 @@ async function runHook(clientName, event, invocation) {
       });
     } catch {
       // Evidence is best effort and must never stop a session from finishing.
+    }
+    try {
+      // THE LOOP GUARD'S ENVELOPE: a turn that ended well teaches it how long a
+      // good turn runs in this repository (loopguard.mjs).
+      if (transcriptPath) {
+        recordTurnEnd(learnedLocation(cwd).dir, transcriptPath);
+      }
+    } catch {
+      // A turn that cannot be measured is simply not learned from.
+    }
+    // THE LIVE RESTORE (toolprune.mjs, LIVE_RESTORE). A pruned Agent cannot be
+    // reached for, so a person who asks for agents would be told there are
+    // none. Claude Code only: the turn's prompt is read from its transcript, and
+    // only when such a prune is applied, so an ordinary Stop pays one small
+    // JSON read. Never on a continuation, so it cannot loop.
+    let liveRestore = null;
+    if (clientName === 'claude-code' && transcriptPath && !raw.stop_hook_active && !raw.stopHookActive) {
+      try {
+        const learned = learnedLocation(cwd);
+        if (hasLiveRestorable(learned.dir)) {
+          const restored = restoreForPrompt({
+            dir: learned.dir,
+            root: learned.root,
+            prompt: turnEvidence(transcriptPath)?.opening,
+          });
+          if (restored.length) {
+            liveRestore = `The ${restored.join(' and ')} tool was pruned in this repository for disuse and is now restored, because this request asks for it. If the request needs it and the work is not done, continue with it now; otherwise just say the work is done.`;
+          }
+        }
+      } catch {
+        // A restore that fails leaves the prune; the fold restores on a typed name.
+      }
     }
     try {
       // THE KEEP-WARM FEEDBACK ARM, at the boundary where a turn has just
@@ -1683,7 +1719,7 @@ async function runHook(clientName, event, invocation) {
       !raw.stopHookActive &&
       !(clientName === 'cursor' && Number(raw.loop_count ?? raw.loopCount ?? 0) > 0)
     ) {
-      const paced = nextPacedContinuation({ cwd, state });
+      const paced = nextPacedContinuation({ cwd, state, client: clientName });
       if (paced) {
         stopPrompt = paced;
         saveState(sessionId, state, agentScope);
@@ -1735,6 +1771,8 @@ async function runHook(clientName, event, invocation) {
       // one from ending.
     }
 
+    // After the harvest's own deferral, which would otherwise drop it.
+    if (liveRestore && client.stopDecision) stopPrompt = stopPrompt ? `${liveRestore}\n\n${stopPrompt}` : liveRestore;
     if (stopPrompt && client.stopStyle === 'followup') {
       emit({ followup_message: stopPrompt, ...(harvestNotice ? { systemMessage: harvestNotice } : {}) });
     } else {
@@ -2190,15 +2228,30 @@ async function runHook(clientName, event, invocation) {
     }
     if (overWindow) state.overWindowNoted = true;
   }
-  const context = [
-    advisory,
-    graphContext,
-    guided ? recordingGuidance() : null,
-    recordingContext,
-    pendingHarvest,
-    overWindow,
-  ]
-    .filter(Boolean)
+  // Through the injection holdout, so each class is measured against what it
+  // costs (injection-holdout.mjs). recordingContext is not a class: it is the
+  // reply to the model's own wiki_write, and withholding it would be withholding
+  // a tool result.
+  let holdoutDir = null;
+  if (clientName === 'claude-code') {
+    try {
+      holdoutDir = learnedLocation(payload.cwd || process.cwd()).dir;
+    } catch {
+      holdoutDir = null;
+    }
+  }
+  const context = applyHoldout(
+    [
+      { cls: 'advisory', text: advisory },
+      { cls: 'graph', text: graphContext },
+      { cls: 'guidance', text: guided ? recordingGuidance() : null },
+      { cls: 'recording', text: recordingContext },
+      { cls: 'harvest-nudge', text: pendingHarvest },
+      { cls: 'over-window', text: overWindow },
+    ],
+    { dir: holdoutDir, sessionId: payload.session_id }
+  )
+    .map((part) => part.text)
     .join('\n\n');
   if (context && !canDeliverToolContext && client.contextStyle === 'antigravity-ephemeral') {
     state.pendingHarvest = [state.pendingHarvest, context].filter(Boolean).join('\n\n');

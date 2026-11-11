@@ -11,8 +11,17 @@
  */
 
 import { readFileSync, existsSync, statSync } from 'fs';
-import { parse as parseYAML } from 'yaml';
-import { parse as parseTOML } from '@iarna/toml';
+import { createRequire } from 'node:module';
+import type { parse as ParseToml } from '@iarna/toml';
+// LOADED ON FIRST USE (2026-11-08). The MCP server builds every tool at
+// startup, and Claude Code waits for the server before composing a session's
+// first prompt: measured 2,243 ms to connect, ~2 s of it module loading. This
+// dependency is only needed when its tool actually runs.
+const requireLazy = createRequire(import.meta.url);
+const parseYAML = (text: string): unknown =>
+  (requireLazy('yaml') as typeof import('yaml')).parse(text);
+const parseTOML = (text: string): ReturnType<typeof ParseToml> =>
+  (requireLazy('@iarna/toml') as { parse: typeof ParseToml }).parse(text);
 import { CacheEngine, resolveCacheLocation } from '../../core/cache-engine.js';
 import { TokenCounter } from '../../core/token-counter.js';
 import { MetricsCollector } from '../../core/metrics.js';

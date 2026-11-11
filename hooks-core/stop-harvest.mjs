@@ -54,7 +54,7 @@ const OFF_REASON = {
     'Meanwhile lifecycle-based structural graph capture keeps working. Durable semantic MCP ' +
     'writes require a writer schema that is actually registered in the current CLI session.',
   'off:no-key':
-    'token-optimizer: finding-extraction is opted in but has no credential. Set ' +
+    'token-optimizer: finding-extraction is on but has no credential. Set ' +
     'TOKEN_OPTIMIZER_API_KEY, or point TOKEN_OPTIMIZER_HARVEST_ENDPOINT at a local model ' +
     'to run it without one.',
 };
@@ -114,11 +114,6 @@ function stateDir() {
     /* best effort */
   }
   return dir;
-}
-
-/** Where the once-per-session notice is remembered, so Stop does not nag. */
-function noticePath(sessionId) {
-  return join(stateDir(), markerName(sessionId));
 }
 
 /**
@@ -185,13 +180,22 @@ function readMarker(path) {
   }
 }
 
-function alreadyNotified(sessionId) {
-  const path = noticePath(sessionId);
-  // Anything already at this path -- our marker, or something planted -- means
-  // stay quiet. Repeating the notice is the worse failure, and refusing to
-  // write over a foreign file is the point.
-  if (existsSync(path)) return true;
-  return !writeMarker(path, String(Date.now()));
+/** How often an off-reason notice may repeat on one machine. */
+export const OFF_NOTICE_REPEAT_MS = 7 * 24 * 60 * 60 * 1000;
+
+/**
+ * Whether the notice for this off-reason is due, and records it as shown.
+ *
+ * ONCE PER WEEK PER MACHINE, NOT ONCE PER SESSION. The reason is the machine's
+ * state -- no credential, an opt-out -- and does not change between sessions,
+ * yet every session of a subscription user with no API key ended on the same
+ * notice (seen on two live sessions in a row, 2026-11-09).
+ */
+function offNoticeDue(reason, now = Date.now()) {
+  const marker = join(stateDir(), markerName(reason));
+  const last = Number(readMarker(marker));
+  if (Number.isFinite(last) && last > 0 && now - last < OFF_NOTICE_REPEAT_MS) return false;
+  return writeMarker(marker, String(now));
 }
 
 /** Minimum gap between harvests of one session. */
@@ -315,7 +319,7 @@ export async function runStopHarvest(payload = {}) {
     // object it sends, so the notice cannot be dropped by a full pipe or
     // truncated by an exit -- which is what used to happen to the single line
     // explaining why no findings exist.
-    if (message && !alreadyNotified(payload.session_id)) return message;
+    if (message && offNoticeDue(harvestMode())) return message;
     return null;
   }
 

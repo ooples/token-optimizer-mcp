@@ -14,7 +14,14 @@
  */
 
 import { readFileSync, existsSync, statSync, readdirSync } from 'fs';
-import { parse as parseYAML } from 'yaml';
+import { createRequire } from 'node:module';
+// LOADED ON FIRST USE (2026-11-08). The MCP server builds every tool at
+// startup, and Claude Code waits for the server before composing a session's
+// first prompt: measured 2,243 ms to connect, ~2 s of it module loading. This
+// dependency is only needed when its tool actually runs.
+const requireLazy = createRequire(import.meta.url);
+const parseYAML = (text: string): unknown =>
+  (requireLazy('yaml') as typeof import('yaml')).parse(text);
 import { join } from 'path';
 import { CacheEngine } from '../../core/cache-engine.js';
 import { readCompressedJson } from '../../utils/cache-helper.js';

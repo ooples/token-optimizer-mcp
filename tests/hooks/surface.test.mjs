@@ -30,17 +30,25 @@ beforeEach(() => {
 });
 afterEach(() => rmSync(workspace, { recursive: true, force: true }));
 
+/** A Claude Code session's fixed prefix -- system prompt and tools -- before any turn. */
+const PREFIX = 20_000;
+
 /**
  * A transcript with `turns` assistant rows, the last one reporting `used` tokens of context.
  *
  * The usage shape mirrors a real transcript: the context size at a turn is cache reads plus cache
  * writes plus fresh input, not the marginal cost of that turn alone.
  */
-function transcript(turns, used = 60_000) {
-  const path = join(workspace, `t-${turns}-${used}.jsonl`);
+function transcript(turns, used = 60_000, { prefix = PREFIX, sizes = null } = {}) {
+  const path = join(workspace, `t-${turns}-${used}-${prefix}-${sizes ? sizes.join('_') : ''}.jsonl`);
   const rows = [];
-  for (let i = 0; i < turns; i++) {
-    const last = i === turns - 1;
+  // A context that GROWS, from the fixed prefix to `used`, as a real one does.
+  // Every row but the last at ~100 tokens hid a runway that charged the whole
+  // prefix to the turns taken.
+  const series = sizes || Array.from({ length: turns }, (_, i) =>
+    turns === 1 ? used : Math.round(prefix + ((used - prefix) * i) / (turns - 1)));
+  for (let i = 0; i < series.length; i++) {
+    const size = series[i];
     rows.push(JSON.stringify({
       type: 'assistant',
       timestamp: new Date(1_700_000_000_000 + i * 1000).toISOString(),
@@ -48,9 +56,9 @@ function transcript(turns, used = 60_000) {
         role: 'assistant',
         model: 'claude-opus-4',
         usage: {
-          cache_read_input_tokens: last ? used - 1_000 : 100,
-          cache_creation_input_tokens: last ? 900 : 10,
-          input_tokens: last ? 100 : 5,
+          cache_read_input_tokens: size - 1_000,
+          cache_creation_input_tokens: 900,
+          input_tokens: 100,
         },
       },
     }));
@@ -111,6 +119,34 @@ describe('the session numbers come from the transcript', () => {
 
   test('past every known window there is nothing honest to forecast', () => {
     expect(sessionUsage(transcript(20, 1_200_000))).toBeNull();
+  });
+
+  // Measured on a live session (2026-11-09): one request in, the model was told
+  // "~4 turns to compaction" because the 35k prefix was charged to that one turn.
+  test('a session one request in is not near compaction', () => {
+    seedArms();
+    const path = transcript(1, 0, { sizes: [35_000] });
+    expect(sessionUsage(path).perTurn).toBeNull();
+    expect(maybeSurface(dir, { transcriptPath: path, sessionId: 'live', state: {}, now: 5_000 }).text).toBeNull();
+  });
+
+  test('the rate is growth per request, not size per request', () => {
+    const usage = sessionUsage(transcript(3, 0, { sizes: [30_000, 30_500, 31_000] }));
+    expect(usage.perTurn).toBe(500);
+    expect(usage.used).toBe(31_000);
+  });
+
+  test('rows of one response count once', () => {
+    const usage = sessionUsage(transcript(6, 0, { sizes: [20_000, 20_000, 20_000, 30_000, 30_000, 40_000] }));
+    expect(usage.turns).toBe(3);
+    expect(usage.perTurn).toBe(10_000);
+  });
+
+  test('growth is measured from the last compaction', () => {
+    const usage = sessionUsage(transcript(6, 0, { sizes: [20_000, 100_000, 180_000, 30_000, 40_000, 50_000] }));
+    expect(usage.used).toBe(50_000);
+    expect(usage.turns).toBe(3);
+    expect(usage.perTurn).toBe(10_000);
   });
 });
 

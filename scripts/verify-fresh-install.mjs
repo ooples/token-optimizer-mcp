@@ -297,11 +297,14 @@ try {
   // It runs here rather than against the registry because `npm pack` produces the exact bytes
   // `npm publish` uploads: testing the tarball is testing the release, and it can be done BEFORE
   // publishing rather than after, when a bad version is already the one people get.
+  // The default (core) profile's working tools. install_doctor is served only with
+  // TOKEN_OPTIMIZER_TOOL_PROFILE=full since 3bb1b929 (never called in 134 measured
+  // sessions); `token-optimizer-doctor` is the same examination from the CLI.
   const REQUIRED_TOOLS = [
     'smart_read',
     'smart_grep',
     'smart_edit',
-    'install_doctor',
+    'wiki_write',
   ];
   const mcp = await new Promise((resolve) => {
     const child = spawn(

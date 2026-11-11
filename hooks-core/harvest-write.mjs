@@ -630,6 +630,46 @@ function derivationFor(graph, resolvedAnchors, evidence, evidenceIncomplete, anc
   };
 }
 
+/** Independent sessions that must re-derive a lesson before it is confirmed. */
+export const CONFIRM_SESSIONS = 3;
+/** Confidence of a confirmed lesson: above every single-session ceiling, below verified (0.95). */
+export const CONFIRMED_CONFIDENCE = 0.9;
+const MAX_CONFIRMED_BY = 20;
+
+/**
+ * Count an independent re-derivation of an existing lesson.
+ *
+ * A duplicate used to collapse silently, so a lesson re-learned in every
+ * session ranked exactly like one seen once. Measured in this repository's own
+ * graph: 341 derived writes over 1,166 Stop runs collapsed into about a dozen
+ * nodes -- the repetition was the strongest evidence the store held, and it was
+ * thrown away.
+ *
+ * Only `authoritativeSessionId` counts: it comes from the client's own hook
+ * payload. A `wiki_write` call carries a model-typed session id, and counting
+ * that would let a model confirm its own claim by inventing two more sessions.
+ * Only machine-derived findings are raised: a person's or an agent's claim
+ * already carries the confidence its author gave it.
+ */
+function confirmDuplicate(dir, node, authoritativeSessionId) {
+  if (!authoritativeSessionId || node.origin !== ORIGIN_HARVESTED) return;
+  const seen = Array.isArray(node.confirmedBy) ? node.confirmedBy : node.sessionId ? [node.sessionId] : [];
+  if (seen.includes(authoritativeSessionId)) return;
+  const confirmedBy = [...seen, authoritativeSessionId].slice(-MAX_CONFIRMED_BY);
+  const confirmed = confirmedBy.length >= CONFIRM_SESSIONS;
+  try {
+    putNode(dir, {
+      ...node,
+      confirmedBy,
+      ...(confirmed && (node.confidence ?? 0) < CONFIRMED_CONFIDENCE
+        ? { confidence: CONFIRMED_CONFIDENCE, confidenceLabel: 'probable' }
+        : {}),
+    });
+  } catch {
+    // A confirmation is a bonus; the lesson itself is already stored.
+  }
+}
+
 /**
  * Writes validated findings, returning the keys actually stored.
  *
@@ -737,6 +777,7 @@ export function writeHarvested(
         );
         if (!alreadyLinked) putEdge(dir, duplicate.id, 'derived_from', target);
       }
+      confirmDuplicate(dir, duplicate, authoritativeSessionId);
       written.push(duplicate.key);
       continue;
     }

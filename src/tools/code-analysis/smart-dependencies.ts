@@ -14,8 +14,25 @@
  */
 
 import { readFileSync, existsSync, statSync } from 'fs';
-import { parse as parseTypescript } from '@typescript-eslint/typescript-estree';
-import { parse as parseBabel } from '@babel/parser';
+import { createRequire } from 'node:module';
+import type { parse as ParseTypescript } from '@typescript-eslint/typescript-estree';
+import type { parse as ParseBabel } from '@babel/parser';
+// LOADED ON FIRST USE (2026-11-08). The MCP server builds every tool at
+// startup, and Claude Code waits for the server before composing a session's
+// first prompt: measured 2,243 ms to connect, ~2 s of it module loading. This
+// dependency is only needed when its tool actually runs.
+const requireLazy = createRequire(import.meta.url);
+const parseTypescript = (
+  code: string,
+  options: Parameters<typeof ParseTypescript>[1]
+): ReturnType<typeof ParseTypescript> =>
+  (
+    requireLazy('@typescript-eslint/typescript-estree') as {
+      parse: typeof ParseTypescript;
+    }
+  ).parse(code, options);
+const parseBabel: typeof ParseBabel = (...args) =>
+  (requireLazy('@babel/parser') as { parse: typeof ParseBabel }).parse(...args);
 import { relative, resolve, dirname, extname, join } from 'path';
 import { CacheEngine } from '../../core/cache-engine.js';
 import {

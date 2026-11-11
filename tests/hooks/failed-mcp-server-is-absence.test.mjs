@@ -179,7 +179,7 @@ describe('the hooks stop advertising a server that never connected', () => {
 
   test('a connected server gets the wiki_write guidance (positive control)', () => {
     const path = transcript([delta(T0, { added: [QUALIFIED] })]);
-    expect(edit('connected', path, env())).toContain('Call wiki_write');
+    expect(edit('connected', path, env())).toContain('## Record what you work out');
   });
 
   test('a failed server gets no wiki_write guidance', () => {
@@ -226,7 +226,7 @@ describe('the hooks stop advertising a server that never connected', () => {
       delta(T1, { added: [QUALIFIED] }),
     ]);
     const hookEnv = env();
-    expect(edit('reconnected', path, hookEnv)).toContain('Call wiki_write');
+    expect(edit('reconnected', path, hookEnv)).toContain('## Record what you work out');
     expect(stateOf(hookEnv, 'reconnected').optimizerToolOkAt?.wiki_write).toBe(
       Date.parse(T1)
     );

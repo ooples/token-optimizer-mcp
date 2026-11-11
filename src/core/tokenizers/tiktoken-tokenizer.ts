@@ -29,7 +29,8 @@ const SUPPORTED_TIKTOKEN_MODELS: readonly TiktokenModel[] = [
 
 export class TiktokenTokenizer implements ITokenizer {
   public readonly modelName: string;
-  private readonly encoder: Tiktoken;
+  private readonly tiktokenModel: TiktokenModel;
+  private encoderInstance: Tiktoken | undefined;
   private readonly cache: LruCache<string, number>;
 
   constructor(modelName: string, cache?: LruCache<string, number>) {
@@ -37,10 +38,21 @@ export class TiktokenTokenizer implements ITokenizer {
     this.cache =
       cache ??
       new LruCache<string, number>(DEFAULT_CACHE_SIZE, DEFAULT_CACHE_TTL_MS);
-    const tiktokenModel = TiktokenTokenizer.mapToTiktokenModel(modelName);
-    const { encoding_for_model } =
-      require('tiktoken') as typeof import('tiktoken');
-    this.encoder = encoding_for_model(tiktokenModel);
+    this.tiktokenModel = TiktokenTokenizer.mapToTiktokenModel(modelName);
+  }
+
+  /**
+   * Built on first count, not in the constructor: the MCP server constructs a
+   * tokenizer at startup, and instantiating tiktoken's WASM encoder there cost
+   * ~210 ms of the time Claude Code waits before a session's first prompt.
+   */
+  private get encoder(): Tiktoken {
+    if (!this.encoderInstance) {
+      const { encoding_for_model } =
+        require('tiktoken') as typeof import('tiktoken');
+      this.encoderInstance = encoding_for_model(this.tiktokenModel);
+    }
+    return this.encoderInstance;
   }
 
   public async countTokens(text: string): Promise<number> {
@@ -55,7 +67,8 @@ export class TiktokenTokenizer implements ITokenizer {
   }
 
   public free(): void {
-    this.encoder.free();
+    this.encoderInstance?.free();
+    this.encoderInstance = undefined;
   }
 
   public static supports(modelName: string): boolean {

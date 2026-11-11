@@ -44,6 +44,7 @@ import {
   hookInstallFor,
 } from './capabilities.mjs';
 import { mode } from './policy.mjs';
+import { LEAN_SWITCHES_SAVING_TOKENS, leanSwitchState } from './copilotprune.mjs';
 import {
   readManifest,
   verifyManifest,
@@ -2142,6 +2143,35 @@ export function probeCodex({ codexHome } = {}) {
 }
 
 /**
+ * Copilot's four lean user switches (copilotprune.mjs): which are off, and how
+ * to switch the rest off. Said to the person, never to the model -- the
+ * settings are theirs, and the saving (~560 tokens per request) is small enough
+ * that writing them is opt-in. Silent when Copilot is not installed.
+ */
+export function probeCopilotSwitches(env = process.env) {
+  const state = leanSwitchState(env);
+  if (!state.copilotInstalled) return [];
+  const name = 'copilot lean user switches';
+  if (!state.readable) {
+    return [ok(name, `${state.path} is not strict JSON, so it is reported and never written`)];
+  }
+  const on = state.switches.filter((item) => !item.off).map((item) => item.key);
+  if (!on.length) return [ok(name, 'all four are off')];
+  const commands = on.map((key) => `\`copilot config ${key} false\``).join(', ');
+  // INFORMATIONAL, NOT A WARNING: an optional ~2% saving on a healthy install
+  // must not add to the warning count every Copilot user sees.
+  return [
+    ok(
+      name,
+      `${on.join(', ')} ${on.length === 1 ? 'is' : 'are'} on; all four off measured ~${LEAN_SWITCHES_SAVING_TOKENS} ` +
+        `fewer tokens per Copilot request${state.declined ? ' (you restored them, so they are not written again)' : ''}. ` +
+        `Optional: run ${commands}, or set TOKEN_OPTIMIZER_COPILOT_LEAN_SWITCHES=write to let the managed ` +
+        '`copilot` launcher write the unset ones (undo: token-optimizer-learned toolprune restore --copilot)'
+    ),
+  ];
+}
+
+/**
  * Is the cache actually persisting?
  *
  * The server no longer dies when its database will not open -- it falls back to
@@ -2239,6 +2269,7 @@ export async function diagnose({
     ...sessionStart,
     ...probeGraph({ dir: graphDir }),
     ...probeCodex({ codexHome }),
+    ...probeCopilotSwitches(),
     ...probeCache({ degradedReason: cacheDegradedReason }),
     ...serverChecks,
   ];

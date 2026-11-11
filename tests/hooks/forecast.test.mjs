@@ -64,7 +64,7 @@ describe('the runway is a deadline, with a counterfactual half', () => {
     // preconditions, and both are asserted on their own below.
     seedArms({ treated: 30, withheld: MIN_CONTROL_TOUCHES + 2 });
     const air = runway(
-      { used: 60_000, capacity: 200_000, turns: 30, touches: 30 }, burnRate(readMetrics(dir)),
+      { used: 60_000, capacity: 200_000, turns: 30, perTurn: 2_000, touches: 30 }, burnRate(readMetrics(dir)),
     );
     expect(air.withGraph).toBeGreaterThan(0);
     // The half no tool without a holdout can produce.
@@ -73,7 +73,7 @@ describe('the runway is a deadline, with a counterfactual half', () => {
 
   test('the counterfactual half is omitted when unmeasurable', () => {
     seedArms({ withheld: 0 });
-    const air = runway({ used: 60_000, capacity: 200_000, turns: 30 }, burnRate(readMetrics(dir)));
+    const air = runway({ used: 60_000, capacity: 200_000, turns: 30, perTurn: 2_000 }, burnRate(readMetrics(dir)));
     expect(air.withGraph).toBeGreaterThan(0);
     expect(air.withoutGraph).toBeNull();
   });
@@ -88,7 +88,7 @@ describe('the panel degrades per-number, not all-or-nothing', () => {
 
   test('the runway says WHY the counterfactual is missing', () => {
     seedArms({ withheld: 0 });
-    const panel = forecastPanel(dir, { used: 60_000, capacity: 200_000, turns: 30 }, []);
+    const panel = forecastPanel(dir, { used: 60_000, capacity: 200_000, turns: 30, perTurn: 2_000 }, []);
     expect(panel.text).toMatch(/no counterfactual yet/i);
   });
 
@@ -104,7 +104,7 @@ describe('modelled and measured check each other', () => {
     for (let i = 0; i < 5; i++) {
       record(dir, { kind: 'substitute', anchor: `/t${i}.ts`, tokens: 100, bytesAvoided: 4_000_000 });
     }
-    const panel = forecastPanel(dir, { used: 60_000, capacity: 200_000, turns: 30 }, []);
+    const panel = forecastPanel(dir, { used: 60_000, capacity: 200_000, turns: 30, perTurn: 2_000 }, []);
     expect(panel.text).toMatch(/disagree/i);
     expect(panel.text).toMatch(/measured figure as authoritative/i);
   });
@@ -238,7 +238,7 @@ describe('the counterfactual is not published on a thin control arm', () => {
     // the fallback string says 'the control arm needs more volume'.
     seedArms({ treated: 30, withheld: 1 });
     const air = runway(
-      { used: 60_000, capacity: 200_000, turns: 30, touches: 30 }, burnRate(readMetrics(dir)),
+      { used: 60_000, capacity: 200_000, turns: 30, perTurn: 2_000, touches: 30 }, burnRate(readMetrics(dir)),
     );
     expect(air.withoutGraph).toBeNull();
     expect(air.counterfactual).toBe('thin-control');
@@ -247,7 +247,7 @@ describe('the counterfactual is not published on a thin control arm', () => {
 
   test('the panel says how short the arm is, rather than only that it is short', () => {
     seedArms({ treated: 30, withheld: 2 });
-    const panel = forecastPanel(dir, { used: 60_000, capacity: 200_000, turns: 30, touches: 30 });
+    const panel = forecastPanel(dir, { used: 60_000, capacity: 200_000, turns: 30, perTurn: 2_000, touches: 30 });
     expect(panel.text).toContain(`2 of the ${MIN_CONTROL_TOUCHES} held-out touches needed`);
   });
 
@@ -264,7 +264,7 @@ describe('a per-touch saving is converted before it is added to a per-turn cost'
     // the old arithmetic gave 40 -- the panel claiming the graph nearly doubled the runway when
     // it added about eight turns.
     const rate = { savedPerTouch: 1500, treatedTouches: 5, withheldTouches: MIN_CONTROL_TOUCHES };
-    const session = { used: 60_000, capacity: 200_000, turns: 30 };
+    const session = { used: 60_000, capacity: 200_000, turns: 30, perTurn: 2_000 };
 
     const sparse = runway({ ...session, touches: 5 }, rate);
     const dense = runway({ ...session, touches: 30 }, rate);
@@ -276,7 +276,7 @@ describe('a per-touch saving is converted before it is added to a per-turn cost'
 
   test('with no touch count the counterfactual is withheld, not assumed', () => {
     const rate = { savedPerTouch: 1500, treatedTouches: 5, withheldTouches: MIN_CONTROL_TOUCHES };
-    const air = runway({ used: 60_000, capacity: 200_000, turns: 30 }, rate);
+    const air = runway({ used: 60_000, capacity: 200_000, turns: 30, perTurn: 2_000 }, rate);
     expect(air.withoutGraph).toBeNull();
     expect(air.counterfactual).toBe('no-touch-density');
   });
@@ -289,7 +289,7 @@ describe('a measured loss is reported as a loss', () => {
     // more volume'. The one result unfavourable to the product was the one result the panel was
     // structurally incapable of showing, disguised as insufficient data.
     const rate = { savedPerTouch: -100, treatedTouches: 30, withheldTouches: MIN_CONTROL_TOUCHES };
-    const air = runway({ used: 60_000, capacity: 200_000, turns: 30, touches: 30 }, rate);
+    const air = runway({ used: 60_000, capacity: 200_000, turns: 30, perTurn: 2_000, touches: 30 }, rate);
 
     expect(air.counterfactual).toBe('costing');
     expect(air.withoutGraph).not.toBeNull();
@@ -299,19 +299,19 @@ describe('a measured loss is reported as a loss', () => {
 
   test('the panel says so in words', () => {
     const rate = { savedPerTouch: -100, treatedTouches: 30, withheldTouches: MIN_CONTROL_TOUCHES };
-    const air = runway({ used: 60_000, capacity: 200_000, turns: 30, touches: 30 }, rate);
+    const air = runway({ used: 60_000, capacity: 200_000, turns: 30, perTurn: 2_000, touches: 30 }, rate);
     expect(air.counterfactual).toBe('costing');
     // and the same through the panel, which is where a user actually reads it
     // A control arm that reads LESS than the treated arm: the graph is measurably a net cost.
     // Mild enough that the per-turn saving does not exceed the session's whole per-turn spend,
     // which is a different (and separately reported) situation.
     seedArms({ treated: 12, withheld: MIN_CONTROL_TOUCHES + 1, treatedRead: 800, withheldRead: 500 });
-    const panel = forecastPanel(dir, { used: 60_000, capacity: 200_000, turns: 30, touches: 12 });
+    const panel = forecastPanel(dir, { used: 60_000, capacity: 200_000, turns: 30, perTurn: 2_000, touches: 12 });
     expect(panel.text).toMatch(/measurably NOT extending the runway/);
   });
 
   test('an unmeasured saving is still distinguishable from a measured zero', () => {
-    const air = runway({ used: 60_000, capacity: 200_000, turns: 30, touches: 5 },
+    const air = runway({ used: 60_000, capacity: 200_000, turns: 30, perTurn: 2_000, touches: 5 },
       { savedPerTouch: null, treatedTouches: 5, withheldTouches: 0 });
     expect(air.counterfactual).toBe('unmeasured');
     expect(air.withoutGraph).toBeNull();
@@ -469,7 +469,7 @@ describe('a correction never replaces the thing it corrects', () => {
 });
 
 describe('the panel actually runs the calibration loop', () => {
-  const session = { sessionId: 'live', used: 60_000, capacity: 200_000, turns: 30, touches: 30 };
+  const session = { sessionId: 'live', used: 60_000, capacity: 200_000, turns: 30, perTurn: 2_000, touches: 30 };
 
   test('building a panel does NOT log a forecast', () => {
     // Inverted deliberately. calibration.mjs had zero shipped importers, and the first fix logged
@@ -525,7 +525,7 @@ describe('the panel actually runs the calibration loop', () => {
 });
 
 describe('the credibility check divides each arm by its own event count', () => {
-  const session = { sessionId: 'live', used: 60_000, capacity: 200_000, turns: 30, touches: 30 };
+  const session = { sessionId: 'live', used: 60_000, capacity: 200_000, turns: 30, perTurn: 2_000, touches: 30 };
 
   test('a session full of substitutions does not manufacture a divergence', () => {
     // THE DEFECT, observed live: `shadow.net` totals SUBSTITUTE events and `rate.treatedTouches`
