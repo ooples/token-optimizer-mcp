@@ -64,7 +64,7 @@ describe('routing maintenance lifecycle', () => {
     const recover = jest.fn(async () => true);
     const maintain = jest.fn(async () => ({ status: 'no-client' as const }));
     stops.push(
-      startRoutingMaintenance({ env, intervalMs: 100, recover, maintain })
+      startRoutingMaintenance({ env, intervalMs: 100, recover, maintain }).stop
     );
     await jest.advanceTimersByTimeAsync(200);
     expect(recover).toHaveBeenCalledTimes(3);
@@ -86,7 +86,7 @@ describe('routing maintenance lifecycle', () => {
       if (calls === 2) throw new Error('transient error');
       return { status: 'unchanged' as const };
     };
-    const stop = startRoutingMaintenance({ env, intervalMs: 100, maintain });
+    const { stop } = startRoutingMaintenance({ env, intervalMs: 100, maintain });
     stops.push(stop);
     await jest.advanceTimersByTimeAsync(1000);
     expect(calls).toBe(1);
@@ -101,7 +101,7 @@ describe('routing maintenance lifecycle', () => {
   it('leaves user endpoint changes and removed routing alone', async () => {
     const { env, path, home } = fixture();
     const maintain = jest.fn(async () => ({ status: 'unchanged' as const }));
-    stops.push(startRoutingMaintenance({ env, intervalMs: 100, maintain }));
+    stops.push(startRoutingMaintenance({ env, intervalMs: 100, maintain }).stop);
     writeFileSync(
       path,
       JSON.stringify({
@@ -124,11 +124,49 @@ describe('routing maintenance lifecycle', () => {
       });
       return { status: 'unchanged' as const };
     });
-    const stop = startRoutingMaintenance({ env, intervalMs: 100, maintain });
+    const { stop } = startRoutingMaintenance({ env, intervalMs: 100, maintain });
     stops.push(stop);
     stop();
     release();
     await jest.advanceTimersByTimeAsync(1000);
     expect(maintain).toHaveBeenCalledTimes(1);
+  });
+
+  const deferring = () =>
+    jest.fn(async (_env: NodeJS.ProcessEnv, options?: { switchTiming?: string }) =>
+      options?.switchTiming === 'when-no-session'
+        ? { status: 'deferred' as const, url: 'http://127.0.0.1:12345' }
+        : { status: 'written' as const }
+    );
+  const begin = async (options: Parameters<typeof startRoutingMaintenance>[0]) => {
+    const m = startRoutingMaintenance({ intervalMs: 100, parentPid: 4242, ...options });
+    stops.push(m.stop);
+    await jest.advanceTimersByTimeAsync(0);
+    m.stop();
+    return m;
+  };
+
+  it('prepares a new route at startup and hands the write to a committer at shutdown', async () => {
+    const { env } = fixture();
+    Object.assign(env, { CLAUDE_CODE_SESSION_ID: 'mine' });
+    const maintain = deferring();
+    const spawnCommit = jest.fn(() => true);
+    const m = await begin({ env, maintain, spawnCommit });
+    expect(maintain.mock.calls.map((call) => call[1]?.switchTiming)).toEqual(['when-no-session']);
+    expect(spawnCommit).not.toHaveBeenCalled();
+    expect(m.commitDeferred()).toBe(true);
+    expect(spawnCommit).toHaveBeenCalledWith(env, { pids: [4242], sessionId: 'mine' });
+    // Once, not again on a second shutdown path; and the server itself never writes.
+    expect(m.commitDeferred()).toBe(false);
+    expect(maintain).toHaveBeenCalledTimes(1);
+  });
+
+  it('has nothing to hand over when startup did not defer', async () => {
+    const { env } = fixture();
+    const maintain = jest.fn(async () => ({ status: 'unchanged' as const }));
+    const spawnCommit = jest.fn(() => true);
+    const m = await begin({ env, maintain, spawnCommit });
+    expect(m.commitDeferred()).toBe(false);
+    expect(spawnCommit).not.toHaveBeenCalled();
   });
 });

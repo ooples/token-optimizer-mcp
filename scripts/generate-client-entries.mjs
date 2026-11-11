@@ -55,6 +55,7 @@ const ENTRIES = [
   ['integrations/opencode/hooks', 'opencode', 'pre-tool', 'pre-tool.mjs'],
   ['integrations/opencode/hooks', 'opencode', 'post-tool', 'post-tool.mjs'],
   ['plugin/hooks', 'claude-code', 'post-tool', 'post-tool.mjs'],
+  ['plugin/hooks', 'claude-code', 'post-tool-failure', 'post-tool-failure.mjs'],
   ['plugin/hooks', 'claude-code', 'stop', 'stop.mjs'],
   ['integrations/copilot/.github/hooks', 'copilot', 'session-start', 'session-start.mjs'],
   ['integrations/copilot/.github/hooks', 'copilot', 'pre-tool', 'pre-tool.mjs'],

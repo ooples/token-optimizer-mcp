@@ -11,7 +11,16 @@
  * the recent log tail, so a session can say so at its start, and doctor can
  * name the slow phase from the marks observability.mjs records.
  */
-import { closeSync, openSync, readSync, readdirSync, statSync } from 'node:fs';
+import {
+  closeSync,
+  mkdirSync,
+  openSync,
+  readFileSync,
+  readSync,
+  readdirSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { join } from 'node:path';
 import { hookLogDirectory } from './observability.mjs';
 
@@ -170,4 +179,51 @@ export function slowHookNotice(latency = recentToolHookLatency()) {
     `Each slow hook delays the tool call it guards.${phase} Tell the user once; ` +
     '`npx token-optimizer-doctor` shows the breakdown.'
   );
+}
+
+const NOTICE_FILE = 'slow-hook-notice.json';
+/** How long one announcement of an unchanged condition stands. */
+export const NOTICE_REPEAT_MS = 7 * 24 * 60 * 60 * 1000;
+
+/**
+ * The notice, at most once per condition: null again until what is slow
+ * changes, or a week has passed.
+ *
+ * WHY. The notice asks the model to "tell the user once", yet it was rebuilt
+ * from the event log at every session start and injected every time -- ~210
+ * characters of machine state, written to the prompt cache at the 1-hour rate
+ * and re-read on every turn of every session, while the 24-hour kill window
+ * kept the same two timeouts alive. Measured in the SWE-bench pilot
+ * (2026-11-07): part of the ~1,400 tokens of fixed context that made the plugin
+ * arm cost 1.23x control on short tasks.
+ *
+ * The condition is its KIND -- slow, killed, and where the time went -- not the
+ * counts, which drift run to run and would re-announce the same problem daily.
+ */
+export function takeSlowHookNotice({
+  dir = hookLogDirectory(),
+  now = Date.now(),
+  latency = recentToolHookLatency({ dir, now }),
+} = {}) {
+  const notice = slowHookNotice(latency);
+  if (!notice) return null;
+  const condition = [
+    latency.p90Ms !== null && latency.p90Ms > SLOW_P90_MS ? 'slow' : '',
+    latency.killed >= MIN_KILLED ? 'killed' : '',
+    latency.slowestPhase?.name || '',
+  ].join('|');
+  const path = join(dir, NOTICE_FILE);
+  try {
+    const last = JSON.parse(readFileSync(path, 'utf8'));
+    if (last?.condition === condition && now - Number(last.at) < NOTICE_REPEAT_MS) return null;
+  } catch {
+    // Never announced, or unreadable: announce.
+  }
+  try {
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(path, JSON.stringify({ condition, at: now }));
+  } catch {
+    // Unrecorded: it is said again next session, which is the safe direction.
+  }
+  return notice;
 }

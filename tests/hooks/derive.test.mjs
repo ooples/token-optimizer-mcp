@@ -35,7 +35,9 @@ import {
   putEdge,
   nodeId,
   projectRootFor,
+  unrootedRoot,
 } from '../../hooks-core/wiki.mjs';
+import { CONFIRMED_CONFIDENCE, writeHarvested } from '../../hooks-core/harvest-write.mjs';
 import { registerProject, projectIdFor } from '../../hooks-core/projects.mjs';
 import { sessionActivity } from '../../hooks-core/adapter.mjs';
 import { indexFile } from '../../hooks-core/staleness.mjs';
@@ -50,6 +52,7 @@ import {
   commandBody,
   commandProgram,
   projectAnchor,
+  userInstructionsAnchor,
 } from '../../hooks-core/derive.mjs';
 
 let dir;
@@ -211,6 +214,83 @@ describe('a command that failed and then succeeded', () => {
     );
     expect(byDerivation.get('command-transition')).toBe(CONFIDENCE.command);
     expect(byDerivation.get('test-transition')).toBe(CONFIDENCE.test);
+  });
+});
+
+/**
+ * Corrections from a session with no project.
+ *
+ * Measured on the machine this was written on: the unrooted store logged 1,891
+ * derive runs, 225 candidates and ZERO written findings. Every candidate was a
+ * person's correction, anchored to the unrooted root -- a directory, which
+ * `indexFile` cannot read -- so all of them were refused.
+ */
+describe('a correction made outside any project', () => {
+  it("is anchored to the person's own instruction file", () => {
+    const userFile = join(dir, 'CLAUDE.md');
+    writeFileSync(userFile, '# rules\n');
+    archiveTurns('s', [
+      { role: 'user', text: 'fix the flaky test' },
+      { role: 'assistant', text: 'done', tools: [] },
+      { role: 'user', text: 'no, do all five issues in one PR' },
+    ]);
+    outcome('deploy', { success: false, output: 'connection refused by host', at: 1 });
+    outcome('deploy --retry', { success: true, at: 2 });
+
+    const candidates = run({ projectRoot: unrootedRoot(), userAnchor: userFile }).candidates;
+    const feedback = candidates.find((c) => c.type === 'feedback');
+    expect(feedback.anchors).toEqual([userFile]);
+    // A command claim from a homeless session has nothing it is about: it
+    // keeps the unresolvable root, and stays refused.
+    expect(candidates.find((c) => c.type === 'command').anchors).toEqual([unrootedRoot()]);
+  });
+
+  it('keeps the project anchor inside a project', () => {
+    const manifest = withManifest();
+    archiveTurns('s', [{ role: 'user', text: 'no, use npm test rather than npx jest' }]);
+    const feedback = run({ userAnchor: join(dir, 'elsewhere.md') }).candidates.find((c) => c.type === 'feedback');
+    expect(feedback.anchors).toEqual([manifest]);
+  });
+
+  it('finds the first instruction file the person has, or none', () => {
+    const home = join(dir, 'home');
+    mkdirSync(join(home, '.claude'), { recursive: true });
+    expect(userInstructionsAnchor(home)).toBeNull();
+    writeFileSync(join(home, '.claude', 'CLAUDE.md'), 'x');
+    expect(userInstructionsAnchor(home)).toBe(join(home, '.claude', 'CLAUDE.md'));
+    writeFileSync(join(home, 'CLAUDE.md'), 'x');
+    expect(userInstructionsAnchor(home)).toBe(join(home, 'CLAUDE.md'));
+  });
+});
+
+describe('a lesson re-derived in independent sessions', () => {
+  const lesson = (manifest) => ({
+    type: 'command',
+    claim: '`npm test -- x` succeeded in this project where `npx jest x` failed',
+    confidence: CONFIDENCE.test,
+    confidenceLabel: 'speculative',
+    anchors: [manifest],
+  });
+  const stored = () => storedFindings().find((node) => node.type === 'command');
+
+  it('is raised to confirmed on the third authoritative session, and not before', () => {
+    const manifest = withManifest();
+    for (const [index, session] of ['a', 'b', 'c'].entries()) {
+      writeHarvested(dir, [lesson(manifest)], { projectRoot: dir, sessionId: session, authoritativeSessionId: session });
+      if (index < 2) expect(stored().confidence).toBe(CONFIDENCE.test);
+    }
+    expect(stored().confidence).toBe(CONFIRMED_CONFIDENCE);
+    expect(stored().confirmedBy).toEqual(['a', 'b', 'c']);
+    expect(storedFindings().filter((node) => node.type === 'command')).toHaveLength(1);
+  });
+
+  it('is not confirmed by the same session twice, nor by a model-typed session id', () => {
+    const manifest = withManifest();
+    writeHarvested(dir, [lesson(manifest)], { projectRoot: dir, sessionId: 'a', authoritativeSessionId: 'a' });
+    writeHarvested(dir, [lesson(manifest)], { projectRoot: dir, sessionId: 'a', authoritativeSessionId: 'a' });
+    writeHarvested(dir, [lesson(manifest)], { projectRoot: dir, sessionId: 'invented-1' });
+    writeHarvested(dir, [lesson(manifest)], { projectRoot: dir, sessionId: 'invented-2' });
+    expect(stored().confidence).toBe(CONFIDENCE.test);
   });
 });
 
@@ -928,6 +1008,85 @@ const toolResult = (id, content, at) => ({
   },
   timestamp: at,
   toolUseResult: `Error: ${content}`,
+});
+
+/** A result the client recorded as a success: no `is_error`, no exit line. */
+const okResult = (id, content, at) => ({
+  type: 'user',
+  message: { role: 'user', content: [{ type: 'tool_result', content, tool_use_id: id }] },
+  timestamp: at,
+});
+
+describe('a failure a pipe hid from the client', () => {
+  // `npm run deploy -- --retry 2>&1 | tail -5` exits with tail's 0, so Claude
+  // Code records it as a success and PostToolUse fires with success: true. Paired
+  // with the real failure before it, that event read as the retry FIXING the
+  // deploy -- a false lesson at the command detector's confidence.
+  const retry = 'npm run deploy -- --retry 2>&1 | tail -5';
+  const scenario = () => {
+    withManifest();
+    recordToolOutcome(dir, {
+      kind: 'tool-outcome',
+      surface: 'command',
+      anchor: retry,
+      toolCallId: 'toolu_2',
+      success: true,
+      at: Date.parse('2026-08-26T10:01:01.000Z'),
+    });
+    return transcriptFile([
+      toolUse('toolu_1', 'npm run deploy', '2026-08-26T10:00:00.000Z'),
+      toolResult('toolu_1', 'Exit code 1\nconnection refused by host', '2026-08-26T10:00:01.000Z'),
+      toolUse('toolu_2', retry, '2026-08-26T10:01:00.000Z'),
+      okResult('toolu_2', 'npm ERR! code ELIFECYCLE\nnpm ERR! errno 1', '2026-08-26T10:01:01.000Z'),
+    ]);
+  };
+
+  it('is read from the transcript as a failure, marked as one the client saw succeed', () => {
+    const failures = failedResultsFromTranscript(scenario());
+    expect(failures.map((f) => [f.toolCallId, f.exit, f.masked ?? false])).toEqual([
+      ['toolu_1', 1, false],
+      ['toolu_2', null, true],
+    ]);
+  });
+
+  it('takes the false success out of the run, so the real fix after it still pairs', () => {
+    // Left in, the masked "success" consumed the deploy failure and was then
+    // refused as a pipeline, so the genuine green run that followed paired with
+    // nothing and the lesson was lost.
+    const path = scenario();
+    recordToolOutcome(dir, {
+      kind: 'tool-outcome',
+      surface: 'command',
+      anchor: 'npm run deploy -- --retry 2>&1',
+      toolCallId: 'toolu_3',
+      success: true,
+      at: Date.parse('2026-08-26T10:02:01.000Z'),
+    });
+    const claims = run({ transcriptPath: path })
+      .candidates.filter((c) => c.type === 'command')
+      .map((c) => c.claim);
+    expect(claims).toEqual([
+      '`npm run deploy -- --retry 2>&1` succeeded in this project where `npm run deploy` failed',
+    ]);
+  });
+
+  it('keeps `2>&1` a single attempt, which is how agents write most commands', () => {
+    withManifest();
+    outcome('npm run deploy', { success: false, output: 'connection refused', at: 1 });
+    outcome('npm run deploy -- --retry 2>&1', { success: true, at: 2 });
+    expect(run().candidates.filter((c) => c.type === 'command').map((c) => c.claim)).toEqual([
+      '`npm run deploy -- --retry 2>&1` succeeded in this project where `npm run deploy` failed',
+    ]);
+  });
+
+  it('leaves the same pipeline alone when the run passed', () => {
+    withManifest();
+    const path = transcriptFile([
+      toolUse('toolu_9', 'npm test 2>&1 | tail -5', '2026-08-26T10:00:00.000Z'),
+      okResult('toolu_9', 'Tests:       12 passed, 12 total', '2026-08-26T10:00:01.000Z'),
+    ]);
+    expect(failedResultsFromTranscript(path)).toEqual([]);
+  });
 });
 
 describe('a failure that exists only in the transcript', () => {

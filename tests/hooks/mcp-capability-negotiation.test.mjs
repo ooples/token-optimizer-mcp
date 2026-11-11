@@ -273,7 +273,6 @@ describe('session policy honesty', () => {
 
   test('does not claim or name unavailable schemas', () => {
     const text = policyText(true, new Set(), false);
-    expect(text).toMatch(/no positive evidence/i);
     expect(text).not.toContain('smart_grep');
     expect(text).not.toContain('wiki_write');
     expect(text).toMatch(/native tools/i);
@@ -289,8 +288,28 @@ describe('session policy honesty', () => {
       true
     );
     expect(text).toContain('smart_grep');
-    expect(text).toContain('optimize_session');
     expect(text).not.toContain('smart_read');
+    // optimize_session is in the MCP server instructions every client gets;
+    // the report is for the person. Neither is repeated here.
+    expect(text).not.toContain('optimize_session');
     expect(text).not.toContain('get_optimization_report');
+  });
+
+  // The evidence grade lives in toolEvidence; the prose only carries what
+  // changes a decision (2026-11-07 context diet).
+  test('does not narrate the evidence grade', () => {
+    for (const proven of [true, false])
+      for (const tools of [new Set(), new Set(['smart_grep'])]) {
+        const text = policyText(true, tools, proven);
+        expect(text.startsWith('# Token optimization is active')).toBe(true);
+        expect(text).not.toMatch(/host named|not confirmed|no positive evidence|declares \d+ optimizer|proven empty/i);
+      }
+  });
+
+  test('says what to do on a missing tool only when routing to unproven tools', () => {
+    const fallback = /reports no such tool, use the built-in tool/;
+    expect(policyText(true, new Set(['smart_grep']), false)).toMatch(fallback);
+    expect(policyText(true, new Set(['smart_grep']), true)).not.toMatch(fallback);
+    expect(policyText(true, new Set(), false)).not.toMatch(fallback);
   });
 });

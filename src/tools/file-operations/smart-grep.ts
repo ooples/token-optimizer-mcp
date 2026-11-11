@@ -295,11 +295,25 @@ export async function gitIgnoredGlobs(
   return entries.map((entry) => (entry.endsWith('/') ? `${entry}**` : entry));
 }
 
+/** A file whose extension already says it is not text. */
+function isBinaryType(filePath: string): boolean {
+  try {
+    return ['image', 'video', 'audio', 'binary', 'archive'].includes(
+      detectFileType(filePath) || ''
+    );
+  } catch {
+    return false;
+  }
+}
+
+/** How much of a file's start is checked for a NUL byte. */
+const BINARY_PROBE_BYTES = 8192;
+
 /** Inspect a bounded prefix; .pdb and .so can also be ordinary text formats. */
 async function hasBinaryPrefix(filePath: string): Promise<boolean> {
   const handle = await open(filePath, 'r');
   try {
-    const probe = Buffer.allocUnsafe(8192);
+    const probe = Buffer.allocUnsafe(BINARY_PROBE_BYTES);
     let total = 0;
     while (total < probe.length) {
       const { bytesRead } = await handle.read(
@@ -804,8 +818,17 @@ export class SmartGrepTool {
       // found, which cannot be known until files are actually read.
       const streamState: StreamState = { truncated: false };
 
-      /** Path-and-stat filters, applied per file as it arrives. */
-      const passesFilters = async (file: string): Promise<boolean> => {
+      /**
+       * Path-and-stat filters, applied per file as it arrives.
+       *
+       * `probeContent: false` skips the NUL-byte prefix probe and leaves it to a
+       * caller that reads the whole file next anyway (see the search loop):
+       * probing opened every file a second time.
+       */
+      const passesFilters = async (
+        file: string,
+        { probeContent = true }: { probeContent?: boolean } = {}
+      ): Promise<boolean> => {
         try {
           if (opts.extensions.length > 0) {
             const hasAllowedExt = opts.extensions.some((ext) =>
@@ -822,7 +845,10 @@ export class SmartGrepTool {
           const stats = statSync(file);
           if (stats.size > opts.maxFileSize) return false;
 
-          if (opts.skipBinary && (await this.isBinaryFile(file))) return false;
+          if (opts.skipBinary) {
+            if (isBinaryType(file)) return false;
+            if (probeContent && (await this.isBinaryFile(file))) return false;
+          }
 
           return true;
         } catch {
@@ -911,10 +937,23 @@ export class SmartGrepTool {
             searchTruncatedBy = 'cap';
             break;
           }
-          if (!(await passesFilters(file))) continue;
+          if (!(await passesFilters(file, { probeContent: false }))) continue;
           try {
+            // ONE READ PER FILE (2026-11-07). The binary probe used to open the
+            // file separately -- an async open, read and close, three awaits
+            // per file -- before this read opened it again. On 2,000 one-byte
+            // files that was ~1.3 ms a file, most of it idle between awaits,
+            // and enough under a loaded test run to time out a 5 s test. The
+            // probe is the same one hasBinaryPrefix applies: a NUL in the first
+            // BINARY_PROBE_BYTES.
+            const raw = readFileSync(file);
+            if (
+              opts.skipBinary &&
+              raw.subarray(0, BINARY_PROBE_BYTES).includes(0)
+            )
+              continue;
             filesSearched++;
-            const content = readFileSync(file, opts.encoding);
+            const content = raw.toString(opts.encoding);
             const lines = content.split(/\r?\n/);
             const fileMatches: GrepMatch[] = [];
 
@@ -1307,13 +1346,7 @@ export class SmartGrepTool {
    */
   private async isBinaryFile(filePath: string): Promise<boolean> {
     try {
-      const fileType = detectFileType(filePath);
-      if (
-        ['image', 'video', 'audio', 'binary', 'archive'].includes(
-          fileType || ''
-        )
-      )
-        return true;
+      if (isBinaryType(filePath)) return true;
       return await hasBinaryPrefix(filePath);
     } catch {
       return false;

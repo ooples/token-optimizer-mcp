@@ -75,6 +75,10 @@ export const WIRING = [
   // and for Agent/Task it is lean handoffs, which never fired across the
   // benchmarks and are opt-in (output-compact.mjs, leanHandoffEnabled).
   { event: 'PostToolUse', file: 'post-tool.mjs', matcher: 'Edit|MultiEdit|Write|Bash|PowerShell|Grep|mcp__.*__(?:smart_edit|smart_write)' },
+  // The loop guard (loopguard.mjs): a failed call fires only this event, never
+  // PostToolUse, so a failing loop is invisible without it. Unmatched, because
+  // it fires only on failure and a loop can fail in any tool.
+  { event: 'PostToolUseFailure', file: 'post-tool-failure.mjs', matcher: null },
   { event: 'PreCompact', file: 'precompact-optimize.mjs', matcher: null },
   { event: 'Stop', file: 'stop.mjs', matcher: null },
 ];

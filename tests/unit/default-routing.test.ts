@@ -30,6 +30,8 @@ import {
   callerChoseEndpoint,
   routingManifestFile,
   legacyRoutingManifestFile,
+  liveClaudeSessions,
+  liveClaudeSessionEntries,
 } from '../../src/proxy/default-routing.js';
 
 let home;
@@ -594,5 +596,88 @@ describe('the record lives beside the settings file it describes (2026-10-23)', 
       readFileSync(legacyRoutingManifestFile(env), 'utf8')
     );
     expect(Object.keys(legacy.entries)).toEqual([other]);
+  });
+});
+
+describe('a route is never switched on under a running session (2026-11-07)', () => {
+  // Claude Code applies a settings change between two requests of a running session, and does not
+  // send the same request to a loopback endpoint as to Anthropic's, so installing the route from
+  // inside a session re-sent everything after the tool definitions uncached: $0.060 against $0.030
+  // for a two-command headless task, measured.
+  const later = { switchTiming: 'when-no-session' as const };
+
+  it('prepares the route but leaves the file alone when the client is on a working endpoint', async () => {
+    write({ model: 'opus' });
+    const result = await applyDefaultRouting(route, env, later);
+    expect(result).toMatchObject({ status: 'deferred', url: served });
+    expect(read()).toEqual({ model: 'opus' });
+    expect(readRoutingManifest(env).entries[claudeSettingsFile(env)]).toBeUndefined();
+  });
+
+  it('defers in front of the user’s own gateway too', async () => {
+    write({ env: { ANTHROPIC_BASE_URL: 'https://gateway.example' } });
+    expect((await applyDefaultRouting(route, env, later)).status).toBe('deferred');
+    expect(read().env.ANTHROPIC_BASE_URL).toBe('https://gateway.example');
+  });
+
+  it('repairs a moved port at once: the session is pointed at a port nobody serves', async () => {
+    write({ model: 'opus' });
+    await applyDefaultRouting(route, env);
+    const moved = async () => 'http://127.0.0.1:45799';
+    expect((await applyDefaultRouting(moved, env, later)).status).toBe('written');
+    expect(read().env.ANTHROPIC_BASE_URL).toBe('http://127.0.0.1:45799');
+  });
+
+  it('heals a dead route at once as well', async () => {
+    write({ model: 'opus' });
+    await applyDefaultRouting(route, env);
+    expect((await applyDefaultRouting(unavailable, env, later)).status).toBe('healed');
+    expect(read().env?.ANTHROPIC_BASE_URL).toBeUndefined();
+  });
+
+  it('writes when told to, which is what a deferred route is committed with', async () => {
+    write({ model: 'opus' });
+    expect((await applyDefaultRouting(route, env, later)).status).toBe('deferred');
+    expect((await applyDefaultRouting(route, env, { switchTiming: 'now' })).status).toBe('written');
+    expect(read().env.ANTHROPIC_BASE_URL).toBe(served);
+  });
+});
+
+describe('which other Claude Code sessions are running', () => {
+  const registry = () => join(home, '.claude', 'sessions');
+  const enter = (pid, sessionId) => {
+    mkdirSync(registry(), { recursive: true });
+    writeFileSync(join(registry(), `${pid}.json`), JSON.stringify({ pid, sessionId }));
+  };
+  // A pid that is certainly not running: above the Windows and Linux maxima.
+  const dead = 2 ** 31 - 2;
+
+  it('is none when the client has never run a session', () => {
+    write({});
+    expect(liveClaudeSessions(env)).toEqual([]);
+  });
+
+  it('counts live processes only, and never the session asking', () => {
+    write({});
+    enter(process.pid, 'other');
+    enter(dead, 'crashed');
+    expect(liveClaudeSessions(env)).toEqual([process.pid]);
+    expect(liveClaudeSessions(env, { pids: [process.pid] })).toEqual([]);
+    // A launcher shim changes the parent pid; the session id Claude Code passes still matches.
+    expect(liveClaudeSessions(env, { pids: [12], sessionId: 'other' })).toEqual([]);
+  });
+
+  it('lists the live entries with their session ids, the asking one included', () => {
+    write({});
+    enter(process.pid, 'mine');
+    enter(dead, 'gone');
+    expect(liveClaudeSessionEntries(env)).toEqual([{ pid: process.pid, sessionId: 'mine' }]);
+  });
+
+  it('cannot tell when the registry is unreadable, and says so', () => {
+    write({});
+    // A file where the directory should be: readable as nothing, which is not the same as none.
+    writeFileSync(registry(), 'not a directory');
+    expect(liveClaudeSessions(env)).toBeNull();
   });
 });

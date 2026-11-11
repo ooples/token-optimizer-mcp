@@ -158,6 +158,10 @@ beforeAll(async () => {
       TOKEN_OPTIMIZER_SHARED_DIR: join(fixtures, '.wiki'),
       TOKEN_OPTIMIZER_STATE_DIR: join(fixtures, '.state'),
       TOKEN_OPTIMIZER_LOG_DIR: join(fixtures, '.logs'),
+      // The contract covers the whole catalog, including the audit tools that
+      // left the default profile on 2026-11-07 (mcp-tool-profiles.test.ts
+      // pins the default itself).
+      TOKEN_OPTIMIZER_TOOL_PROFILE: 'full',
     },
   });
 

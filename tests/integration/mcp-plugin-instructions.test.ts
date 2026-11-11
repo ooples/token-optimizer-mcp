@@ -102,16 +102,17 @@ describe('instructions by install kind', () => {
   it('a plugin install is told not to load the tools just to read or search', () => {
     const text = plugin.result.instructions ?? '';
     expect(text).toContain(
-      'already compact the output of the built-in Read, Grep and Bash tools'
+      'Built-in Read, Grep and Bash output is already compacted'
     );
+    expect(text).toContain('use those for ordinary reads and searches');
     expect(text).toContain(
-      'Do not load these tools with ToolSearch just to read or search'
+      'Load one of these tools with ToolSearch only for what they cannot do'
     );
-    expect(text).toContain('Never call or redirect to an unlisted schema');
+    expect(text).toContain('Never call an unlisted schema');
     // Enforce mode refuses large built-in reads and names smart_read: that wins.
-    expect(text).toContain(
-      'when a hook refuses a built-in call and names one of these tools'
-    );
+    expect(text).toContain('or when a hook names one');
+    // The code-mode catalog advice never applied to Claude Code (2026-11-07).
+    expect(text).not.toContain('ALL_TOOLS');
     expect(text).not.toContain('mandatory routing policy');
     expect(text).not.toContain('the first time a large read');
   });
@@ -120,5 +121,7 @@ describe('instructions by install kind', () => {
     const text = generic.result.instructions ?? '';
     expect(text).toContain('mandatory routing policy, not a preference');
     expect(text).not.toContain('Do not load these tools with ToolSearch');
+    expect(text).not.toContain('only for what they cannot do');
+    expect(text).toContain('ALL_TOOLS');
   });
 });

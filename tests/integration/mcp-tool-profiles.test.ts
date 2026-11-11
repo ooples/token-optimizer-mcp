@@ -351,12 +351,14 @@ describe('MCP tool profiles over the real stdio transport', () => {
       names('full'),
     ]);
 
+    // The default profile's read side of the graph is wiki_query (wiki_read
+    // left the default on 2026-11-07, never having been called).
     expect(baseline).toEqual([]);
-    expect(optimizer).not.toEqual(
-      expect.arrayContaining(['wiki_read', 'wiki_write'])
-    );
-    expect(retrieval).toContain('wiki_read');
+    expect(optimizer).toContain('smart_read');
+    expect(optimizer).not.toContain('wiki_query');
+    expect(optimizer).not.toContain('wiki_write');
+    expect(retrieval).toContain('wiki_query');
     expect(retrieval).not.toContain('wiki_write');
-    expect(full).toEqual(expect.arrayContaining(['wiki_read', 'wiki_write']));
+    expect(full).toEqual(expect.arrayContaining(['wiki_query', 'wiki_write']));
   });
 });

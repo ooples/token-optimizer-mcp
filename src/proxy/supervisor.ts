@@ -38,7 +38,6 @@ import {
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { startProxy } from './server.js';
 import type { TransformationLog } from './transformations.js';
 import type { AccountingRecord } from './accounting.js';
 
@@ -537,7 +536,13 @@ export async function runSupervisor(
           server: listener,
           port,
           transformations,
-        } = await startProxy({
+        } = await // IMPORTED HERE, NOT AT THE TOP. This module is also loaded by the MCP
+        // server's routing maintenance, which only checks health and spawns;
+        // a static import pulled the whole compression stack (and
+        // @babel/parser) into every MCP server a moment after its handshake.
+        (
+          await import('./server.js')
+        ).startProxy({
           upstream,
           port: derived ?? 0,
           // THE PROJECT IS THE CALLER'S, OR THERE IS NONE.

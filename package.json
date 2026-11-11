@@ -21,7 +21,9 @@
     "token-optimizer-diagnostics": "./scripts/export-diagnostics.mjs",
     "token-optimizer-proxy": "./dist/proxy/cli.js",
     "token-optimizer-run": "./scripts/run-client.mjs",
-    "token-optimizer-route": "./scripts/route-client.mjs"
+    "token-optimizer-route": "./scripts/route-client.mjs",
+    "token-optimizer-learned": "./scripts/learned.mjs",
+    "token-optimizer-statusline": "./scripts/statusline-tap.mjs"
   },
   "files": [
     "dist/**/*",

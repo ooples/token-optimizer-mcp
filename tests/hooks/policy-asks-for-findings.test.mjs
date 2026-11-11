@@ -72,26 +72,28 @@ describe('the standing policy asks for findings', () => {
 });
 
 /**
- * ...and says whether anything else is going to extract them.
+ * ...in one short line, whatever extracts findings after the session.
  *
- * The state was legible only from the doctor, which is a place somebody goes
- * after they already suspect a problem. A user watching a graph fill with
- * structural nodes and no verdicts has no reason to suspect one -- the failure
- * this project has now measured twice -- and the model holding a conclusion has
- * no way to know whether dropping it costs anything.
- *
- * SO THE LINE IS ADDRESSED TO THE MODEL, which is what earns it a place in the
- * prefix instead of a systemMessage. Each mode is asserted separately because
- * the useful content differs per mode, and the one a default install actually
- * gets is the one most likely to be written carelessly.
+ * It used to end with a per-mode notice of what would extract findings after
+ * the session (local endpoint, credential, host CLI, opted out, none). On the
+ * 15-pair learned SWE-bench pilot the ~1,000-character block was injected in 8
+ * of 13 plugin sessions and the model made 0 wiki_write calls, so it is now one
+ * line. The extraction state is the person's configuration, and doctor's
+ * harvest check states it to them.
  */
-describe('the standing policy states what will extract findings after the session', () => {
+describe('the recording guidance is one short line in every harvest mode', () => {
   const KEYS = [
     'TOKEN_OPTIMIZER_MODE',
     'TOKEN_OPTIMIZER_HARVEST',
     'TOKEN_OPTIMIZER_HARVEST_ENDPOINT',
     'TOKEN_OPTIMIZER_API_KEY',
     'ANTHROPIC_API_KEY',
+  ];
+  const MODES = [
+    {},
+    { TOKEN_OPTIMIZER_API_KEY: 'sk-test' },
+    { TOKEN_OPTIMIZER_HARVEST: '0' },
+    { TOKEN_OPTIMIZER_HARVEST_ENDPOINT: 'http://localhost:11434/v1/chat/completions' },
   ];
   const saved = new Map();
 
@@ -110,67 +112,33 @@ describe('the standing policy states what will extract findings after the sessio
     }
   });
 
-  it('says a local endpoint runs it free and private, with nothing leaving the machine', () => {
-    // The configuration a user would choose if they knew it existed, and the one
-    // that was buried deepest: no credential, no billing, no digest sent.
-    process.env.TOKEN_OPTIMIZER_HARVEST_ENDPOINT =
-      'http://127.0.0.1:11434/v1/chat/completions';
-    const text = recordingGuidance();
-
-    expect(text).toMatch(/local model endpoint is configured/i);
-    expect(text).toMatch(/free and private/i);
-    expect(text).toMatch(/nothing leaving this machine/i);
-  });
-
-  it('names what a credentialed harvest sends, and what it never sends', () => {
-    process.env.TOKEN_OPTIMIZER_API_KEY = 'sk-test';
-    const text = recordingGuidance();
-
-    expect(text).toMatch(/bounded digest/i);
-    expect(text).toMatch(/never file contents/i);
-  });
-
-  it('on a machine with no credential, states the consequence and names the free option', () => {
-    // THE DEFAULT STATE, and the whole reason this line exists. `off:no-key` is
-    // CI, corporate laptops and every subscription-only login.
-    const text = recordingGuidance();
-
-    expect(text).toMatch(/no separate extractor will run/i);
-    expect(text).toMatch(/derived locally/i);
-    expect(text).toMatch(/TOKEN_OPTIMIZER_HARVEST_ENDPOINT/);
-  });
-
-  it('does not argue with a deliberate opt-out, but still states the consequence', () => {
-    // Nagging about a setting somebody chose is how a notice stops being read,
-    // and this one is charged to every session's prefix.
-    process.env.TOKEN_OPTIMIZER_HARVEST = '0';
-    process.env.TOKEN_OPTIMIZER_API_KEY = 'sk-test';
-    const text = recordingGuidance();
-
-    expect(text).toMatch(/off by configuration/i);
-    expect(text).toMatch(/derived locally/i);
-    expect(text).not.toMatch(/TOKEN_OPTIMIZER_HARVEST_ENDPOINT/);
+  it('is the same short text in every mode, keeping the measured last-message rule', () => {
+    const texts = MODES.map((env) => {
+      for (const key of KEYS) delete process.env[key];
+      Object.assign(process.env, env);
+      return recordingGuidance();
+    });
+    expect(new Set(texts).size).toBe(1);
+    expect(texts[0].length).toBeLessThanOrEqual(260);
+    expect(texts[0]).toMatch(/never as your last message/);
   });
 
   it('carries nothing volatile in ANY mode, so it cannot re-price the prefix', () => {
-    // This text lands near the FRONT of the prompt prefix, which a cache
-    // invalidates from the first differing byte onward -- and unlike the project
-    // briefing, policyText does NOT pass through `stableText`, so a volatile
-    // construct here is emitted rather than dropped. cache.test.mjs asserts this
-    // for whatever mode the ambient environment happens to be in; the notice is
-    // the one part of the block that differs per mode, so each mode is checked.
-    // Volatile means what `volatileLines` means -- a date, a session id, a sha,
-    // a run counter, an epoch -- not any digit at all.
-    for (const env of [
-      {},
-      { TOKEN_OPTIMIZER_API_KEY: 'sk-test' },
-      { TOKEN_OPTIMIZER_HARVEST: '0' },
-      { TOKEN_OPTIMIZER_HARVEST_ENDPOINT: 'http://localhost:11434/v1/chat/completions' },
-    ]) {
+    for (const env of MODES) {
       for (const key of KEYS) delete process.env[key];
       Object.assign(process.env, env);
       expect(volatileLines(policyText(true))).toHaveLength(0);
       expect(volatileLines(recordingGuidance())).toHaveLength(0);
     }
+  });
+
+  it('leaves the extraction options to doctor, which tells the person', async () => {
+    const { probeHarvest } = await import(
+      pathToFileURL(join(process.cwd(), 'hooks-core', 'doctor.mjs')).href
+    );
+    const advice = probeHarvest().map((check) => check.detail).join('\n');
+    expect(advice).toMatch(/TOKEN_OPTIMIZER_HARVEST_ENDPOINT/);
+    expect(advice).toMatch(/free and private/i);
+    expect(recordingGuidance()).not.toMatch(/TOKEN_OPTIMIZER_HARVEST_ENDPOINT/);
   });
 });

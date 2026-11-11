@@ -365,12 +365,7 @@ const server = new Server(
     version: packageVersion,
   },
   {
-    instructions:
-      instructionsFor() +
-      ' Discover only the schema for the tool you need. In code-mode hosts with ' +
-      'ALL_TOOLS, filter by the exact tool-name suffix (for example __smart_read) ' +
-      'and print that entry only. To discover names, list names without descriptions ' +
-      'first. Broad catalog dumps can exhaust the context budget.',
+    instructions: instructionsFor(),
     capabilities: {
       tools: {},
     },
@@ -2201,15 +2196,26 @@ async function runCleanupOperations(
   }
 }
 
-let stopRoutingMaintenance: (() => void) | undefined;
+let routingMaintenance:
+  | import('../proxy/routing-maintenance.js').RoutingMaintenance
+  | undefined;
 let shuttingDown = false;
 
 // Shared cleanup function to avoid duplication between signal handlers
 async function cleanup() {
   shuttingDown = true;
-  stopRoutingMaintenance?.();
+  routingMaintenance?.stop();
   mcpEvidence.shutdown();
   await runCleanupOperations([
+    // FIRST, while the shutdown window is longest: a route this session prepared but did not
+    // install, because installing it mid-session would have switched this session's endpoint
+    // and re-sent its context uncached (routing-maintenance.ts).
+    {
+      fn: () => {
+        routingMaintenance?.commitDeferred();
+      },
+      name: 'installing deferred routing',
+    },
     // Before anything else closes: a window's worth of counts is lost on a kill,
     // and a clean exit is the one chance to narrow that to zero.
     { fn: () => void flushToolRollup(), name: 'flushing tool rollup' },
@@ -2248,7 +2254,7 @@ async function main() {
   // Keep the proxy dependency tree off the cold MCP handshake path.
   void import('../proxy/routing-maintenance.js')
     .then(({ startRoutingMaintenance }) => {
-      if (!shuttingDown) stopRoutingMaintenance = startRoutingMaintenance();
+      if (!shuttingDown) routingMaintenance = startRoutingMaintenance();
     })
     .catch(() => {
       /* Optional recovery cannot fail MCP startup. */

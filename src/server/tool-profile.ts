@@ -1,28 +1,31 @@
+// THE DEFAULT IS WHAT IS USED, PLUS WHAT THE HOOKS NAME (2026-11-07). Measured
+// on the maintainer's machine before the cut: across 111 Claude Code sessions
+// and 23 Codex sessions that used the server, every call landed on smart_read,
+// smart_grep, smart_glob, smart_edit, smart_write, wiki_write,
+// optimize_session or get_optimization_report. optimize_text, get_cached,
+// wiki_read and the six audit/doctor tools were never called. Each advertised
+// tool is paid per session -- a deferred name in Claude Code, a full schema in
+// clients that load the catalog up front, as Codex does -- so a tool nobody
+// calls is pure fixed cost. Those remain behind TOKEN_OPTIMIZER_TOOL_PROFILE=full,
+// and their CLIs (npx token-optimizer-doctor and friends) are unaffected.
+//
+// expand and wiki_query are kept although rarely called: hook text names them
+// ("expand <ref>" to recover compacted output; "wiki_query that key" for a
+// disputed finding), and the CallTool handler refuses an unadvertised name, so
+// dropping them would turn those instructions into dead ends. This list is
+// therefore exactly the hook-named set (hooks-core/capabilities.mjs
+// HOOK_MCP_TOOLS) plus expand.
 export const CORE_TOOL_NAMES = [
   'smart_read',
   'smart_write',
   'smart_edit',
   'smart_glob',
   'smart_grep',
-  'optimize_text',
-  'get_cached',
   'optimize_session',
   'get_optimization_report',
   'wiki_write',
-  'wiki_read',
-  // Advertised in the CORE profile deliberately. An unadvertised tool is not
-  // merely undocumented here -- the CallTool handler refuses any name outside
-  // ADVERTISED_TOOL_NAMES, so leaving wiki_query out would have shipped it
-  // fully implemented, schema-checked, dispatch-wired and unreachable, which is
-  // exactly the defect the injected text has been promising around.
   'wiki_query',
   'expand',
-  'waste_audit',
-  'cache_audit',
-  'model_routing',
-  'token_audit',
-  'install_doctor',
-  'fleet_audit',
 ] as const;
 
 /** Opt-in profile for file work; retain both preview and cache recovery. */
