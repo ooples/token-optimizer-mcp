@@ -2,6 +2,61 @@
 
 Measured head-to-head results against Alternative A, what this optimizer does that others do not, and where it loses. Back to the [README](../README.md).
 
+## The short answer
+
+**Does Token Optimizer win?** Yes, in every head-to-head below: it saves the most.
+It also loses in a few specific places, listed under "Where it loses".
+
+### Against other optimizers, on real coding tasks
+
+Each product was installed and given the same coding tasks: 1,050 runs, measured
+2026-09-03. Lower cost is better. Raw data and method:
+[bench/ledger/RESULTS-COMPETITORS.md](../bench/ledger/RESULTS-COMPETITORS.md).
+
+| Optimizer                      | Cost vs. plain Claude Code | Result                                   |
+| ------------------------------ | -------------------------- | ---------------------------------------- |
+| **Token Optimizer**            | **33.6% cheaper**          | ✅ **Best**                              |
+| Tokenade (its rules text only) | 22.9% cheaper              | Their product needs an account, so only their rules text was tested |
+| tokenjuice                     | 13.6% cheaper              | Real saving, about two-fifths of ours    |
+| claude-token-optimizer         | No measurable change       | Its hooks did not run on Claude Code 2.1.251 |
+
+### Against Alternative A, on compressing tool output
+
+<!-- ALT-A-CORPUS:START -- every figure between this marker and the next
+     CORPUS:END must appear in `totals` of
+     `bench/compression/alt-a/results/head-to-head.json`. Guarded by
+     `node bench/compression/readme-alt-a.check.mjs`; do not hand-edit. -->
+
+Alternative A is a widely used compression proxy. It was run on its own fixtures
+with its own harness, so this is its home benchmark. **The proxy removes 91.5% of
+the tokens; their best setting removes 61.4%.** The proxy is also cheaper on
+**18 of 18** workloads when nothing it moved out is read back, and on 17 of 18
+when all of it is. ✅ **Win.**
+
+<!-- ALT-A-CORPUS:END -->
+
+### What else it does for you
+
+- ✅ **Subscription plans go further.** It detects whether you pay per token or by
+  subscription. On a subscription it optimizes for finished work per unit of quota.
+  It spends leftover 5-hour capacity only while your week is on pace. Limit monitors
+  show your usage; this acts on it. Details: [quota pacing](#learned-cost-control-pruning-loop-guard-holdout-and-the-quota-you-actually-pay-with).
+- ✅ **Remembers what earlier sessions worked out**, so the agent does not re-derive it.
+- ✅ **Re-reading an unchanged file returns only what changed.**
+- ✅ **MIT licensed, 16 clients, nothing leaves your machine.** See [the table at the end](#honest-comparison).
+
+### Where it loses
+
+- ⚠️ **Without the proxy**, the compressor removes fewer tokens than Alternative A
+  on 8 of 18 workloads. On those, Alternative A moves content out of the request
+  instead of shrinking it. The proxy does the same, and wins.
+- ⚠️ **In the four-product run, most of the saving came from the rules file.** The
+  hooks added no measurable cost saving on top of it.
+- ⚠️ **Every sample is small.** Treat the figures as directions with intervals,
+  not guarantees.
+
+Everything below is the full detail behind these answers.
+
 ## How it compares to Alternative A
 
 Providers cache the prompt prefix: cached tokens re-read at **0.1x**, rewritten

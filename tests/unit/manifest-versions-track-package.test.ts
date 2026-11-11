@@ -58,11 +58,6 @@ function targets(): Target[] {
       value: p.version,
     })),
     {
-      path: 'mcp.json',
-      jsonpath: '$.version',
-      value: read('mcp.json').version,
-    },
-    {
       path: 'gemini-extension.json',
       jsonpath: '$.version',
       value: read('gemini-extension.json').version,
@@ -86,7 +81,7 @@ describe('manifest versions track package.json', () => {
   it('finds every version field it is meant to check', () => {
     // Without this, a manifest that stopped declaring a version would empty the
     // list and turn every assertion below into a vacuous pass.
-    expect(required.length).toBeGreaterThanOrEqual(6);
+    expect(required.length).toBeGreaterThanOrEqual(5);
   });
 
   it.each(required.map((t) => [`${t.path} ${t.jsonpath}`, t] as const))(

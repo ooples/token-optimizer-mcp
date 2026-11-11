@@ -25,7 +25,7 @@
   <a href="docs/COMPARISON.md">Benchmarks</a> ·
   <a href="docs/INSTALLATION.md">All 16 clients</a> ·
   <a href="docs/REFERENCE.md">Reference</a> ·
-  <a href="CHANGELOG.md">Changelog</a>
+  <a href="docs/CHANGELOG.md">Changelog</a>
 </p>
 
 On SWE-bench Verified, Claude Code with the plugin in its default mode solved the
@@ -107,9 +107,42 @@ directions with intervals, not guarantees. The full method, every run including
 the ones where it lost, and the per-instance data are in
 [PR #559](https://github.com/ooples/token-optimizer-mcp/pull/559).
 
-**On compression alone**, against Alternative A's real implementation on its own
-fixtures, the proxy removes more of the payload on 15 of 18 workloads. Those
-tables are regenerated and checked by CI: see
+## How it compares
+
+**Short answer: in every head-to-head we have run, it saves the most, and it
+loses in a few named places, listed below.**
+
+| Question                                            | Answer                                                                                                                                                                                                      |
+| --------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Does it cut cost more than other optimizers?        | ✅ **Yes.** On real coding tasks it cost **33.6% less** than plain Claude Code. The next best, tokenjuice, saved 13.6%. Tokenade's rules text saved 22.9%. claude-token-optimizer made no measurable difference. |
+| Does it remove more tokens than Alternative A?      | ✅ **Yes, through the proxy.** Figures below the table.                                                                                                                                                      |
+| Does a subscription plan go further?                | ✅ **Built in.** It detects a subscription and optimizes for finished work per unit of quota, not per dollar. It spends leftover 5-hour capacity only while your week is on pace. Limit monitors show your usage; this acts on it. |
+| Do tasks still get done?                            | ✅ **Yes.** The same SWE-bench tasks were resolved with and without it (7 of 7), at 0.71× the cost.                                                                                                          |
+| Where does it lose?                                 | ⚠️ See the list below the figures.                                                                                                                                                                          |
+
+<!-- ALT-A-CORPUS:START -- every figure between this marker and the next
+     CORPUS:END must appear in `totals` of
+     `bench/compression/alt-a/results/head-to-head.json`. Guarded by
+     `node bench/compression/readme-alt-a.check.mjs`; do not hand-edit. -->
+
+**Against Alternative A**, run on its own fixtures and harness, the proxy removes
+**91.5%** of the tokens. Their best setting removes 61.4%. The proxy costs less
+on **18 of 18** workloads when nothing it moved out is read back, and on 17 of 18
+when all of it is.
+
+<!-- ALT-A-CORPUS:END -->
+
+**Where it loses:**
+
+- Without the proxy, the compressor removes fewer tokens than Alternative A on 8
+  of 18 workloads. On those, they move content out of the request rather than
+  shrink it.
+- In the four-product run, most of the saving came from its rules file. The hooks
+  added no measurable cost saving on top.
+
+The competitor run is 1,050 runs from 2026-09-03:
+[bench/ledger/RESULTS-COMPETITORS.md](bench/ledger/RESULTS-COMPETITORS.md). The
+Alternative A tables are regenerated and checked by CI:
 [docs/COMPARISON.md](docs/COMPARISON.md).
 
 ## What it does

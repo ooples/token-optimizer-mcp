@@ -75,7 +75,9 @@ export interface ProjectAnalysisResult {
  * This looked only for `session-log-*.jsonl`. Nothing in this package has ever
  * written that file: the PowerShell orchestrator logs every tool call to
  * `operations-<sessionId>.csv` (header `timestamp,toolName,tokens,metadata`,
- * see hooks/handlers/token-optimizer-orchestrator.ps1). So on a correctly
+ * written by the legacy token-optimizer-orchestrator.ps1, which installs made by
+ * the pre-July-2026 installers copied locally and still run; the repository's
+ * copy was removed). So on a correctly
  * installed machine with months of recorded usage -- 235 KB of it on the box
  * this was found on -- analyze_project_tokens found nothing and answered
  * "No session files found. Ensure PowerShell hooks are configured."

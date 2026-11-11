@@ -40,7 +40,6 @@ const copilotPreTool = join(
   repoRoot,
   'src/integrations/copilot/.github/hooks/pre-tool.mjs'
 );
-const legacyPowerShellDispatcher = join(repoRoot, 'hooks/dispatcher.ps1');
 const openCodePlugin = join(
   repoRoot,
   'src/integrations/opencode/.opencode/plugins/token-optimizer.js'
@@ -336,44 +335,6 @@ describe('native CLI hook integrations', () => {
     );
     expect(manifest.hooks.PreToolUse[0].matcher).toContain('PowerShell');
     expect(manifest.hooks.PostToolUse[0].matcher).toContain('PowerShell');
-  });
-
-  const windowsIt = process.platform === 'win32' ? it : it.skip;
-  windowsIt('enforces large legacy PowerShell reads by default', () => {
-    const result = spawnSync(
-      'powershell',
-      [
-        '-NoProfile',
-        '-ExecutionPolicy',
-        'Bypass',
-        '-File',
-        legacyPowerShellDispatcher,
-        '-Phase',
-        'PreToolUse',
-      ],
-      {
-        cwd: repoRoot,
-        input: JSON.stringify({
-          hook_event_name: 'PreToolUse',
-          tool_name: 'Read',
-          tool_input: { file_path: largeFile },
-          cwd: fixtureDir,
-        }),
-        encoding: 'utf8',
-        env: {
-          ...process.env,
-          TOKEN_OPTIMIZER_LARGE_READ_BYTES: '1000',
-          TOKEN_OPTIMIZER_MODE: '',
-        },
-      }
-    );
-
-    expect(result.status).toBe(2);
-    expect(JSON.parse(result.stdout).hookSpecificOutput).toMatchObject({
-      permissionDecision: 'deny',
-      permissionDecisionReason: expect.stringContaining('smart_read'),
-    });
-    expect(result.stdout).toContain('TOKEN_OPTIMIZER_MODE=off');
   });
 
   it('ships a Codex plugin MCP config that Codex can discover', () => {

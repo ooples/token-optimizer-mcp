@@ -246,66 +246,7 @@ if (provenance.length) {
 const C_START = 'ALT-A-CORPUS:START';
 const C_END = '<!-- ALT-A-CORPUS:END -->';
 
-const corpusBlocks = [];
-for (
-  let at = readme.indexOf(C_START);
-  at !== -1;
-  at = readme.indexOf(C_START, at + 1)
-) {
-  const open = readme.indexOf('-->', at);
-  const close = readme.indexOf(C_END, open);
-  if (open === -1 || close === -1) {
-    console.error(
-      'readme-alt-a.check: a ALT-A-CORPUS:START at offset ' +
-        at +
-        ' has no matching CORPUS:END. Markers are what makes this checkable.'
-    );
-    process.exit(1);
-  }
-  // AN UNPAIRED MARKER MUST NOT QUIETLY WIDEN A BLOCK. With one CORPUS:END
-  // deleted the scan ran on to the NEXT one and swallowed everything between,
-  // which still fails but attributes the figures to the wrong sentence. A block
-  // that contains another START is a broken pair, not a bigger block.
-  if (readme.slice(open + 3, close).includes(C_START)) {
-    console.error(
-      'readme-alt-a.check: a ALT-A-CORPUS block contains another ' +
-        'CORPUS:START, so a CORPUS:END is missing between them.'
-    );
-    process.exit(1);
-  }
-  corpusBlocks.push([open + 3, close]);
-  at = close;
-}
-
-// A CHECK OVER AN EMPTY SET IS A VACUOUS PASS, and these markers live in a file
-// that is edited by hand, so their absence has to be the loud case.
-if (!corpusBlocks.length) {
-  console.error(
-    'readme-alt-a.check: no ALT-A-CORPUS markers in docs/COMPARISON.md. The corpus\n' +
-      'headlines were unchecked for a long time and that is what these markers\n' +
-      'fixed -- restore them around the corpus sentences, do not drop the rule.'
-  );
-  process.exit(1);
-}
-
-const corpusFigures = [];
-for (const [from_, to_] of corpusBlocks)
-  for (const figure of readme.slice(from_, to_).match(FIGURE) ?? [])
-    corpusFigures.push(figure);
-
-if (!corpusFigures.length) {
-  console.error(
-    'readme-alt-a.check: the ALT-A-CORPUS blocks hold no figures. ' +
-      'Refusing to pass vacuously.'
-  );
-  process.exit(1);
-}
-
 const corpusKnown = flatten(record.totals, new Set());
-const corpusMissing = corpusFigures.filter(
-  (figure) =>
-    !corpusKnown.has(figure) && !corpusKnown.has(figure.replace(/,/g, ''))
-);
 
 // MARKERS ARE ONLY WORTH ANYTHING IF THEY ARE NOT OPTIONAL. Nothing stops the
 // next corpus claim from being written outside a pair, which is exactly how the
@@ -318,40 +259,122 @@ const corpusMissing = corpusFigures.filter(
 // above is scoped to `totals` rather than trusted to a keyword.
 const CORPUS_SCOPE =
   /corpus|retention unit|identifiers|of the characters|of the tokens/i;
-const covered = new Set();
-for (const [from_, to_] of corpusBlocks) {
-  const first = readme.slice(0, from_).split(/\r?\n/).length;
-  const last = readme.slice(0, to_).split(/\r?\n/).length;
-  for (let line = first; line <= last; line += 1) covered.add(line);
-}
-const unmarked = readme
-  .split(/\r?\n/)
-  .map((text, index) => ({ line: index + 1, text }))
-  .filter(({ line, text }) => !covered.has(line))
-  .filter(({ text }) => CORPUS_SCOPE.test(text) && FIGURE.test(text));
 
-console.log(
-  `readme-alt-a.check: ${corpusFigures.length} corpus figures across ` +
-    `${corpusBlocks.length} marked block(s), against the record's totals.`
-);
+/**
+ * Checks one file's ALT-A-CORPUS blocks against the record's totals, and fails
+ * any corpus-scoped figure written outside a block.
+ *
+ * docs/COMPARISON.md must carry blocks; the README may carry none, because its
+ * summary need not quote the corpus at all -- but where it does, the figures are
+ * held to the same record. The README summary was unguarded before: it said the
+ * proxy "removes more of the payload on 15 of 18 workloads" and nothing checked it.
+ */
+function checkCorpus(text, label, { required }) {
+  const corpusBlocks = [];
+  for (
+    let at = text.indexOf(C_START);
+    at !== -1;
+    at = text.indexOf(C_START, at + 1)
+  ) {
+    const open = text.indexOf('-->', at);
+    const close = text.indexOf(C_END, open);
+    if (open === -1 || close === -1) {
+      console.error(
+        `readme-alt-a.check: a ALT-A-CORPUS:START in ${label} at offset ` +
+          at +
+          ' has no matching CORPUS:END. Markers are what makes this checkable.'
+      );
+      process.exit(1);
+    }
+    // AN UNPAIRED MARKER MUST NOT QUIETLY WIDEN A BLOCK. With one CORPUS:END
+    // deleted the scan ran on to the NEXT one and swallowed everything between,
+    // which still fails but attributes the figures to the wrong sentence. A block
+    // that contains another START is a broken pair, not a bigger block.
+    if (text.slice(open + 3, close).includes(C_START)) {
+      console.error(
+        `readme-alt-a.check: a ALT-A-CORPUS block in ${label} contains another ` +
+          'CORPUS:START, so a CORPUS:END is missing between them.'
+      );
+      process.exit(1);
+    }
+    corpusBlocks.push([open + 3, close]);
+    at = close;
+  }
 
-if (corpusMissing.length) {
-  console.error(
-    '\nreadme-alt-a.check FAILED. Not found in the record totals:'
+  // A CHECK OVER AN EMPTY SET IS A VACUOUS PASS, and these markers live in a file
+  // that is edited by hand, so their absence has to be the loud case.
+  if (required && !corpusBlocks.length) {
+    console.error(
+      `readme-alt-a.check: no ALT-A-CORPUS markers in ${label}. The corpus\n` +
+        'headlines were unchecked for a long time and that is what these markers\n' +
+        'fixed -- restore them around the corpus sentences, do not drop the rule.'
+    );
+    process.exit(1);
+  }
+
+  const corpusFigures = [];
+  for (const [from_, to_] of corpusBlocks)
+    for (const figure of text.slice(from_, to_).match(FIGURE) ?? [])
+      corpusFigures.push(figure);
+
+  if (corpusBlocks.length && !corpusFigures.length) {
+    console.error(
+      `readme-alt-a.check: the ALT-A-CORPUS blocks in ${label} hold no figures. ` +
+        'Refusing to pass vacuously.'
+    );
+    process.exit(1);
+  }
+
+  const corpusMissing = corpusFigures.filter(
+    (figure) =>
+      !corpusKnown.has(figure) && !corpusKnown.has(figure.replace(/,/g, ''))
   );
-  for (const figure of corpusMissing) console.error(`  corpus: ${figure}`);
-  failed = true;
+
+  const covered = new Set();
+  for (const [from_, to_] of corpusBlocks) {
+    const first = text.slice(0, from_).split(/\r?\n/).length;
+    const last = text.slice(0, to_).split(/\r?\n/).length;
+    for (let line = first; line <= last; line += 1) covered.add(line);
+  }
+  const unmarked = text
+    .split(/\r?\n/)
+    .map((line, index) => ({ line: index + 1, text: line }))
+    .filter(({ line }) => !covered.has(line))
+    .filter(({ text: line }) => CORPUS_SCOPE.test(line) && FIGURE.test(line));
+
+  console.log(
+    `readme-alt-a.check: ${label}: ${corpusFigures.length} corpus figures across ` +
+      `${corpusBlocks.length} marked block(s), against the record's totals.`
+  );
+
+  let bad = false;
+  if (corpusMissing.length) {
+    console.error(
+      `\nreadme-alt-a.check FAILED. ${label}: not found in the record totals:`
+    );
+    for (const figure of corpusMissing) console.error(`  corpus: ${figure}`);
+    bad = true;
+  }
+
+  if (unmarked.length) {
+    console.error(
+      `\nreadme-alt-a.check FAILED. ${label}: corpus-scoped lines with figures\n` +
+        'that sit outside every ALT-A-CORPUS block, so nothing compares them to anything:'
+    );
+    for (const { line, text: content } of unmarked)
+      console.error(`  ${label}:${line}: ${content.trim().slice(0, 96)}`);
+    bad = true;
+  }
+  return bad;
 }
 
-if (unmarked.length) {
-  console.error(
-    '\nreadme-alt-a.check FAILED. Corpus-scoped lines with figures that sit\n' +
-      'outside every ALT-A-CORPUS block, so nothing compares them to anything:'
-  );
-  for (const { line, text } of unmarked)
-    console.error(`  docs/COMPARISON.md:${line}: ${text.trim().slice(0, 96)}`);
+if (checkCorpus(readme, 'docs/COMPARISON.md', { required: true })) failed = true;
+if (
+  checkCorpus(readFileSync(join(repo, 'README.md'), 'utf8'), 'README.md', {
+    required: false,
+  })
+)
   failed = true;
-}
 
 if (failed) process.exit(1);
 

@@ -1776,4 +1776,4 @@ For detailed troubleshooting and support:
 
 This documentation is for Token Optimizer MCP v2.0+
 
-For updates and changelog, see [CHANGELOG.md](../CHANGELOG.md)
+For updates and changelog, see [CHANGELOG.md](CHANGELOG.md)

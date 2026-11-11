@@ -74,7 +74,7 @@ function validateRequiredFiles() {
     { path: 'package.json', description: 'Package manifest' },
     { path: 'README.md', description: 'Documentation' },
     { path: 'LICENSE', description: 'License file' },
-    { path: 'CHANGELOG.md', description: 'Changelog' },
+    { path: 'docs/CHANGELOG.md', description: 'Changelog' },
     { path: 'dist/server/index.js', description: 'Main entry point' },
     { path: 'dist/server/index.d.ts', description: 'TypeScript declarations' },
   ];
@@ -270,8 +270,8 @@ function estimatePackageSize() {
   if (fileExists('LICENSE')) {
     totalSize += fs.statSync(path.join(rootDir, 'LICENSE')).size;
   }
-  if (fileExists('CHANGELOG.md')) {
-    totalSize += fs.statSync(path.join(rootDir, 'CHANGELOG.md')).size;
+  if (fileExists('docs/CHANGELOG.md')) {
+    totalSize += fs.statSync(path.join(rootDir, 'docs', 'CHANGELOG.md')).size;
   }
 
   const sizeMB = (totalSize / (1024 * 1024)).toFixed(2);

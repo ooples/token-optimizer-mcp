@@ -182,7 +182,7 @@ Use manual release only when automation fails or for special releases.
    # Using GitHub CLI
    gh release create v0.2.0 \
      --title "v0.2.0" \
-     --notes-file CHANGELOG.md
+     --notes-file docs/CHANGELOG.md
 
    # Or manually via GitHub web interface
    ```
