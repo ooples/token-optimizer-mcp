@@ -15,7 +15,7 @@ import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
-import { canonicalJson, sha256 } from '../../ucr/index.mjs';
+import { canonicalJson, sha256 } from '../../src/ucr/index.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
@@ -42,8 +42,8 @@ afterEach(() => rmSync(workspace, { recursive: true, force: true }));
 
 const entry = (client) => {
   const candidates = [
-    join(ROOT, 'integrations', client, 'hooks', 'pre-tool.mjs'),
-    join(ROOT, 'integrations', client, '.github', 'hooks', 'pre-tool.mjs'),
+    join(ROOT, 'src', 'integrations', client, 'hooks', 'pre-tool.mjs'),
+    join(ROOT, 'src', 'integrations', client, '.github', 'hooks', 'pre-tool.mjs'),
   ];
   const found = candidates.find((path) => existsSync(path));
   if (!found) throw new Error(`no packaged pre-tool entry for ${client}`);
@@ -171,7 +171,7 @@ describe('an outline never overrides a UCR guard', () => {
   };
 
   test('the Claude Code router refuses a guarded read rather than outlining it', () => {
-    const router = join(ROOT, 'plugin', 'hooks', 'pretooluse-router.mjs');
+    const router = join(ROOT, 'src', 'plugin', 'hooks', 'pretooluse-router.mjs');
     const out = call(router, 'Read', { file_path: big }, guard());
     expect(out.permissionDecision).toBe('deny');
     expect(out.updatedInput).toBeUndefined();
@@ -191,7 +191,7 @@ describe('the once-per-file rule holds under parallel calls', () => {
     // Checking for the record and writing it later let two parallel calls both
     // serve an outline -- 3 runs in 5 on the previous commit. Creating the record
     // exclusively makes it the claim, so exactly one call can win.
-    const router = join(ROOT, 'plugin', 'hooks', 'pretooluse-router.mjs');
+    const router = join(ROOT, 'src', 'plugin', 'hooks', 'pretooluse-router.mjs');
     const session = randomUUID();
     const outlined = await Promise.all(
       Array.from(

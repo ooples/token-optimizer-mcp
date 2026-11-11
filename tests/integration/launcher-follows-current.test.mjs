@@ -14,16 +14,16 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { createHash } from 'node:crypto';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { activateWindowsCommands } from '../../scripts/windows-commands.mjs';
-import { activateShells } from '../../scripts/managed-shell.mjs';
-import { repairManagedInstall } from '../../scripts/repair-managed-install.mjs';
+import { activateWindowsCommands } from '../../src/scripts/windows-commands.mjs';
+import { activateShells } from '../../src/scripts/managed-shell.mjs';
+import { repairManagedInstall } from '../../src/scripts/repair-managed-install.mjs';
 import {
   FORWARDER_NAME,
   isManagedRuntimeRoot,
   launcherEntry,
-} from '../../scripts/launch-entry.mjs';
+} from '../../src/scripts/launch-entry.mjs';
 
-const FORWARDER_SOURCE = resolve('scripts', FORWARDER_NAME);
+const FORWARDER_SOURCE = resolve('src', 'scripts', FORWARDER_NAME);
 const digest = (bytes) => createHash('sha256').update(bytes).digest('hex');
 const dirs = [];
 
@@ -31,26 +31,31 @@ afterEach(() => {
   while (dirs.length) fs.rmSync(dirs.pop(), { recursive: true, force: true });
 });
 
-/** A managed runtime whose versions each have a run-client reporting who ran. */
-function runtimeWith(versions, current) {
+/**
+ * A managed runtime whose versions each have a run-client reporting who ran.
+ * Versions named in `legacy` keep the layout from before the package root moved
+ * under src/, as an older install left in the runtime does.
+ */
+function runtimeWith(versions, current, { legacy = [] } = {}) {
   const runtime = fs.mkdtempSync(join(tmpdir(), 'optimizer-runtime-'));
   dirs.push(runtime);
   const report = join(runtime, 'ran.json');
   versions.forEach((version, index) => {
     const root = packageRoot(runtime, version);
-    fs.mkdirSync(join(root, 'scripts'), { recursive: true });
+    const scripts = legacy.includes(version) ? join(root, 'scripts') : join(root, 'src', 'scripts');
+    fs.mkdirSync(scripts, { recursive: true });
     fs.writeFileSync(
       join(root, 'package.json'),
       JSON.stringify({ name: '@ooples/token-optimizer-mcp', version })
     );
     fs.writeFileSync(
-      join(root, 'scripts', 'run-client.mjs'),
+      join(scripts, 'run-client.mjs'),
       `import fs from 'node:fs';\n` +
         `fs.writeFileSync(${JSON.stringify(report)}, JSON.stringify({ version: ${JSON.stringify(version)}, args: process.argv.slice(2) }));\n` +
         `process.exitCode = 7;\n`
     );
-    fs.copyFileSync(FORWARDER_SOURCE, join(root, 'scripts', FORWARDER_NAME));
-    fs.copyFileSync(resolve('scripts', 'launch-entry.mjs'), join(root, 'scripts', 'launch-entry.mjs'));
+    fs.copyFileSync(FORWARDER_SOURCE, join(scripts, FORWARDER_NAME));
+    fs.copyFileSync(resolve('src', 'scripts', 'launch-entry.mjs'), join(scripts, 'launch-entry.mjs'));
     // Older first, so the newest-by-mtime fallback has a defined answer.
     const when = new Date(Date.now() - (versions.length - index) * 60_000);
     fs.utimesSync(join(runtime, 'versions', version), when, when);
@@ -73,13 +78,21 @@ function forward(runtime, args) {
 
 describe('the stable forwarder', () => {
   it("runs the run-client `current` names, with the caller's arguments and exit code", () => {
-    const { runtime, report } = runtimeWith(['7.3.0', '7.4.4'], '7.4.4');
+    const { runtime, report } = runtimeWith(['7.3.0', '7.4.4'], '7.4.4', { legacy: ['7.3.0'] });
     const result = forward(runtime, ['codex', '--flag', 'two words', '']);
     expect(result.status).toBe(7);
     expect(JSON.parse(fs.readFileSync(report, 'utf8'))).toEqual({
       version: '7.4.4',
       args: ['codex', '--flag', 'two words', ''],
     });
+  });
+
+  it('runs a `current` from before the package root moved under src/', () => {
+    // A rollback, or a runtime the newer forwarder was copied into before the
+    // pointer moved: `current` names a package whose run-client is at the root.
+    const { runtime, report } = runtimeWith(['7.3.0', '7.4.4'], '7.3.0', { legacy: ['7.3.0'] });
+    expect(forward(runtime, ['codex']).status).toBe(7);
+    expect(JSON.parse(fs.readFileSync(report, 'utf8')).version).toBe('7.3.0');
   });
 
   it('follows an update without the launcher changing', () => {
@@ -118,7 +131,7 @@ describe('what a launcher names', () => {
     // A global or project install has no `current` to follow (positive control).
     const elsewhere = resolve('.');
     expect(isManagedRuntimeRoot(elsewhere, runtime)).toBe(false);
-    expect(launcherEntry(elsewhere, { runtime })).toBe(join(elsewhere, 'scripts', 'run-client.mjs'));
+    expect(launcherEntry(elsewhere, { runtime })).toBe(join(elsewhere, 'src', 'scripts', 'run-client.mjs'));
   });
 
   it('a dry run computes the forwarder path without writing it', () => {
@@ -231,7 +244,7 @@ describe('shell profiles', () => {
   function signalRuntime(body) {
     const { runtime } = runtimeWith(['7.4.4'], '7.4.4');
     fs.writeFileSync(
-      join(packageRoot(runtime, '7.4.4'), 'scripts', 'run-client.mjs'),
+      join(packageRoot(runtime, '7.4.4'), 'src', 'scripts', 'run-client.mjs'),
       body(runtime)
     );
     const forwarder = join(runtime, FORWARDER_NAME);
@@ -279,7 +292,7 @@ describe('shell profiles', () => {
 describe('the refresh runs the launcher repair', () => {
   /** Call launch.mjs's repairManagedLaunchers in a fresh process, as the refresh does. */
   function repairFromRefresh(root) {
-    const launch = new URL('../../plugin/launch.mjs', import.meta.url).href;
+    const launch = new URL('../../src/plugin/launch.mjs', import.meta.url).href;
     const result = spawnSync(
       process.execPath,
       [
@@ -297,7 +310,7 @@ describe('the refresh runs the launcher repair', () => {
     const root = packageRoot(runtime, '7.4.4');
     const seen = join(runtime, 'repair-env.json');
     fs.writeFileSync(
-      join(root, 'scripts', 'repair-managed-install.mjs'),
+      join(root, 'src', 'scripts', 'repair-managed-install.mjs'),
       `import fs from 'node:fs'; fs.writeFileSync(${JSON.stringify(seen)}, JSON.stringify({ scope: process.env.TOKEN_OPTIMIZER_REPAIR_SCOPE }));`
     );
     expect(repairFromRefresh(root)).toBe('true');
@@ -307,10 +320,10 @@ describe('the refresh runs the launcher repair', () => {
   it('skips a package that predates the forwarder, leaving launchers as they were', () => {
     const { runtime } = runtimeWith(['7.4.4'], '7.4.4');
     const root = packageRoot(runtime, '7.4.4');
-    fs.rmSync(join(root, 'scripts', FORWARDER_NAME));
+    fs.rmSync(join(root, 'src', 'scripts', FORWARDER_NAME));
     const seen = join(runtime, 'repair-ran');
     fs.writeFileSync(
-      join(root, 'scripts', 'repair-managed-install.mjs'),
+      join(root, 'src', 'scripts', 'repair-managed-install.mjs'),
       `import fs from 'node:fs'; fs.writeFileSync(${JSON.stringify(seen)}, '');`
     );
     expect(repairFromRefresh(root)).toBe('false');
@@ -333,7 +346,7 @@ describe('repair migrates a launcher that pins a runtime version', () => {
   }
 
   it('moves it to the forwarder, keeps ownership, and is idempotent', () => {
-    const { runtime } = runtimeWith(['7.3.0', '7.4.4'], '7.4.4');
+    const { runtime } = runtimeWith(['7.3.0', '7.4.4'], '7.4.4', { legacy: ['7.3.0'] });
     const directory = pinnedLauncher(runtime, '7.3.0');
     const repair = () =>
       repairManagedInstall({
@@ -357,13 +370,13 @@ describe('repair migrates a launcher that pins a runtime version', () => {
   });
 
   it("in launcher scope, migrates the launcher and leaves Claude's settings untouched", () => {
-    const { runtime } = runtimeWith(['7.3.0', '7.4.4'], '7.4.4');
+    const { runtime } = runtimeWith(['7.3.0', '7.4.4'], '7.4.4', { legacy: ['7.3.0'] });
     const directory = pinnedLauncher(runtime, '7.3.0');
     const settingsPath = join(runtime, 'settings.json');
     // A hook command the full repair would upgrade to the new version.
     const hook = join(packageRoot(runtime, '7.3.0'), 'plugin', 'hooks', 'stop.mjs').replaceAll('\\', '/');
-    fs.mkdirSync(join(packageRoot(runtime, '7.4.4'), 'plugin', 'hooks'), { recursive: true });
-    fs.writeFileSync(join(packageRoot(runtime, '7.4.4'), 'plugin', 'hooks', 'stop.mjs'), '');
+    fs.mkdirSync(join(packageRoot(runtime, '7.4.4'), 'src', 'plugin', 'hooks'), { recursive: true });
+    fs.writeFileSync(join(packageRoot(runtime, '7.4.4'), 'src', 'plugin', 'hooks', 'stop.mjs'), '');
     const settings = JSON.stringify({
       hooks: { Stop: [{ hooks: [{ type: 'command', command: `node "${hook}" --token-optimizer-hook` }] }] },
     });
@@ -382,7 +395,7 @@ describe('repair migrates a launcher that pins a runtime version', () => {
   });
 
   it('leaves a launcher it did not write alone', () => {
-    const { runtime } = runtimeWith(['7.3.0', '7.4.4'], '7.4.4');
+    const { runtime } = runtimeWith(['7.3.0', '7.4.4'], '7.4.4', { legacy: ['7.3.0'] });
     const directory = pinnedLauncher(runtime, '7.3.0');
     fs.appendFileSync(join(directory, 'codex.cmd'), 'rem my change\r\n');
     const before = fs.readFileSync(join(directory, 'codex.cmd'));

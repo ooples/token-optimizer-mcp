@@ -4,7 +4,7 @@ import { join } from 'path';
 import { tmpdir } from 'os';
 
 // @ts-expect-error -- hooks-core ships as plain ESM with no type declarations.
-import { detectInstall, probeVersion, checklist } from '../../hooks-core/doctor.mjs';
+import { detectInstall, probeVersion, checklist } from '../../src/hooks-core/doctor.mjs';
 
 /**
  * Issue #307, second half: the doctor diagnosed the wrong install.
@@ -32,7 +32,7 @@ function givenPackage(version: string) {
     join(root, 'package.json'),
     JSON.stringify({ name: '@ooples/token-optimizer-mcp', version })
   );
-  mkdirSync(join(root, 'plugin', 'hooks'), { recursive: true });
+  mkdirSync(join(root, 'src', 'plugin', 'hooks'), { recursive: true });
   return root;
 }
 

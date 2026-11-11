@@ -6,7 +6,7 @@
  * hold thousands of nodes, and shipping it wholesale would make every page load
  * a multi-megabyte download for a view that shows twenty things.
  *
- * The graph modules are plain ESM under hooks-core/ because Claude Code and the
+ * The graph modules are plain ESM under src/hooks-core/ because Claude Code and the
  * other clients execute them directly from the installed plugin directory, with
  * no build step. They are imported dynamically here rather than statically so
  * that this TypeScript build has no compile-time dependency on untyped ESM, and
@@ -24,7 +24,8 @@ const here = dirname(fileURLToPath(import.meta.url));
 
 /** Resolves hooks-core relative to the built output, which lives in dist/server. */
 function coreUrl(name: string): string {
-  return pathToFileURL(path.join(here, '..', '..', 'hooks-core', name)).href;
+  return pathToFileURL(path.join(here, '..', '..', 'src', 'hooks-core', name))
+    .href;
 }
 
 interface GraphModules {
@@ -443,7 +444,7 @@ export function registerWikiRoutes(app: Express): void {
         );
 
       // Lexical retrieval per the design -- now actually ranked by BM25
-      // (hooks-core/lexical.mjs), the same primitive the wiki_query tool
+      // (src/hooks-core/lexical.mjs), the same primitive the wiki_query tool
       // uses for its `search` operation. The previous substring filter
       // could not order results, so the caller kept whatever matched rather
       // than what matched best.

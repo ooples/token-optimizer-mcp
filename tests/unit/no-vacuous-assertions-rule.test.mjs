@@ -12,7 +12,7 @@
  * actually reports, not about a hand-rolled walk of the AST.
  */
 import { RuleTester } from 'eslint';
-import rule from '../../eslint-rules/no-vacuous-assertions.mjs';
+import rule from '../../config/eslint-rules/no-vacuous-assertions.mjs';
 
 const ruleTester = new RuleTester({
   languageOptions: { ecmaVersion: 2022, sourceType: 'module' },

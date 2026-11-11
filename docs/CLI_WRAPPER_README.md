@@ -17,24 +17,24 @@ This CLI wrapper enables PowerShell hooks to call token-optimizer-mcp tools dire
 ### Mode 1: Direct Arguments (Bash/Unix)
 
 ```bash
-node cli-wrapper.mjs count_tokens '{"text":"Hello World"}'
+node src/cli-wrapper.mjs count_tokens '{"text":"Hello World"}'
 ```
 
 ### Mode 2: stdin (Recommended for PowerShell)
 
 ```bash
 # Bash
-echo '{"text":"Hello World"}' | node cli-wrapper.mjs count_tokens --stdin
+echo '{"text":"Hello World"}' | node src/cli-wrapper.mjs count_tokens --stdin
 
 # PowerShell
 $args = @{text="Hello World"}
-$args | ConvertTo-Json -Compress | node cli-wrapper.mjs count_tokens --stdin
+$args | ConvertTo-Json -Compress | node src/cli-wrapper.mjs count_tokens --stdin
 ```
 
 ### Mode 3: File-based
 
 ```bash
-node cli-wrapper.mjs count_tokens --file ./args.json
+node src/cli-wrapper.mjs count_tokens --file ./args.json
 ```
 
 ## PowerShell Integration
@@ -58,7 +58,7 @@ The helper uses stdin to avoid all JSON escaping issues:
 
 ```powershell
 $argsJson = $Arguments | ConvertTo-Json -Compress
-$result = $argsJson | node cli-wrapper.mjs $Tool --stdin
+$result = $argsJson | node src/cli-wrapper.mjs $Tool --stdin
 ```
 
 ## Architecture
@@ -134,10 +134,10 @@ Test the wrapper directly:
 
 ```bash
 # Test count_tokens
-printf '{"text":"Test"}' | node cli-wrapper.mjs count_tokens --stdin
+printf '{"text":"Test"}' | node src/cli-wrapper.mjs count_tokens --stdin
 
 # Test optimize_text
-printf '{"text":"Large text...","key":"test1"}' | node cli-wrapper.mjs optimize_text --stdin
+printf '{"text":"Large text...","key":"test1"}' | node src/cli-wrapper.mjs optimize_text --stdin
 ```
 
 Test from PowerShell:

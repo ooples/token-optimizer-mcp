@@ -46,7 +46,7 @@
 import { describe, it, expect } from '@jest/globals';
 import { readFileSync } from 'fs';
 import { join, relative } from 'path';
-import { putEdge } from '../../hooks-core/wiki.mjs';
+import { putEdge } from '../../src/hooks-core/wiki.mjs';
 import { TOOL_DEFINITIONS } from '../../dist/server/tool-definitions.js';
 import {
   USAGE_DIRS,
@@ -265,7 +265,7 @@ const STRUCTURAL_KEYS = new Set([
 ]);
 
 const FIELD_WRITERS = ['record(?:Read)?', 'putNode', 'putNodeWithEdges'];
-const FIELD_WRITE_PATH = /^(hooks-core|plugin.hooks|src.server)/;
+const FIELD_WRITE_PATH = /^src.(hooks-core|plugin.hooks|server)/;
 
 function recordFields() {
   const written = new Map();

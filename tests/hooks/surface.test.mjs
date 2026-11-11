@@ -16,10 +16,10 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import {
   maybeSurface, closeForecast, sessionUsage, SURFACE_INTERVAL_MS, DEFAULT_CAPACITY,
-} from '../../hooks-core/surface.mjs';
-import { logForecast, observeOutcome, reliability } from '../../hooks-core/calibration.mjs';
-import { record, recordRead, readBalance } from '../../hooks-core/metrics.mjs';
-import { putNode, putEdge, nodeId } from '../../hooks-core/wiki.mjs';
+} from '../../src/hooks-core/surface.mjs';
+import { logForecast, observeOutcome, reliability } from '../../src/hooks-core/calibration.mjs';
+import { record, recordRead, readBalance } from '../../src/hooks-core/metrics.mjs';
+import { putNode, putEdge, nodeId } from '../../src/hooks-core/wiki.mjs';
 
 let workspace;
 let dir;
@@ -367,7 +367,7 @@ describe('the calibration loop is closed by compaction', () => {
 describe('the wiring is real, not merely present', () => {
   // This is the test that would have failed for the whole life of calibration.mjs. Every other
   // test in this file passes just as well on a module nothing imports.
-  const hook = (name) => readFileSync(join(process.cwd(), 'plugin', 'hooks', name), 'utf8');
+  const hook = (name) => readFileSync(join(process.cwd(), 'src', 'plugin', 'hooks', name), 'utf8');
 
   test('the PreToolUse router calls maybeSurface', () => {
     // The entry is a thin runtime-switch shim; the router's code is in impl/.
@@ -381,7 +381,7 @@ describe('the wiring is real, not merely present', () => {
   test('the vendored copy of surface.mjs is in place for the plugin to import', () => {
     // The hooks import from ./lib/, which is synced rather than symlinked -- an unsynced module
     // means the hook throws on load and fails open, silently doing nothing.
-    expect(() => readFileSync(join(process.cwd(), 'plugin', 'hooks', 'lib', 'surface.mjs'), 'utf8'))
+    expect(() => readFileSync(join(process.cwd(), 'src', 'plugin', 'hooks', 'lib', 'surface.mjs'), 'utf8'))
       .not.toThrow();
   });
 });

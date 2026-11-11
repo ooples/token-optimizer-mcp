@@ -22,11 +22,11 @@ import { appendFileSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readF
 import { join } from 'node:path';
 import { hostname, tmpdir } from 'node:os';
 import { pathToFileURL } from 'node:url';
-import { gc, migrate, recover, offlineBlockers, readTombstone, restore, resumeIfDue, tokenOptimizerProcesses } from '../../hooks-core/migrate.mjs';
-import { readState, storeId } from '../../hooks-core/maintenance.mjs';
+import { gc, migrate, recover, offlineBlockers, readTombstone, restore, resumeIfDue, tokenOptimizerProcesses } from '../../src/hooks-core/migrate.mjs';
+import { readState, storeId } from '../../src/hooks-core/maintenance.mjs';
 
 const ROOT = process.cwd();
-const mod = (name) => pathToFileURL(join(ROOT, 'hooks-core', name)).href;
+const mod = (name) => pathToFileURL(join(ROOT, 'src', 'hooks-core', name)).href;
 
 let work;
 let repo;
@@ -117,7 +117,7 @@ describe('the offline check', () => {
     const leasing = join(work, 'plugins', 'token-optimizer', 'next');
     mkdirSync(join(leasing, 'hooks', 'lib'), { recursive: true });
     writeFileSync(join(leasing, 'hooks', 'post-tool.mjs'), '');
-    copyFileSync(join(ROOT, 'hooks-core', 'maintenance.mjs'), join(leasing, 'hooks', 'lib', 'maintenance.mjs'));
+    copyFileSync(join(ROOT, 'src', 'hooks-core', 'maintenance.mjs'), join(leasing, 'hooks', 'lib', 'maintenance.mjs'));
     const table = [
       '101\t"C:\\Program Files\\nodejs\\node.exe" C:\\Users\\u\\.token-optimizer\\runtime\\versions\\7.7.1\\node_modules\\@ooples\\token-optimizer-mcp\\dist\\server\\index.js',
       // A version number alone proves nothing: this one is a newer number whose
@@ -409,7 +409,7 @@ describe('session start finishes what was left', () => {
   });
 
   test('mid-migration, readers are pointed at the staged copy, not the fence', async () => {
-    const { projectStore } = await import('../../hooks-core/maintenance.mjs');
+    const { projectStore } = await import('../../src/hooks-core/maintenance.mjs');
     let seen = null;
     let graph = null;
     migrate(repo, {

@@ -19,7 +19,8 @@ import { dirname } from 'path';
 const here = dirname(fileURLToPath(import.meta.url));
 
 function coreUrl(name: string): string {
-  return pathToFileURL(path.join(here, '..', '..', 'hooks-core', name)).href;
+  return pathToFileURL(path.join(here, '..', '..', 'src', 'hooks-core', name))
+    .href;
 }
 
 interface WasteModules {

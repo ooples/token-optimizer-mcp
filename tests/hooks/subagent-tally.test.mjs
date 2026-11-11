@@ -17,7 +17,7 @@ import {
   subagentTally,
   subagentTranscripts,
   tallyTranscript,
-} from '../../hooks-core/subagents.mjs';
+} from '../../src/hooks-core/subagents.mjs';
 
 const usage = (read, write, out) => ({
   input_tokens: 2,

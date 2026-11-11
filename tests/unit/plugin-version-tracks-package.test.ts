@@ -24,7 +24,7 @@ const read = (p: string) => JSON.parse(readFileSync(join(ROOT, p), 'utf8'));
 describe('plugin manifest version', () => {
   it('matches the package version', () => {
     const pkg = read('package.json').version;
-    const plugin = read('plugin/.claude-plugin/plugin.json').version;
+    const plugin = read('src/plugin/.claude-plugin/plugin.json').version;
 
     expect(plugin).toBe(pkg);
   });
@@ -32,20 +32,20 @@ describe('plugin manifest version', () => {
   it('is still configured for release-please to bump', () => {
     // If this entry is dropped, the versions drift again and the only symptom
     // is users quietly not receiving hook updates.
-    const config = read('release-please-config.json');
+    const config = read('.github/release-please-config.json');
     const extras = config.packages?.['.']?.['extra-files'] ?? [];
 
     expect(
       extras.some(
         (e: { path?: string; jsonpath?: string }) =>
-          e.path === 'plugin/.claude-plugin/plugin.json' &&
+          e.path === 'src/plugin/.claude-plugin/plugin.json' &&
           e.jsonpath === '$.version'
       )
     ).toBe(true);
   });
 
   it('is a plain semver, which is what the update check compares', () => {
-    const plugin = read('plugin/.claude-plugin/plugin.json').version;
+    const plugin = read('src/plugin/.claude-plugin/plugin.json').version;
     expect(plugin).toMatch(/^\d+\.\d+\.\d+$/);
   });
 });

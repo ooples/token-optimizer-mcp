@@ -22,7 +22,7 @@ import {
   normalizeEol,
   contentMatches,
   writeIfChanged,
-} from '../../scripts/lib/text.mjs';
+} from '../../src/scripts/lib/text.mjs';
 
 /**
  * The generators compared generated content to on-disk content byte-for-byte,
@@ -164,10 +164,10 @@ describe('every generator', () => {
   };
 
   const GENERATORS = [
-    'scripts/sync-hook-core.mjs',
-    'scripts/generate-client-entries.mjs',
-    'scripts/generate-opencode-legacy-plugin.mjs',
-    'scripts/generate-client-configs.mjs',
+    'src/scripts/sync-hook-core.mjs',
+    'src/scripts/generate-client-entries.mjs',
+    'src/scripts/generate-opencode-legacy-plugin.mjs',
+    'src/scripts/generate-client-configs.mjs',
   ];
 
   it.each(GENERATORS)('%s imports the shared EOL-safe helpers', (file) => {
@@ -233,21 +233,21 @@ describe('a generator run against a CRLF working tree', () => {
 
   function sandbox() {
     const root = mkdtempSync(join(tmpdir(), 'gen-eol-'));
-    mkdirSync(join(root, 'scripts', 'lib'), { recursive: true });
-    mkdirSync(join(root, 'hooks-core'), { recursive: true });
+    mkdirSync(join(root, 'src', 'scripts', 'lib'), { recursive: true });
+    mkdirSync(join(root, 'src', 'hooks-core'), { recursive: true });
     copyFileSync(
-      join(process.cwd(), 'scripts', GEN),
-      join(root, 'scripts', GEN)
+      join(process.cwd(), 'src', 'scripts', GEN),
+      join(root, 'src', 'scripts', GEN)
     );
     copyFileSync(
-      join(process.cwd(), 'scripts', 'lib', 'text.mjs'),
-      join(root, 'scripts', 'lib', 'text.mjs')
+      join(process.cwd(), 'src', 'scripts', 'lib', 'text.mjs'),
+      join(root, 'src', 'scripts', 'lib', 'text.mjs')
     );
     // capabilities.mjs and the routing record it reads.
     for (const dep of ['capabilities.mjs', 'routing-record.mjs'])
       copyFileSync(
-        join(process.cwd(), 'hooks-core', dep),
-        join(root, 'hooks-core', dep)
+        join(process.cwd(), 'src', 'hooks-core', dep),
+        join(root, 'src', 'hooks-core', dep)
       );
     // Generated hook entries stamp the package version into lifecycle telemetry,
     // making package.json an explicit generator input alongside the script and
@@ -260,7 +260,7 @@ describe('a generator run against a CRLF working tree', () => {
   }
 
   function run(root: string, args: string[] = []) {
-    return spawnSync(process.execPath, [join(root, 'scripts', GEN), ...args], {
+    return spawnSync(process.execPath, [join(root, 'src', 'scripts', GEN), ...args], {
       encoding: 'utf8',
       timeout: 60_000,
     });
@@ -275,8 +275,8 @@ describe('a generator run against a CRLF working tree', () => {
         else if (full.endsWith('.mjs')) out.push(full);
       }
     };
-    if (existsSync(join(root, 'integrations')))
-      walk(join(root, 'integrations'));
+    if (existsSync(join(root, 'src', 'integrations')))
+      walk(join(root, 'src', 'integrations'));
     return out;
   }
 

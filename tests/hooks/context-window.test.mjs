@@ -21,7 +21,7 @@ import { join } from 'node:path';
 import {
   otherSessionsNotice,
   overWindowNotice,
-} from '../../hooks-core/context-window.mjs';
+} from '../../src/hooks-core/context-window.mjs';
 
 const ROOT = process.cwd();
 const work = mkdtempSync(join(tmpdir(), 'context-window-'));
@@ -299,7 +299,7 @@ describe('the Claude Code hooks deliver it', () => {
     const state = join(w.cwd, '..', 'state');
     const call = (id) =>
       run(
-        'plugin/hooks/post-tool.mjs',
+        'src/plugin/hooks/post-tool.mjs',
         w,
         {
           hook_event_name: 'PostToolUse',
@@ -322,7 +322,7 @@ describe('the Claude Code hooks deliver it', () => {
     transcript(w, 'old', 760_000);
     register(w, process.pid, 'old');
     const out = run(
-      'plugin/hooks/session-start.mjs',
+      'src/plugin/hooks/session-start.mjs',
       w,
       {
         hook_event_name: 'SessionStart',

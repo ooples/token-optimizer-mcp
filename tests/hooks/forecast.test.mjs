@@ -11,15 +11,15 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { record, recordRead } from '../../hooks-core/metrics.mjs';
+import { record, recordRead } from '../../src/hooks-core/metrics.mjs';
 import {
   burnRate, runway, shadowAvoided, forecastPanel, worthSurfacing, ACTIONABLE_RUNWAY,
   MIN_CONTROL_TOUCHES, MIN_DIVERGENCE_EVENTS, balanceAwareEvents,
-} from '../../hooks-core/forecast.mjs';
+} from '../../src/hooks-core/forecast.mjs';
 import {
   logForecast, observeOutcome, reliability, calibrate,
-} from '../../hooks-core/calibration.mjs';
-import { readMetrics, readBalance } from '../../hooks-core/metrics.mjs';
+} from '../../src/hooks-core/calibration.mjs';
+import { readMetrics, readBalance } from '../../src/hooks-core/metrics.mjs';
 
 let dir;
 

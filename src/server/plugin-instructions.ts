@@ -39,7 +39,7 @@ const SERVER_INSTRUCTIONS =
 // buys nothing and still re-writes the prompt cache. Measured on the 2026-10-23
 // multi-agent benchmarks: 0.25-0.6 ToolSearch loads per run under the wording
 // above, each followed by a cache re-write. The subagent briefing says the same
-// (hooks-core/policy.mjs). CLAUDE_PLUGIN_ROOT is set by Claude Code's plugin
+// (src/hooks-core/policy.mjs). CLAUDE_PLUGIN_ROOT is set by Claude Code's plugin
 // runtime and by nothing else, and a plugin install always ships the hooks;
 // each stdio server process serves one client, so the choice is made once.
 //

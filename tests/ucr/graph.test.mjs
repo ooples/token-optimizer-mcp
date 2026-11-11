@@ -9,7 +9,7 @@ import {
   rebuildGraph,
   readProjection,
   writeProjection,
-} from '../../ucr/index.mjs';
+} from '../../src/ucr/index.mjs';
 
 const actor = {
   agentId: 'agent',

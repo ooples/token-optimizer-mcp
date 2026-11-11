@@ -9,7 +9,7 @@ import { afterEach, beforeEach, describe, expect, test } from '@jest/globals';
 import { existsSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { writeAtomically } from '../../hooks-core/policy.mjs';
+import { writeAtomically } from '../../src/hooks-core/policy.mjs';
 
 let dir;
 let target;

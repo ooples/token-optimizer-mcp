@@ -16,11 +16,11 @@ import { mkdtempSync, rmSync, writeFileSync, appendFileSync, readFileSync, statS
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
-import { load, putNode, putEdge, nodeId } from '../../hooks-core/wiki.mjs';
-import { serve, indexFile } from '../../hooks-core/staleness.mjs';
-import { record, recordRead, report } from '../../hooks-core/metrics.mjs';
-import { canonicalPath } from '../../hooks-core/paths.mjs';
-import { decide, normalizePayload } from '../../hooks-core/decide.mjs';
+import { load, putNode, putEdge, nodeId } from '../../src/hooks-core/wiki.mjs';
+import { serve, indexFile } from '../../src/hooks-core/staleness.mjs';
+import { record, recordRead, report } from '../../src/hooks-core/metrics.mjs';
+import { canonicalPath } from '../../src/hooks-core/paths.mjs';
+import { decide, normalizePayload } from '../../src/hooks-core/decide.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
@@ -38,7 +38,7 @@ afterEach(() => rmSync(workspace, { recursive: true, force: true }));
 describe('the graph directory is created restrictively -- on every platform', () => {
   // Asserting the SOURCE, because the behavioural assertion is POSIX-only and
   // therefore skipped exactly where this regressed unnoticed.
-  const source = readFileSync(join(ROOT, 'hooks-core', 'wiki.mjs'), 'utf8');
+  const source = readFileSync(join(ROOT, 'src', 'hooks-core', 'wiki.mjs'), 'utf8');
 
   test('append() passes mode 0o700 to mkdirSync', () => {
     expect(source).toMatch(/mkdirSync\(dir,\s*\{\s*recursive:\s*true,\s*mode:\s*0o700\s*\}\)/);
@@ -51,7 +51,7 @@ describe('the graph directory is created restrictively -- on every platform', ()
   });
 
   test('the metrics directory gets the same treatment', () => {
-    const metrics = readFileSync(join(ROOT, 'hooks-core', 'metrics.mjs'), 'utf8');
+    const metrics = readFileSync(join(ROOT, 'src', 'hooks-core', 'metrics.mjs'), 'utf8');
     expect(metrics).toMatch(/mode:\s*0o700/);
     expect(metrics).toMatch(/chmodSync\(dir,\s*0o700\)/);
   });
@@ -61,7 +61,7 @@ describe('graph writes are serialized', () => {
   test('append takes a lock rather than trusting append atomicity', () => {
     // POSIX guarantees atomic appends only up to PIPE_BUF (often 4 KB), and a
     // single record here can carry a 256 KB snapshot.
-    const source = readFileSync(join(ROOT, 'hooks-core', 'wiki.mjs'), 'utf8');
+    const source = readFileSync(join(ROOT, 'src', 'hooks-core', 'wiki.mjs'), 'utf8');
     expect(source).toContain('withLock');
   });
 

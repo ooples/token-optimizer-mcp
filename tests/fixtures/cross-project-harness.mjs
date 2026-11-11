@@ -19,8 +19,8 @@ import { spawnSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
 
-const HOOK = join(process.cwd(), 'plugin', 'hooks', 'pretooluse-router.mjs');
-const CORE = (n) => pathToFileURL(join(process.cwd(), 'hooks-core', n)).href;
+const HOOK = join(process.cwd(), 'src', 'plugin', 'hooks', 'pretooluse-router.mjs');
+const CORE = (n) => pathToFileURL(join(process.cwd(), 'src', 'hooks-core', n)).href;
 
 /**
  * @returns {Promise<{arms: Array, sharedDir: string, cleanup: Function}>}

@@ -25,12 +25,12 @@ import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
-import { mode, MODE_ASSIST, MODE_ENFORCE, MODE_OFF } from '../../hooks-core/policy.mjs';
+import { mode, MODE_ASSIST, MODE_ENFORCE, MODE_OFF } from '../../src/hooks-core/policy.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const ROUTER = join(HERE, '..', '..', 'plugin', 'hooks', 'pretooluse-router.mjs');
-const SESSION_START = join(HERE, '..', '..', 'plugin', 'hooks', 'session-start.mjs');
-const POST_TOOL = join(HERE, '..', '..', 'plugin', 'hooks', 'post-tool.mjs');
+const ROUTER = join(HERE, '..', '..', 'src', 'plugin', 'hooks', 'pretooluse-router.mjs');
+const SESSION_START = join(HERE, '..', '..', 'src', 'plugin', 'hooks', 'session-start.mjs');
+const POST_TOOL = join(HERE, '..', '..', 'src', 'plugin', 'hooks', 'post-tool.mjs');
 
 const ISOLATED_GRAPH = mkdtempSync(join(tmpdir(), 'assist-graph-'));
 const ISOLATED_STATE = mkdtempSync(join(tmpdir(), 'assist-state-'));

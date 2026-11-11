@@ -23,7 +23,7 @@ import { join } from 'node:path';
  */
 
 const core = (name) =>
-  readFileSync(join(process.cwd(), 'hooks-core', name), 'utf8');
+  readFileSync(join(process.cwd(), 'src', 'hooks-core', name), 'utf8');
 
 describe('the stale marker in the restoration brief', () => {
   it('requires a diff, exactly as the injector does', () => {

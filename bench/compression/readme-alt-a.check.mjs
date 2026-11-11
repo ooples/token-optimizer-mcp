@@ -32,7 +32,9 @@ import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repo = join(here, '..', '..');
-const README = join(repo, 'README.md');
+// The guarded tables moved out of README.md into docs/COMPARISON.md, which
+// keeps the README short; the prose that quotes them moved with them.
+const README = join(repo, 'docs', 'COMPARISON.md');
 const RECORD = join(here, 'alt-a', 'results', 'head-to-head.json');
 
 const START = '<!-- ALT-A-TABLE:START';
@@ -44,7 +46,7 @@ const to = readme.indexOf(END);
 if (from === -1 || to === -1 || to < from) {
   console.error(
     'readme-alt-a.check: the ALT-A-TABLE markers are missing from\n' +
-      'README.md. They are what makes this check possible -- restore them\n' +
+      'docs/COMPARISON.md. They are what makes this check possible -- restore them\n' +
       'around the twelve-row table rather than removing the check.'
   );
   process.exit(1);
@@ -201,7 +203,7 @@ if (missing.length) {
 // and a stale record has to be declared rather than merely not noticed.
 //
 // This does not prove the record is CURRENT. It cannot: the other arm needs a
-// clone CI has not got. `scripts/verify-blockers.mjs` carries that half, by
+// clone CI has not got. `src/scripts/verify-blockers.mjs` carries that half, by
 // refusing to call the tree shippable once `src/compress` has moved past the
 // commit named here.
 const provenance = [record.recordedAt, record.commit.slice(0, 8)].filter(
@@ -279,7 +281,7 @@ for (
 // that is edited by hand, so their absence has to be the loud case.
 if (!corpusBlocks.length) {
   console.error(
-    'readme-alt-a.check: no ALT-A-CORPUS markers in README.md. The corpus\n' +
+    'readme-alt-a.check: no ALT-A-CORPUS markers in docs/COMPARISON.md. The corpus\n' +
       'headlines were unchecked for a long time and that is what these markers\n' +
       'fixed -- restore them around the corpus sentences, do not drop the rule.'
   );
@@ -347,7 +349,7 @@ if (unmarked.length) {
       'outside every ALT-A-CORPUS block, so nothing compares them to anything:'
   );
   for (const { line, text } of unmarked)
-    console.error(`  README.md:${line}: ${text.trim().slice(0, 96)}`);
+    console.error(`  docs/COMPARISON.md:${line}: ${text.trim().slice(0, 96)}`);
   failed = true;
 }
 

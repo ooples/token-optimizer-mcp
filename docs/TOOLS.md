@@ -1605,7 +1605,7 @@ semantic harvest or a local model endpoint is configured, so on a fresh install
 
 **Notes:**
 
-- `search` ranks with BM25 (`hooks-core/lexical.mjs`), the same primitive the
+- `search` ranks with BM25 (`src/hooks-core/lexical.mjs`), the same primitive the
   dashboard's `/api/wiki/search` uses. Query terms of 3+ characters also match by
   prefix (`custom` finds `customer`), but **infix does not match** (`tomer` does
   not find `customer`). A query that tokenizes to nothing falls through to the

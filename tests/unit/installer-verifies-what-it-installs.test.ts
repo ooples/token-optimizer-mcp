@@ -6,19 +6,19 @@ import { join } from 'path';
  * Both installers verified the wrong files, so both always reported failure.
  *
  * The hook layer was redesigned from a downloaded `dispatcher` plus `handlers/`
- * and `helpers/` shell libraries into three ES modules under plugin/hooks.
+ * and `helpers/` shell libraries into three ES modules under src/plugin/hooks.
  * `Install-HooksFiles` was updated to copy the new modules; `Test-Installation`
  * was not, and still required dispatcher.ps1, handlers/*.ps1 and five
  * helpers/*.ps1 that the same file's own comments describe as replaced.
  *
  * The consequence is not a cosmetic warning. Verification failing means the
  * installer throws "Installation verification failed", which skips
- * scripts/record-install.mjs -- so no install manifest is written, and
+ * src/scripts/record-install.mjs -- so no install manifest is written, and
  * `install_doctor` then reports "install manifest present: FAIL / no record of
  * what was installed". The doctor was telling the truth about a file the
  * installer had been prevented from writing.
  *
- * install-hooks.sh carries the identical stale list (dispatcher.sh,
+ * src/install-hooks.sh carries the identical stale list (dispatcher.sh,
  * handlers/token-optimizer-orchestrator.sh, helpers/invoke-mcp.sh), so this is
  * not a Windows-only bug.
  *
@@ -30,7 +30,7 @@ import { join } from 'path';
 const ROOT = process.cwd();
 const read = (p: string) => readFileSync(join(ROOT, p), 'utf8');
 
-/** Every file actually shipped under plugin/hooks, as basenames. */
+/** Every file actually shipped under src/plugin/hooks, as basenames. */
 function shippedHookFiles(): Set<string> {
   const out = new Set<string>();
   const walk = (dir: string) => {
@@ -40,7 +40,7 @@ function shippedHookFiles(): Set<string> {
       else out.add(entry);
     }
   };
-  walk('plugin/hooks');
+  walk('src/plugin/hooks');
   return out;
 }
 
@@ -48,7 +48,7 @@ function shippedHookFiles(): Set<string> {
  * Paths an installer treats as required for verification, as basenames.
  *
  * Scoped to the required-files array rather than every $HOOKS_DIR mention in the
- * file: install-hooks.sh also prints "$HOOKS_DIR/logs/dispatcher.log" in its
+ * file: src/install-hooks.sh also prints "$HOOKS_DIR/logs/dispatcher.log" in its
  * closing help text, which is a log location, not a file installation produces.
  * Counting it would fail the installer for telling the user where to look.
  */
@@ -71,8 +71,8 @@ const ENTRYPOINTS = [
 ];
 
 describe.each([
-  ['install-hooks.ps1', 'install-hooks.ps1'],
-  ['install-hooks.sh', 'install-hooks.sh'],
+  ['install-hooks.ps1', 'src/install-hooks.ps1'],
+  ['install-hooks.sh', 'src/install-hooks.sh'],
 ])('%s verification', (_label, file) => {
   it('only requires files the installer actually ships', () => {
     if (!existsSync(join(ROOT, file))) return;
@@ -105,7 +105,7 @@ describe('the install manifest', () => {
     // failure -- including the MCP-configured check, which cannot pass for a
     // Claude Code CLI user because that path configures MCP via the plugin
     // rather than claude_desktop_config.json -- silently skipped it.
-    const ps1 = read('install-hooks.ps1');
+    const ps1 = read('src/install-hooks.ps1');
     const recordIndex = ps1.indexOf('record-install.mjs');
     expect(recordIndex).toBeGreaterThan(-1);
 

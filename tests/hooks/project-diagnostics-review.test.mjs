@@ -1,5 +1,5 @@
 import { expect, test } from '@jest/globals';
-import { foldOutput } from '../../hooks-core/output-compact.mjs';
+import { foldOutput } from '../../src/hooks-core/output-compact.mjs';
 
 test('bare project diagnostics keep different project paths distinct', () => {
   const a = '/a/First.csproj : warning NU1903: Vulnerable dependency';

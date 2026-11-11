@@ -20,7 +20,7 @@ import {
   wholeFileDump,
   isRecursiveSearch,
   adviseOnce,
-} from '../../hooks-core/decide.mjs';
+} from '../../src/hooks-core/decide.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
@@ -61,7 +61,7 @@ afterEach(() => rmSync(workspace, { recursive: true, force: true }));
 const route = (sessionId, toolName, toolInput) => {
   const result = spawnSync(
     process.execPath,
-    [join(ROOT, 'plugin/hooks/pretooluse-router.mjs')],
+    [join(ROOT, 'src/plugin/hooks/pretooluse-router.mjs')],
     {
       input: JSON.stringify({
         session_id: sessionId,
@@ -152,7 +152,7 @@ describe('outlines in the default install: assist, with the optimizer tools pres
   // does earn one, and the verdict path outlined only when refusals were on. In
   // the default assist mode the files the outline exists for were never outlined.
   const withTools = (sessionId, toolName, toolInput) => {
-    const result = spawnSync(process.execPath, [join(ROOT, 'plugin/hooks/pretooluse-router.mjs')], {
+    const result = spawnSync(process.execPath, [join(ROOT, 'src/plugin/hooks/pretooluse-router.mjs')], {
       input: JSON.stringify({ session_id: sessionId, cwd: workspace, tool_name: toolName, tool_input: toolInput }),
       encoding: 'utf8',
       env: {
@@ -182,7 +182,7 @@ describe('outlines in the default install: assist, with the optimizer tools pres
     const small = join(workspace, 'small.txt');
     writeFileSync(small, 'x\n');
     const call = (transcript) =>
-      spawnSync(process.execPath, [join(ROOT, 'plugin/hooks/pretooluse-router.mjs')], {
+      spawnSync(process.execPath, [join(ROOT, 'src/plugin/hooks/pretooluse-router.mjs')], {
         input: JSON.stringify({ session_id: session, transcript_path: transcript, cwd: workspace, tool_name: 'Read', tool_input: { file_path: small } }),
         encoding: 'utf8',
         env: { ...process.env, TOKEN_OPTIMIZER_STATE_DIR: stateDir },
@@ -220,7 +220,7 @@ describe('the subagent briefing rides on every exit', () => {
     ['deny', "p.deny('REASON')"],
     ['advise', "p.advise('REASON')"],
   ])('%s', (_, call) => {
-    const policy = pathToFileURL(join(ROOT, 'hooks-core', 'policy.mjs')).href;
+    const policy = pathToFileURL(join(ROOT, 'src', 'hooks-core', 'policy.mjs')).href;
     const result = spawnSync(
       process.execPath,
       ['--input-type=module', '-e', `import(${JSON.stringify(policy)}).then((p) => { p.precedeWith('BRIEFING'); ${call}; })`],
@@ -281,8 +281,40 @@ describe('advisories are said once', () => {
     // every real call. Two separate processes are the only honest check.
     const session = `twice-${randomUUID()}`;
     const stateDir = join(workspace, 'state');
+    const logDir = join(workspace, 'logs');
+    // Everything the hook left on disk, so a failure on CI says WHY the
+    // advisory was missing instead of only that it was. This test has failed
+    // on Linux Node 24/26 runners and never locally, so the evidence has to
+    // come back in the failure message itself.
+    const leftOnDisk = (dir) => {
+      const found = {};
+      const walk = (path, rel) => {
+        let entries;
+        try {
+          entries = readdirSync(path, { withFileTypes: true });
+        } catch {
+          return;
+        }
+        for (const entry of entries) {
+          const child = join(path, entry.name);
+          const name = rel ? `${rel}/${entry.name}` : entry.name;
+          if (entry.isDirectory()) walk(child, name);
+          else {
+            let text;
+            try {
+              text = readFileSync(child, 'utf8');
+            } catch (error) {
+              text = `<unreadable: ${error.code}>`;
+            }
+            found[name] = text.length > 4000 ? `${text.slice(0, 4000)}…` : text;
+          }
+        }
+      };
+      walk(dir, '');
+      return found;
+    };
     const post = (command) => {
-      const result = spawnSync(process.execPath, [join(ROOT, 'plugin/hooks/post-tool.mjs')], {
+      const result = spawnSync(process.execPath, [join(ROOT, 'src/plugin/hooks/post-tool.mjs')], {
         input: JSON.stringify({
           hook_event_name: 'PostToolUse',
           session_id: session,
@@ -296,7 +328,7 @@ describe('advisories are said once', () => {
         env: {
           ...process.env,
           TOKEN_OPTIMIZER_STATE_DIR: stateDir,
-          TOKEN_OPTIMIZER_LOG_DIR: join(workspace, 'logs'),
+          TOKEN_OPTIMIZER_LOG_DIR: logDir,
           TOKEN_OPTIMIZER_MCP_CAPABILITIES:
             'mcp__plugin_token-optimizer_token-optimizer__smart_grep',
         },
@@ -308,11 +340,27 @@ describe('advisories are said once', () => {
         stderr: expect.any(String),
       });
       const out = result.stdout.trim() ? JSON.parse(result.stdout.trim()) : {};
-      return String(out.hookSpecificOutput?.additionalContext ?? '');
+      return {
+        context: String(out.hookSpecificOutput?.additionalContext ?? ''),
+        stdout: result.stdout,
+        stderr: result.stderr,
+        state: leftOnDisk(stateDir),
+        logs: leftOnDisk(logDir),
+      };
     };
     // The positive control: the first search IS advised, so the second
     // being silent means the record was kept, not that nothing ever fires.
-    expect(post('grep -rn foo .')).toMatch(/Recursive shell searches/);
-    expect(post('grep -rn bar src')).not.toMatch(/Recursive shell searches/);
+    // A matcher diff shows only the compared key, so a mismatch throws the
+    // whole record: the hook's raw output and the state and logs it wrote.
+    const expectAdvised = (record, wanted) => {
+      if (/Recursive shell searches/.test(record.context) !== wanted) {
+        throw new Error(
+          `expected the search advisory to be ${wanted ? 'given' : 'withheld'}; hook record:\n` +
+            JSON.stringify(record, null, 2)
+        );
+      }
+    };
+    expectAdvised(post('grep -rn foo .'), true);
+    expectAdvised(post('grep -rn bar src'), false);
   });
 });

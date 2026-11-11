@@ -1,5 +1,5 @@
 import { test, expect } from '@jest/globals';
-import { parsePackReport } from '../../scripts/npm-pack-report.mjs';
+import { parsePackReport } from '../../src/scripts/npm-pack-report.mjs';
 const name = '@ooples/token-optimizer-mcp';
 const report = {
   name,

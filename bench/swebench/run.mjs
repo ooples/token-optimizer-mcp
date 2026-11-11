@@ -209,7 +209,7 @@ async function stagePlugin(work) {
   if (!existsSync(server)) throw new Error(`no build at ${server}; run npm run build first`);
   const staged = join(work, 'plugin');
   rmSync(staged, { recursive: true, force: true });
-  cpSync(join(REPO, 'plugin'), staged, { recursive: true });
+  cpSync(join(REPO, 'src', 'plugin'), staged, { recursive: true });
   // A SNAPSHOT of the build, not the live dist/: a rebuild during a campaign
   // would otherwise change the arm under test half-way through. It stays inside
   // the checkout, so the server still resolves this checkout's node_modules.

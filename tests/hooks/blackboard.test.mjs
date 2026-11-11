@@ -3,7 +3,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { BOARD_BUDGET, BOARD_TTL_MS, boardFor, gitHead, isReadOnlyCommand, recordOnBoard, splitCd } from '../../hooks-core/blackboard.mjs';
+import { BOARD_BUDGET, BOARD_TTL_MS, boardFor, gitHead, isReadOnlyCommand, recordOnBoard, splitCd } from '../../src/hooks-core/blackboard.mjs';
 
 const root = mkdtempSync(join(tmpdir(), 'board-'));
 afterAll(() => rmSync(root, { recursive: true, force: true }));
@@ -89,7 +89,7 @@ describe('through the hooks', () => {
     };
     const session = `bb-${Date.now()}`;
     const run = (script, input) =>
-      spawnSync(process.execPath, [join(process.cwd(), 'plugin', 'hooks', script)], { cwd: workspace, env, encoding: 'utf8', timeout: 30_000, input: JSON.stringify(input) });
+      spawnSync(process.execPath, [join(process.cwd(), 'src', 'plugin', 'hooks', script)], { cwd: workspace, env, encoding: 'utf8', timeout: 30_000, input: JSON.stringify(input) });
     run('post-tool.mjs', {
       hook_event_name: 'PostToolUse', session_id: session, agent_id: 'sib-a', cwd: workspace,
       tool_name: 'Bash', tool_input: { command: 'git log --oneline -30' },

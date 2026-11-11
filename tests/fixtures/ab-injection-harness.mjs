@@ -1,7 +1,7 @@
 /**
  * Builds the A/B arms from the REAL hook, not from hand-written hints.
  *
- * For each seeded dead-end it runs plugin/hooks/pretooluse-router.mjs with the
+ * For each seeded dead-end it runs src/plugin/hooks/pretooluse-router.mjs with the
  * command the subject is likely to reach for, and captures the additionalContext
  * the hook actually emits. The treatment prompt is that string verbatim -- which
  * is exactly what Claude Code prepends -- so the experiment tests the shipped
@@ -13,15 +13,15 @@ import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
-import { putNode, putNodeWithEdges, wikiDir, contentHash } from '../../hooks-core/wiki.mjs';
-import { indexFile } from '../../hooks-core/staleness.mjs';
+import { putNode, putNodeWithEdges, wikiDir, contentHash } from '../../src/hooks-core/wiki.mjs';
+import { indexFile } from '../../src/hooks-core/staleness.mjs';
 
 // RESOLVED FROM THIS FILE, not from an absolute path. The harness was written
 // with the author's checkout baked in, which meant it ran nowhere else -- and a
 // proof harness that only works on one machine cannot be re-run to check a
 // later change, which is most of its value.
 const HERE = dirname(fileURLToPath(import.meta.url));
-const HOOK = join(HERE, '..', '..', 'plugin', 'hooks', 'pretooluse-router.mjs');
+const HOOK = join(HERE, '..', '..', 'src', 'plugin', 'hooks', 'pretooluse-router.mjs');
 
 // Five dead-ends this session actually hit. Each cost real time, and none is
 // discoverable by quickly reading the code -- which is the condition that makes

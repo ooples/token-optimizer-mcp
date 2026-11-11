@@ -39,9 +39,9 @@ import { pathToFileURL } from 'node:url';
  * the ROUTER choose the order can fail on this.
  */
 
-const ROUTER = join(process.cwd(), 'plugin', 'hooks', 'pretooluse-router.mjs');
+const ROUTER = join(process.cwd(), 'src', 'plugin', 'hooks', 'pretooluse-router.mjs');
 const CORE = (name) =>
-  pathToFileURL(join(process.cwd(), 'hooks-core', name)).href;
+  pathToFileURL(join(process.cwd(), 'src', 'hooks-core', name)).href;
 
 let putNode, putEdge, nodeId;
 

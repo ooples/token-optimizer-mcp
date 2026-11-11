@@ -13,8 +13,8 @@ import { tmpdir } from 'node:os';
 import {
   recordingNudge, compactionNudge, semanticHarvestPrompt, findingCount,
   isSubstantive, NUDGE_AFTER_EDITS,
-} from '../../hooks-core/recording.mjs';
-import { putNode } from '../../hooks-core/wiki.mjs';
+} from '../../src/hooks-core/recording.mjs';
+import { putNode } from '../../src/hooks-core/wiki.mjs';
 
 let dir;
 beforeEach(() => { dir = join(mkdtempSync(join(tmpdir(), 'rec-')), 'wiki'); mkdirSync(dir, { recursive: true }); });

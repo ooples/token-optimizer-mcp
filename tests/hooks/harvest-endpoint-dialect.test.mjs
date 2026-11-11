@@ -28,9 +28,9 @@ import {
   credentialFor,
   validate,
   FINDINGS_SCHEMA,
-} from '../../hooks-core/harvest.mjs';
+} from '../../src/hooks-core/harvest.mjs';
 
-const HARVEST_MODULE = new URL('../../hooks-core/harvest.mjs', import.meta.url).href;
+const HARVEST_MODULE = new URL('../../src/hooks-core/harvest.mjs', import.meta.url).href;
 
 // The recorded failure now outlives the process that recorded it, so a test
 // run must not write into the developer's own ~/.token-optimizer.
@@ -44,7 +44,7 @@ const FINDING = [
     evidence: 'returned by the test server',
     applicability: 'while proving the harvest transport works',
     confidenceLabel: 'verified',
-    anchors: ['hooks-core/harvest.mjs'],
+    anchors: ['src/hooks-core/harvest.mjs'],
   },
 ];
 
@@ -297,10 +297,10 @@ describe('the schema declares every field the prompt asks for', () => {
             confidenceLabel: 'verified',
             scope,
             invalidators: ['the schema changes'],
-            anchors: ['hooks-core/harvest.mjs'],
+            anchors: ['src/hooks-core/harvest.mjs'],
           },
         ],
-        { knownFiles: new Set(['hooks-core/harvest.mjs']) }
+        { knownFiles: new Set(['src/hooks-core/harvest.mjs']) }
       );
       expect(kept.scope).toBe(scope);
       expect(kept.invalidators).toEqual(['the schema changes']);
@@ -466,12 +466,12 @@ describe('the model is given the anchors rather than asked for them', () => {
 
     await extract('a digest', {
       timeoutMs: 4000,
-      knownFiles: new Set(['hooks-core/harvest.mjs', 'hooks-core/derive.mjs']),
+      knownFiles: new Set(['src/hooks-core/harvest.mjs', 'src/hooks-core/derive.mjs']),
     });
 
     expect(anchorSpec().items.enum).toEqual([
-      'hooks-core/harvest.mjs',
-      'hooks-core/derive.mjs',
+      'src/hooks-core/harvest.mjs',
+      'src/hooks-core/derive.mjs',
     ]);
   });
 

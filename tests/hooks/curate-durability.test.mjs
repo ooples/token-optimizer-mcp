@@ -15,8 +15,8 @@ import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 
-import { create, correct, retire, pin, activeFindings, originWeight, HUMAN_WEIGHT, AGENT_WEIGHT, ORIGIN_AGENT, ORIGIN_HUMAN, ORIGIN_HARVESTED } from '../../hooks-core/curate.mjs';
-import { load, wikiDir } from '../../hooks-core/wiki.mjs';
+import { create, correct, retire, pin, activeFindings, originWeight, HUMAN_WEIGHT, AGENT_WEIGHT, ORIGIN_AGENT, ORIGIN_HUMAN, ORIGIN_HARVESTED } from '../../src/hooks-core/curate.mjs';
+import { load, wikiDir } from '../../src/hooks-core/wiki.mjs';
 
 let project, dir, target;
 

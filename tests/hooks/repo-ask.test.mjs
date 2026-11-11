@@ -3,9 +3,9 @@ import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { answer } from '../../hooks-core/ask.mjs';
-import { quietEnvScript } from '../../hooks-core/quiet-env.mjs';
-import { subagentBriefing } from '../../hooks-core/policy.mjs';
+import { answer } from '../../src/hooks-core/ask.mjs';
+import { quietEnvScript } from '../../src/hooks-core/quiet-env.mjs';
+import { subagentBriefing } from '../../src/hooks-core/policy.mjs';
 
 const repo = mkdtempSync(join(tmpdir(), 'ask-'));
 afterAll(() => rmSync(repo, { recursive: true, force: true }));

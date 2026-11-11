@@ -28,7 +28,8 @@ import { rolloutSection } from '../rollout/describe.js';
 const here = dirname(fileURLToPath(import.meta.url));
 
 function coreUrl(name: string): string {
-  return pathToFileURL(path.join(here, '..', '..', 'hooks-core', name)).href;
+  return pathToFileURL(path.join(here, '..', '..', 'src', 'hooks-core', name))
+    .href;
 }
 
 let cached: {
@@ -207,7 +208,7 @@ export async function installDoctor(input: {
         '',
         plan.untouched,
         '',
-        'Nothing has been changed. Run `node scripts/uninstall.mjs --apply` to carry it out.',
+        'Nothing has been changed. Run `node src/scripts/uninstall.mjs --apply` to carry it out.',
       ].join('\n')
     );
   }

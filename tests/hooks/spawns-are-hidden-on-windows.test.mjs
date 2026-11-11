@@ -15,7 +15,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, resolve } from 'node:path';
 
-const HOOKS_CORE = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', 'hooks-core');
+const HOOKS_CORE = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', 'src', 'hooks-core');
 
 /** The child_process bindings a module imported, so `pattern.exec(...)` is not mistaken for one. */
 function spawnBindings(source) {

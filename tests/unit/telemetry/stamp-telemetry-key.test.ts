@@ -18,7 +18,7 @@ import { mkdtempSync, rmSync, copyFileSync, readFileSync, writeFileSync } from '
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-const SCRIPT = join(process.cwd(), 'scripts', 'stamp-telemetry-key.mjs');
+const SCRIPT = join(process.cwd(), 'src', 'scripts', 'stamp-telemetry-key.mjs');
 const SOURCE = join(process.cwd(), 'src', 'telemetry', 'credentials.ts');
 const VALID = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiJ9.not-a-signature';
 

@@ -16,10 +16,10 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
-const real = await import('../../hooks-core/staleness.mjs');
-const { rejected } = await import('../../hooks-core/store-write.mjs');
+const real = await import('../../src/hooks-core/staleness.mjs');
+const { rejected } = await import('../../src/hooks-core/store-write.mjs');
 
-jest.unstable_mockModule('../../hooks-core/staleness.mjs', () => ({
+jest.unstable_mockModule('../../src/hooks-core/staleness.mjs', () => ({
   ...real,
   indexFile: (dir, path, ...rest) => {
     if (String(path).includes('busy')) {
@@ -30,7 +30,7 @@ jest.unstable_mockModule('../../hooks-core/staleness.mjs', () => ({
   },
 }));
 
-const { writeHarvested } = await import('../../hooks-core/harvest-write.mjs');
+const { writeHarvested } = await import('../../src/hooks-core/harvest-write.mjs');
 
 let project;
 let dir;

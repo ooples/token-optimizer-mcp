@@ -23,7 +23,7 @@ import {
   recentToolHookLatency,
   slowHookNotice,
   takeSlowHookNotice,
-} from '../../hooks-core/hook-latency.mjs';
+} from '../../src/hooks-core/hook-latency.mjs';
 
 const ROOT = process.cwd();
 const work = mkdtempSync(join(tmpdir(), 'hook-latency-'));
@@ -237,8 +237,8 @@ describe('takeSlowHookNotice says it once per condition', () => {
 });
 
 describe.each([
-  ['plugin/hooks/session-start.mjs'],
-  ['integrations/codex/hooks/session-start.mjs'],
+  ['src/plugin/hooks/session-start.mjs'],
+  ['src/integrations/codex/hooks/session-start.mjs'],
 ])('%s', (entry) => {
   const slowRuns = () => [
     ...fast(50),
@@ -275,7 +275,7 @@ describe('a real hook records where its time went', () => {
     const env = cleanEnv();
     const r = spawnSync(
       process.execPath,
-      [join(ROOT, 'plugin', 'hooks', 'pretooluse-router.mjs')],
+      [join(ROOT, 'src', 'plugin', 'hooks', 'pretooluse-router.mjs')],
       {
         encoding: 'utf8',
         timeout: 60_000,

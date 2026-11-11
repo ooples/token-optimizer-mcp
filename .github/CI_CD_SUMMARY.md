@@ -159,7 +159,7 @@ BREAKING: → major version
 
 ---
 
-#### Commitlint (`.commitlintrc.json`)
+#### Commitlint (`commitlint` in `package.json`)
 **Purpose**: Define commit message validation rules
 
 **Rules Enforced**:

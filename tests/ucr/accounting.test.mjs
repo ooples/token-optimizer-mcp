@@ -3,7 +3,7 @@ import {
   CognitiveCostLedger,
   compareCognitiveCosts,
   stratifiedCostDiagnostics,
-} from '../../ucr/index.mjs';
+} from '../../src/ucr/index.mjs';
 
 function complete(runId, consumerTokens) {
   const ledger = new CognitiveCostLedger({ runId });

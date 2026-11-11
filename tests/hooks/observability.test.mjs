@@ -9,7 +9,7 @@ import {
   readHookEvents,
   recordHookBootstrapFailure,
   writeHookEvent,
-} from '../../hooks-core/observability.mjs';
+} from '../../src/hooks-core/observability.mjs';
 
 const ROOT = process.cwd();
 const PACKAGE_VERSION = JSON.parse(
@@ -199,7 +199,7 @@ describe('cross-client hook observability', () => {
     const started = Date.now();
     const child = spawn(
       process.execPath,
-      [join(ROOT, 'integrations', 'codex', 'plugin', 'hooks', 'pre-tool.mjs')],
+      [join(ROOT, 'src', 'integrations', 'codex', 'plugin', 'hooks', 'pre-tool.mjs')],
       {
         cwd: workspace,
         env: {
@@ -246,7 +246,7 @@ describe('cross-client hook observability', () => {
   test('covers Claude Code custom hooks with the same bounded schema', async () => {
     const child = spawn(
       process.execPath,
-      [join(ROOT, 'plugin', 'hooks', 'pretooluse-router.mjs')],
+      [join(ROOT, 'src', 'plugin', 'hooks', 'pretooluse-router.mjs')],
       {
         cwd: workspace,
         env: childEnv({ TOKEN_OPTIMIZER_LOG_DIR: join(workspace, 'claude-logs') }),
@@ -288,7 +288,7 @@ describe('cross-client hook observability', () => {
     const results = await Promise.all(
       adapters.map(async ([client, entryParts]) => {
         const logDirectory = join(workspace, `${client}-logs`);
-        const child = spawn(process.execPath, [join(ROOT, ...entryParts)], {
+        const child = spawn(process.execPath, [join(ROOT, 'src', ...entryParts)], {
           cwd: workspace,
           env: childEnv({ TOKEN_OPTIMIZER_LOG_DIR: logDirectory }),
           stdio: ['pipe', 'pipe', 'pipe'],
@@ -334,7 +334,7 @@ describe('cross-client hook observability', () => {
     const logDirectory = join(workspace, 'stop-logs');
     const child = spawn(
       process.execPath,
-      [join(ROOT, 'integrations', 'codex', 'plugin', 'hooks', 'stop.mjs')],
+      [join(ROOT, 'src', 'integrations', 'codex', 'plugin', 'hooks', 'stop.mjs')],
       {
         cwd: workspace,
         env: {
@@ -374,7 +374,7 @@ describe('cross-client hook observability', () => {
     writeHookEvent({ client: 'codex', outcome: 'success', durationMs: 10 });
     writeHookEvent({ client: 'gemini', outcome: 'success', durationMs: 20 });
 
-    const summaryRun = spawnSync(process.execPath, [join(ROOT, 'scripts', 'export-diagnostics.mjs')], {
+    const summaryRun = spawnSync(process.execPath, [join(ROOT, 'src', 'scripts', 'export-diagnostics.mjs')], {
       cwd: workspace,
       env: process.env,
       encoding: 'utf8',
@@ -387,7 +387,7 @@ describe('cross-client hook observability', () => {
 
     const eventRun = spawnSync(
       process.execPath,
-      [join(ROOT, 'scripts', 'export-diagnostics.mjs'), '--include-events', '--limit', '1'],
+      [join(ROOT, 'src', 'scripts', 'export-diagnostics.mjs'), '--include-events', '--limit', '1'],
       { cwd: workspace, env: process.env, encoding: 'utf8' }
     );
     expect(eventRun.status).toBe(0);

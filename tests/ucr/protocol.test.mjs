@@ -20,7 +20,7 @@ import {
   signEvent,
   verifyEventSignature,
   verifyRunIdentity,
-} from '../../ucr/index.mjs';
+} from '../../src/ucr/index.mjs';
 
 const actor = {
   agentId: 'agent-a',

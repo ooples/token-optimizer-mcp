@@ -22,11 +22,11 @@ import { createServer } from 'http';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, realpathSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { load, nodeId } from '../../hooks-core/wiki.mjs';
-import { canonicalPath } from '../../hooks-core/paths.mjs';
-import { projectStore } from '../../hooks-core/maintenance.mjs';
+import { load, nodeId } from '../../src/hooks-core/wiki.mjs';
+import { canonicalPath } from '../../src/hooks-core/paths.mjs';
+import { projectStore } from '../../src/hooks-core/maintenance.mjs';
 
-const WORKER = join(process.cwd(), 'hooks-core', 'harvest-worker.mjs');
+const WORKER = join(process.cwd(), 'src', 'hooks-core', 'harvest-worker.mjs');
 const SESSION = 's-subdir-root';
 
 let project;

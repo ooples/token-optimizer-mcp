@@ -10,7 +10,7 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { diagnose, renderDiagnosis, probeMode } from '../../hooks-core/doctor.mjs';
+import { diagnose, renderDiagnosis, probeMode } from '../../src/hooks-core/doctor.mjs';
 
 const ROOT = process.cwd();
 

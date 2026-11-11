@@ -28,7 +28,7 @@ import { join } from 'path';
 import { pathToFileURL } from 'url';
 
 const CORE = (name) =>
-  pathToFileURL(join(process.cwd(), 'hooks-core', name)).href;
+  pathToFileURL(join(process.cwd(), 'src', 'hooks-core', name)).href;
 
 let dir;
 let readMetrics;

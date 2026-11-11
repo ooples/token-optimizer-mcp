@@ -23,16 +23,16 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 /** Fields assigned, incremented or mutated on a `state` object in hook code. */
 function writtenFields() {
   const sources = [
-    ...readdirSync(join(ROOT, 'hooks-core'))
+    ...readdirSync(join(ROOT, 'src', 'hooks-core'))
       .filter((f) => f.endsWith('.mjs'))
-      .map((f) => join(ROOT, 'hooks-core', f)),
-    ...readdirSync(join(ROOT, 'plugin', 'hooks'))
+      .map((f) => join(ROOT, 'src', 'hooks-core', f)),
+    ...readdirSync(join(ROOT, 'src', 'plugin', 'hooks'))
       .filter((f) => f.endsWith('.mjs'))
-      .map((f) => join(ROOT, 'plugin', 'hooks', f)),
+      .map((f) => join(ROOT, 'src', 'plugin', 'hooks', f)),
     // The Claude Code hooks' bodies live in impl/ behind their entry shims.
-    ...readdirSync(join(ROOT, 'plugin', 'hooks', 'impl'))
+    ...readdirSync(join(ROOT, 'src', 'plugin', 'hooks', 'impl'))
       .filter((f) => f.endsWith('.mjs'))
-      .map((f) => join(ROOT, 'plugin', 'hooks', 'impl', f)),
+      .map((f) => join(ROOT, 'src', 'plugin', 'hooks', 'impl', f)),
   ];
   const fields = new Set();
   const writes = [
@@ -80,7 +80,7 @@ test('the scan finds the fields it exists to protect', () => {
 });
 
 test('every written state field round-trips through saveState and loadState', async () => {
-  const { loadState, saveState } = await import('../../hooks-core/policy.mjs');
+  const { loadState, saveState } = await import('../../src/hooks-core/policy.mjs');
   const session = `fields-${randomUUID()}`;
   const fields = writtenFields();
 

@@ -302,7 +302,7 @@ describe('onnxEncoder', () => {
   // saw -- `A float32 tensor's data must be type of function Float32Array()`,
   // thrown inside onnxruntime before any of our code runs. Nothing on our side
   // can fix it and a mock would prove nothing, so these run as
-  // `node scripts/verify-onnx-adapter.mjs`, which exercises the same paths
+  // `node src/scripts/verify-onnx-adapter.mjs`, which exercises the same paths
   // against real inference and exits non-zero on failure.
   //
   // Everything that does NOT cross into native code -- the two-phase pass, the

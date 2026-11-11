@@ -4,17 +4,18 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { sha256 } from '../../ucr/index.mjs';
+import { sha256 } from '../../src/ucr/index.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const SOURCE = join(
   ROOT,
+  'src',
   'evals',
   'ucr',
   'results',
   'full-study-qualification-codex-to-claude-v10.json'
 );
-const VERIFY = join(ROOT, 'scripts', 'verify-ucr-qualification.mjs');
+const VERIFY = join(ROOT, 'src', 'scripts', 'verify-ucr-qualification.mjs');
 const TEMP = mkdtempSync(join(tmpdir(), 'ucr-qualification-verifier-'));
 
 afterAll(() => rmSync(TEMP, { recursive: true, force: true }));

@@ -7,7 +7,7 @@ describe('fleet enforcement certification', () => {
     const repoRoot = resolve(process.cwd());
     const result = spawnSync(
       process.execPath,
-      ['scripts/certify-clients.mjs', '--json', '--no-version-check'],
+      ['src/scripts/certify-clients.mjs', '--json', '--no-version-check'],
       { cwd: repoRoot, encoding: 'utf8' }
     );
 

@@ -21,7 +21,7 @@ import { pathToFileURL } from 'url';
 import { join } from 'path';
 
 const HARVEST = pathToFileURL(
-  join(process.cwd(), 'plugin', 'hooks', 'lib', 'harvest.mjs')
+  join(process.cwd(), 'src', 'plugin', 'hooks', 'lib', 'harvest.mjs')
 ).href;
 
 /** Imported fresh each time: the module reads env per call, but be explicit. */

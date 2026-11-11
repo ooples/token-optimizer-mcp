@@ -130,7 +130,7 @@ Complete this checklist before publishing `token-optimizer-mcp` to npm.
 
 - [ ] **Test local installation** (optional but recommended)
   ```bash
-  bash scripts/test-install.sh
+  bash src/scripts/test-install.sh
   ```
   - Package installs successfully
   - CLI entry point works

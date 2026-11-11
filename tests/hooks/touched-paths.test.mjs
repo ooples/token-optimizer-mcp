@@ -10,7 +10,7 @@
 import { mkdtempSync, rmSync, writeFileSync, mkdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { touchedFiles, isContentDump, decide, isRecursiveSearch, normalizePayload } from '../../hooks-core/decide.mjs';
+import { touchedFiles, isContentDump, decide, isRecursiveSearch, normalizePayload } from '../../src/hooks-core/decide.mjs';
 
 // touchedPaths was a compatibility shim -- `touchedFiles(p).map(f => f.path)` --
 // kept, per its own docstring, "so every existing caller and test reads exactly
@@ -18,8 +18,8 @@ import { touchedFiles, isContentDump, decide, isRecursiveSearch, normalizePayloa
 // the test that existed to check it. The paths are what this suite is about, so
 // it derives them directly now.
 const touchedPaths = (payload) => touchedFiles(payload).map((f) => f.path);
-import { projectRootFor, unrootedRoot } from '../../hooks-core/wiki.mjs';
-import { isMachineOwned } from '../../hooks-core/policy.mjs';
+import { projectRootFor, unrootedRoot } from '../../src/hooks-core/wiki.mjs';
+import { isMachineOwned } from '../../src/hooks-core/policy.mjs';
 
 let home;
 let repoA;

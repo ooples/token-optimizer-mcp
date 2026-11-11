@@ -16,10 +16,10 @@
  */
 import { describe, it, expect } from '@jest/globals';
 import fc from 'fast-check';
-import { canonicalPath } from '../../hooks-core/paths.mjs';
-import { canonicalKey, nodeId, contentHash, load, findingsFor } from '../../hooks-core/wiki.mjs';
-import { extractSymbols, extractImports, symbolKey, languageOf } from '../../hooks-core/symbols.mjs';
-import { normalizePayload, touchedFiles } from '../../hooks-core/decide.mjs';
+import { canonicalPath } from '../../src/hooks-core/paths.mjs';
+import { canonicalKey, nodeId, contentHash, load, findingsFor } from '../../src/hooks-core/wiki.mjs';
+import { extractSymbols, extractImports, symbolKey, languageOf } from '../../src/hooks-core/symbols.mjs';
+import { normalizePayload, touchedFiles } from '../../src/hooks-core/decide.mjs';
 import { mkdtempSync, rmSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';

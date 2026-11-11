@@ -24,7 +24,8 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { toolSearchOutcomesFromTranscript } from '../../hooks-core/transcript.mjs';
+import { toolSearchOutcomesFromTranscript } from '../../src/hooks-core/transcript.mjs';
+
 
 // These tests are about WHETHER the harvest prompt is generated; how it is
 // delivered (held for the next turn by default, 2026-10-21) is covered by
@@ -189,7 +190,7 @@ describe('a tool search is evidence about the tools it looked for', () => {
       regexSearch('s3', '((.*))*x', [], { limit: 5 }),
       regexSearch('s4', '((.|.))*x', [], { limit: 5 }),
     ]);
-    const module = join(ROOT, 'hooks-core', 'transcript.mjs').replace(/\\/g, '/');
+    const module = join(ROOT, 'src', 'hooks-core', 'transcript.mjs').replace(/\\/g, '/');
     const result = spawnSync(
       process.execPath,
       [
@@ -277,8 +278,8 @@ describe('a tool search is evidence about the tools it looked for', () => {
 });
 
 describe('the Stop hook stops asking for a tool the session could not load', () => {
-  const STOP = join(ROOT, 'plugin', 'hooks', 'stop.mjs');
-  const POST = join(ROOT, 'plugin', 'hooks', 'post-tool.mjs');
+  const STOP = join(ROOT, 'src', 'plugin', 'hooks', 'stop.mjs');
+  const POST = join(ROOT, 'src', 'plugin', 'hooks', 'post-tool.mjs');
 
   function env() {
     const base = { ...process.env };

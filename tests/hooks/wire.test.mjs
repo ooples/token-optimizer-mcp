@@ -19,7 +19,7 @@ import {
   WIRING,
   MARKER,
   OWNERSHIP_FLAG,
-} from '../../hooks-core/wire.mjs';
+} from '../../src/hooks-core/wire.mjs';
 
 const HOOKS = '/home/me/.claude-global/hooks/token-optimizer';
 /** How many of our hooks an event carries: PreToolUse holds the router and the agent-scope recorder. */

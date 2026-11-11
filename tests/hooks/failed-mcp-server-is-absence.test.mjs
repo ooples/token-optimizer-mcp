@@ -25,8 +25,8 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { HOOK_MCP_TOOLS } from '../../hooks-core/capabilities.mjs';
-import { serverFailuresFromTranscript } from '../../hooks-core/transcript.mjs';
+import { HOOK_MCP_TOOLS } from '../../src/hooks-core/capabilities.mjs';
+import { serverFailuresFromTranscript } from '../../src/hooks-core/transcript.mjs';
 
 const ROOT = process.cwd();
 const PLUGIN_SERVER = 'plugin:token-optimizer:token-optimizer';
@@ -131,7 +131,7 @@ describe('serverFailuresFromTranscript', () => {
 });
 
 describe('the hooks stop advertising a server that never connected', () => {
-  const POST = join(ROOT, 'plugin', 'hooks', 'post-tool.mjs');
+  const POST = join(ROOT, 'src', 'plugin', 'hooks', 'post-tool.mjs');
 
   function env() {
     const base = { ...process.env };

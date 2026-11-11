@@ -1,7 +1,7 @@
 import { describe, expect, test } from '@jest/globals';
 import {
   evaluationSchedule, parseRunIdentity, parseUsage,
-} from '../../scripts/run-evidence-eval.mjs';
+} from '../../src/scripts/run-evidence-eval.mjs';
 
 describe('live evidence harness', () => {
   test('counterbalances every four-arm pair', () => {

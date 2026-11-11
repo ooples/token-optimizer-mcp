@@ -11,8 +11,8 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { turnEvidence } from '../../hooks-core/transcript.mjs';
-import { semanticHarvestPrompt } from '../../hooks-core/recording.mjs';
+import { turnEvidence } from '../../src/hooks-core/transcript.mjs';
+import { semanticHarvestPrompt } from '../../src/hooks-core/recording.mjs';
 
 const root = mkdtempSync(join(tmpdir(), 'harvest-gate-'));
 afterAll(() => rmSync(root, { recursive: true, force: true }));
@@ -159,7 +159,7 @@ describe('semanticHarvestPrompt, gated on the turn', () => {
 // THE WIRING, through the real Claude Code hooks: edits recorded by
 // post-tool.mjs, then stop.mjs reading the turn from transcript_path.
 describe('the Claude Code Stop hook', () => {
-  let PLUGIN = join(process.cwd(), 'plugin', 'hooks');
+  let PLUGIN = join(process.cwd(), 'src', 'plugin', 'hooks');
   const hook = (name, payload, workspace) =>
     spawnSync(process.execPath, [join(PLUGIN, `${name}.mjs`)], {
       cwd: workspace,
@@ -265,7 +265,7 @@ describe('the Claude Code Stop hook', () => {
   test('another client keeps the prompt: only Claude Code transcripts are read', () => {
     // Copilot shares this Stop adapter, and its transcript need not record
     // failures the way Claude Code's does (review on #520).
-    PLUGIN = join(process.cwd(), 'integrations', 'copilot', '.github', 'hooks');
+    PLUGIN = join(process.cwd(), 'src', 'integrations', 'copilot', '.github', 'hooks');
     try {
       const out = stopAfterEdits([
         prompt('rename it'),
@@ -275,7 +275,7 @@ describe('the Claude Code Stop hook', () => {
       expect(out.decision).toBe('block');
       expect(out.reason).toMatch(/semantic harvest/);
     } finally {
-      PLUGIN = join(process.cwd(), 'plugin', 'hooks');
+      PLUGIN = join(process.cwd(), 'src', 'plugin', 'hooks');
     }
   });
 });

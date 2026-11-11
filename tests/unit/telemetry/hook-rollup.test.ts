@@ -252,7 +252,7 @@ describe('reading a real ledger at boot', () => {
       },
     ]);
     const metrics = await import(
-      pathToFileURL(join(process.cwd(), 'hooks-core', 'metrics.mjs')).href
+      pathToFileURL(join(process.cwd(), 'src', 'hooks-core', 'metrics.mjs')).href
     );
     const report = metrics.report(join(project, '.token-optimizer', 'wiki'));
     // The control: the reduction DID carry the client name through, twice.

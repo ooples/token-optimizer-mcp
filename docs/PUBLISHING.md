@@ -61,7 +61,7 @@ passes.
   its discretion. **No application process** — the submission form does not add
   here. If they list it, you can prompt users via
   [plugin hints](https://code.claude.com/docs/en/plugin-hints).
-- ⏳ **Prerequisite:** merge the packaging PR so `plugin/` and
+- ⏳ **Prerequisite:** merge the packaging PR so `src/plugin/` and
   `.claude-plugin/marketplace.json` land on `master` (the submission/self-host
   flows read the default branch).
 
@@ -84,8 +84,8 @@ crawls public GitHub repos daily; there is nothing to submit.
 
 No dedicated plugin store of their own — they load MCP servers from config
 (`~/.copilot/mcp-config.json`, `~/.codex/config.toml`,
-`opencode.json`; see `integrations/`). Discovery comes from **the MCP Registry
-(step 1)**. Ready-to-copy configs live in `integrations/`.
+`opencode.json`; see `src/integrations/`). Discovery comes from **the MCP Registry
+(step 1)**. Ready-to-copy configs live in `src/integrations/`.
 
 ## Quick status
 
@@ -95,4 +95,4 @@ No dedicated plugin store of their own — they load MCP servers from config
 | Claude Code (self-host) | ✅ marketplace.json, validate passes | merge packaging PR to `master` |
 | Claude Code (community) | ✅ validate passes | submit via Console form (needs your login) |
 | Gemini gallery | ✅ topic + root manifest | `git tag` a release (after merge) |
-| Copilot / Codex / OpenCode | ✅ `integrations/*` configs | ✅ (covered by the MCP Registry) |
+| Copilot / Codex / OpenCode | ✅ `src/integrations/*` configs | ✅ (covered by the MCP Registry) |

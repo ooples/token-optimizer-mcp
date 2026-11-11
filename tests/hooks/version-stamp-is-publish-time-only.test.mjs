@@ -10,7 +10,7 @@
  *
  * This repository has paid for that invariant three times. v5.4.0 and v5.4.1
  * were tagged with GitHub Releases and neither reached npm; the post-mortem is
- * written into scripts/pin-mcp-version.mjs and scripts/generate-client-configs.mjs,
+ * written into src/scripts/pin-mcp-version.mjs and src/scripts/generate-client-configs.mjs,
  * which removed the version from nine configs and named the remedy: pin at
  * publish time only, so the tarball carries an exact version while git carries
  * none. The stamp was then reintroduced by a different generator, into 48 files,
@@ -34,10 +34,10 @@ import {
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { pathToFileURL } from 'node:url';
-import { serviceVersion } from '../../hooks-core/observability.mjs';
+import { serviceVersion } from '../../src/hooks-core/observability.mjs';
 
 const ROOT = process.cwd();
-const GENERATED_DIRS = ['plugin', 'integrations'];
+const GENERATED_DIRS = ['src/plugin', 'src/integrations'];
 /**
  * Any assignment of a version literal, in any spacing or quote style.
  *
@@ -85,15 +85,15 @@ let sandbox;
 /** A minimal ROOT the generators can run against without touching the repo. */
 beforeAll(() => {
   sandbox = mkdtempSync(join(tmpdir(), 'version-stamp-'));
-  mkdirSync(join(sandbox, 'scripts'), { recursive: true });
-  cpSync(join(ROOT, 'scripts', 'lib'), join(sandbox, 'scripts', 'lib'), {
+  mkdirSync(join(sandbox, 'src', 'scripts'), { recursive: true });
+  cpSync(join(ROOT, 'src', 'scripts', 'lib'), join(sandbox, 'src', 'scripts', 'lib'), {
     recursive: true,
   });
-  cpSync(join(ROOT, 'hooks-core'), join(sandbox, 'hooks-core'), {
+  cpSync(join(ROOT, 'src', 'hooks-core'), join(sandbox, 'src', 'hooks-core'), {
     recursive: true,
   });
   for (const script of ['sync-hook-core.mjs', 'generate-client-entries.mjs']) {
-    cpSync(join(ROOT, 'scripts', script), join(sandbox, 'scripts', script));
+    cpSync(join(ROOT, 'src', 'scripts', script), join(sandbox, 'src', 'scripts', script));
   }
   writeFileSync(
     join(sandbox, 'package.json'),
@@ -112,7 +112,7 @@ afterAll(() => {
 function generate(script, ...flags) {
   const result = spawnSync(
     process.execPath,
-    [join(sandbox, 'scripts', script), ...flags],
+    [join(sandbox, 'src', 'scripts', script), ...flags],
     {
       encoding: 'utf8',
       timeout: 60_000,
@@ -129,7 +129,7 @@ describe('generated output carries no version by default', () => {
     generate('sync-hook-core.mjs');
     // The fixture package.json says 9.9.9-fixture. If the generator reads it into
     // the output at all, this fails.
-    const vendored = sandboxFile('plugin', 'hooks', 'lib', 'observability.mjs');
+    const vendored = sandboxFile('src', 'plugin', 'hooks', 'lib', 'observability.mjs');
     // Generated at all, first: a generator that emitted an empty file would
     // satisfy the stamp check below and pass as 'version-free'.
     expect(vendored).toMatch(/\bexport\b/);
@@ -138,7 +138,7 @@ describe('generated output carries no version by default', () => {
 
   test('the client entry points are version-free too', () => {
     generate('generate-client-entries.mjs');
-    const entry = sandboxFile('plugin', 'hooks', 'stop.mjs');
+    const entry = sandboxFile('src', 'plugin', 'hooks', 'stop.mjs');
     expect(entry).toMatch(/\bimport\b/);
     expect(entry).not.toMatch(STAMP);
   });
@@ -163,13 +163,13 @@ describe('the publish-time stamp is real', () => {
   test('--stamp writes the exact version into the vendored core', () => {
     generate('sync-hook-core.mjs', '--stamp');
     expect(
-      sandboxFile('plugin', 'hooks', 'lib', 'observability.mjs')
+      sandboxFile('src', 'plugin', 'hooks', 'lib', 'observability.mjs')
     ).toContain(`TOKEN_OPTIMIZER_VERSION = '${FIXTURE_VERSION}'`);
   });
 
   test('--stamp writes it into every client entry point', () => {
     generate('generate-client-entries.mjs', '--stamp');
-    expect(sandboxFile('plugin', 'hooks', 'stop.mjs')).toContain(
+    expect(sandboxFile('src', 'plugin', 'hooks', 'stop.mjs')).toContain(
       `TOKEN_OPTIMIZER_VERSION = '${FIXTURE_VERSION}'`
     );
   });
@@ -241,7 +241,7 @@ describe('the release workflow applies it, in the only window that works', () =>
     // -1, and -1 is less than every real index. Caught by mutation.
     expect(text).toContain('npm run stamp:version');
     expect(text.indexOf('npm run stamp:version')).toBeLessThan(
-      text.indexOf('scripts/checksums.mjs')
+      text.indexOf('src/scripts/checksums.mjs')
     );
   });
 
@@ -313,7 +313,7 @@ describe('a version is only reported when it is ours', () => {
       );
       mkdirSync(join(foreign, 'vendored'));
       const copy = join(foreign, 'vendored', 'observability.mjs');
-      cpSync(join(ROOT, 'hooks-core', 'observability.mjs'), copy);
+      cpSync(join(ROOT, 'src', 'hooks-core', 'observability.mjs'), copy);
 
       const saved = {
         version: process.env.TOKEN_OPTIMIZER_VERSION,

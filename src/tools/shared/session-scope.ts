@@ -18,7 +18,7 @@
  * server and session id, so a session scope alone handed a subagent
  * `// No changes` for a file only its parent read. Claude Code tags each call
  * with a toolUseId, and the PreToolUse hook records which agent made it
- * (hooks-core/agent-scope.mjs writes `<state>/agent-scope/<toolUseId>.json`);
+ * (src/hooks-core/agent-scope.mjs writes `<state>/agent-scope/<toolUseId>.json`);
  * the agent is added to the scope when that record is found. When it is not --
  * another client, no hook, a failed write -- the scope is the session's,
  * exactly as before.

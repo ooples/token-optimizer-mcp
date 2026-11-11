@@ -9,8 +9,8 @@ import { describe, it, expect, afterEach } from '@jest/globals';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { failureInOutput, maskedRunner } from '../../hooks-core/piped-failure.mjs';
-import { currentTurn, turnStats } from '../../hooks-core/loopguard.mjs';
+import { failureInOutput, maskedRunner } from '../../src/hooks-core/piped-failure.mjs';
+import { currentTurn, turnStats } from '../../src/hooks-core/loopguard.mjs';
 
 describe('a masked exit status', () => {
   it.each([

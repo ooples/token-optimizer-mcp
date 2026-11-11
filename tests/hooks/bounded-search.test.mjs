@@ -9,7 +9,7 @@
  */
 
 import { describe, expect, test } from '@jest/globals';
-import { decide, isRecursiveSearch, searchOutputBounded } from '../../hooks-core/decide.mjs';
+import { decide, isRecursiveSearch, searchOutputBounded } from '../../src/hooks-core/decide.mjs';
 
 const TOOLS = new Set(['smart_read', 'smart_grep', 'smart_glob']);
 const verdict = (tool_name, tool_input) =>

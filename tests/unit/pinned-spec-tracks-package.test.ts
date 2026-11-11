@@ -31,15 +31,15 @@ import { join } from 'path';
 const ROOT = process.cwd();
 const read = (p: string) => readFileSync(join(ROOT, p), 'utf8');
 
-// Mirrors TARGETS in scripts/pin-mcp-version.mjs. Kept as a literal rather than
+// Mirrors TARGETS in src/scripts/pin-mcp-version.mjs. Kept as a literal rather than
 // imported so a target silently dropped from the script is still asserted here.
 const PINNED_CONFIGS = [
-  'integrations/copilot/mcp-config.json',
-  'integrations/gemini/gemini-extension.json',
-  'integrations/opencode/opencode.json',
-  'integrations/codex/config.toml',
-  'integrations/codex/plugin/.mcp.json',
-  'plugin/.mcp.json',
+  'src/integrations/copilot/mcp-config.json',
+  'src/integrations/gemini/gemini-extension.json',
+  'src/integrations/opencode/opencode.json',
+  'src/integrations/codex/config.toml',
+  'src/integrations/codex/plugin/.mcp.json',
+  'src/plugin/.mcp.json',
   'mcp.json',
   'server.json',
   'gemini-extension.json',
@@ -55,7 +55,7 @@ const SPEC = /@ooples\/token-optimizer-mcp@([^"'\s,\]]+)/g;
  *   - mcp.json and server.json are registry manifests that name the package and
  *     version in separate fields, so demanding an inline spec would assert a shape
  *     they do not have.
- *   - plugin/.mcp.json (the Claude Code plugin) no longer launches via npx at all.
+ *   - src/plugin/.mcp.json (the Claude Code plugin) no longer launches via npx at all.
  *     It runs a bundled warm-launch shim (`node ${CLAUDE_PLUGIN_ROOT}/launch.mjs`)
  *     that serves the already-installed server directly (~1.9s, offline) and
  *     refreshes @latest in the BACKGROUND for the next launch — eliminating the
@@ -68,7 +68,7 @@ const INLINE_SPEC_CONFIGS = PINNED_CONFIGS.filter(
   (relative) =>
     relative !== 'mcp.json' &&
     relative !== 'server.json' &&
-    relative !== 'plugin/.mcp.json'
+    relative !== 'src/plugin/.mcp.json'
 );
 
 const present = () => PINNED_CONFIGS.filter((r) => existsSync(join(ROOT, r)));
@@ -124,7 +124,7 @@ describe('the MCP spec in client configs', () => {
 });
 
 describe('the plugin launches via the bundled warm-launch shim', () => {
-  const relative = 'plugin/.mcp.json';
+  const relative = 'src/plugin/.mcp.json';
   const server = () =>
     JSON.parse(read(relative)).mcpServers['token-optimizer'];
 
@@ -146,7 +146,7 @@ describe('the plugin launches via the bundled warm-launch shim', () => {
   });
 
   it('ships the launcher it points at', () => {
-    expect(existsSync(join(ROOT, 'plugin/launch.mjs'))).toBe(true);
+    expect(existsSync(join(ROOT, 'src/plugin/launch.mjs'))).toBe(true);
   });
 });
 

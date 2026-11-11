@@ -3,7 +3,7 @@ import {
   StreamingGraphProjection,
   benchmarkGraphProjection,
   syntheticScaleEvent,
-} from '../../ucr/index.mjs';
+} from '../../src/ucr/index.mjs';
 
 describe('streaming graph projection', () => {
   test('accepts every unique write, rejects duplicates, and reports no orphans', () => {

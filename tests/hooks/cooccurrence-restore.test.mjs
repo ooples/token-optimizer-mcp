@@ -24,16 +24,18 @@ import {
   putNode,
   putNodeWithEdges,
   nodeId,
-} from '../../hooks-core/wiki.mjs';
+} from '../../src/hooks-core/wiki.mjs';
 
 const PRECOMPACT = join(
   process.cwd(),
+  'src',
   'plugin',
   'hooks',
   'precompact-optimize.mjs'
 );
 const SESSION_START = join(
   process.cwd(),
+  'src',
   'plugin',
   'hooks',
   'session-start.mjs'

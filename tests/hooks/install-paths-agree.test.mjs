@@ -3,9 +3,9 @@
  *
  * There are two, and they are maintained separately:
  *
- *   hooks-core/wire.mjs WIRING   the SCRIPT install, which merges entries into
+ *   src/hooks-core/wire.mjs WIRING   the SCRIPT install, which merges entries into
  *                                the user's settings.json
- *   plugin/hooks/hooks.json      the PLUGIN manifest Claude Code reads directly
+ *   src/plugin/hooks/hooks.json      the PLUGIN manifest Claude Code reads directly
  *
  * Nothing compared them. `npm run sync:hooks:check` verifies that the vendored
  * hook SOURCES match hooks-core, and says nothing about which tools each install
@@ -20,10 +20,10 @@
 import { describe, it, expect } from '@jest/globals';
 import { readFileSync } from 'fs';
 import { join } from 'path';
-import { WIRING } from '../../hooks-core/wire.mjs';
+import { WIRING } from '../../src/hooks-core/wire.mjs';
 
 const manifest = JSON.parse(
-  readFileSync(join(process.cwd(), 'plugin', 'hooks', 'hooks.json'), 'utf8')
+  readFileSync(join(process.cwd(), 'src', 'plugin', 'hooks', 'hooks.json'), 'utf8')
 );
 
 /** The matcher the plugin manifest registers for one event. */

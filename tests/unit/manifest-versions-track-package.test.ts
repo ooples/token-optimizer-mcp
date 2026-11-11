@@ -68,14 +68,14 @@ function targets(): Target[] {
       value: read('gemini-extension.json').version,
     },
     {
-      path: 'plugin/.claude-plugin/plugin.json',
+      path: 'src/plugin/.claude-plugin/plugin.json',
       jsonpath: '$.version',
-      value: read('plugin/.claude-plugin/plugin.json').version,
+      value: read('src/plugin/.claude-plugin/plugin.json').version,
     },
     {
-      path: 'integrations/codex/plugin/.codex-plugin/plugin.json',
+      path: 'src/integrations/codex/plugin/.codex-plugin/plugin.json',
       jsonpath: '$.version',
-      value: read('integrations/codex/plugin/.codex-plugin/plugin.json').version,
+      value: read('src/integrations/codex/plugin/.codex-plugin/plugin.json').version,
     },
   ];
 }
@@ -103,7 +103,7 @@ describe('manifest versions track package.json', () => {
     // The value check above only catches drift AFTER it happens. This catches the
     // cause: a field release-please does not know about will drift on the very next
     // release, and nobody will notice until a registry publish returns 422.
-    const config = read('release-please-config.json');
+    const config = read('.github/release-please-config.json');
     const extras = (config.packages['.']['extra-files'] ?? []) as Array<{
       path: string;
       jsonpath: string;
@@ -117,6 +117,6 @@ describe('manifest versions track package.json', () => {
     expect(missing).toEqual([]);
     // The plugin manifest has its own value test but the same wiring requirement,
     // and it is the one that already rotted through four releases.
-    expect(wired.has('plugin/.claude-plugin/plugin.json $.version')).toBe(true);
+    expect(wired.has('src/plugin/.claude-plugin/plugin.json $.version')).toBe(true);
   });
 });

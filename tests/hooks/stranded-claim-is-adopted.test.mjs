@@ -32,9 +32,9 @@ import {
 } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { load, nodeId, putNodeWithEdges } from '../../hooks-core/wiki.mjs';
-import { indexFile } from '../../hooks-core/staleness.mjs';
-import { drainInvalidations } from '../../hooks-core/pending.mjs';
+import { load, nodeId, putNodeWithEdges } from '../../src/hooks-core/wiki.mjs';
+import { indexFile } from '../../src/hooks-core/staleness.mjs';
+import { drainInvalidations } from '../../src/hooks-core/pending.mjs';
 
 const NL = String.fromCharCode(10);
 const BEFORE = 'export function parse(x) {' + NL + '  return x.trim();' + NL + '}' + NL;

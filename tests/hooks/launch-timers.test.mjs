@@ -25,7 +25,7 @@ beforeAll(async () => {
   delete process.env.TOKEN_OPTIMIZER_VERSION;
   try {
     ({ MAX_TIMER_MS, boundedDelay, startMarkerRenewal, startPeriodicRefresh } = await import(
-      '../../plugin/launch.mjs'
+      '../../src/plugin/launch.mjs'
     ));
   } finally {
     if (saved.only === undefined) delete process.env.TOKEN_OPTIMIZER_LAUNCH_IMPORT_ONLY;

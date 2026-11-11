@@ -12,14 +12,14 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { putNode, putEdge, putNodeWithEdges, load, nodeId } from '../../hooks-core/wiki.mjs';
-import { contradict, hasOutstandingContradiction, audit } from '../../hooks-core/curate.mjs';
-import { indexFile, serve } from '../../hooks-core/staleness.mjs';
-import { forTouch, sessionIndex } from '../../hooks-core/inject.mjs';
-import { restorationPlan } from '../../hooks-core/restore.mjs';
-import { writeHarvested } from '../../hooks-core/harvest-write.mjs';
-import { canonicalPath } from '../../hooks-core/paths.mjs';
-import { record } from '../../hooks-core/metrics.mjs';
+import { putNode, putEdge, putNodeWithEdges, load, nodeId } from '../../src/hooks-core/wiki.mjs';
+import { contradict, hasOutstandingContradiction, audit } from '../../src/hooks-core/curate.mjs';
+import { indexFile, serve } from '../../src/hooks-core/staleness.mjs';
+import { forTouch, sessionIndex } from '../../src/hooks-core/inject.mjs';
+import { restorationPlan } from '../../src/hooks-core/restore.mjs';
+import { writeHarvested } from '../../src/hooks-core/harvest-write.mjs';
+import { canonicalPath } from '../../src/hooks-core/paths.mjs';
+import { record } from '../../src/hooks-core/metrics.mjs';
 
 let dir;
 

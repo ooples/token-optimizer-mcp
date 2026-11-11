@@ -26,7 +26,7 @@ import {
 } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
-import { load, putNode, putEdge, nodeId } from '../../hooks-core/wiki.mjs';
+import { load, putNode, putEdge, nodeId } from '../../src/hooks-core/wiki.mjs';
 
 let dir;
 

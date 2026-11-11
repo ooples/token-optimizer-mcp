@@ -22,13 +22,13 @@ import {
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { record, recordToolOutcome, readMetrics } from '../../hooks-core/metrics.mjs';
+import { record, recordToolOutcome, readMetrics } from '../../src/hooks-core/metrics.mjs';
 import {
   readArchive,
   transcriptDir,
   safeName,
   failedResultsFromTranscript,
-} from '../../hooks-core/transcript.mjs';
+} from '../../src/hooks-core/transcript.mjs';
 import {
   load,
   putNode,
@@ -36,13 +36,13 @@ import {
   nodeId,
   projectRootFor,
   unrootedRoot,
-} from '../../hooks-core/wiki.mjs';
-import { CONFIRMED_CONFIDENCE, writeHarvested } from '../../hooks-core/harvest-write.mjs';
-import { registerProject, projectIdFor } from '../../hooks-core/projects.mjs';
-import { sessionActivity } from '../../hooks-core/adapter.mjs';
-import { indexFile } from '../../hooks-core/staleness.mjs';
-import { canonicalPath } from '../../hooks-core/paths.mjs';
-import { ORIGIN_HARVESTED, ORIGIN_HUMAN } from '../../hooks-core/curate.mjs';
+} from '../../src/hooks-core/wiki.mjs';
+import { CONFIRMED_CONFIDENCE, writeHarvested } from '../../src/hooks-core/harvest-write.mjs';
+import { registerProject, projectIdFor } from '../../src/hooks-core/projects.mjs';
+import { sessionActivity } from '../../src/hooks-core/adapter.mjs';
+import { indexFile } from '../../src/hooks-core/staleness.mjs';
+import { canonicalPath } from '../../src/hooks-core/paths.mjs';
+import { ORIGIN_HARVESTED, ORIGIN_HUMAN } from '../../src/hooks-core/curate.mjs';
 import {
   derive,
   searchGap,
@@ -53,7 +53,7 @@ import {
   commandProgram,
   projectAnchor,
   userInstructionsAnchor,
-} from '../../hooks-core/derive.mjs';
+} from '../../src/hooks-core/derive.mjs';
 
 let dir;
 
@@ -660,7 +660,7 @@ describe('wired at session end', () => {
 
       const result = spawnSync(
         process.execPath,
-        [join(process.cwd(), 'integrations', 'cursor', 'hooks', 'stop.mjs')],
+        [join(process.cwd(), 'src', 'integrations', 'cursor', 'hooks', 'stop.mjs')],
         {
           cwd: workspace,
           env: {
@@ -715,7 +715,7 @@ describe('through the Claude Code Stop hook', () => {
   const stopHook = (workspace, wiki, payload) =>
     spawnSync(
       process.execPath,
-      [join(process.cwd(), 'plugin', 'hooks', 'stop.mjs')],
+      [join(process.cwd(), 'src', 'plugin', 'hooks', 'stop.mjs')],
       {
         cwd: workspace,
         env: {
@@ -863,7 +863,7 @@ describe('a subagent Stop through the Claude Code hook (#502)', () => {
           .map((row) => JSON.stringify(row))
           .join('\n') + '\n'
       );
-      const result = spawnSync(process.execPath, [join(process.cwd(), 'plugin', 'hooks', 'stop.mjs')], {
+      const result = spawnSync(process.execPath, [join(process.cwd(), 'src', 'plugin', 'hooks', 'stop.mjs')], {
         cwd: workspace,
         env: {
           ...process.env,

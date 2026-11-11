@@ -6,7 +6,7 @@
 # restates nothing it does not have to.
 #
 # stdio, not http: the server is an stdio MCP server, and the plugin's own launcher spawns it the
-# same way (see plugin/.mcp.json).
+# same way (see src/plugin/.mcp.json).
 startCommand:
   type: stdio
   configSchema:

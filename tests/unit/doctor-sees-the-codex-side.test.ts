@@ -4,7 +4,7 @@ import { join } from 'path';
 import { tmpdir } from 'os';
 
 // @ts-expect-error -- hooks-core ships as plain ESM with no type declarations.
-import { probeCodex } from '../../hooks-core/doctor.mjs';
+import { probeCodex } from '../../src/hooks-core/doctor.mjs';
 
 /**
  * The doctor ships inside a package that eleven clients install, and could see

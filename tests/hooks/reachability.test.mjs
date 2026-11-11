@@ -17,7 +17,7 @@
  * So this asks the one question those techniques cannot: is anything referenced
  * ONLY by its tests?
  *
- * SCOPE IS DELIBERATELY hooks-core AND plugin/hooks. Those are the live hook
+ * SCOPE IS DELIBERATELY hooks-core AND src/plugin/hooks. Those are the live hook
  * path, where every verified instance of this defect has occurred, and where
  * every export is called by ordinary imports. `src/tools` is excluded because
  * its tools are dispatched by NAME through a registry, so a name-based scan
@@ -51,9 +51,9 @@ const ALLOWED = new Map([
   // ------------------------------------------------------------------
   // TRIAGE BACKLOG -- investigated, with the evidence recorded.
   //
-  // The first pass listed 21. Widening USAGE_DIRS to scripts/ and to all of
-  // plugin/ cleared four of them: wirePlan and unwire are called by
-  // scripts/wire-hooks.mjs and scripts/uninstall.mjs, and writeManifest and
+  // The first pass listed 21. Widening USAGE_DIRS to src/scripts/ and to all of
+  // src/plugin/ cleared four of them: wirePlan and unwire are called by
+  // src/scripts/wire-hooks.mjs and src/scripts/uninstall.mjs, and writeManifest and
   // touchedPaths resolved too -- the latter by being DELETED, since it was a
   // compatibility shim over touchedFiles with no caller but its own test.
   //
@@ -143,7 +143,7 @@ const testText = testFiles.map((f) => readFileSync(f, 'utf8')).join('\n');
  *
  * CONSTS WERE INVISIBLE, and that is where the second-worst instance hid. The
  * collector matched only `export function`, so 56 exported consts went
- * unchecked -- among them `EDGE_KINDS` in hooks-core/wiki.mjs, which declared
+ * unchecked -- among them `EDGE_KINDS` in src/hooks-core/wiki.mjs, which declared
  * `contradicts` and `answers` as edge kinds of this graph while nothing in the
  * repository ever wrote either one. A declaration nothing writes is the same
  * defect as a function nothing calls, and it was outside the scan's model.
@@ -411,7 +411,7 @@ describe('an import is not a call site', () => {
 describe('exported consts are checked, not just functions', () => {
   it('collects an exported const', () => {
     const names = exportedNames().map((e) => e.name);
-    // EDGE_KINDS is an exported const in hooks-core/wiki.mjs. While the
+    // EDGE_KINDS is an exported const in src/hooks-core/wiki.mjs. While the
     // collector saw only `export function`, 56 declarations went unchecked --
     // and that is where `contradicts` and `answers` sat, declared as edge kinds
     // of this graph with zero write sites anywhere in the repository.

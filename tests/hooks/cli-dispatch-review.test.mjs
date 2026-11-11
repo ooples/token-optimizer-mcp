@@ -8,12 +8,12 @@ import { pathToFileURL } from 'node:url';
 
 const work = mkdtempSync(join(tmpdir(), 'cli-dispatch-review-'));
 const server = join(work, 'dist/server');
-const scripts = join(work, 'scripts');
+const scripts = join(work, 'src', 'scripts');
 const marker = join(work, 'server-imported');
 const entry = join(server, 'index.js');
 beforeAll(() => {
   mkdirSync(server, { recursive: true });
-  mkdirSync(scripts);
+  mkdirSync(scripts, { recursive: true });
   writeFileSync(join(work, 'package.json'), JSON.stringify({ type: 'module', version: '7.8.0' }));
   for (const name of ['index', 'cli-dispatch', 'plugin-instructions']) {
     const source = readFileSync(join(process.cwd(), `src/server/${name}.ts`), 'utf8');

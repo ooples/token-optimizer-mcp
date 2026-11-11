@@ -1,5 +1,5 @@
 import { expect, test } from '@jest/globals';
-import { foldOutput } from '../../hooks-core/output-compact.mjs';
+import { foldOutput } from '../../src/hooks-core/output-compact.mjs';
 
 test('project warnings retain bracketed message text', () => {
   const warnings = ['App.csproj : warning ABC123: Check [net8.0]', 'App.csproj : warning ABC123: Check [net9.0]'];

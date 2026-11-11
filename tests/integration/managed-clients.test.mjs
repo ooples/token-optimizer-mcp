@@ -8,15 +8,15 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { activateShells } from '../../scripts/managed-shell.mjs';
+import { activateShells } from '../../src/scripts/managed-shell.mjs';
 import {
   codexRoute,
   executable,
   runClient,
-} from '../../scripts/run-client.mjs';
+} from '../../src/scripts/run-client.mjs';
 import { createServer } from 'node:http';
-import { sessionRouting } from '../../scripts/session-routing.mjs';
-import { putNode } from '../../hooks-core/wiki.mjs';
+import { sessionRouting } from '../../src/scripts/session-routing.mjs';
+import { putNode } from '../../src/hooks-core/wiki.mjs';
 
 describe('managed client installation', () => {
   it('forwards Codex MCP routing state explicitly across its environment filter', async () => {

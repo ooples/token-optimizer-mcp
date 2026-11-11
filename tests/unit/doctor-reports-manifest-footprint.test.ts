@@ -4,11 +4,11 @@ import { join } from 'path';
 import { tmpdir } from 'os';
 
 // @ts-expect-error -- hooks-core ships as plain ESM with no type declarations.
-import { checklist, probeClients, probeGraph } from '../../hooks-core/doctor.mjs';
+import { checklist, probeClients, probeGraph } from '../../src/hooks-core/doctor.mjs';
 // @ts-expect-error -- hooks-core ships as plain ESM with no type declarations.
-import { record } from '../../hooks-core/metrics.mjs';
+import { record } from '../../src/hooks-core/metrics.mjs';
 // @ts-expect-error -- hooks-core ships as plain ESM with no type declarations.
-import { writeManifest, manifestSize, readManifest } from '../../hooks-core/manifest.mjs';
+import { writeManifest, manifestSize, readManifest } from '../../src/hooks-core/manifest.mjs';
 
 /**
  * The doctor reports what the install manifest actually covers.

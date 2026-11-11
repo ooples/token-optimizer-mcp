@@ -4,7 +4,7 @@ import { join } from 'path';
 import { tmpdir } from 'os';
 
 // @ts-expect-error -- hooks-core ships as plain ESM with no type declarations.
-import { probeHarvest, diagnose } from '../../hooks-core/doctor.mjs';
+import { probeHarvest, diagnose } from '../../src/hooks-core/doctor.mjs';
 
 // SIZED TO THE WORK, NOT JEST'S DEFAULT. These tests spawn git or write
 // packs; the slowest took 2.0 s alone, and under a full parallel
@@ -18,7 +18,7 @@ jest.setTimeout(20_000);
  * Measured on a real machine running 5.4.0: the project graph held 484 symbol,
  * 286 file and 122 task nodes and ZERO findings, lessons or corrections, because
  * harvestMode() was 'off:not-opted-in'. Fifteen doctor checks passed and not one
- * of them mentioned harvest -- `grep -c harvest hooks-core/doctor.mjs` returned 0.
+ * of them mentioned harvest -- `grep -c harvest src/hooks-core/doctor.mjs` returned 0.
  *
  * stop-harvest.mjs names this exact gap in its own header: "nothing in doctor,
  * audit or waste mentions harvest, so a user sees a graph filling with structural

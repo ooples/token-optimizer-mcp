@@ -4,7 +4,7 @@
  * `loadHooksCore` is the only place in the server that resolves a path at CALL
  * time. Everything else imports eagerly at startup and is already in memory, so
  * when the directory the server is running from disappears -- which it did,
- * because `plugin/launch.mjs` pruned the version a live session was using --
+ * because `src/plugin/launch.mjs` pruned the version a live session was using --
  * every other tool kept working and only the wiki tools failed. They failed
  * with `Cannot find module .../versions/6.0.0/.../hooks-core/wiki.mjs`, which
  * names an internal path and an ESM error code, and reads as a broken package.

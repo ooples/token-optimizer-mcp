@@ -99,7 +99,7 @@ const PROBE_BODY = [
 
 const WALKED = [
   join(REPO, 'src', 'core'),
-  join(REPO, 'hooks-core'),
+  join(REPO, 'src', 'hooks-core'),
 ];
 
 const planted = [];

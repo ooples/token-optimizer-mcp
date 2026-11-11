@@ -19,13 +19,13 @@ import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { record, recordToolOutcome } from '../../hooks-core/metrics.mjs';
+import { record, recordToolOutcome } from '../../src/hooks-core/metrics.mjs';
 import {
   classify,
   referenceRate,
   referenceNote,
-} from '../../hooks-core/usage.mjs';
-import { renderAudit } from '../../hooks-core/audit.mjs';
+} from '../../src/hooks-core/usage.mjs';
+import { renderAudit } from '../../src/hooks-core/audit.mjs';
 
 let dir;
 beforeEach(() => {

@@ -1,6 +1,6 @@
 // tests/hooks/redact.test.mjs
 import { describe, it, expect } from '@jest/globals';
-import { redact } from '../../hooks-core/redact.mjs';
+import { redact } from '../../src/hooks-core/redact.mjs';
 
 describe('redact', () => {
   it('removes bearer tokens', () => {

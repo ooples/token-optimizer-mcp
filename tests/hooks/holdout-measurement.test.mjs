@@ -21,9 +21,9 @@ import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
 import { mkdtempSync, rmSync, writeFileSync, appendFileSync, existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
-import { record, report, readBalance, inHoldout } from '../../hooks-core/metrics.mjs';
-import { forCommand } from '../../hooks-core/inject.mjs';
-import { putNode, putNodeWithEdges, load } from '../../hooks-core/wiki.mjs';
+import { record, report, readBalance, inHoldout } from '../../src/hooks-core/metrics.mjs';
+import { forCommand } from '../../src/hooks-core/inject.mjs';
+import { putNode, putNodeWithEdges, load } from '../../src/hooks-core/wiki.mjs';
 
 const NL = String.fromCharCode(10);
 

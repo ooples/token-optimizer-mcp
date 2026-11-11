@@ -1,7 +1,7 @@
 /**
  * Tool-name normalisation, and the loop hazard that comes with widening it.
  *
- * `plugin/hooks/hooks.json`'s PostToolUse matcher has always listed
+ * `src/plugin/hooks/hooks.json`'s PostToolUse matcher has always listed
  * `mcp__.*__(?:smart_edit|smart_write)`, but `normalizeTool` resolved only the
  * seven built-ins and the alias table -- so an MCP-prefixed name mapped to
  * null and the hook exited before any accounting ran. The optimizer was blind
@@ -32,8 +32,8 @@ import {
   readCostBytes,
   isReplacementTool,
   touchedFiles,
-} from '../../hooks-core/decide.mjs';
-import { observedWrites } from '../../hooks-core/pending.mjs';
+} from '../../src/hooks-core/decide.mjs';
+import { observedWrites } from '../../src/hooks-core/pending.mjs';
 
 let workspace;
 let big;
@@ -74,7 +74,7 @@ describe('normalizeTool', () => {
   });
 
   it('resolves the bare replacement names too, as Codex spells them', () => {
-    // integrations/codex/hooks/hooks.json's AfterTool matcher lists
+    // src/integrations/codex/hooks/hooks.json's AfterTool matcher lists
     // `smart_edit|smart_write` WITHOUT an mcp__ prefix, so the unprefixed
     // spelling has to resolve or that matcher is decorative on Codex.
     expect(normalizeTool('smart_edit')).toBe('Edit');

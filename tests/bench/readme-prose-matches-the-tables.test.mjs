@@ -13,7 +13,7 @@ import {
 // every arm below breaks the README on purpose and names what comes back.
 
 const README = readFileSync(
-  fileURLToPath(new URL('../../README.md', import.meta.url)),
+  fileURLToPath(new URL('../../docs/COMPARISON.md', import.meta.url)),
   'utf8'
 );
 
@@ -140,12 +140,12 @@ describe('control: the check catches the drift it was written for', () => {
   });
 
   it('does not police prose outside the covered regions', () => {
-    // The installation and dashboard sections carry figures from harnesses this
+    // The honest-comparison section carries figures from harnesses this
     // check does not run. Saying so is the point: a check that implied a sweep
     // it does not do would be worse than one with a stated edge.
     const elsewhere = README.replace(
-      '## Installation',
-      '## Installation\n\nAn uncovered sentence claiming 3.7% of nothing.'
+      '## Honest comparison',
+      '## Honest comparison\n\nAn uncovered sentence claiming 3.7% of nothing.'
     );
     expect(elsewhere).not.toBe(README);
     expect(proseDrift(elsewhere).faults).toEqual([]);

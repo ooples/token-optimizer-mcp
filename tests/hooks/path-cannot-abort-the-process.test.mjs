@@ -31,7 +31,7 @@ import { tmpdir } from 'os';
  */
 
 const CORE = (name) =>
-  pathToFileURL(join(process.cwd(), 'hooks-core', name)).href;
+  pathToFileURL(join(process.cwd(), 'src', 'hooks-core', name)).href;
 
 /** The exact character libuv mishandles. */
 const ABORTS = String.fromCodePoint(0x10ffff);
@@ -137,7 +137,7 @@ describe('a path that would abort libuv', () => {
     // missed the first time.
     const result = spawnSync(
       process.execPath,
-      [join(process.cwd(), 'plugin', 'hooks', 'pretooluse-router.mjs')],
+      [join(process.cwd(), 'src', 'plugin', 'hooks', 'pretooluse-router.mjs')],
       {
         input: JSON.stringify({
           tool_name: tool,

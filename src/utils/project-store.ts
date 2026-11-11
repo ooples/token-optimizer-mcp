@@ -1,5 +1,5 @@
 /**
- * Where a project's store lives, as hooks-core/maintenance.mjs decides it.
+ * Where a project's store lives, as src/hooks-core/maintenance.mjs decides it.
  *
  * NOT A SECOND COPY OF THE RULE. The store's location depends on its tombstone,
  * whether an in-repo store still exists, and an id hashed from the canonical

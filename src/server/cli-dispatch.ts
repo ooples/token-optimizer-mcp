@@ -3,14 +3,14 @@ import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 
 const SUBCOMMAND_SCRIPTS: Record<string, string> = {
-  install: '../../scripts/install-cli.mjs',
-  'install-client': '../../scripts/install-client-hooks.mjs',
-  uninstall: '../../scripts/uninstall.mjs',
-  doctor: '../../scripts/doctor.mjs',
-  storage: '../../scripts/storage.mjs',
-  diagnostics: '../../scripts/export-diagnostics.mjs',
-  run: '../../scripts/run-client.mjs',
-  route: '../../scripts/route-client.mjs',
+  install: '../../src/scripts/install-cli.mjs',
+  'install-client': '../../src/scripts/install-client-hooks.mjs',
+  uninstall: '../../src/scripts/uninstall.mjs',
+  doctor: '../../src/scripts/doctor.mjs',
+  storage: '../../src/scripts/storage.mjs',
+  diagnostics: '../../src/scripts/export-diagnostics.mjs',
+  run: '../../src/scripts/run-client.mjs',
+  route: '../../src/scripts/route-client.mjs',
   savings: '../savings/cli.js',
   learn: '../learn/cli.js',
   update: '../update/cli.js',

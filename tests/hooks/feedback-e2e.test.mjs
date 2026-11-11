@@ -22,12 +22,12 @@ import { createServer } from 'http';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
-import { load } from '../../hooks-core/wiki.mjs';
-import { standingRules } from '../../hooks-core/inject.mjs';
-import { ORIGIN_HUMAN } from '../../hooks-core/curate.mjs';
-import { transcriptDir, safeName } from '../../hooks-core/transcript.mjs';
+import { load } from '../../src/hooks-core/wiki.mjs';
+import { standingRules } from '../../src/hooks-core/inject.mjs';
+import { ORIGIN_HUMAN } from '../../src/hooks-core/curate.mjs';
+import { transcriptDir, safeName } from '../../src/hooks-core/transcript.mjs';
 
-const WORKER = join(process.cwd(), 'hooks-core', 'harvest-worker.mjs');
+const WORKER = join(process.cwd(), 'src', 'hooks-core', 'harvest-worker.mjs');
 const SESSION = 's-feedback-e2e';
 
 let project;

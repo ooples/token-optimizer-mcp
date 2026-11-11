@@ -12,7 +12,8 @@
  */
 
 import { readdirSync, readFileSync, statSync } from 'fs';
-import { join } from 'path';
+import { dirname, join } from 'path';
+import { fileURLToPath } from 'url';
 
 /** Characters written by code point, so no escape in this file is load-bearing. */
 const BACKSLASH = String.fromCharCode(92);
@@ -28,18 +29,27 @@ const BACKTICK = String.fromCharCode(96);
  * registry, so a name-based scan reports false positives there, and a blocking
  * check built on false positives gets disabled within a week.
  */
-export const DECLARE_DIRS = ['hooks-core', 'plugin/hooks'];
+export const DECLARE_DIRS = ['src/hooks-core', 'src/plugin/hooks'];
 
 /**
  * Where USAGES are searched: everything that ships.
  *
  * THIS MUST BE WIDER THAN THE DECLARATION SET. `src/server/*` reaches into
  * hooks-core through a dynamic `mods.<module>.<fn>` handle rather than a static
- * import, and eleven files under `scripts/` consume hooks-core directly -- the
+ * import, and eleven files under `src/scripts/` consume hooks-core directly -- the
  * installer and the uninstaller among them. A check that scans only where its
  * author expected the callers to be measures the author, not the code.
+ *
+ * Every directory under src/ except three that hold no shipped JavaScript the
+ * hooks call: the per-client hook trees (generated entry points and vendored
+ * copies), the UCR reference material, and the eval suites. Listed by exclusion,
+ * so a new source directory is scanned without anyone remembering to add it.
  */
-export const USAGE_DIRS = ['hooks-core', 'plugin', 'src', 'scripts'];
+const NOT_SHIPPED_CODE = new Set(['integrations', 'ucr', 'evals']);
+const SRC = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'src');
+export const USAGE_DIRS = readdirSync(SRC, { withFileTypes: true })
+  .filter((entry) => entry.isDirectory() && !NOT_SHIPPED_CODE.has(entry.name))
+  .map((entry) => `src/${entry.name}`);
 
 /** Every source file under `dir`, minus the generated and vendored copies. */
 export function walk(dir, out = []) {
@@ -103,7 +113,7 @@ export function readSources(repo, dirs) {
  * a JS lexer that knows about quotes but not about REGEX LITERALS desynchronises
  * on the first regex containing a quote, and this repository has them --
  *
- *   hooks-core/adapter.mjs:255
+ *   src/hooks-core/adapter.mjs:255
  *   /\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*((?:"(?:\\.|[^"\\])*")|...)/gs
  *
  * MEASURED: adapter.mjs 1032 newlines in, 385 out -- 63% of the file consumed;

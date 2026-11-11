@@ -36,8 +36,8 @@ import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { record, recordToolOutcome, readEvidence } from '../../hooks-core/metrics.mjs';
-import { classify, referenceRate } from '../../hooks-core/usage.mjs';
+import { record, recordToolOutcome, readEvidence } from '../../src/hooks-core/metrics.mjs';
+import { classify, referenceRate } from '../../src/hooks-core/usage.mjs';
 import {
   withheldFor,
   exploreOrder,
@@ -55,12 +55,12 @@ import {
   WITHHOLD_FRACTION,
   MAX_WITHHELD_PER_SESSION,
   SHRINKAGE_K,
-} from '../../hooks-core/loo.mjs';
-import { forTouch } from '../../hooks-core/inject.mjs';
-import { renderAudit } from '../../hooks-core/audit.mjs';
-import { load, putNode, putEdge, nodeId } from '../../hooks-core/wiki.mjs';
-import { canonicalPath } from '../../hooks-core/paths.mjs';
-import { indexFile } from '../../hooks-core/staleness.mjs';
+} from '../../src/hooks-core/loo.mjs';
+import { forTouch } from '../../src/hooks-core/inject.mjs';
+import { renderAudit } from '../../src/hooks-core/audit.mjs';
+import { load, putNode, putEdge, nodeId } from '../../src/hooks-core/wiki.mjs';
+import { canonicalPath } from '../../src/hooks-core/paths.mjs';
+import { indexFile } from '../../src/hooks-core/staleness.mjs';
 
 let workspace;
 let dir;

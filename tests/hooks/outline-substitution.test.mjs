@@ -22,10 +22,10 @@ import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
-import { substitutionFor, floorBytes } from '../../hooks-core/substitute.mjs';
-import { putNode, putEdge, nodeId } from '../../hooks-core/wiki.mjs';
-import { indexFile } from '../../hooks-core/staleness.mjs';
-import { canonicalPath } from '../../hooks-core/paths.mjs';
+import { substitutionFor, floorBytes } from '../../src/hooks-core/substitute.mjs';
+import { putNode, putEdge, nodeId } from '../../src/hooks-core/wiki.mjs';
+import { indexFile } from '../../src/hooks-core/staleness.mjs';
+import { canonicalPath } from '../../src/hooks-core/paths.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
@@ -140,7 +140,7 @@ describe('the router supplies the signal', () => {
   const read = (sessionId) => {
     const result = spawnSync(
       process.execPath,
-      [join(ROOT, 'plugin/hooks/pretooluse-router.mjs')],
+      [join(ROOT, 'src/plugin/hooks/pretooluse-router.mjs')],
       {
         input: JSON.stringify({
           session_id: sessionId,
@@ -207,7 +207,7 @@ describe('a refused read is answered, not just refused', () => {
   const read = (mode, { file = big, capabilities = INSTALLED } = {}) => {
     const result = spawnSync(
       process.execPath,
-      [join(ROOT, 'plugin/hooks/pretooluse-router.mjs')],
+      [join(ROOT, 'src/plugin/hooks/pretooluse-router.mjs')],
       {
         input: JSON.stringify({
           session_id: `refused-${randomUUID()}`,

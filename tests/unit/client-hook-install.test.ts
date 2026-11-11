@@ -3,7 +3,7 @@
  *
  * Ten integrations vendor byte-identical copies of the same core -- 10.87MB of
  * tarball for 1.44MB of unique content -- so `files` excludes them and
- * `scripts/install-client-hooks.mjs` composes each copy into the destination.
+ * `src/scripts/install-client-hooks.mjs` composes each copy into the destination.
  *
  * The design this replaced composed "on first use" from inside the hook, and it
  * shipped a package in which all ten were silently inert: no client runs its
@@ -34,8 +34,8 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
-import { coreFiles } from '../../scripts/lib/hook-core.mjs';
-import { CLIENT_KEYS, specFor } from '../../scripts/install-client-hooks.mjs';
+import { coreFiles } from '../../src/scripts/lib/hook-core.mjs';
+import { CLIENT_KEYS, specFor } from '../../src/scripts/install-client-hooks.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const posix = (p: string) => p.replace(/\\/g, '/');
@@ -68,17 +68,17 @@ function shippedPackage(): string {
 
 describe('the tarball drops the ten copies and keeps what the installer needs', () => {
   it('ships no vendored lib under integrations', () => {
-    expect(packed.filter((p) => /^integrations\/.*\/lib\//.test(p))).toEqual(
+    expect(packed.filter((p) => /^src\/integrations\/.*\/lib\//.test(p))).toEqual(
       []
     );
   });
 
-  it('still ships plugin/hooks/lib, which Claude Code loads directly', () => {
+  it('still ships src/plugin/hooks/lib, which Claude Code loads directly', () => {
     // Claude Code reads this one straight out of the installed package, so it
     // cannot wait on any command the user has to run first.
     const names = coreFiles(ROOT);
     const shipped = new Set(packed);
-    expect(names.filter((n) => !shipped.has(`plugin/hooks/lib/${n}`))).toEqual(
+    expect(names.filter((n) => !shipped.has(`src/plugin/hooks/lib/${n}`))).toEqual(
       []
     );
   });
@@ -86,16 +86,16 @@ describe('the tarball drops the ten copies and keeps what the installer needs', 
   it('ships hooks-core and every module the installer imports', () => {
     const shipped = new Set(packed);
     expect(
-      coreFiles(ROOT).filter((n) => !shipped.has(`hooks-core/${n}`))
+      coreFiles(ROOT).filter((n) => !shipped.has(`src/hooks-core/${n}`))
     ).toEqual([]);
     // text.mjs is as load-bearing as the other two: the installer imports it,
     // and a `files` pattern that left it out would make the command throw on
     // every client while the package otherwise looked complete.
     for (const module of [
-      'scripts/install-client-hooks.mjs',
-      'scripts/lib/hook-core.mjs',
-      'scripts/lib/main-module.mjs',
-      'scripts/lib/text.mjs',
+      'src/scripts/install-client-hooks.mjs',
+      'src/scripts/lib/hook-core.mjs',
+      'src/scripts/lib/main-module.mjs',
+      'src/scripts/lib/text.mjs',
     ]) {
       expect(packed).toContain(module);
     }
@@ -110,7 +110,7 @@ describe('the installer composes a complete core outside the package', () => {
       const result = spawnSync(
         process.execPath,
         [
-          join(shipped, 'scripts', 'install-client-hooks.mjs'),
+          join(shipped, 'src', 'scripts', 'install-client-hooks.mjs'),
           '--client',
           client,
           '--dest',
@@ -173,7 +173,7 @@ describe('what the installer writes enforces, and a plain copy does not', () => 
       execFileSync(
         process.execPath,
         [
-          join(shipped, 'scripts', 'install-client-hooks.mjs'),
+          join(shipped, 'src', 'scripts', 'install-client-hooks.mjs'),
           '--client',
           'cursor',
           '--dest',
@@ -212,7 +212,7 @@ describe('what the installer writes enforces, and a plain copy does not', () => 
     const shipped = shippedPackage();
     const destination = mkdtempSync(join(tmpdir(), 'to-plain-copy-'));
     try {
-      const source = 'integrations/cursor/hooks';
+      const source = 'src/integrations/cursor/hooks';
       const copied = packed.filter((p) => p.startsWith(`${source}/`));
       expect(copied.length).toBeGreaterThan(0);
       for (const path of copied) {
@@ -253,7 +253,7 @@ describe('the published bin runs the way the docs say to run it', () => {
   ).bin;
   const scriptBins = Object.values(bin)
     .map((path) => path.replace(/^\.\//, ''))
-    .filter((path) => path.startsWith('scripts/'));
+    .filter((path) => path.startsWith('src/scripts/'));
 
   it('gives every script bin an interpreter line', () => {
     // npm links a bin as a bare executable, so on POSIX the kernel needs the
@@ -293,8 +293,8 @@ describe('the published bin runs the way the docs say to run it', () => {
     const destination = mkdtempSync(join(tmpdir(), 'to-linked-'));
     try {
       const linked = linkAs(
-        join(shipped, 'scripts', 'install-client-hooks.mjs'),
-        join(shipped, 'scripts'),
+        join(shipped, 'src', 'scripts', 'install-client-hooks.mjs'),
+        join(shipped, 'src', 'scripts'),
         'token-optimizer-install-client'
       );
       const result = spawnSync(

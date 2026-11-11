@@ -28,7 +28,7 @@ import { pathToFileURL } from 'node:url';
  */
 
 const CORE = pathToFileURL(
-  join(process.cwd(), 'hooks-core', 'policy.mjs')
+  join(process.cwd(), 'src', 'hooks-core', 'policy.mjs')
 ).href;
 
 let dir;

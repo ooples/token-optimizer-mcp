@@ -19,7 +19,7 @@ import { join } from 'path';
 import { mkdtempSync, rmSync, readFileSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 
-const WIKI = pathToFileURL(join(process.cwd(), 'hooks-core', 'wiki.mjs')).href;
+const WIKI = pathToFileURL(join(process.cwd(), 'src', 'hooks-core', 'wiki.mjs')).href;
 
 let dir: string;
 
@@ -140,7 +140,7 @@ describe('putNodeWithEdges', () => {
 describe('writeHarvested', () => {
   it('stores no finding without its derived_from edges', async () => {
     const HARVEST_WRITE = pathToFileURL(
-      join(process.cwd(), 'hooks-core', 'harvest-write.mjs')
+      join(process.cwd(), 'src', 'hooks-core', 'harvest-write.mjs')
     ).href;
     const { writeHarvested } = await import(HARVEST_WRITE);
     const { load } = await import(WIKI);

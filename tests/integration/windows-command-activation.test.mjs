@@ -3,8 +3,8 @@ import fs from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { activateWindowsCommands } from '../../scripts/windows-commands.mjs';
-import { repairCodexStartup } from '../../scripts/codex-startup.mjs';
+import { activateWindowsCommands } from '../../src/scripts/windows-commands.mjs';
+import { repairCodexStartup } from '../../src/scripts/codex-startup.mjs';
 
 function fixture(fn) {
   const directory = fs.mkdtempSync(join(tmpdir(), 'optimizer-command-'));
@@ -49,8 +49,8 @@ describe('Windows managed commands', () => {
 
   (process.platform === 'win32' ? it : it.skip)('runs from cmd without a profile or recursion and preserves arguments', () => fixture((options) => {
     const fakeRoot = join(options.directory, 'package');
-    fs.mkdirSync(join(fakeRoot, 'scripts'), { recursive: true });
-    fs.writeFileSync(join(fakeRoot, 'scripts/run-client.mjs'), 'console.log(JSON.stringify(process.argv.slice(2))); process.exitCode=7;');
+    fs.mkdirSync(join(fakeRoot, 'src', 'scripts'), { recursive: true });
+    fs.writeFileSync(join(fakeRoot, 'src/scripts/run-client.mjs'), 'console.log(JSON.stringify(process.argv.slice(2))); process.exitCode=7;');
     activateWindowsCommands({ ...options, root: fakeRoot });
     // Resolved through PATH, as users reach it -- not through cmd's current-directory lookup, which
     // NoDefaultCurrentDirectoryInExePath=1 disables (Claude Code sets it), so a real `codex` on the

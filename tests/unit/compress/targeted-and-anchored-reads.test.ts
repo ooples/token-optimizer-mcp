@@ -24,7 +24,7 @@ import { readNumbering } from '../../../src/compress/numbering.js';
 import type { ProviderRequest } from '../../../src/compress/frontier.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
-const FILE = join(ROOT, 'hooks-core', 'adapter.mjs');
+const FILE = join(ROOT, 'src', 'hooks-core', 'adapter.mjs');
 const SOURCE = readFileSync(FILE, 'utf8').split('\n');
 
 let spillDir: string;
@@ -93,7 +93,7 @@ describe('a range the model asked for comes back whole', () => {
   it('a "range" longer than one page is compressed like a dump', () => {
     // `head -n 200000` is a range in form only. Past the 2,000 lines a Read
     // returns per call, the pass-through would ship whole dumps unfolded.
-    const bigFile = join(ROOT, 'hooks-core', 'doctor.mjs');
+    const bigFile = join(ROOT, 'src', 'hooks-core', 'doctor.mjs');
     const big = readFileSync(bigFile, 'utf8')
       .split('\n')
       .map((line, i) => `${String(i + 1).padStart(6)}\t${line}`)

@@ -95,7 +95,7 @@ export function taskPackEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
  * repository and have its tree and history read and sent upstream. A pack is
  * built only for a directory at or under a root the user vouched for:
  *   - a project root the SessionStart hook registered when a session started
- *     there (hooks-core/projects.mjs, `~/.token-optimizer/projects.jsonl`),
+ *     there (src/hooks-core/projects.mjs, `~/.token-optimizer/projects.jsonl`),
  *   - the proxy's own project root, and
  *   - TOKEN_OPTIMIZER_PROXY_REPO_ROOTS (path-delimited), for a proxy used
  *     without the hooks.
@@ -532,7 +532,7 @@ function loadSymbols(): Promise<Symbols | null> {
     try {
       const here = new URL('.', import.meta.url);
       const url = pathToFileURL(
-        fileURLToPath(new URL('../../hooks-core/symbols.mjs', here))
+        fileURLToPath(new URL('../../src/hooks-core/symbols.mjs', here))
       ).href;
       return ((await import(url)) as { extractSymbols: Symbols })
         .extractSymbols;

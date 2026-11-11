@@ -1,6 +1,6 @@
 /**
  * Hooks follow `<runtime>/current` mid-session, gated on the state schema
- * (hooks-core/runtime-switch.mjs). Every case builds a fake runtime directory;
+ * (src/hooks-core/runtime-switch.mjs). Every case builds a fake runtime directory;
  * nothing here touches the machine's real ~/.token-optimizer.
  */
 import { afterAll, afterEach, describe, expect, test } from '@jest/globals';
@@ -30,7 +30,7 @@ import {
   ownVersion,
   resolveHook,
   sessionRecord,
-} from '../../hooks-core/runtime-switch.mjs';
+} from '../../src/hooks-core/runtime-switch.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const root = mkdtempSync(join(tmpdir(), 'runtime-switch-'));
@@ -46,7 +46,7 @@ let n = 0;
 /** A fresh world: a state dir, a runtime dir, and "this copy" at version 1.0.0. */
 function world() {
   const base = join(root, `w${++n}`);
-  const self = join(base, 'self', 'plugin', 'hooks');
+  const self = join(base, 'self', 'src', 'plugin', 'hooks');
   mkdirSync(join(self, 'lib'), { recursive: true });
   writeFileSync(join(base, 'self', 'package.json'), JSON.stringify({ name: '@ooples/token-optimizer-mcp', version: '1.0.0' }));
   writeFileSync(join(self, 'lib', 'adapter.mjs'), "export const marker = 'self';\nexport async function run() {}\n");
@@ -60,9 +60,13 @@ function world() {
   return { base, self, env };
 }
 
-/** Installs version `version` with the given schema-module source; returns its hooks dir. */
-function install(w, version, { schema = STATE_SCHEMA, migrations = '{}', switchSource = null, files = {} } = {}) {
-  const hooks = join(w.env.TOKEN_OPTIMIZER_RUNTIME, 'versions', version, 'node_modules', '@ooples', 'token-optimizer-mcp', 'plugin', 'hooks');
+/**
+ * Installs version `version` with the given schema-module source; returns its hooks dir.
+ * `legacy` lays it out as releases before the package root moved under src/ did.
+ */
+function install(w, version, { schema = STATE_SCHEMA, migrations = '{}', switchSource = null, files = {}, legacy = false } = {}) {
+  const pkg = join(w.env.TOKEN_OPTIMIZER_RUNTIME, 'versions', version, 'node_modules', '@ooples', 'token-optimizer-mcp');
+  const hooks = legacy ? join(pkg, 'plugin', 'hooks') : join(pkg, 'src', 'plugin', 'hooks');
   mkdirSync(join(hooks, 'lib'), { recursive: true });
   const all = {
     'lib/runtime-switch.mjs': switchSource ?? `export const STATE_SCHEMA = ${schema};\nexport const MIGRATIONS = ${migrations};\n`,
@@ -97,13 +101,21 @@ async function call(w, event, { session = 'sess-1', tool = null } = {}) {
     bytes: 1,
   };
   try {
-    return await resolveHook({ hooksDir: w.self, entryRel: 'plugin/hooks', event, env: w.env });
+    return await resolveHook({ hooksDir: w.self, entryRel: 'src/plugin/hooks', event, env: w.env });
   } finally {
     delete globalThis.__tokenOptimizerStdin;
   }
 }
 
 describe('same schema', () => {
+  test('current from before the package root moved under src/ is still found', async () => {
+    const w = world();
+    await call(w, 'session-start');
+    const hooks = install(w, '2.0.0', { legacy: true });
+    point(w, '2.0.0');
+    expect(await call(w, 'pre-tool', { tool: 'toolu_a' })).toMatchObject({ mode: 'current', version: '2.0.0', hooksDir: hooks });
+  });
+
   test('every hook switches to current, and the session record keeps its baseline', async () => {
     const w = world();
     await call(w, 'session-start');
@@ -275,7 +287,7 @@ describe('current older than the session state: older code never reads newer sta
     // Another hook holds the session's lock, so nothing can be moved.
     mkdirSync(join(w.env.TOKEN_OPTIMIZER_STATE_DIR, 'sess-1.migrate.lock'));
     globalThis.__tokenOptimizerStdin = { raw: JSON.stringify({ session_id: 'sess-1' }), status: 'received', bytes: 1 };
-    const adapter = await importForHook({ here: pathToFileURL(join(w.self, 'entry.mjs')).href, entryRel: 'plugin/hooks', event: 'pre-tool', module: 'lib/adapter.mjs', env: w.env });
+    const adapter = await importForHook({ here: pathToFileURL(join(w.self, 'entry.mjs')).href, entryRel: 'src/plugin/hooks', event: 'pre-tool', module: 'lib/adapter.mjs', env: w.env });
     expect(adapter).toBe(INERT_HOOK);
     expect(read(w, 'sess-1-0123456789ab.json')).toEqual({ edits: 7 });
   });
@@ -287,7 +299,7 @@ describe('current older than the session state: older code never reads newer sta
     writeFileSync(join(v3, 'lib', 'adapter.mjs'), "import './missing.mjs';\nexport const marker = '3.0.0';\n");
     rmSync(join(w.env.TOKEN_OPTIMIZER_RUNTIME, 'current'));
     globalThis.__tokenOptimizerStdin = { raw: JSON.stringify({ session_id: 'sess-1' }), status: 'received', bytes: 1 };
-    const adapter = await importForHook({ here: pathToFileURL(join(w.self, 'entry.mjs')).href, entryRel: 'plugin/hooks', event: 'pre-tool', module: 'lib/adapter.mjs', env: w.env });
+    const adapter = await importForHook({ here: pathToFileURL(join(w.self, 'entry.mjs')).href, entryRel: 'src/plugin/hooks', event: 'pre-tool', module: 'lib/adapter.mjs', env: w.env });
     // This copy runs only after the newer state is moved aside.
     expect(adapter.marker).toBe('self');
     expect(readdirSync(w.env.TOKEN_OPTIMIZER_STATE_DIR)).toContain('sess-1-0123456789ab.json.schema2.quarantine');
@@ -354,7 +366,7 @@ describe('the generated entry falls back only when the switch cannot load', () =
     const w = world();
     const dir = join(w.base, 'entry');
     mkdirSync(join(dir, 'lib'), { recursive: true });
-    writeFileSync(join(dir, 'post-tool.mjs'), readFileSync(join(ROOT, 'plugin', 'hooks', 'post-tool.mjs')));
+    writeFileSync(join(dir, 'post-tool.mjs'), readFileSync(join(ROOT, 'src', 'plugin', 'hooks', 'post-tool.mjs')));
     const mark = (name) => JSON.stringify(join(dir, name));
     writeFileSync(
       join(dir, 'lib', 'adapter.mjs'),
@@ -415,10 +427,10 @@ describe('fails safe', () => {
     install(w, '7.4.0');
     point(w, '7.4.0');
     expect((await call(w, 'pre-tool')).mode).toBe('current');
-    rmSync(join(w.env.TOKEN_OPTIMIZER_RUNTIME, 'versions', '7.4.0', 'node_modules', '@ooples', 'token-optimizer-mcp', 'plugin', 'hooks', 'lib', 'adapter.mjs'));
+    rmSync(join(w.env.TOKEN_OPTIMIZER_RUNTIME, 'versions', '7.4.0', 'node_modules', '@ooples', 'token-optimizer-mcp', 'src', 'plugin', 'hooks', 'lib', 'adapter.mjs'));
     // The pointer cache still names 7.4.0 as complete; the import is what fails.
     globalThis.__tokenOptimizerStdin = { raw: JSON.stringify({ session_id: 's' }), status: 'received', bytes: 1 };
-    const adapter = await importForHook({ here: pathToFileURL(join(w.self, 'entry.mjs')).href, entryRel: 'plugin/hooks', event: 'pre-tool', module: 'lib/adapter.mjs', env: w.env });
+    const adapter = await importForHook({ here: pathToFileURL(join(w.self, 'entry.mjs')).href, entryRel: 'src/plugin/hooks', event: 'pre-tool', module: 'lib/adapter.mjs', env: w.env });
     expect(adapter.marker).toBe('self');
   });
 
@@ -441,7 +453,7 @@ describe('fails safe', () => {
 
 describe('the payload is read once', () => {
   test("policy's readPayloadResult takes the resolver's handed-on stdin", async () => {
-    const { readPayloadResult } = await import('../../hooks-core/policy.mjs');
+    const { readPayloadResult } = await import('../../src/hooks-core/policy.mjs');
     globalThis.__tokenOptimizerStdin = { raw: '{"session_id":"handed"}', status: 'received', bytes: 23 };
     await expect(readPayloadResult({ timeoutMs: 50 })).resolves.toEqual({ payload: { session_id: 'handed' }, status: 'ok', bytes: 23 });
     globalThis.__tokenOptimizerStdin = { raw: null, status: 'timeout', bytes: 0 };
@@ -467,7 +479,7 @@ describe('deadline and cost', () => {
     writeFileSync(
       script,
       `globalThis.__tokenOptimizerHookStartedAt = Date.now() - 1000;\n` +
-        `const { beginHookInvocation } = await import(${JSON.stringify(new URL('../../hooks-core/observability.mjs', import.meta.url).href)});\n` +
+        `const { beginHookInvocation } = await import(${JSON.stringify(new URL('../../src/hooks-core/observability.mjs', import.meta.url).href)});\n` +
         `beginHookInvocation('claude-code', 'pre-tool', { deadlineMs: 1500 });\n` +
         `setTimeout(() => {}, 5000);\n`
     );
@@ -505,9 +517,9 @@ describe('every entry point goes through the resolver', () => {
       else if (/^(pre-tool|post-tool|session-start|stop)\.mjs$/.test(e.name)) entries.push(p);
     }
   };
-  walk(join(ROOT, 'integrations'));
+  walk(join(ROOT, 'src', 'integrations'));
   for (const name of ['post-tool', 'stop', 'pretooluse-router', 'precompact-optimize', 'agent-scope'])
-    entries.push(join(ROOT, 'plugin', 'hooks', `${name}.mjs`));
+    entries.push(join(ROOT, 'src', 'plugin', 'hooks', `${name}.mjs`));
 
   test('found the generated and plugin entries', () => {
     expect(entries.length).toBeGreaterThanOrEqual(37 + 3);
@@ -522,14 +534,14 @@ describe('every entry point goes through the resolver', () => {
   });
 
   test("Claude Code's SessionStart records the session's baseline", () => {
-    const source = readFileSync(join(ROOT, 'plugin', 'hooks', 'session-start.mjs'), 'utf8');
+    const source = readFileSync(join(ROOT, 'src', 'plugin', 'hooks', 'session-start.mjs'), 'utf8');
     expect(source).toMatch(/resolveHook\(\{[\s\S]*?event: 'session-start'/);
   });
 
   test('the plugin post-tool entry, spawned, runs current\'s adapter with the payload handed on', () => {
     const w = world();
     const out = join(w.base, 'ran.json');
-    const version = ownVersion(join(ROOT, 'plugin', 'hooks'), {});
+    const version = ownVersion(join(ROOT, 'src', 'plugin', 'hooks'), {});
     install(w, '99.0.0', {
       files: {
         'lib/adapter.mjs':
@@ -542,7 +554,7 @@ describe('every entry point goes through the resolver', () => {
     point(w, '99.0.0');
     writeFileSync(join(w.env.TOKEN_OPTIMIZER_STATE_DIR, 'sess-e2e.runtime.json'), JSON.stringify({ version, schema: STATE_SCHEMA }));
     const payload = JSON.stringify({ session_id: 'sess-e2e', tool_use_id: 'toolu_e2e', tool_name: 'Bash' });
-    const r = spawnSync(process.execPath, [join(ROOT, 'plugin', 'hooks', 'post-tool.mjs')], {
+    const r = spawnSync(process.execPath, [join(ROOT, 'src', 'plugin', 'hooks', 'post-tool.mjs')], {
       input: payload,
       encoding: 'utf8',
       timeout: 30_000,

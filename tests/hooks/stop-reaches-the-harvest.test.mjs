@@ -1,7 +1,7 @@
 /**
  * The Stop path actually reaches the harvest.
  *
- * #300 unregistered `plugin/hooks/stop-harvest.mjs` and nothing replaced it, so
+ * #300 unregistered `src/plugin/hooks/stop-harvest.mjs` and nothing replaced it, so
  * four capabilities went silently: the transcript archive, the harvest worker
  * spawn, refusal detection, and the notice that says why no findings exist. On
  * a full session with a valid credential, `harvestMode()` reported `remote` and
@@ -28,12 +28,12 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync 
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { readFileSync } from 'node:fs';
-import { projectStore } from '../../hooks-core/maintenance.mjs';
+import { projectStore } from '../../src/hooks-core/maintenance.mjs';
 
 const NL = String.fromCharCode(10);
 const ROOT = process.cwd();
-const STOP = join(ROOT, 'plugin', 'hooks', 'stop.mjs');
-const HOOKS_JSON = join(ROOT, 'plugin', 'hooks', 'hooks.json');
+const STOP = join(ROOT, 'src', 'plugin', 'hooks', 'stop.mjs');
+const HOOKS_JSON = join(ROOT, 'src', 'plugin', 'hooks', 'hooks.json');
 const STATE_VAR = process.platform === 'win32' ? 'LOCALAPPDATA' : 'XDG_STATE_HOME';
 
 let work;
@@ -81,8 +81,8 @@ function vendoredLibs() {
       else walk(full);
     }
   };
-  walk(join(ROOT, 'plugin'));
-  walk(join(ROOT, 'integrations'));
+  walk(join(ROOT, 'src', 'plugin'));
+  walk(join(ROOT, 'src', 'integrations'));
   // A discovery that finds nothing would pass every assertion below forever.
   // Eleven is what sync-hook-core lists today; the floor guards a broken walk,
   // not the exact roster, so a twelfth client raises it rather than breaking it.
@@ -196,10 +196,10 @@ describe('the registered Stop entry', () => {
 describe('the harvest worker is reachable from every client, not one', () => {
   test('ships in the shared core rather than beside one client entry', () => {
     // THE REASON ONLY CLAUDE CODE COULD EVER HAVE RUN IT. The worker lived in
-    // plugin/hooks/, which is vendored to no other client, so even a correctly
+    // src/plugin/hooks/, which is vendored to no other client, so even a correctly
     // registered Stop on the other ten would have found no worker to spawn.
-    expect(existsSync(join(ROOT, 'hooks-core', 'harvest-worker.mjs'))).toBe(true);
-    expect(existsSync(join(ROOT, 'plugin', 'hooks', 'harvest-worker.mjs'))).toBe(false);
+    expect(existsSync(join(ROOT, 'src', 'hooks-core', 'harvest-worker.mjs'))).toBe(true);
+    expect(existsSync(join(ROOT, 'src', 'plugin', 'hooks', 'harvest-worker.mjs'))).toBe(false);
   });
 
   test('is vendored beside the adapter in every client that has one', () => {
@@ -228,7 +228,7 @@ describe('the harvest worker is reachable from every client, not one', () => {
     // of the twelve and spawned `node --check` per file: partial coverage that
     // reads as coverage, and too slow to widen. `vm.SourceTextModule` compiles
     // ESM without evaluating it, which is the same parse `--check` performs.
-    const core = readdirSync(join(ROOT, 'hooks-core')).filter((f) => f.endsWith('.mjs'));
+    const core = readdirSync(join(ROOT, 'src', 'hooks-core')).filter((f) => f.endsWith('.mjs'));
     expect(core.length).toBeGreaterThan(20);
 
     for (const lib of vendoredLibs()) {
@@ -250,7 +250,7 @@ describe('the harvest worker is reachable from every client, not one', () => {
     // Pinned as a property of the generator rather than of one file, because
     // the next executable added to hooks-core hits this again and the failure
     // is invisible by construction.
-    const source = readFileSync(join(ROOT, 'hooks-core', 'harvest-worker.mjs'), 'utf8');
+    const source = readFileSync(join(ROOT, 'src', 'hooks-core', 'harvest-worker.mjs'), 'utf8');
     expect(source.startsWith('#!')).toBe(true);
 
     for (const lib of vendoredLibs()) {
@@ -281,7 +281,7 @@ describe('the harvest is not spent on a turn with no work in it', () => {
   // hold is that the edit check precedes the debounce, since a check placed
   // after it would still write the marker and change nothing.
   const source = readFileSync(
-    join(process.cwd(), 'hooks-core', 'stop-harvest.mjs'),
+    join(process.cwd(), 'src', 'hooks-core', 'stop-harvest.mjs'),
     'utf8'
   );
 
@@ -304,7 +304,7 @@ describe('the harvest is not spent on a turn with no work in it', () => {
     // sync:hooks fans hooks-core out to every client. A fix that lands in one
     // copy and not the other ships as fixed and behaves as broken.
     const packaged = readFileSync(
-      join(process.cwd(), 'plugin', 'hooks', 'lib', 'stop-harvest.mjs'),
+      join(process.cwd(), 'src', 'plugin', 'hooks', 'lib', 'stop-harvest.mjs'),
       'utf8'
     );
 

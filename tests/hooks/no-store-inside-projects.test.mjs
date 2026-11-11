@@ -21,9 +21,9 @@ import { tmpdir } from 'node:os';
 
 const ROOT = process.cwd();
 const ENTRIES = {
-  'claude code': join(ROOT, 'plugin', 'hooks', 'post-tool.mjs'),
-  codex: join(ROOT, 'integrations', 'codex', 'hooks', 'post-tool.mjs'),
-  'codex plugin': join(ROOT, 'integrations', 'codex', 'plugin', 'hooks', 'post-tool.mjs'),
+  'claude code': join(ROOT, 'src', 'plugin', 'hooks', 'post-tool.mjs'),
+  codex: join(ROOT, 'src', 'integrations', 'codex', 'hooks', 'post-tool.mjs'),
+  'codex plugin': join(ROOT, 'src', 'integrations', 'codex', 'plugin', 'hooks', 'post-tool.mjs'),
 };
 
 let work;
@@ -101,7 +101,7 @@ describe('a plugin that already holds a store from an older release', () => {
     // What 7.7.1 left behind in the reporter's plugin.
     mkdirSync(join(plugin, '.token-optimizer', 'wiki'), { recursive: true });
     writeFileSync(join(plugin, '.token-optimizer', 'wiki', 'graph.jsonl'), '{"t":"n","id":"file:x","rid":"0000000000000001"}\n');
-    const { resumeIfDue } = await import('../../hooks-core/migrate.mjs');
+    const { resumeIfDue } = await import('../../src/hooks-core/migrate.mjs');
     const env = { TOKEN_OPTIMIZER_HOME: join(home, '.token-optimizer') };
 
     const notice = resumeIfDue(plugin, { env, processes: () => ({ complete: true, found: [] }), background: false });
@@ -128,7 +128,7 @@ describe('a repository moved to a new path keeps its graph', () => {
   }
 
   test('the store follows the repository to its new path; a live clone keeps its own', async () => {
-    const { projectStore } = await import('../../hooks-core/maintenance.mjs');
+    const { projectStore } = await import('../../src/hooks-core/maintenance.mjs');
     const env = { TOKEN_OPTIMIZER_HOME: join(home, '.token-optimizer') };
     const original = join(work, 'repos', 'project');
     gitRepo(original);

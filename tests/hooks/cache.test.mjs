@@ -23,7 +23,7 @@ import {
   cacheOrdered,
   transcriptFor,
   WRITE_MULTIPLIER,
-} from '../../hooks-core/cache.mjs';
+} from '../../src/hooks-core/cache.mjs';
 import {
   gapDistribution,
   keepWarmDecision,
@@ -38,11 +38,11 @@ import {
   TRIPWIRE_MIN,
   OBSERVATION_FLOOR,
   TURN_GAP_MS,
-} from '../../hooks-core/keepwarm.mjs';
-import { record, readMetrics, readBalance } from '../../hooks-core/metrics.mjs';
-import { policyText } from '../../hooks-core/adapter.mjs';
-import { sessionContext } from '../../hooks-core/inject.mjs';
-import { putNode } from '../../hooks-core/wiki.mjs';
+} from '../../src/hooks-core/keepwarm.mjs';
+import { record, readMetrics, readBalance } from '../../src/hooks-core/metrics.mjs';
+import { policyText } from '../../src/hooks-core/adapter.mjs';
+import { sessionContext } from '../../src/hooks-core/inject.mjs';
+import { putNode } from '../../src/hooks-core/wiki.mjs';
 
 let workspace;
 let dir;
@@ -489,7 +489,7 @@ describe('a refresh finds out whether it bought anything', () => {
 
       const r = spawnSync(
         process.execPath,
-        [join(process.cwd(), 'plugin', 'hooks', 'stop.mjs')],
+        [join(process.cwd(), 'src', 'plugin', 'hooks', 'stop.mjs')],
         {
           input: JSON.stringify({ cwd: project, session_id: 'stop-session' }),
           encoding: 'utf8',
@@ -977,7 +977,7 @@ describe('SessionStart context is assembled in cache order', () => {
     const run = (userPrompt) => {
       const r = spawnSync(
         process.execPath,
-        [join(process.cwd(), 'plugin', 'hooks', 'session-start.mjs')],
+        [join(process.cwd(), 'src', 'plugin', 'hooks', 'session-start.mjs')],
         {
           input: JSON.stringify({ cwd: project, userPrompt }),
           encoding: 'utf8',

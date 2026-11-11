@@ -8,7 +8,7 @@ import {
   detectInstall,
   checklist,
   probeVersion,
-} from '../../hooks-core/doctor.mjs';
+} from '../../src/hooks-core/doctor.mjs';
 
 /**
  * The doctor was written for the script-install path and is blind to plugin
@@ -126,7 +126,7 @@ describe('detectInstall', () => {
     const install = detectInstall({ pluginsDir, root: fixture });
 
     expect(install.method).not.toBe('plugin');
-    expect(install.hooksDir).toBe(join(fixture, 'plugin', 'hooks'));
+    expect(install.hooksDir).toBe(join(fixture, 'src', 'plugin', 'hooks'));
   });
 });
 
@@ -205,7 +205,7 @@ describe('checklist on a plugin install', () => {
 
 describe('the doctor cannot pass on a broken install', () => {
   it('a plugin record whose hooks directory is gone does not fall back to the package copy', () => {
-    // THE DEFECT: hooksDir fell back to the npm package's own plugin/hooks, which ships with
+    // THE DEFECT: hooksDir fell back to the npm package's own src/plugin/hooks, which ships with
     // every install (it is in package.json `files`). So the binary-present checks passed, the
     // enforcement probe ran THAT copy and got a real deny back, and the report said
     // "Enforcement is live" -- while Claude Code loads from installPath, which is gone, and

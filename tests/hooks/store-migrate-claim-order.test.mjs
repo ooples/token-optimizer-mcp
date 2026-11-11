@@ -8,8 +8,8 @@ import { afterEach, beforeEach, describe, expect, test } from '@jest/globals';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { hostname, tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { migrate } from '../../hooks-core/migrate.mjs';
-import { storeId } from '../../hooks-core/maintenance.mjs';
+import { migrate } from '../../src/hooks-core/migrate.mjs';
+import { storeId } from '../../src/hooks-core/maintenance.mjs';
 
 const quiet = () => ({ complete: true, found: [] });
 

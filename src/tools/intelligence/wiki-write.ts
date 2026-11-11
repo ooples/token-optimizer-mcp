@@ -81,7 +81,7 @@ export interface WikiWriteOptions {
    * edge: this value is a model-supplied tool argument nothing verifies, so
    * `writeHarvested` never treats it as authoritative for attribution
    * (see its `authoritativeSessionId` parameter, which this call omits).
-   * `plugin/hooks/harvest-worker.mjs` is the caller whose session id comes
+   * `src/plugin/hooks/harvest-worker.mjs` is the caller whose session id comes
    * from a trusted channel (Claude Code's own hook payload) and can supply
    * that; a tool argument cannot.
    */
@@ -268,7 +268,7 @@ export async function wikiWrite(
         // supply it: `sessionId` is stored for provenance/display only, never
         // used to attribute an `answers` edge. The consequence is real and
         // accepted, not an oversight: `wiki_write` calls never write an
-        // `answers` edge. `plugin/hooks/harvest-worker.mjs` supplies
+        // `answers` edge. `src/plugin/hooks/harvest-worker.mjs` supplies
         // `authoritativeSessionId` because ITS `sessionId` comes from Claude
         // Code's own hook payload, not a tool-call argument -- that is the
         // difference that makes an identity authoritative, and this function

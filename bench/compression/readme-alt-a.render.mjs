@@ -19,7 +19,9 @@ import { fileURLToPath } from 'node:url';
 import { COLUMNS } from './readme-alt-a.columns.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const README = join(here, '..', '..', 'README.md');
+// The guarded tables moved out of README.md into docs/COMPARISON.md, which
+// keeps the README short; the prose that quotes them moved with them.
+const README = join(here, '..', '..', 'docs', 'COMPARISON.md');
 const RECORD = join(here, 'alt-a', 'results', 'head-to-head.json');
 
 const START = '<!-- ALT-A-TABLE:START';
@@ -71,7 +73,7 @@ const from = readme.indexOf(START);
 const to = readme.indexOf(END);
 if (from === -1 || to === -1 || to < from) {
   console.error(
-    'readme-alt-a.render: ALT-A-TABLE markers not found in README.md'
+    'readme-alt-a.render: ALT-A-TABLE markers not found in docs/COMPARISON.md'
   );
   process.exit(1);
 }

@@ -4,15 +4,26 @@ import { resolve, join } from 'node:path';
 import { runInNewContext } from 'node:vm';
 import * as path from 'node:path';
 
-const source = readFileSync(resolve('scripts/postinstall.cjs'), 'utf8');
+const source = readFileSync(resolve('src/scripts/postinstall.cjs'), 'utf8');
 const HOME = resolve('fake home with spaces');
 
+/**
+ * Run postinstall.cjs against a fake package.
+ *
+ * `calls` is every command that could touch something OUTSIDE the package --
+ * the installer. The old-layout aliases postinstall makes inside its own
+ * package directory go to `aliases` instead, so "nothing ran" below still means
+ * the installer did not run, rather than being broken by a call that writes
+ * only under the package being installed.
+ */
 function install(env, { fail = false, tty = false } = {}) {
   const calls = [],
+    aliases = [],
     messages = [];
   const root = resolve('test package with spaces');
+  const aliasScript = join(root, 'src', 'scripts', 'legacy-layout.mjs');
   runInNewContext(source, {
-    __dirname: join(root, 'scripts'),
+    __dirname: join(root, 'src', 'scripts'),
     process: { env, execPath: process.execPath, stdout: { isTTY: tty } },
     console: {
       log: (...args) => messages.push(args.join(' ')),
@@ -24,6 +35,11 @@ function install(env, { fail = false, tty = false } = {}) {
       if (name === 'node:child_process')
         return {
           execFileSync: (...args) => {
+            if (args[1][0] === aliasScript) {
+              aliases.push(args);
+              if (fail) throw Error('fixture alias failure');
+              return;
+            }
             calls.push(args);
             if (fail) throw Error('fixture installer failure');
           },
@@ -31,8 +47,24 @@ function install(env, { fail = false, tty = false } = {}) {
       throw Error(`Unexpected dependency ${name}`);
     },
   });
-  return { calls, messages, root };
+  return { calls, aliases, messages, root, aliasScript };
 }
+
+test.each([{}, { npm_config_global: 'true' }, { TOKEN_OPTIMIZER_AUTO_INSTALL: '1' }])(
+  'every install makes the old-layout aliases in its own package, and only there: %j',
+  (env) => {
+    const { aliases, root, aliasScript } = install(env);
+    expect(aliases).toEqual([
+      [process.execPath, [aliasScript, root], { stdio: 'ignore', windowsHide: true, timeout: 10000 }],
+    ]);
+  }
+);
+
+test('a failure making the aliases does not fail the install', () => {
+  const { aliases, messages } = install({ npm_config_global: 'true' }, { fail: true });
+  expect(aliases).toHaveLength(1);
+  expect(messages.join('\n')).toContain('Nothing on your machine has been changed yet');
+});
 
 // THE POINT OF ISSUE #449. Installing a package is not consent to edit another
 // application's global configuration, and the hooks this installer writes match
@@ -65,7 +97,7 @@ test('the undo it prints is one that actually undoes anything', () => {
   // it, reads a list of things it "would remove", and walks away believing the
   // machine is unwired. The flag is read out of uninstall.mjs here rather than
   // written down twice, so the notice cannot drift away from the gate.
-  const uninstaller = readFileSync(resolve('scripts/uninstall.mjs'), 'utf8');
+  const uninstaller = readFileSync(resolve('src/scripts/uninstall.mjs'), 'utf8');
   expect(uninstaller).toContain("process.argv.includes('--apply')");
 
   const said = install({ npm_config_global: 'true' }).messages.join('\n');
@@ -95,7 +127,7 @@ test.each([
   expect(calls).toEqual([
     [
       process.execPath,
-      [join(root, 'scripts/install-cli.mjs')],
+      [join(root, 'src/scripts/install-cli.mjs')],
       { stdio: 'inherit', cwd: root, windowsHide: true },
     ],
   ]);

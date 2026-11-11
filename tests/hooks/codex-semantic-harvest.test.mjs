@@ -13,8 +13,8 @@ import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 const ROOT = process.cwd();
-const POST = join(ROOT, 'integrations', 'codex', 'hooks', 'post-tool.mjs');
-const STOP = join(ROOT, 'integrations', 'codex', 'hooks', 'stop.mjs');
+const POST = join(ROOT, 'src', 'integrations', 'codex', 'hooks', 'post-tool.mjs');
+const STOP = join(ROOT, 'src', 'integrations', 'codex', 'hooks', 'stop.mjs');
 
 let workspace;
 let env;

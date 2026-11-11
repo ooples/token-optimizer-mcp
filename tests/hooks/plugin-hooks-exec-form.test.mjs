@@ -18,7 +18,7 @@ import { describe, it, expect } from '@jest/globals';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join, relative } from 'path';
-import { isPluginHookFor } from '../../scripts/claude-hook-ownership.mjs';
+import { isPluginHookFor } from '../../src/scripts/claude-hook-ownership.mjs';
 import {
   CLAUDE_CODE_EXEC_FORM_FLOOR,
   hooksUseExecForm,
@@ -26,9 +26,9 @@ import {
   probeClaudeCodeHooks,
   readClaudeCodeVersion,
   resolveClaudeExecutable,
-} from '../../hooks-core/doctor.mjs';
+} from '../../src/hooks-core/doctor.mjs';
 
-const pluginRoot = join(process.cwd(), 'plugin');
+const pluginRoot = join(process.cwd(), 'src', 'plugin');
 const manifest = JSON.parse(readFileSync(join(pluginRoot, 'hooks', 'hooks.json'), 'utf8'));
 const hooks = Object.entries(manifest.hooks).flatMap(([event, groups]) =>
   groups.flatMap((group) => group.hooks.map((hook) => ({ event, hook })))

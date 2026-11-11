@@ -19,7 +19,7 @@ import {
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { createHash } from 'node:crypto';
-import { CLIENT_CAPABILITIES } from '../../hooks-core/capabilities.mjs';
+import { CLIENT_CAPABILITIES } from '../../src/hooks-core/capabilities.mjs';
 
 const pause = (ms) => new Promise((done) => setTimeout(done, ms));
 // THE WAIT BUDGET ONE `until` MAY SPEND. Exported as a constant because the

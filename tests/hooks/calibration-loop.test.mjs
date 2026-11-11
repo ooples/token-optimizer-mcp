@@ -29,8 +29,8 @@ import {
   recordToolOutcome,
   readMetrics,
   readTruncation,
-} from '../../hooks-core/metrics.mjs';
-import { referenceRate } from '../../hooks-core/usage.mjs';
+} from '../../src/hooks-core/metrics.mjs';
+import { referenceRate } from '../../src/hooks-core/usage.mjs';
 import {
   servingPolicyVersion,
   MIN_PRIOR_INJECTIONS,
@@ -38,7 +38,7 @@ import {
   MIN_WITHHELD,
   FDR_Q,
   permutationP,
-} from '../../hooks-core/loo.mjs';
+} from '../../src/hooks-core/loo.mjs';
 import {
   calibration,
   calibrationP,
@@ -48,10 +48,10 @@ import {
   labelsByFinding,
   MIN_FINDINGS_PER_ARM,
   MIN_GAP_TOKENS,
-} from '../../hooks-core/crosslayer.mjs';
-import { renderAudit } from '../../hooks-core/audit.mjs';
-import { putNode, load } from '../../hooks-core/wiki.mjs';
-import { contradict, hasOutstandingContradiction } from '../../hooks-core/curate.mjs';
+} from '../../src/hooks-core/crosslayer.mjs';
+import { renderAudit } from '../../src/hooks-core/audit.mjs';
+import { putNode, load } from '../../src/hooks-core/wiki.mjs';
+import { contradict, hasOutstandingContradiction } from '../../src/hooks-core/curate.mjs';
 
 let workspace;
 let dir;
@@ -466,7 +466,7 @@ describe('measured utility ranks a finding and never raises its confidence', () 
     // STRUCTURAL, in the spirit of the reachability guard: utility RANKS, and a
     // module that measures it must not be able to promote what it measured.
     for (const file of ['crosslayer.mjs', 'loo.mjs', 'usage.mjs']) {
-      const text = readFileSync(new URL(`../../hooks-core/${file}`, import.meta.url), 'utf8')
+      const text = readFileSync(new URL(`../../src/hooks-core/${file}`, import.meta.url), 'utf8')
         // Comments name `confidence` on purpose; only code counts.
         .replace(/\/\*[\s\S]*?\*\//g, '')
         .replace(/^\s*\/\/.*$/gm, '');

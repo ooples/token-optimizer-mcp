@@ -27,7 +27,7 @@ import { pathToFileURL } from 'node:url';
  * the lookup was identified as the culprit rather than the trigger.
  */
 
-const CORE = (n) => pathToFileURL(join(process.cwd(), 'hooks-core', n)).href;
+const CORE = (n) => pathToFileURL(join(process.cwd(), 'src', 'hooks-core', n)).href;
 
 let session;
 let other;

@@ -133,8 +133,9 @@ function renderTable(
 
 /** Resolves hooks-core relative to the built output, which lives in dist/tools/analytics. */
 function coreUrl(name: string): string {
-  return pathToFileURL(path.join(here, '..', '..', '..', 'hooks-core', name))
-    .href;
+  return pathToFileURL(
+    path.join(here, '..', '..', '..', 'src', 'hooks-core', name)
+  ).href;
 }
 
 interface GraphPricing {

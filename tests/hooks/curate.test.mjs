@@ -12,10 +12,10 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import {
   pin, correct, retire, create, activeFindings, audit, exportMarkdown, ORIGIN_HUMAN,
-} from '../../hooks-core/curate.mjs';
-import { load, putNode, putEdge, nodeId } from '../../hooks-core/wiki.mjs';
-import { canonicalPath } from '../../hooks-core/paths.mjs';
-import { indexFile, checkAnchor } from '../../hooks-core/staleness.mjs';
+} from '../../src/hooks-core/curate.mjs';
+import { load, putNode, putEdge, nodeId } from '../../src/hooks-core/wiki.mjs';
+import { canonicalPath } from '../../src/hooks-core/paths.mjs';
+import { indexFile, checkAnchor } from '../../src/hooks-core/staleness.mjs';
 
 let workspace;
 let dir;

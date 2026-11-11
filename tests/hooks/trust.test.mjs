@@ -14,11 +14,11 @@ import { tmpdir } from 'node:os';
 import {
   writeManifest, readManifest, verifyManifest, removalPlan, uninstall,
   ourEntries, residue, fileHash,
-} from '../../hooks-core/manifest.mjs';
+} from '../../src/hooks-core/manifest.mjs';
 import {
   checklist, probeEnforcement, probeSessionStart, probeGraph, diagnose, renderDiagnosis,
-} from '../../hooks-core/doctor.mjs';
-import { withEscape } from '../../hooks-core/policy.mjs';
+} from '../../src/hooks-core/doctor.mjs';
+import { withEscape } from '../../src/hooks-core/policy.mjs';
 
 const ROOT = join(process.cwd());
 

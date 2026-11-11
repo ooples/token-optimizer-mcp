@@ -11,7 +11,7 @@
 import { mkdtempSync, writeFileSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { checklist } from '../../hooks-core/doctor.mjs';
+import { checklist } from '../../src/hooks-core/doctor.mjs';
 
 function settingsWiredTo(dir, hooksDir) {
   const path = join(dir, 'settings.json');

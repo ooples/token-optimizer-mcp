@@ -73,7 +73,7 @@ afterEach(() => {
 /** Records content as the hook does, for the session the server will claim. */
 async function recordAuthored(file: string, content: string): Promise<void> {
   const authored = (await import(
-    pathToFileURL(join(process.cwd(), 'hooks-core', 'authored.mjs')).href
+    pathToFileURL(join(process.cwd(), 'src', 'hooks-core', 'authored.mjs')).href
   )) as {
     recordAuthoredContent(
       root: string,

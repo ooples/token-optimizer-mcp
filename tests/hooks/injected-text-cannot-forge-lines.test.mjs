@@ -24,13 +24,13 @@ import { afterEach, beforeEach, describe, expect, test } from '@jest/globals';
 import { mkdtempSync, rmSync, writeFileSync, mkdirSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { load, wikiDir } from '../../hooks-core/wiki.mjs';
-import { serve } from '../../hooks-core/staleness.mjs';
-import { safeLine, safeRecord } from '../../hooks-core/safe-text.mjs';
-import { contradict, create, ORIGIN_AGENT } from '../../hooks-core/curate.mjs';
-import { writeHarvested } from '../../hooks-core/harvest-write.mjs';
-import { forTouch, forSharedCommand } from '../../hooks-core/inject.mjs';
-import { restorationPlan } from '../../hooks-core/restore.mjs';
+import { load, wikiDir } from '../../src/hooks-core/wiki.mjs';
+import { serve } from '../../src/hooks-core/staleness.mjs';
+import { safeLine, safeRecord } from '../../src/hooks-core/safe-text.mjs';
+import { contradict, create, ORIGIN_AGENT } from '../../src/hooks-core/curate.mjs';
+import { writeHarvested } from '../../src/hooks-core/harvest-write.mjs';
+import { forTouch, forSharedCommand } from '../../src/hooks-core/inject.mjs';
+import { restorationPlan } from '../../src/hooks-core/restore.mjs';
 
 const NL = String.fromCharCode(10);
 const CR = String.fromCharCode(13);
@@ -289,7 +289,7 @@ describe('every module that renders stored text reaches the convention', () => {
   // an untrusted stored field into a string must reach the convention, either
   // by serving its findings or by calling safeLine/safeRecord itself. A new
   // renderer added tomorrow fails here until its author has decided which.
-  const CORE = join(process.cwd(), 'hooks-core');
+  const CORE = join(process.cwd(), 'src', 'hooks-core');
 
   /** Fields carrying text this repository did not write. */
   const UNTRUSTED = ['claim', 'contradictionReason', 'contradictedBy', 'staleReason'];

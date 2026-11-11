@@ -6,7 +6,7 @@ import {
   projectIdFor,
   registerProject,
   registeredProjects,
-} from '../../hooks-core/projects.mjs';
+} from '../../src/hooks-core/projects.mjs';
 
 let workspace;
 let priorRegistry;

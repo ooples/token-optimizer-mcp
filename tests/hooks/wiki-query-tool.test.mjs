@@ -31,11 +31,11 @@ import {
   nodeId,
   wikiDir,
   projectRootFor,
-} from '../../hooks-core/wiki.mjs';
+} from '../../src/hooks-core/wiki.mjs';
 // `readAll` is private to metrics.mjs; `readMetrics` is the exported reader over
 // the same bounded log.
-import { readMetrics } from '../../hooks-core/metrics.mjs';
-import { canonicalPath } from '../../hooks-core/paths.mjs';
+import { readMetrics } from '../../src/hooks-core/metrics.mjs';
+import { canonicalPath } from '../../src/hooks-core/paths.mjs';
 import {
   wikiQuery,
   WIKI_QUERY_TOOL_DEFINITION,
@@ -253,7 +253,7 @@ describe('wiki_query', () => {
     try {
       process.chdir(nested);
 
-      // Exactly what plugin/hooks/session-start.mjs and hooks-core/adapter.mjs
+      // Exactly what src/plugin/hooks/session-start.mjs and src/hooks-core/adapter.mjs
       // compute for the index events.
       const hookDir = wikiDir(
         projectRootFor(join(process.cwd(), '__session__'), process.cwd())

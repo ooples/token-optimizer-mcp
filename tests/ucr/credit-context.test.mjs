@@ -14,7 +14,7 @@ import {
   WorkingSetStore,
   createTiktokenCounter,
   calibrateRetrievalRouter,
-} from '../../ucr/index.mjs';
+} from '../../src/ucr/index.mjs';
 
 const temporary = [];
 afterEach(() => {

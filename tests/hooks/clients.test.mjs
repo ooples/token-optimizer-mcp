@@ -14,12 +14,12 @@ import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
-import { normalizeTool, normalizePayload } from '../../hooks-core/decide.mjs';
-import { CLIENTS, normalizeClientPayload } from '../../hooks-core/adapter.mjs';
+import { normalizeTool, normalizePayload } from '../../src/hooks-core/decide.mjs';
+import { CLIENTS, normalizeClientPayload } from '../../src/hooks-core/adapter.mjs';
 import {
   CAPABILITY_TIERS,
   CLIENT_CAPABILITIES,
-} from '../../hooks-core/capabilities.mjs';
+} from '../../src/hooks-core/capabilities.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
@@ -80,7 +80,7 @@ function runEntry(relativePath, payload, env = {}) {
 const nativeCommandClients = [
   {
     client: 'claude-code',
-    entry: 'plugin/hooks/pretooluse-router.mjs',
+    entry: 'src/plugin/hooks/pretooluse-router.mjs',
     payload: (session) => ({
       session_id: session,
       cwd: workspace,
@@ -90,7 +90,7 @@ const nativeCommandClients = [
   },
   {
     client: 'codex',
-    entry: 'integrations/codex/hooks/pre-tool.mjs',
+    entry: 'src/integrations/codex/hooks/pre-tool.mjs',
     payload: (session) => ({
       session_id: session,
       cwd: workspace,
@@ -100,7 +100,7 @@ const nativeCommandClients = [
   },
   {
     client: 'copilot',
-    entry: 'integrations/copilot/.github/hooks/pre-tool.mjs',
+    entry: 'src/integrations/copilot/.github/hooks/pre-tool.mjs',
     payload: (session) => ({
       sessionId: session,
       cwd: workspace,
@@ -110,7 +110,7 @@ const nativeCommandClients = [
   },
   {
     client: 'gemini',
-    entry: 'integrations/gemini/hooks/pre-tool.mjs',
+    entry: 'src/integrations/gemini/hooks/pre-tool.mjs',
     payload: (session) => ({
       session_id: session,
       cwd: workspace,
@@ -120,7 +120,7 @@ const nativeCommandClients = [
   },
   {
     client: 'qwen',
-    entry: 'integrations/qwen/hooks/pre-tool.mjs',
+    entry: 'src/integrations/qwen/hooks/pre-tool.mjs',
     payload: (session) => ({
       session_id: session,
       cwd: workspace,
@@ -130,7 +130,7 @@ const nativeCommandClients = [
   },
   {
     client: 'cursor',
-    entry: 'integrations/cursor/hooks/pre-tool.mjs',
+    entry: 'src/integrations/cursor/hooks/pre-tool.mjs',
     payload: (session) => ({
       session_id: session,
       cwd: workspace,
@@ -140,7 +140,7 @@ const nativeCommandClients = [
   },
   {
     client: 'cline',
-    entry: 'integrations/cline/hooks/token-optimizer/pre-tool.mjs',
+    entry: 'src/integrations/cline/hooks/token-optimizer/pre-tool.mjs',
     payload: (session) => ({
       taskId: session,
       workspaceRoots: [workspace],
@@ -149,7 +149,7 @@ const nativeCommandClients = [
   },
   {
     client: 'windsurf',
-    entry: 'integrations/windsurf/hooks/pre-tool.mjs',
+    entry: 'src/integrations/windsurf/hooks/pre-tool.mjs',
     payload: (session) => ({
       trajectory_id: session,
       agent_action_name: 'pre_read_code',
@@ -159,12 +159,12 @@ const nativeCommandClients = [
 ];
 
 const rulesOnlyClients = {
-  roo: 'integrations/roo/token-optimizer.md',
-  zed: 'integrations/zed/AGENTS.md',
-  amp: 'integrations/amp/AGENTS.md',
-  continue: 'integrations/continue/token-optimizer.md',
-  crush: 'integrations/crush/AGENTS.md',
-  droid: 'integrations/droid/AGENTS.md',
+  roo: 'src/integrations/roo/token-optimizer.md',
+  zed: 'src/integrations/zed/AGENTS.md',
+  amp: 'src/integrations/amp/AGENTS.md',
+  continue: 'src/integrations/continue/token-optimizer.md',
+  crush: 'src/integrations/crush/AGENTS.md',
+  droid: 'src/integrations/droid/AGENTS.md',
 };
 
 describe('tool names normalize across clients', () => {
@@ -410,7 +410,7 @@ describe('the vendored core stays identical to its source', () => {
     // executes from. Drift there is the exact failure this replaced.
     const result = spawnSync(
       process.execPath,
-      [join(ROOT, 'scripts', 'sync-hook-core.mjs'), '--check'],
+      [join(ROOT, 'src', 'scripts', 'sync-hook-core.mjs'), '--check'],
       { encoding: 'utf8' }
     );
     expect(result.status).toBe(0);

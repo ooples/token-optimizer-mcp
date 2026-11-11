@@ -6,7 +6,7 @@ import {
   BENCHMARK_FAMILIES,
   gradeStudyFixture,
   materializeStudyFixture,
-} from '../../ucr/index.mjs';
+} from '../../src/ucr/index.mjs';
 
 const roots = [];
 afterEach(() => {

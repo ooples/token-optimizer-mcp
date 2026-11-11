@@ -11,9 +11,9 @@
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { record } from '../../hooks-core/metrics.mjs';
-import { recordAuthoredContent } from '../../hooks-core/authored.mjs';
-import { projectStore } from '../../hooks-core/maintenance.mjs';
+import { record } from '../../src/hooks-core/metrics.mjs';
+import { recordAuthoredContent } from '../../src/hooks-core/authored.mjs';
+import { projectStore } from '../../src/hooks-core/maintenance.mjs';
 
 let root;
 beforeEach(() => {

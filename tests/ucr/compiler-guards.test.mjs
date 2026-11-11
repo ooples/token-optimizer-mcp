@@ -9,7 +9,7 @@ import {
   semanticFieldTrace,
   validateSemanticObject,
   verifyGuardReceipt,
-} from '../../ucr/index.mjs';
+} from '../../src/ucr/index.mjs';
 
 let sequence = 0;
 const eventFactory = (type, payload) => ({

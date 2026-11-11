@@ -17,11 +17,11 @@ import {
   TOKEN_HEADER,
   capabilityToken,
 } from '../../src/server/dashboard-guard.js';
-import { putNodeWithEdges, load, nodeId } from '../../hooks-core/wiki.mjs';
-import { registerProject } from '../../hooks-core/projects.mjs';
+import { putNodeWithEdges, load, nodeId } from '../../src/hooks-core/wiki.mjs';
+import { registerProject } from '../../src/hooks-core/projects.mjs';
 
 const lexical = await import(
-  pathToFileURL(join(process.cwd(), 'hooks-core', 'lexical.mjs')).href
+  pathToFileURL(join(process.cwd(), 'src', 'hooks-core', 'lexical.mjs')).href
 );
 
 describe('lexical.rank (the primitive the route now calls)', () => {

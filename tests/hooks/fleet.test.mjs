@@ -15,9 +15,9 @@ import { tmpdir } from 'node:os';
 import {
   discoverProjects, projectCwd, scanProject, transferable, enforcementComparison,
   pareto, renderFleet, slugifyCwd, DEFAULT_LIMIT,
-} from '../../hooks-core/fleet.mjs';
-import { applyRemedy } from '../../hooks-core/remedy.mjs';
-import { canonicalPath } from '../../hooks-core/paths.mjs';
+} from '../../src/hooks-core/fleet.mjs';
+import { applyRemedy } from '../../src/hooks-core/remedy.mjs';
+import { canonicalPath } from '../../src/hooks-core/paths.mjs';
 
 let machine;
 

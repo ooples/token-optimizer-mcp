@@ -26,12 +26,12 @@ import {
 } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { projectStore } from '../../hooks-core/maintenance.mjs';
+import { projectStore } from '../../src/hooks-core/maintenance.mjs';
 
 const NL = String.fromCharCode(10);
 const ROOT = process.cwd();
-const PRECOMPACT = join(ROOT, 'plugin', 'hooks', 'precompact-optimize.mjs');
-const HOOKS_JSON = join(ROOT, 'plugin', 'hooks', 'hooks.json');
+const PRECOMPACT = join(ROOT, 'src', 'plugin', 'hooks', 'precompact-optimize.mjs');
+const HOOKS_JSON = join(ROOT, 'src', 'plugin', 'hooks', 'hooks.json');
 const STATE_VAR = process.platform === 'win32' ? 'LOCALAPPDATA' : 'XDG_STATE_HOME';
 
 let work;
@@ -142,7 +142,7 @@ describe('PreCompact reaches the harvest', () => {
     const session = 'pc-one-object';
 
     // A real tool call, so the session has something to compress.
-    spawnSync(process.execPath, [join(ROOT, 'plugin', 'hooks', 'pretooluse-router.mjs')], {
+    spawnSync(process.execPath, [join(ROOT, 'src', 'plugin', 'hooks', 'pretooluse-router.mjs')], {
       input: JSON.stringify({
         cwd: work,
         session_id: session,

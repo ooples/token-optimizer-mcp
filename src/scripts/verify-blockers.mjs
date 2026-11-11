@@ -1,0 +1,799 @@
+/**
+ * Proves each pre-plan blocker is actually closed, one check per item.
+ *
+ * WHY THIS IS A SCRIPT AND NOT A CHECKLIST. Every item below was already
+ * "verified" once in prose, and prose does not re-run. Two of those prose
+ * verdicts turned out to be wrong when something finally executed them -- the
+ * scope leak was narrower than written, and the competitor's missing text model
+ * was not the cause it was claimed to be. A claim that cannot be re-run is a
+ * memory, so this is the re-runnable form.
+ *
+ *   node src/scripts/verify-blockers.mjs
+ *
+ * Exits non-zero naming every item it cannot prove, AND every item it merely
+ * deferred. Checks that would cost minutes or money are reported as DEFERRED
+ * with the command that settles them, rather than silently skipped -- but a
+ * deferred item is still an unproved one, so CI must not be able to accept a
+ * run that contains any. Pass --allow-deferred for a local run that
+ * deliberately does not pay for them.
+ */
+
+import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { createRequire } from 'node:module';
+import { readFileSync, existsSync } from 'node:fs';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const require = createRequire(import.meta.url);
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
+const read = (p) => readFileSync(join(ROOT, p), 'utf8');
+
+/**
+ * Runs a command, returning {ok, out}. Never throws.
+ *
+ * NEVER `npm` HERE. execFileSync cannot launch it on Windows -- bare `npm`
+ * is ENOENT because it is a .cmd shim rather than an executable, and
+ * `npm.cmd` is EINVAL under Node 22 without a shell. Both failures arrive
+ * as an exception, which this function reports as a failed CHECK, so the
+ * first version of this script invented two blocker failures whose
+ * underlying commands pass by hand. Call what the package scripts call.
+ */
+function run(cmd, args) {
+  try {
+    const out = execFileSync(cmd, args, {
+      cwd: ROOT,
+      encoding: 'utf8',
+      maxBuffer: 64 * 1024 * 1024,
+      timeout: 900_000,
+    });
+    return { ok: true, out };
+  } catch (err) {
+    return {
+      ok: false,
+      out: `${err.stdout || ''}${err.stderr || ''}` || String(err.message),
+    };
+  }
+}
+
+const results = [];
+const check = (id, what, fn) => {
+  let verdict;
+  try {
+    verdict = fn();
+  } catch (err) {
+    verdict = { state: 'FAIL', detail: `check threw: ${err.message}` };
+  }
+  results.push({ id, what, ...verdict });
+};
+const pass = (detail) => ({ state: 'PASS', detail });
+const fail = (detail) => ({ state: 'FAIL', detail });
+const deferred = (detail) => ({ state: 'DEFERRED', detail });
+
+// ---------------------------------------------------------------- B1
+check('B1', 'project findings cannot leak across repos', () => {
+  const inject = read('src/hooks-core/inject.mjs');
+  if (!inject.includes('TRANSFERABLE_SCOPES')) {
+    return fail('src/hooks-core/inject.mjs has no scope gate');
+  }
+  // A hooks-core fix does not ship until the vendored copies match it: each
+  // client executes its own copy, and the fix was inert for all of them until
+  // sync:hooks ran. This is the check that caught that.
+  // Exactly what `npm run sync:hooks:check` chains, without npm.
+  for (const script of [
+    'sync-hook-core.mjs',
+    'generate-client-entries.mjs',
+    'generate-client-configs.mjs',
+    'pin-mcp-version.mjs',
+  ]) {
+    const r = run(process.execPath, [join('src', 'scripts', script), '--check']);
+    if (!r.ok) return fail(`${script} --check reports drift`);
+  }
+  const vendored = read('src/plugin/hooks/lib/inject.mjs');
+  if (!vendored.includes('TRANSFERABLE_SCOPES')) {
+    return fail('the vendored core does not carry the gate');
+  }
+  return pass(
+    'gate present in hooks-core and every vendored copy; sync check clean'
+  );
+});
+
+// ---------------------------------------------------------------- B2
+check('B2', 'the cache-weighted gate is green and not vacuous', () => {
+  const proof = run(process.execPath, ['bench/compression/proof.mjs']);
+  if (!proof.ok) return fail('proof.mjs exits non-zero');
+  const gates = [
+    'NEEDLE GATE PASSED',
+    'RELEVANCE GATE PASSED',
+    'STEADY GATE PASSED',
+    'GATE PASSED on all workloads',
+  ].filter((g) => !proof.out.includes(g));
+  if (gates.length) return fail(`missing: ${gates.join(', ')}`);
+  // THE BEHAVIOUR, NOT THE SPELLING. This first asserted the source
+  // contained the identifier `strictWins`, which survives deleting the
+  // branch that enforces it. The harness now reports the count it counted,
+  // so a run with only ties cannot satisfy this.
+  const wins = proof.out.match(/strict wins:\s*(\d+)/);
+  if (!wins) {
+    return fail(
+      'the harness did not report a strict-win count, so the tie relaxation ' +
+        'is unaccounted for'
+    );
+  }
+  if (Number(wins[1]) < 1) {
+    return fail(
+      'the harness reports 0 strict wins -- every workload tied, so the gate ' +
+        'cannot tell a cache-respecting engine from an inert one'
+    );
+  }
+  return pass(
+    `all five gates pass; ${wins[1]} strict win(s) reported, so the tie ` +
+      'relaxation is paid for'
+  );
+});
+
+// ---------------------------------------------------------------- B3
+check('B3', 'the published tables are reproducible by their harnesses', () => {
+  const t = run(process.execPath, ['bench/compression/readme-table.check.mjs']);
+  if (!t.ok) return fail('README figures disagree with the harness');
+  if (!t.out.includes('README TABLE AGREES'))
+    return fail('check did not confirm agreement');
+  // THE SECOND TABLE HAS ITS OWN CHAIN. head-to-head.mjs needs a Alternative A clone
+  // on disk, which this machine may not have, so its figures are checked
+  // against the run recorded beside it rather than re-measured here. That is a
+  // weaker link and it is a checked one; leaving the larger of the two
+  // published tables out entirely would have let it drift unguarded.
+  const h = run(process.execPath, [
+    'bench/compression/readme-alt-a.check.mjs',
+  ]);
+  if (!h.ok || !h.out.includes('AGREES with the recorded run')) {
+    return fail('README head-to-head figures disagree with the recorded run');
+  }
+  // AND THE RECORD HAS TO DESCRIBE THIS TREE, not an older one. The check above
+  // compares prose to the record and would agree just as happily if the record
+  // were taken before the compressor changed -- both sides would be consistent
+  // and both would be out of date. So the one thing that cannot be re-measured
+  // here is instead bounded: if nothing under `src/compress` has moved since the
+  // commit the record names, the figures still describe what this tree does.
+  //
+  // A FAILURE HERE IS NOT A BUG, IT IS A RE-RECORD. The remedy is the record's
+  // own `regenerate` field, and it needs the clone -- which is exactly why this
+  // is a shippability blocker rather than something CI could be asked to fix.
+  const record = JSON.parse(
+    read('bench/compression/alt-a/results/head-to-head.json')
+  );
+  const moved = run('git', [
+    'diff',
+    '--name-only',
+    record.commit,
+    'HEAD',
+    '--',
+    'src/compress',
+  ]);
+  if (!moved.ok) {
+    return fail(
+      `cannot compare src/compress against the recorded commit ` +
+        `${record.commit.slice(0, 8)}`
+    );
+  }
+  const changed = moved.out
+    .split('\n')
+    .filter((line) => line.trim() !== '');
+  if (changed.length) {
+    return fail(
+      `the head-to-head record is from ${record.commit.slice(0, 8)} and ` +
+        `${changed.length} compressor file(s) have changed since, starting ` +
+        `with ${changed[0]} -- re-record with: ${record.regenerate}`
+    );
+  }
+  return pass(
+    [t, h].map((x) => x.out.trim().split('\n').slice(-2)[0]).join(' | ') +
+      ' | src/compress unchanged since the record'
+  );
+});
+
+// ---------------------------------------------------------------- B4 / B5
+check('B4', 'the codebase-exploration verdict agrees with its own row', () => {
+  const r = read('docs/COMPARISON.md');
+  // THE PROPERTY, NOT THE VERDICT, AND NOT A FIXED DIRECTION EITHER. This once
+  // asserted "parity", which was true of the branch the work began on; then
+  // "never ours", which was true while the row read 46.0% against their 47.4%.
+  // Both broke on an honest re-measurement -- the second on the one that turned
+  // the row into a win at 48.8%. What holds whichever way the number moves is
+  // that the verdict agrees with the two figures printed beside it, so that is
+  // what is checked.
+  //
+  // SCOPED TO THE PROOF TABLE. The head-to-head table above it has a
+  // codebase-exploration row too, with four cells and no verdict column, and an
+  // unscoped match found that one first.
+  const block = r.match(/PROOF-TABLE:START[\s\S]*?PROOF-TABLE:END/);
+  if (!block) return fail('the proof table markers are gone');
+  const row = block[0].match(/^\|\s*codebase-exploration\s*\|.*$/im);
+  if (!row) return fail('the row is not in the proof table at all');
+  const cells = row[0].split('|').map((c) => c.trim());
+  const theirs = Number.parseFloat(cells[3]);
+  const ours = Number.parseFloat(cells[4]);
+  const verdict = (cells[5] ?? '').toLowerCase();
+  if (!Number.isFinite(theirs) || !Number.isFinite(ours)) {
+    return fail(`the row does not carry two figures: ${row[0].trim()}`);
+  }
+  const earned = ours > theirs ? 'ours' : ours < theirs ? 'theirs' : 'parity';
+  if (verdict !== earned) {
+    return fail(
+      `row reads ${ours}% against ${theirs}% but is published as ` +
+        `"${verdict}", not "${earned}"`
+    );
+  }
+  if (/ours on 7 of 8|ours on 8 of 8/.test(r)) {
+    return fail('the old over-workload tally is still published');
+  }
+  return pass(`${ours}% against ${theirs}%, published as ${verdict}`);
+});
+
+check('B5', 'every reduction claim carries the retention claim', () => {
+  const r = read('docs/COMPARISON.md');
+  // DERIVED FROM THE RECORDED RUN, NOT FROM LITERALS HERE. This used to pin
+  // 1,890, 345 and 0.94x, and went on asserting them for as long as the README
+  // did -- so a check meant to stop a reduction figure travelling without its
+  // retention figures could not tell that all five had gone stale together.
+  // head-to-head.mjs --record writes what the harness printed; the README has
+  // to carry those numbers and no others.
+  const recordPath = 'bench/compression/alt-a/results/head-to-head.json';
+  if (!existsSync(join(ROOT, recordPath))) {
+    return fail(`no recorded run at ${recordPath}`);
+  }
+  const record = JSON.parse(read(recordPath));
+  const { totals } = record;
+  const count = (n) => Number(n).toLocaleString('en-US');
+  const figures = [
+    ['corpus reduction, ours', totals.chars.ours],
+    ['corpus reduction, theirs', totals.chars.theirs],
+    ['retention units', count(totals.retention.units)],
+    ['in context, ours', count(totals.retention.inContext.ours)],
+    ['in context, theirs', count(totals.retention.inContext.theirs)],
+    ['reconstructible', count(totals.retention.reconstructible)],
+    ['recoverable, ours', count(totals.retention.recoverable.ours)],
+    ['recoverable, theirs', count(totals.retention.recoverable.theirs)],
+    ['spill size', totals.spillStore],
+  ];
+  const wanted = figures.filter(([, figure]) => !r.includes(figure));
+  if (wanted.length) {
+    return fail(
+      `the README does not carry: ${wanted
+        .map(([name, figure]) => `${name} (${figure})`)
+        .join(', ')}`
+    );
+  }
+  // THE SUBSTITUTION COLUMN HAS TO SAY WHAT IT IS. It reports a ratio near
+  // 100% by moving whole blocks to disk, which is a move and not a reduction,
+  // and a quote of it without that word is a misquote.
+  if (r.includes(totals.sub.chars) && !/substitution/i.test(r)) {
+    return fail(`${totals.sub.chars} is published without the word ` +
+      '"substitution" anywhere near it');
+  }
+  return pass(
+    `${figures.length} figures carried, from the run recorded at ` +
+      record.commit.slice(0, 8)
+  );
+});
+
+// ---------------------------------------------------------------- B6
+check('B6', 'task accuracy is measured against a baseline arm', () => {
+  if (!existsSync(join(ROOT, 'bench/accuracy/squad-eval.mjs'))) {
+    return fail('no accuracy harness');
+  }
+  const src = read('bench/accuracy/squad-eval.mjs');
+  const needs = [
+    ['baseline arm', 'baselineOk'],
+    ['a vacuity gate on compression', 'MIN_MEAN_REDUCTION'],
+    ['ground-truth scoring', 'function correct'],
+    ['article diversity', 'byTitle'],
+  ].filter(([, token]) => !src.includes(token));
+  if (needs.length) {
+    return fail(`harness lacks: ${needs.map(([n]) => n).join(', ')}`);
+  }
+  // COMMITTED EVIDENCE, NOT A PROMISE. This returned DEFERRED, which meant a
+  // green run could coexist with task accuracy never having been measured.
+  // Re-running a paid 30-item evaluation on every verification is not the
+  // answer either, so the measurement is committed and checked here.
+  const RESULT = 'bench/accuracy/results/squad-v2-n30.json';
+  if (!existsSync(join(ROOT, RESULT))) {
+    return fail(
+      `no committed measurement at ${RESULT} -- run ` +
+        `node bench/accuracy/squad-eval.mjs --n 30 --json ${RESULT}`
+    );
+  }
+  let m;
+  try {
+    m = JSON.parse(read(RESULT));
+  } catch (err) {
+    return fail(`${RESULT} is not readable json: ${err.message}`);
+  }
+  // JSON.parse ACCEPTS null, AND A SCALAR, AND AN ARRAY. Each of those
+  // reaches the field reads below and dies on a property access, which the
+  // check() wrapper does catch -- so the script survives and the other
+  // blockers still run -- but it reports "check threw: Cannot read
+  // properties of null", a stack artefact rather than a diagnosis. Anyone
+  // reading that has to open this file to learn what was wrong with theirs.
+  if (m === null || typeof m !== 'object' || Array.isArray(m)) {
+    return fail(
+      `${RESULT} parsed as ${Array.isArray(m) ? 'an array' : String(m === null ? 'null' : typeof m)}, ` +
+        'not a measurement object -- regenerate it with ' +
+        'node bench/accuracy/squad-eval.mjs --n 30 --json ' +
+        RESULT
+    );
+  }
+  // Provenance first: an undated measurement cannot be known to be stale.
+  if (!m.measuredAt || !m.harnessSha || m.harnessSha === 'unknown') {
+    return fail(`${RESULT} carries no measuredAt/harnessSha stamp`);
+  }
+  if (!(m.scored >= 30)) {
+    return fail(`only ${m.scored} items scored; this arm is quoted at n=30`);
+  }
+  // The same floor the harness enforces on itself: below it the two arms are
+  // one experiment run twice and the accuracy pair means nothing.
+  if (!(m.meanReduction >= 0.15)) {
+    return fail(
+      `mean reduction ${(m.meanReduction * 100).toFixed(1)}% is below the ` +
+        'vacuity floor, so the recorded accuracy compares nothing'
+    );
+  }
+  // BOTH arms, because a compressed-only score is unreadable.
+  if (typeof m.baseAcc !== 'number' || typeof m.oursAcc !== 'number') {
+    return fail(`${RESULT} does not record both arms`);
+  }
+  return pass(
+    `n=${m.scored} at ${(m.meanReduction * 100).toFixed(1)}% reduction: ` +
+      `baseline ${m.baseAcc.toFixed(3)}, ours ${m.oursAcc.toFixed(3)} ` +
+      `(measured ${String(m.measuredAt).slice(0, 10)} @ ${String(m.harnessSha).slice(0, 8)})`
+  );
+});
+
+// ---------------------------------------------------------------- B7
+check('B7', 'no competitor analysis lives in this public repo', () => {
+  // THE BLOCKER MOVED. B7 was "the false control-arm claim is gone", a fix
+  // applied inside docs/COMPETITIVE_GAPS.md. That document is competitive
+  // analysis and this repository is public, so the analysis -- corrected or
+  // not -- does not belong here at all. Correcting a claim in a file that
+  // should not exist is the smaller half of the problem.
+  //
+  // Both documents now live outside the repo. This checks the property that
+  // replaced the old one: they are absent, and nothing links to them.
+  const banned = ['docs/COMPETITIVE_GAPS.md', 'docs/COMPETITOR_ALT_A.md'];
+  const present = banned.filter((f) => existsSync(join(ROOT, f)));
+  if (present.length) {
+    return fail(
+      `competitive analysis is committed here: ${present.join(', ')}`
+    );
+  }
+  // A dangling link advertises what was removed and where it went.
+  const readme = read('README.md');
+  const linked = banned.filter((f) => readme.includes(f.replace('docs/', '')));
+  if (linked.length) {
+    return fail(`README still links removed analysis: ${linked.join(', ')}`);
+  }
+  return pass('both analyses are out of the repo and unlinked');
+});
+
+// ---------------------------------------------------------------- B8
+check(
+  'B8',
+  'the retracted competitor caveat is retracted where it is read',
+  () => {
+    // ONLY THE IN-REPO SURFACE IS CHECKABLE FROM HERE, by design. The
+    // competitive analysis is deliberately not in this repository -- it is a
+    // public one, and the analysis is for us rather than for them -- so the
+    // second half of this check was removed rather than pointed at a file
+    // that must not exist. fixtures.mjs is the surface that matters anyway:
+    // it is what the next person to run the competitor arm will read.
+    const f = read('bench/compression/fixtures.mjs');
+    if (!f.includes('CORRECTION, 2026-09-21')) {
+      return fail('fixtures.mjs still presents the warning as a setup error');
+    }
+    // Case-insensitive on purpose: the note writes COLD in caps for emphasis,
+    // and a check that fails on the emphasis rather than the substance is the
+    // spelling-not-behaviour error over again.
+    if (!/cold/i.test(f) || !f.includes('ensure_background_load')) {
+      return fail(
+        'the correction does not explain WHY the warning is not a setup error, ' +
+          'so a reader will try to fix it again'
+      );
+    }
+    return pass(
+      'corrected in the fixtures, with the reason, where a benchmarker reads it'
+    );
+  }
+);
+
+// ---------------------------------------------------------------- B9
+check('B9', 'the frozen comparators carry provenance', () => {
+  const f = read('bench/compression/fixtures.mjs');
+  if (!f.includes('PROVENANCE OF EVERY')) return fail('no provenance block');
+  if (!f.includes('capture date is NOT RECORDED')) {
+    return fail('provenance does not admit the unknown capture date');
+  }
+  const seen = (f.match(/`theirs` provenance: see the note/g) || []).length;
+  if (seen < 3)
+    return fail(`only ${seen} of the other comparators point at it`);
+  return pass('provenance block plus pointers on every other comparator');
+});
+
+// ---------------------------------------------------------------- B10
+check('B10', 'ndjson is compressed, and damaged json still refused', () => {
+  const probe = `
+    import('./dist/compress/json.js').then(j => {
+      // ONE UNIQUELY IDENTIFIABLE ERROR RECORD. Checking only that the
+      // string ERROR survived passes on output that keeps the marker and
+      // drops the record it belonged to, or its host -- which is the
+      // answer to the query being asked.
+      const rows = Array.from({length:300},(_,i)=>(i===7
+        ? {ts:'t7',level:'ERROR',logger:'scheduler',
+           message:'disk full on w7 while writing shard 41',
+           service:'bench',host:'w7',trace:'tr7'}
+        : {ts:'t'+i,level:'INFO',logger:'scheduler',message:'job_'+i,
+           service:'bench',host:'w'+(i%8),trace:'tr'+i}));
+      const nd = rows.map(r=>JSON.stringify(r)).join('\\n');
+      const spill = (c,h) => '.spill/'+h;
+      const out = j.compressJson(nd, { spill, query:'which host errored?' });
+      const ratio = 1 - out.text.length / nd.length;
+      const lines = nd.split('\\n'); lines[57] = '{"ts":"broken';
+      const damaged = lines.join('\\n');
+      const refused = j.compressJson(damaged,{spill,query:'x'}).text === damaged;
+      // Every part of the record the question needs: the level, the host
+      // that answers "which host errored?", and the message that says why.
+      const kept = out.text.includes('ERROR')
+        && out.text.includes('w7')
+        && out.text.includes('disk full on w7 while writing shard 41');
+      console.log(JSON.stringify({ ratio, kept, refused }));
+    });`;
+  const r = run(process.execPath, ['-e', probe]);
+  if (!r.ok) return fail(`probe failed: ${r.out.slice(0, 200)}`);
+  const m = r.out.match(/\{.*\}/);
+  if (!m) return fail(`probe printed nothing usable: ${r.out.slice(0, 200)}`);
+  const { ratio, kept, refused } = JSON.parse(m[0]);
+  if (ratio < 0.5)
+    return fail(`ndjson reduction only ${(ratio * 100).toFixed(1)}%`);
+  if (!kept) {
+    return fail(
+      'the anomalous record did not survive intact -- level, host or message ' +
+        'is missing, so the answer to the query was compressed away'
+    );
+  }
+  if (!refused)
+    return fail('a damaged document was rewritten — the guard is gone');
+  return pass(
+    `ndjson ${(ratio * 100).toFixed(1)}% reduction, ERROR row kept, damaged document refused`
+  );
+});
+
+// ---------------------------------------------------------------- B11
+check('B11', 'the competitor clone is out of our test run', () => {
+  // THE ARRAY, NOT THE FILE’S PROSE. Searching the source text for
+  // '.codex/' also matches the comment above the pattern explaining why it
+  // is there, so deleting the live entry and keeping the explanation left
+  // this green while the competitor clone came back into the test run.
+  let cfg;
+  try {
+    cfg = require(join(ROOT, 'config', 'jest.config.js'));
+  } catch (err) {
+    return fail(`jest.config.js does not load: ${err.message}`);
+  }
+  // jest.config.js is ESM (export default), so require hands back the module
+  // namespace and the config sits under .default.
+  const config = cfg?.default ?? cfg;
+  const ignored = config?.testPathIgnorePatterns;
+  if (!Array.isArray(ignored))
+    return fail(`jest.config.js declares no testPathIgnorePatterns array`);
+  const hit = ignored.find((p) => typeof p === 'string' && p.includes('.codex/'));
+  if (!hit)
+    return fail(`.codex/ is not in testPathIgnorePatterns: ${JSON.stringify(ignored)}`);
+  return pass(`${hit} is in testPathIgnorePatterns`);
+});
+
+// ---------------------------------------------------------------- B12
+// ---------------------------------------------------------------- B13
+check('B13', 'info retention is measured on their corpus', () => {
+  const HARNESS = 'bench/accuracy/info-retention-eval.mjs';
+  if (!existsSync(join(ROOT, HARNESS)))
+    return fail('no info-retention harness');
+  const src = read(HARNESS);
+
+  // THEIR FIXTURES, OR THE NUMBER IS NOT COMPARABLE. A retention figure on a
+  // corpus we invented is dismissible, and our own fixtures have already lost
+  // us one argument. These four probes are the ones their generator plants.
+  const needs = [
+    ['their generator cited', 'compression_only.py'],
+    ['error-code probe', 'ERR-'],
+    ['alert-status probe', "'critical'"],
+    ['anomalous-value probe', "'98.7'"],
+    ['named-server probe', 'prod-server-'],
+    ['a vacuity floor', 'MIN_MEAN_REDUCTION'],
+  ].filter(([, token]) => !src.includes(token));
+  if (needs.length)
+    return fail(`harness lacks: ${needs.map(([n]) => n).join(', ')}`);
+
+  const RESULT = 'bench/accuracy/results/info-retention.json';
+  const REGEN = `node ${HARNESS} --n 30 --json ${RESULT}`;
+  if (!existsSync(join(ROOT, RESULT)))
+    return fail(`no committed measurement at ${RESULT} -- run ${REGEN}`);
+
+  let m;
+  try {
+    m = JSON.parse(read(RESULT));
+  } catch (err) {
+    return fail(`${RESULT} is not readable json: ${err.message}`);
+  }
+  if (m === null || typeof m !== 'object' || Array.isArray(m))
+    return fail(`${RESULT} is not a measurement object -- run ${REGEN}`);
+  if (!m.measuredAt || !m.harnessSha || m.harnessSha === 'unknown')
+    return fail(`${RESULT} carries no measuredAt/harnessSha stamp`);
+
+  // THE STAMP MUST NAME THIS HARNESS, NOT MERELY A COMMIT. A sha that is not
+  // the string "unknown" was the whole test, so a result measured against an
+  // older generator -- different probes, different corpus, different floor --
+  // satisfied it for as long as nobody looked. Compare the CONTENT at that
+  // sha with the file on disk. Deliberately not a check that the result was
+  // committed in the same commit as the run: rerunning the benchmark without
+  // touching the harness is legitimate and must stay so.
+  let measuredHarness;
+  try {
+    measuredHarness = execFileSync('git', ['show', `${m.harnessSha}:${HARNESS}`], {
+      cwd: ROOT,
+      encoding: 'utf8',
+    });
+  } catch {
+    return fail(`${RESULT} stamps ${m.harnessSha.slice(0, 12)}, which has no ${HARNESS}`);
+  }
+  // NORMALISE THE LINE ENDINGS BEFORE COMPARING. git show hands back the blob
+  // as stored, which is LF, while the working file on Windows is CRLF -- 236
+  // carriage returns of difference in a file that is otherwise identical. A raw
+  // comparison therefore passes on Linux CI and fails only on a Windows
+  // checkout, which is the worst shape a verifier failure can take.
+  const normalise = (text) => text.replace(/\r\n/g, '\n');
+  if (normalise(measuredHarness) !== normalise(src))
+    return fail(
+      `${RESULT} was measured with a different ${HARNESS} ` +
+        `(stamped ${m.harnessSha.slice(0, 12)}) -- run ${REGEN}`
+    );
+
+  // INVARIANTS THE VERIFIER OWNS, NOT ONES THE MEASUREMENT SUPPLIES.
+  // Reading the floor out of the artifact let the artifact set its own bar:
+  // meanReduction 0 against minMeanReduction 0 passed, which is the inert
+  // engine this blocker exists to catch, wearing the result of a real run.
+  // The floor is read back out of the harness source instead, so the two
+  // cannot drift apart silently either.
+  const floor = /const MIN_MEAN_REDUCTION = ([0-9.]+);/.exec(src);
+  if (!floor) return fail(`${HARNESS} no longer declares MIN_MEAN_REDUCTION`);
+  const required = Number(floor[1]);
+  if (!(required > 0)) return fail(`${HARNESS} declares a floor of ${required}`);
+
+  if (m.dataset !== 'info-retention')
+    return fail(`${RESULT} is for dataset ${JSON.stringify(m.dataset)}`);
+  if (m.source !== 'alternative_a/evals/runners/compression_only.py')
+    return fail(`${RESULT} cites ${JSON.stringify(m.source)}, not their generator`);
+  if (m.probes !== m.cases * 4)
+    return fail(`${RESULT} has ${m.probes} probes for ${m.cases} cases, not four each`);
+  if (m.literalSurvival !== 1)
+    return fail(`${RESULT} literal survival ${m.literalSurvival}, below their oracle`);
+  if (m.lost !== 0) return fail(`${RESULT} lost ${m.lost} probe fact(s)`);
+
+  // A RETENTION NUMBER WITHOUT A REDUCTION NUMBER IS MEANINGLESS. An engine
+  // that returns its input unchanged retains everything -- squad-eval was
+  // measured reporting exactly that, 1.000 at 0.0%.
+  if (!(m.meanReduction >= required))
+    return fail(
+      `${RESULT} reduced ${(m.meanReduction * 100).toFixed(1)}%, below the ` +
+        `${(required * 100).toFixed(1)}% vacuity floor in ${HARNESS} -- the engine was inert`
+    );
+  if (m.retention !== 1)
+    return fail(`${RESULT} lost ${m.lost} probe fact(s) of ${m.probes}`);
+
+  return pass(
+    `${m.cases} cases, ${m.probes} probes, retention ${m.retention.toFixed(3)} ` +
+      `at ${(m.meanReduction * 100).toFixed(1)}% reduction`
+  );
+});
+check('B12', 'the launch suite is hermetic and green', () => {
+  const src = read('tests/hooks/launch-version-pin.test.mjs');
+  if (!src.includes('scrubbedEnv')) {
+    return fail('the suite still inherits TOKEN_OPTIMIZER_* from the shell');
+  }
+  if (
+    !src.includes(
+      'an inherited pin from the developer shell does not reach the shim'
+    )
+  ) {
+    return fail(
+      'nothing guards the hermeticity, so the leak can return unnoticed'
+    );
+  }
+  // Run it WITH the leak present, which is the condition that used to fail.
+  // jest directly, with the flag package.json's `test` script passes --
+  // without it more than half this repo's suites cannot even load.
+  const r = run(process.execPath, [
+    '--experimental-vm-modules',
+    join('node_modules', 'jest', 'bin', 'jest.js'),
+    'tests/hooks/launch-version-pin.test.mjs',
+  ]);
+  if (!r.ok) return fail(`the suite is red: ${r.out.slice(-300)}`);
+  return pass(
+    'green, with a guard that exports a pin and requires it to be ignored'
+  );
+});
+
+// ---------------------------------------------------------------- B14
+check(
+  'B14',
+  'every competitive claim is backed by a re-runnable measurement',
+  () => {
+    const PROBE = 'bench/competitive/probe-alt-a.py';
+    const RESULT = 'bench/competitive/results/claims.json';
+    const REGEN = `python ${PROBE} ${RESULT}`;
+
+    // THREE CLAIMS ABOUT THEM WERE MADE FROM READING SOURCE AND EACH WAS WRONG:
+    // a function tested with one flag generalised to a capability they have; a
+    // result object read through the wrong field, reporting their output as
+    // larger than their input; and a substring oracle run against a CSV
+    // encoding, reporting total loss where there was none. Every one would have
+    // shipped. So a claim is a measurement with a producer, or it is not a
+    // claim.
+    if (!existsSync(join(ROOT, PROBE)))
+      return fail(`no claim probe at ${PROBE}`);
+    if (!existsSync(join(ROOT, RESULT)))
+      return deferred(`no committed measurement at ${RESULT} -- run ${REGEN}`);
+
+    let m;
+    try {
+      m = JSON.parse(read(RESULT));
+    } catch (err) {
+      return fail(`${RESULT} is not readable json: ${err.message}`);
+    }
+    if (!m?.measuredAt || !m?.harnessSha || !m?.competitorVersion)
+      return fail(
+        `${RESULT} carries no measuredAt/harnessSha/competitorVersion`
+      );
+
+    // The probe writes 'unknown' when git rev-parse fails, which is truthy and
+    // therefore satisfied a presence check while naming no revision at all. A
+    // measurement that cannot say which tree produced it is not one anyone can
+    // re-run.
+    if (m.harnessSha === 'unknown')
+      return fail(`${RESULT} was measured outside a git checkout -- run ${REGEN}`);
+
+    // A CONTENT HASH, BECAUSE A SHA DOES NOT SEE UNCOMMITTED EDITS.
+    // harnessSha records the commit the probe ran at, which says nothing
+    // about whether the probe on disk is still that probe -- an edited but
+    // uncommitted probe keeps the old stamp and every claim below keeps
+    // passing against a measurement it no longer produces.
+    const probeHash = createHash('sha256')
+      .update(read(PROBE).replace(/\r\n/g, '\n'), 'utf8')
+      .digest('hex');
+    if (!m.probeSha256)
+      return fail(`${RESULT} carries no probeSha256 -- run ${REGEN}`);
+    if (m.probeSha256 !== probeHash)
+      return fail(
+        `${RESULT} was measured with a different ${PROBE} ` +
+          `(${m.probeSha256.slice(0, 12)} vs ${probeHash.slice(0, 12)}) -- run ${REGEN}`
+      );
+
+    const c = m.claims ?? {};
+    const problems = [];
+
+    // 'their lossless mode is not lossless'
+    const lossless = c.losslessModeDropsKeys;
+    if (!lossless) problems.push('losslessModeDropsKeys not measured');
+    else {
+      if (!(lossless.keysOut < lossless.keysIn))
+        problems.push(
+          `lossless mode kept ${lossless.keysOut} of ${lossless.keysIn} keys -- ` +
+            'it no longer drops any, so the claim is retired, not failing'
+        );
+      if (lossless.outputParsesAsJson !== true)
+        problems.push(
+          'lossless output no longer parses, so "silent" is unproven'
+        );
+      if ((lossless.recoveryMarkers ?? []).length)
+        problems.push(
+          `lossless output now carries ${JSON.stringify(lossless.recoveryMarkers)} -- ` +
+            'the drop is marked, so "no marker of any kind" is false'
+        );
+    }
+
+    // 'their marker dies with the store'
+    const ccr = c.ccrMarkerDiesWithTheStore;
+    if (!ccr) problems.push('ccrMarkerDiesWithTheStore not measured');
+    else {
+      if (!(ccr.hashesInOutput > 0 && ccr.resolveWhileWarm > 0))
+        problems.push(
+          'nothing resolved even warm, so the probe proves nothing'
+        );
+      if (ccr.storeCleared !== true)
+        problems.push(
+          'the store could not be cleared, so the cold case is untested'
+        );
+      else if (ccr.resolveAfterClear !== 0)
+        problems.push(
+          `${ccr.resolveAfterClear} hash(es) still resolve after clearing -- ` +
+            'the marker survives, so the claim is false'
+        );
+      if (!(ccr.rowsVisible < ccr.rowsIn))
+        problems.push(
+          'no rows were removed, so nothing depended on the marker'
+        );
+    }
+
+    // 'their code marker names no location, ours does'
+    const code = c.codeMarkerCarriesNoLocation;
+    if (!code) problems.push('codeMarkerCarriesNoLocation not measured');
+    else {
+      if (code.elidesBodies !== true)
+        problems.push(
+          'they no longer elide bodies, so the comparison is not like for like'
+        );
+      // MEASURED FALSE, NOT MERELY NOT-TRUE. `undefined === true` is false,
+      // so a result carrying only {"elidesBodies": true} satisfied this and
+      // the comparison below, where two missing counts compare equal. The
+      // claim is about what their marker does, so it needs the observation.
+      if (code.markerCarriesLocation !== false)
+        problems.push(
+          `markerCarriesLocation is ${JSON.stringify(code.markerCarriesLocation)}, ` +
+            'so the claim is either false or unmeasured'
+        );
+      const counted = (v) => Number.isInteger(v) && v > 0;
+      if (!counted(code.signaturesIn) || !counted(code.signaturesOut))
+        problems.push(
+          `signature counts are ${JSON.stringify(code.signaturesIn)}/` +
+            `${JSON.stringify(code.signaturesOut)} -- the probe found no signatures ` +
+            'to compare, so retention is unmeasured'
+        );
+      else if (code.signaturesOut !== code.signaturesIn)
+        problems.push(
+          `they kept ${code.signaturesOut} of ${code.signaturesIn} signatures -- ` +
+            'retention differs, so a ratio comparison needs that caveat'
+        );
+    }
+
+    if (problems.length) return fail(problems.join('; '));
+    return pass(
+      `3 claims re-measured against ${m.competitorVersion}: ` +
+        `${lossless.keysOut}/${lossless.keysIn} keys kept unmarked, ` +
+        `${ccr.resolveAfterClear} of ${ccr.hashesInOutput} hashes resolve cold, ` +
+        `their code marker located=${code.markerCarriesLocation}`
+    );
+  }
+);
+
+// ---------------------------------------------------------------- report
+const w = Math.max(...results.map((r) => r.what.length));
+console.log('Pre-plan blockers — verification\n');
+for (const r of results) {
+  const tag =
+    r.state === 'PASS'
+      ? 'PASS    '
+      : r.state === 'FAIL'
+        ? 'FAIL    '
+        : 'DEFERRED';
+  console.log(`${tag}  ${r.id.padEnd(4)} ${r.what.padEnd(w)}  ${r.detail}`);
+}
+
+const failures = results.filter((r) => r.state === 'FAIL');
+const defers = results.filter((r) => r.state === 'DEFERRED');
+console.log(
+  `\n${results.length - failures.length - defers.length} proved, ` +
+    `${defers.length} deferred, ${failures.length} failed`
+);
+console.log(
+  'Not covered here, because it needs the whole suite: run `npm test` and require zero failures.'
+);
+// A DEFERRED ITEM IS AN UNPROVED ITEM. Exiting zero on one let a green CI
+// run coexist with task accuracy never having been measured, which is the
+// gap this script exists to close.
+const allowDeferred = process.argv.includes('--allow-deferred');
+if (defers.length && !allowDeferred) {
+  console.error(
+    `\n${defers.length} item(s) are DEFERRED and therefore unproved: ` +
+      `${defers.map((d) => d.id).join(', ')}. Run the commands above, or pass ` +
+      '--allow-deferred to accept this deliberately.'
+  );
+}
+if (failures.length || (defers.length && !allowDeferred)) process.exitCode = 1;

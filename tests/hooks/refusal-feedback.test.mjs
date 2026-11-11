@@ -20,7 +20,7 @@ import { pathToFileURL } from 'node:url';
  * the lesson.
  */
 
-const CORE = (n) => pathToFileURL(join(process.cwd(), 'hooks-core', n)).href;
+const CORE = (n) => pathToFileURL(join(process.cwd(), 'src', 'hooks-core', n)).href;
 
 let detectRefusals, recordRefusal, writeHarvested, load, sharedDirOf, forSharedCommand;
 

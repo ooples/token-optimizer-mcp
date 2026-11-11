@@ -26,8 +26,8 @@ import {
   cachedRoutingBriefing,
   HEURISTIC,
   MIN_EPISODES,
-} from '../../hooks-core/routing.mjs';
-import { volatileLines } from '../../hooks-core/cache.mjs';
+} from '../../src/hooks-core/routing.mjs';
+import { volatileLines } from '../../src/hooks-core/cache.mjs';
 
 let workspace;
 

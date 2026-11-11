@@ -27,13 +27,13 @@ import {
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { record } from '../../hooks-core/metrics.mjs';
-import { derive } from '../../hooks-core/derive.mjs';
-import { load } from '../../hooks-core/wiki.mjs';
+import { record } from '../../src/hooks-core/metrics.mjs';
+import { derive } from '../../src/hooks-core/derive.mjs';
+import { load } from '../../src/hooks-core/wiki.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = join(HERE, '..', '..');
-const ROUTER = join(REPO, 'plugin', 'hooks', 'pretooluse-router.mjs');
+const ROUTER = join(REPO, 'src', 'plugin', 'hooks', 'pretooluse-router.mjs');
 
 const FAILED = 'npx jest tests/foo.test.mjs';
 const WORKED = 'npm test -- tests/foo.test.mjs';

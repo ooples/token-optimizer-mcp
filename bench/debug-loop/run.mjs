@@ -52,7 +52,7 @@ import {
   existsSync,
 } from 'node:fs';
 import { createHash } from 'node:crypto';
-import { compact } from '../../hooks-core/compact.mjs';
+import { compact } from '../../src/hooks-core/compact.mjs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -64,7 +64,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const CLIENT_CAP_CHARS = 30_000;
 
 /** The subject: a small module with a focused suite that fails loudly. */
-const SOURCE = join(ROOT, 'hooks-core', 'redact.mjs');
+const SOURCE = join(ROOT, 'src', 'hooks-core', 'redact.mjs');
 
 /**
  * Where the pristine source waits while the harness is breaking it.
@@ -237,7 +237,7 @@ const main = async () => {
   );
   const counter = new TokenCounter();
   const { boundedRewrite } = await import(
-    `file:///${join(ROOT, 'hooks-core', 'rewrite.mjs').replace(/\\/g, '/')}`
+    `file:///${join(ROOT, 'src', 'hooks-core', 'rewrite.mjs').replace(/\\/g, '/')}`
   );
   const bound = boundedRewrite('jest').maxBytes;
 
@@ -260,7 +260,7 @@ const main = async () => {
 
   // A `finally` DOES NOT SURVIVE A SIGNAL. Ctrl-C or a CI cancellation delivers
   // SIGINT/SIGTERM, whose default action terminates the process outright, so
-  // the restore below never runs and `hooks-core/redact.mjs` is left holding a
+  // the restore below never runs and `src/hooks-core/redact.mjs` is left holding a
   // deliberately broken fixture -- in the working tree, where the next command
   // picks it up. The handler restores and then re-raises with the default
   // behaviour, so the exit status still reports the signal.

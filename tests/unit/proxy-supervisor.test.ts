@@ -363,7 +363,7 @@ describe('the proxy supervisor', () => {
   /** A throwaway project with one verified finding, so this suite never reads the ambient graph. */
   async function seededProject(): Promise<string> {
     const root = mkdtempSync(join(tmpdir(), 'supervisor-project-'));
-    const wiki = await import('../../hooks-core/wiki.mjs');
+    const wiki = await import('../../src/hooks-core/wiki.mjs');
     const dir = join(root, '.token-optimizer', 'wiki');
     wiki.putNode(dir, {
       kind: 'finding',

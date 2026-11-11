@@ -5,12 +5,12 @@ import { join } from 'path';
 import {
   CLIENT_HOOK_INSTALLS,
   hookInstallFor,
-} from '../../hooks-core/capabilities.mjs';
+} from '../../src/hooks-core/capabilities.mjs';
 
 /**
  * Every client that ships hooks must say where they land.
  *
- * The destinations lived as English inside scripts/generate-client-configs.mjs, so the doctor
+ * The destinations lived as English inside src/scripts/generate-client-configs.mjs, so the doctor
  * could examine exactly two installs -- Claude Code's and Codex's -- and every other client fell
  * through to whatever was in Claude Code's plugin registry (#408). One fixed case does not stop
  * the eleventh integration arriving with no destination of its own, which is what this asserts:
@@ -19,19 +19,19 @@ import {
  */
 
 const ROOT = process.cwd();
-const INTEGRATIONS = join(ROOT, 'integrations');
+const INTEGRATIONS = join(ROOT, 'src', 'integrations');
 
 /** Every hooks/ directory we ship, as a repository-relative posix path. */
 function shippedHookDirs(): string[] {
   const found: string[] = [];
   for (const client of readdirSync(INTEGRATIONS)) {
     // The Codex PLUGIN bundle is installed by Codex itself from the marketplace, so it has no
-    // copy destination of its own; integrations/codex/hooks is the by-hand path and is covered.
+    // copy destination of its own; src/integrations/codex/hooks is the by-hand path and is covered.
     for (const candidate of ['hooks', join('.github', 'hooks')]) {
       const dir = join(INTEGRATIONS, client, candidate);
       if (existsSync(dir) && statSync(dir).isDirectory())
         found.push(
-          join('integrations', client, candidate).split('\\').join('/')
+          join('src', 'integrations', client, candidate).split('\\').join('/')
         );
     }
   }

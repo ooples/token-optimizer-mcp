@@ -15,14 +15,14 @@ import {
   putNode,
   putNodeWithEdges,
   wikiDir,
-} from '../../hooks-core/wiki.mjs';
-import { canonicalPath } from '../../hooks-core/paths.mjs';
+} from '../../src/hooks-core/wiki.mjs';
+import { canonicalPath } from '../../src/hooks-core/paths.mjs';
 
 const ROOT = process.cwd();
 const CLIENTS = [
   {
     name: 'Cline',
-    entry: 'integrations/cline/hooks/token-optimizer/pre-tool.mjs',
+    entry: 'src/integrations/cline/hooks/token-optimizer/pre-tool.mjs',
     payload: (session, cwd, command) => ({
       taskId: session,
       workspaceRoots: [cwd],
@@ -32,7 +32,7 @@ const CLIENTS = [
   },
   {
     name: 'Codex',
-    entry: 'integrations/codex/hooks/pre-tool.mjs',
+    entry: 'src/integrations/codex/hooks/pre-tool.mjs',
     payload: (session, cwd, command) => ({
       session_id: session,
       cwd,
@@ -43,7 +43,7 @@ const CLIENTS = [
   },
   {
     name: 'Gemini',
-    entry: 'integrations/gemini/hooks/pre-tool.mjs',
+    entry: 'src/integrations/gemini/hooks/pre-tool.mjs',
     payload: (session, cwd, command) => ({
       session_id: session,
       cwd,
@@ -54,7 +54,7 @@ const CLIENTS = [
   },
   {
     name: 'Qwen',
-    entry: 'integrations/qwen/hooks/pre-tool.mjs',
+    entry: 'src/integrations/qwen/hooks/pre-tool.mjs',
     payload: (session, cwd, command) => ({
       session_id: session,
       cwd,
@@ -65,7 +65,7 @@ const CLIENTS = [
   },
   {
     name: 'Copilot',
-    entry: 'integrations/copilot/.github/hooks/pre-tool.mjs',
+    entry: 'src/integrations/copilot/.github/hooks/pre-tool.mjs',
     payload: (session, cwd, command) => ({
       sessionId: session,
       cwd,
@@ -76,7 +76,7 @@ const CLIENTS = [
   },
   {
     name: 'Cursor',
-    entry: 'integrations/cursor/hooks/pre-tool.mjs',
+    entry: 'src/integrations/cursor/hooks/pre-tool.mjs',
     payload: (session, cwd, command) => ({
       conversation_id: session,
       cwd,
@@ -87,7 +87,7 @@ const CLIENTS = [
   },
   {
     name: 'Kilo',
-    entry: 'integrations/kilo/hooks/pre-tool.mjs',
+    entry: 'src/integrations/kilo/hooks/pre-tool.mjs',
     payload: (session, cwd, command) => ({
       session_id: session,
       cwd,
@@ -181,7 +181,7 @@ describe('Windsurf adapter', () => {
     writeFileSync(large, 'x'.repeat(80_000));
     const result = spawnSync(
       process.execPath,
-      [join(ROOT, 'integrations/windsurf/hooks/pre-tool.mjs')],
+      [join(ROOT, 'src/integrations/windsurf/hooks/pre-tool.mjs')],
       {
         input: JSON.stringify({
           agent_action_name: 'pre_read_code',
@@ -208,7 +208,7 @@ describe('Windsurf adapter', () => {
   test('captures a completed write through Windsurf post_write_code', () => {
     const result = spawnSync(
       process.execPath,
-      [join(ROOT, 'integrations/windsurf/hooks/post-tool.mjs')],
+      [join(ROOT, 'src/integrations/windsurf/hooks/post-tool.mjs')],
       {
         input: JSON.stringify({
           agent_action_name: 'post_write_code',

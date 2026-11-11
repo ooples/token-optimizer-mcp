@@ -31,7 +31,7 @@ so that a win cannot come from anything except the plugin.
   managed `claude.cmd`).
 - **The plugin arm runs this checkout.** The plugin is staged with its MCP
   server pointed at this checkout's `dist/server/index.js`, not the published
-  `@latest` that `plugin/launch.mjs` would fetch. Each plugin-arm run writes an
+  `@latest` that `src/plugin/launch.mjs` would fetch. Each plugin-arm run writes an
   MCP debug log, and the report warns about any run in which the server never
   connected.
 - **Scored by the official evaluator.** Predictions are written in SWE-bench's

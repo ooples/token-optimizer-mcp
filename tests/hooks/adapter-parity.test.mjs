@@ -1,7 +1,7 @@
 /**
  * The adapter measures the same things the Claude Code router measures.
  *
- * adapter.mjs serves codex, gemini, qwen and opencode; plugin/hooks/pretooluse-router.mjs serves
+ * adapter.mjs serves codex, gemini, qwen and opencode; src/plugin/hooks/pretooluse-router.mjs serves
  * Claude Code. Its comment claims "Same measurement as the Claude Code router: every client's
  * allowed read feeds the same holdout comparison, or the metric is client-specific and therefore
  * not comparable". Three details made that claim false, and each produced a wrong number rather
@@ -15,9 +15,9 @@ import { mkdtempSync, rmSync, writeFileSync, mkdirSync, readFileSync, existsSync
 import { join } from 'path';
 import { tmpdir } from 'os';
 
-import { wikiDir, projectRootFor } from '../../hooks-core/wiki.mjs';
-import { recordRead, fingerprint, readMetrics } from '../../hooks-core/metrics.mjs';
-import { loadState, saveState } from '../../hooks-core/policy.mjs';
+import { wikiDir, projectRootFor } from '../../src/hooks-core/wiki.mjs';
+import { recordRead, fingerprint, readMetrics } from '../../src/hooks-core/metrics.mjs';
+import { loadState, saveState } from '../../src/hooks-core/policy.mjs';
 
 let repoA, repoB, fileA, fileB;
 

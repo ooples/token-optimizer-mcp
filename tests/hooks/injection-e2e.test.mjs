@@ -16,9 +16,9 @@ import { spawnSync } from 'child_process';
 import { join } from 'path';
 import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'fs';
 import { tmpdir } from 'os';
-import { putNode, putNodeWithEdges, wikiDir } from '../../hooks-core/wiki.mjs';
+import { putNode, putNodeWithEdges, wikiDir } from '../../src/hooks-core/wiki.mjs';
 
-const HOOK = join(process.cwd(), 'plugin', 'hooks', 'pretooluse-router.mjs');
+const HOOK = join(process.cwd(), 'src', 'plugin', 'hooks', 'pretooluse-router.mjs');
 
 let project;
 let dir;

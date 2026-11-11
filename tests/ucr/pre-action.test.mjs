@@ -3,7 +3,7 @@ import { describe, it } from '@jest/globals';
 import {
   PreActionController,
   formatPreActionInjection,
-} from '../../ucr/index.mjs';
+} from '../../src/ucr/index.mjs';
 
 const capsule = {
   schemaVersion: 'ucr.capsule/1',

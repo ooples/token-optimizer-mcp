@@ -16,6 +16,7 @@ const ROUTER = join(
   dirname(fileURLToPath(import.meta.url)),
   '..',
   '..',
+  'src',
   'plugin',
   'hooks',
   'pretooluse-router.mjs'

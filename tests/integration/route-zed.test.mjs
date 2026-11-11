@@ -25,7 +25,7 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { run, zedSettingsFile } from '../../scripts/route-client.mjs';
+import { run, zedSettingsFile } from '../../src/scripts/route-client.mjs';
 
 let home;
 let zed;

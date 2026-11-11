@@ -50,7 +50,10 @@ export const Source = Object.freeze({
  * so rather than implying a sweep it does not do.
  */
 const SECTIONS = [
-  { from: '## How it compares to Alternative A', to: '## The 30-second version' },
+  {
+    from: '## How it compares to Alternative A',
+    to: '## What it does that other optimizers do not',
+  },
 ];
 const SPAN = ['<!-- PROSE-CLAIMS:START', '<!-- PROSE-CLAIMS:END -->'];
 
@@ -316,7 +319,7 @@ export const MINIMUM_FIGURES = 25;
 
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   const here = dirname(fileURLToPath(import.meta.url));
-  const readme = readFileSync(join(here, '..', '..', 'README.md'), 'utf8');
+  const readme = readFileSync(join(here, '..', '..', 'docs', 'COMPARISON.md'), 'utf8');
   const { checked, coveredLines: n, faults } = proseDrift(readme);
   console.log(
     `readme-prose.check: ${checked} figures across ${n} covered prose line(s), ` +

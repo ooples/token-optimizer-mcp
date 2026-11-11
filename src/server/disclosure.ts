@@ -12,7 +12,7 @@
  * (anthropics/claude-code#32105). Our OWN tool results are the part we control
  * completely, and they are the ones users route their large reads through.
  *
- * The real work lives in hooks-core/disclose.mjs and hooks-core/expand.mjs,
+ * The real work lives in src/hooks-core/disclose.mjs and src/hooks-core/expand.mjs,
  * imported dynamically for the same reasons as the wiki routes: they are plain
  * ESM the clients execute with no build step, and a missing graph must degrade
  * to "return the output unchanged" rather than break a tool call.
@@ -29,7 +29,8 @@ const here = dirname(fileURLToPath(import.meta.url));
 const SESSION_ID = `mcp-${process.pid}-${Date.now().toString(36)}`;
 
 function coreUrl(name: string): string {
-  return pathToFileURL(path.join(here, '..', '..', 'hooks-core', name)).href;
+  return pathToFileURL(path.join(here, '..', '..', 'src', 'hooks-core', name))
+    .href;
 }
 
 interface DisclosureModules {

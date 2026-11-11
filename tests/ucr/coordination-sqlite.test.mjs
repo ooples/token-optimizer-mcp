@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import {
   SqliteCoordinationStore,
   reconcileCoordinationPartitions,
-} from '../../ucr/index.mjs';
+} from '../../src/ucr/index.mjs';
 
 const roots = [];
 afterEach(() => {

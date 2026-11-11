@@ -5,7 +5,7 @@
  * server that resolves a path at CALL time; everything else imports eagerly at
  * startup and is therefore already in memory. That difference is invisible
  * until the directory the server is running from disappears -- and it does
- * disappear: `plugin/launch.mjs` used to prune every runtime version except the
+ * disappear: `src/plugin/launch.mjs` used to prune every runtime version except the
  * newest, including the one a live session was executing from. Observed
  * 2026-08-28, a session that outlived one six-hour refresh got
  * `Cannot find module .../versions/6.0.0/.../hooks-core/wiki.mjs` from every
@@ -37,10 +37,10 @@ const here = dirname(fileURLToPath(import.meta.url));
 
 /** hooks-core as shipped beside the running build (dist/tools/intelligence/..). */
 function bundledDir(): string {
-  return path.join(here, '..', '..', '..', 'hooks-core');
+  return path.join(here, '..', '..', '..', 'src', 'hooks-core');
 }
 
-/** The managed runtime root, matching plugin/launch.mjs. */
+/** The managed runtime root, matching src/plugin/launch.mjs. */
 function runtimeRoot(): string {
   return (
     process.env.TOKEN_OPTIMIZER_RUNTIME ||
@@ -117,8 +117,12 @@ function fallbackDir(): { dir: string; version: string } | null {
     '@ooples',
     'token-optimizer-mcp'
   );
-  const dir = path.join(packageDir, 'hooks-core');
-  if (!existsSync(dir)) return null;
+  // The runtime may hold a version from before the root was flattened under src/.
+  const dir = [
+    path.join(packageDir, 'src', 'hooks-core'),
+    path.join(packageDir, 'hooks-core'),
+  ].find((candidate) => existsSync(candidate));
+  if (!dir) return null;
 
   const candidateVersion = readVersionOf(packageDir);
   if (!fallbackIsCompatible(RUNNING_VERSION, candidateVersion)) return null;

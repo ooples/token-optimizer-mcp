@@ -2,7 +2,7 @@
  * The feature registry: what can be turned on, where it lives, and who decides.
  *
  * WHY THIS FILE EXISTS. This package reads 129 distinct TOKEN_OPTIMIZER_* switches
- * spread across src/ and hooks-core/, each parsed at its own call site with its own
+ * spread across src/ and src/hooks-core/, each parsed at its own call site with its own
  * idea of what counts as "on". There was no way to ask which of them were active,
  * no way to learn one had been set to a value that does nothing, and no way to
  * turn on a group of experiments without knowing all their names. This registry is
@@ -18,7 +18,7 @@
  * nobody chose. capture.ts says exactly this at its own read and it is right: the
  * operator has to say WHERE, which is the proof they decided to keep it.
  *
- * WHY THE HOOK SWITCHES ARE ABSENT. hooks-core/ imports nothing from dist/ -- the
+ * WHY THE HOOK SWITCHES ARE ABSENT. src/hooks-core/ imports nothing from dist/ -- the
  * hook binaries have to run when the build is broken, which is the case the doctor
  * exists for. So a channel resolved here cannot reach TOKEN_OPTIMIZER_HARVEST_FULL
  * or TOKEN_OPTIMIZER_OUTPUT_DISCIPLINE, and registering them would make the

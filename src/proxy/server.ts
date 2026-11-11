@@ -1118,7 +1118,7 @@ function compressBodyOnce(
       // request and on none of its next 92, and that one change in `system`
       // re-wrote ~14k tokens per worker on call 2 -- ~17% of the run's cost for
       // 771 characters of findings. A subagent gets its findings once, through
-      // the hook briefing on its first tool call (hooks-core/briefing.mjs).
+      // the hook briefing on its first tool call (src/hooks-core/briefing.mjs).
       suppressKnowledge: suppressKnowledge || isSubagentRequest(parsed),
       cacheExpired,
     });

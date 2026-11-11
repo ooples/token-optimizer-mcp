@@ -37,8 +37,9 @@ import {
   optimizerToolEvidence,
   optimizerToolsForHook,
   unreachableOptimizerTools,
-} from '../../hooks-core/capabilities.mjs';
-import { absentToolsFromTranscript } from '../../hooks-core/transcript.mjs';
+} from '../../src/hooks-core/capabilities.mjs';
+import { absentToolsFromTranscript } from '../../src/hooks-core/transcript.mjs';
+
 
 // These tests are about WHETHER the harvest prompt is generated; how it is
 // delivered (held for the next turn by default, 2026-10-21) is covered by
@@ -163,8 +164,8 @@ describe('no generated entry point can launder the grade again', () => {
     const offenders = [];
     let wrote = 0;
     for (const path of [
-      ...sources(join(ROOT, 'plugin')),
-      ...sources(join(ROOT, 'integrations')),
+      ...sources(join(ROOT, 'src', 'plugin')),
+      ...sources(join(ROOT, 'src', 'integrations')),
     ]) {
       const source = readFileSync(path, 'utf8');
       // The assignment, not the prose: the comment block in these files
@@ -364,8 +365,8 @@ describe('the transcript is the only place a failed call exists on Claude Code',
 });
 
 describe('the Stop hook stops asking for a tool the session cannot call', () => {
-  const STOP = join(ROOT, 'plugin', 'hooks', 'stop.mjs');
-  const POST = join(ROOT, 'plugin', 'hooks', 'post-tool.mjs');
+  const STOP = join(ROOT, 'src', 'plugin', 'hooks', 'stop.mjs');
+  const POST = join(ROOT, 'src', 'plugin', 'hooks', 'post-tool.mjs');
 
   function editThen(sessionId, transcriptPath, env) {
     const file = join(workspace, 'edited.ts');

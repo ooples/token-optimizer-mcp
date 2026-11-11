@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { spawnSync } from 'node:child_process';
-import { loadState, saveState, stateScope } from '../../hooks-core/policy.mjs';
+import { loadState, saveState, stateScope } from '../../src/hooks-core/policy.mjs';
 
 const work = mkdtempSync(join(tmpdir(), 'agy-review-'));
 const prior = process.env.TOKEN_OPTIMIZER_STATE_DIR;
@@ -18,8 +18,8 @@ afterAll(() => {
 });
 
 function hook(event, payload = raw, entry = false) {
-  const module = pathToFileURL(join(process.cwd(), 'hooks-core/adapter.mjs')).href;
-  const args = entry ? [join(process.cwd(), 'integrations/antigravity/pre-invocation.mjs')] : ['--input-type=module', '-e', `import {run} from ${JSON.stringify(module)}; await run('agy',${JSON.stringify(event)});`];
+  const module = pathToFileURL(join(process.cwd(), 'src/hooks-core/adapter.mjs')).href;
+  const args = entry ? [join(process.cwd(), 'src/integrations/antigravity/pre-invocation.mjs')] : ['--input-type=module', '-e', `import {run} from ${JSON.stringify(module)}; await run('agy',${JSON.stringify(event)});`];
   const child = spawnSync(process.execPath, args, {
     input: JSON.stringify(payload), encoding: 'utf8', windowsHide: true,
     env: { ...process.env, TOKEN_OPTIMIZER_MODE: 'assist', TOKEN_OPTIMIZER_HOLDOUT: '0', TOKEN_OPTIMIZER_HOME: join(work, 'home'), TOKEN_OPTIMIZER_WIKI_DIR: join(work, 'wiki') },
@@ -58,7 +58,7 @@ test('a structural outline request retains its source file', () => {
 });
 
 test('structural views leave full-read bookkeeping untouched', async () => {
-  const { normalizePayload, remember } = await import('../../hooks-core/decide.mjs');
+  const { normalizePayload, remember } = await import('../../src/hooks-core/decide.mjs');
   const file = join(work, 'bookkeeping.py');
   const state = { seen: {} };
   for (const name of ['view_file_outline', 'view_code_item']) {
