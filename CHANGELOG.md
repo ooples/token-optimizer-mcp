@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.10.0](https://github.com/ooples/token-optimizer-mcp/compare/v7.9.0...v7.10.0) (2026-11-11)
+
+
+### Features
+
+* **hooks:** learned cost control - tool pruning, loop guard, context holdout, quota pacing ([#559](https://github.com/ooples/token-optimizer-mcp/issues/559)) ([9149834](https://github.com/ooples/token-optimizer-mcp/commit/9149834e395908cec34b282c651201e18045c5cd))
+
+
+### Bug Fixes
+
+* **plugin:** run hooks without a shell and fail open, so a missing node or Git Bash cannot lock the session ([#560](https://github.com/ooples/token-optimizer-mcp/issues/560)) ([eb24c6f](https://github.com/ooples/token-optimizer-mcp/commit/eb24c6f487fc5e694ab9e8bfa9100715d5b2fbd7))
+
 ## [7.9.0](https://github.com/ooples/token-optimizer-mcp/compare/v7.8.0...v7.9.0) (2026-11-04)
 
 
