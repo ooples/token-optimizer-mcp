@@ -15,7 +15,7 @@ are listed below the table.
 | **Headroom**               | Installed proxy vs ours, 120 Codex task pairs                      | $30.43 est. cost, 120/120 passed | $22.26 est. cost, 119/120 passed | ✅ **26.9% cheaper**, 30.1% faster on average |
 | **Headroom**               | Installed proxy vs ours, one small Claude Code task, 4/4 tests     | 48,626 tokens                | 49,053 tokens                   | ➖ **Tie** (0.9% more)                 |
 | **tokenjuice**             | Product installed, same coding tasks for every arm                 | 13.6% cheaper                | **33.6% cheaper**               | ✅ **Win**                             |
-| **Tokenade**               | Its rules text vs our rules text (its CLI needs an account)        | 22.9% cheaper                | **32.0% cheaper**               | ✅ **Win**                             |
+| **Tokenade**               | Its rules text vs our rules text; its full product not yet run    | 22.9% cheaper                | **32.0% cheaper**               | ✅ **Win**                             |
 | **claude-token-optimizer** | Product installed, its hooks fixed so they fire on Claude Code     | 2.7% cheaper, within noise   | **33.6% cheaper**               | ✅ **Win**                             |
 
 How each row was kept fair, and what it does not show:
@@ -26,9 +26,10 @@ How each row was kept fair, and what it does not show:
   uses their product with that one line changed to read the hook input Claude Code
   actually sends. We confirmed the patched hooks fired and blocked oversized reads.
   Its CLAUDE.md ships as an unfilled template, which understates it.
-- **Tokenade's product needs an account,** so only its rules text could run. It is
-  compared with our rules text alone, not our full product. If its hooks save
-  more, this row understates it.
+- **Tokenade was run as its rules text only.** That campaign recorded its CLI as
+  needing an account; it was later found to install without one, but the full
+  product has not been re-run. So it is compared with our rules text alone, not
+  our full product, and if its hooks save more, this row understates it.
 - **Headroom, first row:** the 91.5% is our proxy. Like Headroom, it moves some
   content out of the request for the agent to fetch back if needed. Our
   compressor alone removes fewer tokens than Headroom on 8 of the 18 workloads.
@@ -69,7 +70,7 @@ when all of it is. ✅ **Win.**
   show your usage; this acts on it. Details: [quota pacing](#learned-cost-control-pruning-loop-guard-holdout-and-the-quota-you-actually-pay-with).
 - ✅ **Remembers what earlier sessions worked out**, so the agent does not re-derive it.
 - ✅ **Re-reading an unchanged file returns only what changed.**
-- ✅ **MIT licensed, 16 clients, nothing leaves your machine.** See [the table at the end](#honest-comparison).
+- ✅ **MIT licensed, 16 clients, nothing leaves your machine.** See [the list at the end](#honest-comparison).
 
 ### Where it loses
 
@@ -1205,18 +1206,32 @@ nothing is discovered or imported unless you name it.
 
 ## Honest comparison
 
-|                              | Token Optimizer                                                      | Typical alternatives                                 |
-| ---------------------------- | -------------------------------------------------------------------- | ---------------------------------------------------- |
-| **License**                  | MIT — commercial use fine                                            | Often noncommercial-only; check before using at work |
-| Default behaviour            | Refuses the wasteful call                                            | Suggests a better tool                               |
-| Re-read of an unchanged file | Returns a diff                                                       | Returns the file again                               |
-| Savings figure               | Direct before/return ledger; causal graph effect separately held out | Computed from the tool's own assumptions             |
-| Cross-session memory         | Findings, decisions, dead ends                                       | Usually none                                         |
-| Compaction                   | Consolidation, ranked by cost-to-rederive                            | Checkpoint and replay                                |
-| Cache economics              | Measured from the transcript, attributed to a line                   | Rarely addressed                                     |
-| Model routing                | Measured from episode outcomes                                       | Guessed from task size                               |
-| Cross-project                | Fixes transfer by content hash                                       | Per-project only                                     |
-| Clients                      | 16                                                                   | 3–6 typical                                          |
-| Telemetry                    | None                                                                 | Varies                                               |
+Licenses, as published by each project on 2026-11-11:
+
+| Project                | License    |
+| ---------------------- | ---------- |
+| **Token Optimizer**    | MIT        |
+| Headroom               | Apache-2.0 |
+| tokenjuice             | MIT        |
+| claude-token-optimizer | MIT        |
+
+All four allow commercial use. Tokenade's license was not checked.
+
+What Token Optimizer does is listed below. These are statements about this
+project only. We have not audited each competitor's feature list, so this is not
+a claim that they lack any of it.
+
+| Area                         | Token Optimizer                                                      |
+| ---------------------------- | -------------------------------------------------------------------- |
+| Default behaviour            | Substitutes a cheaper answer for a wasteful call                     |
+| Re-read of an unchanged file | Returns a diff                                                       |
+| Savings figure               | Direct before/return ledger; causal graph effect separately held out |
+| Cross-session memory         | Findings, decisions, dead ends                                       |
+| Compaction                   | Consolidation, ranked by cost-to-rederive                            |
+| Cache economics              | Measured from the transcript, attributed to a line                   |
+| Model routing                | Measured from episode outcomes                                       |
+| Cross-project                | Fixes transfer by content hash                                       |
+| Clients                      | 16                                                                   |
+| Telemetry                    | None                                                                 |
 
 ---

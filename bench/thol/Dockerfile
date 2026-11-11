@@ -85,7 +85,9 @@ RUN useradd -ms /bin/bash bench
 # claude-token-optimizer's twelve hooks are shell scripts that live in the
 # PROJECT (see bench/ledger/competitors/), but nine of them shell out to `cto`,
 # so the package has to be here as well as the scaffold.
-RUN npm install -g claude-token-optimizer@2.3.20 tokenjuice@0.8.1
+# Latest published as of 2026-11-11 (claude-token-optimizer 2.3.20 is still
+# current; tokenjuice moved from 0.8.1). Keep in step with competitor-pins.json.
+RUN npm install -g claude-token-optimizer@2.3.20 tokenjuice@0.11.0
 
 # Pre-seed a SHARED managed runtime for plugin/launch.mjs.
 #
@@ -127,6 +129,16 @@ ARG THOL_REV=5ee6ea7f81dc21db1aae8d359cda3e1f7ded6dde
 RUN git clone https://github.com/pi-infected/token-harness-optimizer-leaderboard.git thol \
     && git -C thol checkout --quiet ${THOL_REV} \
     && test "$(git -C thol rev-parse HEAD)" = "${THOL_REV}"
+
+# THE COMPETITORS AT THEIR LATEST VERSIONS, not THOL's. Upstream THOL pins each
+# competitor at the version it last ran (June-July 2026) and has no newer
+# commit, so measuring against THOL_REV alone means measuring stale products.
+# competitor-pins.json records the current version of every runnable
+# competitor; apply-competitor-pins.py rewrites THOL's install script and
+# manifests to it, and fails the build if any pin did not land exactly where
+# expected. Like THOL_REV, changing a pin starts a new campaign.
+COPY --chown=bench:bench thol/competitor-pins.json thol/apply-competitor-pins.py /home/bench/pins/
+RUN python3 /home/bench/pins/apply-competitor-pins.py /home/bench/thol
 
 # THOL ships no requirements.txt: fixtures/generate_fixtures.py, tasks/_vlib.py
 # and every verify.py import stdlib only. So there is nothing to pip install,
