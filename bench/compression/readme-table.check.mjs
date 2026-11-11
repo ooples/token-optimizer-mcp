@@ -26,7 +26,9 @@ import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repo = join(here, '..', '..');
-const README = join(repo, 'README.md');
+// The guarded tables moved out of README.md into docs/COMPARISON.md, which
+// keeps the README short; the prose that quotes them moved with them.
+const README = join(repo, 'docs', 'COMPARISON.md');
 const PROOF = join(here, 'proof.mjs');
 
 const START = '<!-- PROOF-TABLE:START';
@@ -37,7 +39,7 @@ const from = readme.indexOf(START);
 const to = readme.indexOf(END);
 if (from === -1 || to === -1 || to < from) {
   console.error(
-    'readme-table.check: the PROOF-TABLE markers are missing from README.md.\n' +
+    'readme-table.check: the PROOF-TABLE markers are missing from docs/COMPARISON.md.\n' +
       'They are what makes this check possible -- restore them around the\n' +
       'head-to-head table rather than removing the check.'
   );

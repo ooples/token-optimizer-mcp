@@ -72,17 +72,16 @@ if (Test-Path ".releaserc.json") {
     Check-Fail "Semantic-release config missing"
 }
 
-if (Test-Path ".commitlintrc.json") {
-    Check-Pass "Commitlint config exists"
-    # Validate JSON
-    try {
-        $null = Get-Content ".commitlintrc.json" | ConvertFrom-Json
-        Check-Pass "Commitlint config is valid JSON"
-    } catch {
-        Check-Fail "Commitlint config is invalid JSON"
+# Commitlint reads its rules from the "commitlint" key of package.json.
+try {
+    $pkg = Get-Content "package.json" -Raw | ConvertFrom-Json
+    if ($pkg.commitlint) {
+        Check-Pass "Commitlint config exists (package.json)"
+    } else {
+        Check-Fail "Commitlint config missing from package.json"
     }
-} else {
-    Check-Fail "Commitlint config missing"
+} catch {
+    Check-Fail "package.json is invalid JSON"
 }
 
 if (Test-Path ".github\dependabot.yml") {

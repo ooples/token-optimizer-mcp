@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="330" viewBox="0 0 960 330" role="img" aria-labelledby="t d">
+  <title id="t">Cost per SWE-bench Verified task, relative to the same model with no plugin</title>
+  <desc id="d">Same 10 instances, Claude Sonnet, subscription billing. Default mode assist: 0.705 times control cost (95% interval 0.626 to 0.797), 7 of 7 resolved in both arms. Enforce: 0.669 (0.543 to 0.843), control 7, plugin 8 resolved. Advise: 0.754 (0.622 to 0.945), 6 and 6. Off: 0.999 (0.826 to 1.197), 7 and 7. Source: pull request 559.</desc>
+  <style>
+    .bg { fill: #fcfcfb; }
+    .ink { fill: #0b0b0b; }
+    .ink2 { fill: #52514e; }
+    .muted { fill: #898781; }
+    .grid { stroke: #e1e0d9; stroke-width: 1; }
+    .ref { stroke: #52514e; stroke-width: 1.5; stroke-dasharray: 4 3; }
+    .bar { fill: #2a78d6; }
+    .off { fill: #898781; }
+    .ci { stroke: #0b0b0b; stroke-width: 1.5; }
+    text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; }
+    @media (prefers-color-scheme: dark) {
+      .bg { fill: #1a1a19; }
+      .ink { fill: #f0efec; }
+      .ink2 { fill: #c3c2b7; }
+      .grid { stroke: #2c2c2a; }
+      .ref { stroke: #c3c2b7; }
+      .bar { fill: #3987e5; }
+      .ci { stroke: #f0efec; }
+    }
+  </style>
+  <rect class="bg" width="960" height="330" rx="8"/>
+  <text class="ink" x="24" y="34" font-size="17" font-weight="600">Cost per SWE-bench task vs. the same agent without the plugin</text>
+  <text class="ink2" x="24" y="56" font-size="13">Claude Sonnet, subscription billing, same 10 instances per mode. Bars: pooled cost ratio. Whiskers: 95% interval.</text>
+
+  <!-- x grid: 0 .. 1.25, 448 px per unit, origin x=200 -->
+  <g class="grid">
+    <line x1="200" y1="78" x2="200" y2="278"/>
+    <line x1="312" y1="78" x2="312" y2="278"/>
+    <line x1="424" y1="78" x2="424" y2="278"/>
+    <line x1="536" y1="78" x2="536" y2="278"/>
+    <line x1="760" y1="78" x2="760" y2="278"/>
+  </g>
+  <g class="muted" font-size="12" text-anchor="middle">
+    <text x="200" y="296">0</text>
+    <text x="312" y="296">0.25×</text>
+    <text x="424" y="296">0.5×</text>
+    <text x="536" y="296">0.75×</text>
+    <text x="648" y="296">1.0× = no plugin</text>
+    <text x="760" y="296">1.25×</text>
+  </g>
+
+  <!-- rows: labels -->
+  <g font-size="14" text-anchor="end">
+    <text class="ink" x="186" y="107" font-weight="600">assist (default)</text>
+    <text class="ink" x="186" y="155">enforce</text>
+    <text class="ink" x="186" y="203">advise</text>
+    <text class="ink" x="186" y="251">off</text>
+  </g>
+
+  <!-- bars: square at the baseline, 4px rounded data end -->
+  <path class="bar" d="M200 91 H511.8 a4 4 0 0 1 4 4 V107 a4 4 0 0 1 -4 4 H200 Z"/>
+  <path class="bar" d="M200 139 H495.7 a4 4 0 0 1 4 4 V155 a4 4 0 0 1 -4 4 H200 Z"/>
+  <path class="bar" d="M200 187 H533.8 a4 4 0 0 1 4 4 V203 a4 4 0 0 1 -4 4 H200 Z"/>
+  <path class="off" d="M200 235 H643.6 a4 4 0 0 1 4 4 V251 a4 4 0 0 1 -4 4 H200 Z"/>
+
+  <!-- 95% intervals -->
+  <g class="ci">
+    <line x1="480.4" y1="101" x2="557.1" y2="101"/><line x1="480.4" y1="96" x2="480.4" y2="106"/><line x1="557.1" y1="96" x2="557.1" y2="106"/>
+    <line x1="443.3" y1="149" x2="577.7" y2="149"/><line x1="443.3" y1="144" x2="443.3" y2="154"/><line x1="577.7" y1="144" x2="577.7" y2="154"/>
+    <line x1="478.7" y1="197" x2="623.4" y2="197"/><line x1="478.7" y1="192" x2="478.7" y2="202"/><line x1="623.4" y1="192" x2="623.4" y2="202"/>
+    <line x1="570.0" y1="245" x2="736.3" y2="245"/><line x1="570.0" y1="240" x2="570.0" y2="250"/><line x1="736.3" y1="240" x2="736.3" y2="250"/>
+  </g>
+
+  <!-- no-plugin reference -->
+  <line class="ref" x1="648" y1="78" x2="648" y2="278"/>
+
+  <g class="muted" font-size="12"><text x="790" y="84">cost</text><text x="842" y="84">resolved</text></g>
+  <!-- direct labels: ratio and tasks resolved (no plugin / plugin) -->
+  <g font-size="13">
+    <text class="ink" x="790" y="106" font-weight="600">0.71×</text><text class="ink2" x="842" y="106">7 / 7</text>
+    <text class="ink" x="790" y="154" font-weight="600">0.67×</text><text class="ink2" x="842" y="154">7 / 8</text>
+    <text class="ink" x="790" y="202" font-weight="600">0.75×</text><text class="ink2" x="842" y="202">6 / 6</text>
+    <text class="ink" x="790" y="250" font-weight="600">1.00×</text><text class="ink2" x="842" y="250">7 / 7</text>
+  </g>
+  <text class="muted" x="24" y="318" font-size="11">Resolved = tasks solved, no plugin / plugin, graded by the official SWE-bench evaluator. Small samples; run-to-run variance is large. Data: PR #559.</text>
+</svg>

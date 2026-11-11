@@ -194,7 +194,7 @@ check('B3', 'the published tables are reproducible by their harnesses', () => {
 
 // ---------------------------------------------------------------- B4 / B5
 check('B4', 'the codebase-exploration verdict agrees with its own row', () => {
-  const r = read('README.md');
+  const r = read('docs/COMPARISON.md');
   // THE PROPERTY, NOT THE VERDICT, AND NOT A FIXED DIRECTION EITHER. This once
   // asserted "parity", which was true of the branch the work began on; then
   // "never ours", which was true while the row read 46.0% against their 47.4%.
@@ -231,7 +231,7 @@ check('B4', 'the codebase-exploration verdict agrees with its own row', () => {
 });
 
 check('B5', 'every reduction claim carries the retention claim', () => {
-  const r = read('README.md');
+  const r = read('docs/COMPARISON.md');
   // DERIVED FROM THE RECORDED RUN, NOT FROM LITERALS HERE. This used to pin
   // 1,890, 345 and 0.94x, and went on asserting them for as long as the README
   // did -- so a check meant to stop a reduction figure travelling without its

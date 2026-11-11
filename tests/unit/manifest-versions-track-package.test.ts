@@ -103,7 +103,7 @@ describe('manifest versions track package.json', () => {
     // The value check above only catches drift AFTER it happens. This catches the
     // cause: a field release-please does not know about will drift on the very next
     // release, and nobody will notice until a registry publish returns 422.
-    const config = read('release-please-config.json');
+    const config = read('.github/release-please-config.json');
     const extras = (config.packages['.']['extra-files'] ?? []) as Array<{
       path: string;
       jsonpath: string;

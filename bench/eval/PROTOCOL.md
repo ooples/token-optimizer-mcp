@@ -96,7 +96,7 @@ the trial's answer — never which arm produced it.
 - **wrong turn** — took one of the documented dead-ends
 - **tokens** — subagent token usage, reported per trial
 
-Ground truth is the `cause` field of `eval/corpus.json`, taken from the PR body
+Ground truth is the `cause` field of `bench/eval/corpus.json`, taken from the PR body
 written when the bug was fixed, months before this eval existed.
 
 ---

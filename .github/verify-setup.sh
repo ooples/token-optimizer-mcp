@@ -76,16 +76,11 @@ else
     check_fail "Semantic-release config missing"
 fi
 
-if [ -f ".commitlintrc.json" ]; then
-    check_pass "Commitlint config exists"
-    # Validate JSON
-    if jq empty .commitlintrc.json 2>/dev/null; then
-        check_pass "Commitlint config is valid JSON"
-    else
-        check_fail "Commitlint config is invalid JSON"
-    fi
+# Commitlint reads its rules from the "commitlint" key of package.json.
+if jq -e '.commitlint' package.json >/dev/null 2>&1; then
+    check_pass "Commitlint config exists (package.json)"
 else
-    check_fail "Commitlint config missing"
+    check_fail "Commitlint config missing from package.json"
 fi
 
 if [ -f ".github/dependabot.yml" ]; then

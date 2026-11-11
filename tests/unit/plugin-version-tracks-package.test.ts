@@ -32,7 +32,7 @@ describe('plugin manifest version', () => {
   it('is still configured for release-please to bump', () => {
     // If this entry is dropped, the versions drift again and the only symptom
     // is users quietly not receiving hook updates.
-    const config = read('release-please-config.json');
+    const config = read('.github/release-please-config.json');
     const extras = config.packages?.['.']?.['extra-files'] ?? [];
 
     expect(

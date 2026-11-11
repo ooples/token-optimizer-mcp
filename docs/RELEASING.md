@@ -14,7 +14,7 @@ version or edit `CHANGELOG.md` by hand — both are derived from the
 2. On each push to `master`, the [`Release`](../.github/workflows/release.yml)
    workflow runs **release-please**, which opens/updates a single **release PR**
    (e.g. _"chore(master): release 5.1.0"_) with the version bump in
-   `package.json` + `.release-please-manifest.json` and the generated
+   `package.json` + `.github/release-please-manifest.json` and the generated
    `CHANGELOG.md`.
 3. **You merge the release PR** when you want to ship. release-please then cuts
    the git tag (`vX.Y.Z`) and the GitHub Release.
@@ -57,7 +57,7 @@ gate.
 | `feat!:` / `BREAKING CHANGE:`                                      | major   |
 | `docs:`, `refactor:`, `style:`, `chore:`, `test:`, `build:`, `ci:` | none    |
 
-The baseline is pinned in `.release-please-manifest.json` (currently `5.0.1`,
+The baseline is pinned in `.github/release-please-manifest.json` (currently `5.0.1`,
 the last published version); the first release PR bumps from there.
 
 ### Config files
@@ -65,8 +65,8 @@ the last published version); the first release PR bumps from there.
 | File                            | Purpose                                                          |
 | ------------------------------- | ---------------------------------------------------------------- |
 | `.github/workflows/release.yml` | The `Release` workflow (release-please + publish + notify)       |
-| `release-please-config.json`    | release-please config (`release-type: node`, changelog sections) |
-| `.release-please-manifest.json` | Current released version per package (source of truth)           |
+| `.github/release-please-config.json`    | release-please config (`release-type: node`, changelog sections) |
+| `.github/release-please-manifest.json` | Current released version per package (source of truth)           |
 
 ## npm authentication
 

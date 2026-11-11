@@ -222,7 +222,7 @@ Edit `.releaserc.json` to customize version bumping:
 
 ### Customize Commit Lint Rules
 
-Edit `.commitlintrc.json`:
+Edit the `commitlint` key in `package.json`:
 
 ```json
 {
