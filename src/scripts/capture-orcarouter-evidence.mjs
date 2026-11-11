@@ -414,7 +414,8 @@ async function main() {
     const staleId = textOnlyIds[0];
     await page
       .locator(
-        `#orcarouter-model-list .model-option[data-value="${staleId.replace(/"/g, '\\"')}"]`
+        // Backslash first, so the escapes added for quotes are not themselves re-escaped.
+        `#orcarouter-model-list .model-option[data-value="${staleId.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"]`
       )
       .click();
     await panel.waitFor({ state: 'hidden' });
