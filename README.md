@@ -109,23 +109,33 @@ the ones where it lost, and the per-instance data are in
 
 ## How it compares
 
-**Short answer: in every head-to-head we have run, it saves the most, and it
-loses in a few named places, listed below.**
+**Short answer: it beats every competitor we have measured on tokens saved, and
+ties Headroom on one small live task.** Every row links to its raw data.
 
-| Question                                            | Answer                                                                                                                                                                                                      |
-| --------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Does it cut cost more than other optimizers?        | ✅ **Yes.** On real coding tasks it cost **33.6% less** than plain Claude Code. The next best, tokenjuice, saved 13.6%. Tokenade's rules text saved 22.9%. claude-token-optimizer made no measurable difference. |
-| Does it remove more tokens than Alternative A?      | ✅ **Yes, through the proxy.** Figures below the table.                                                                                                                                                      |
-| Does a subscription plan go further?                | ✅ **Built in.** It detects a subscription and optimizes for finished work per unit of quota, not per dollar. It spends leftover 5-hour capacity only while your week is on pace. Limit monitors show your usage; this acts on it. |
-| Do tasks still get done?                            | ✅ **Yes.** The same SWE-bench tasks were resolved with and without it (7 of 7), at 0.71× the cost.                                                                                                          |
-| Where does it lose?                                 | ⚠️ See the list below the figures.                                                                                                                                                                          |
+| Competitor                 | What was measured                                   | Them                 | Token Optimizer   | Result                      |
+| -------------------------- | --------------------------------------------------- | -------------------- | ----------------- | --------------------------- |
+| **Headroom**               | Tokens removed on Headroom's own benchmark, 18 workloads | 61.4%           | 91.5%             | ✅ **Win**, figures below   |
+| **Headroom**               | Input tokens on 3 Codex tasks, every answer correct | 71,626               | 42,468            | ✅ **Win**, 40.7% fewer     |
+| **Headroom**               | Input tokens on a live Claude Code task, 4/4 tests  | 48,626               | 49,053            | ➖ **Tie**, 0.9% more       |
+| **tokenjuice**             | Cost vs plain Claude Code, real coding tasks        | 13.6% cheaper        | **33.6% cheaper** | ✅ **Win**                  |
+| **Tokenade**               | Same tasks; only its rules text could be tested     | 22.9% cheaper        | **33.6% cheaper** | ✅ **Win**                  |
+| **claude-token-optimizer** | Same tasks; its hooks did not run on Claude Code 2.1.251 | No measurable change | **33.6% cheaper** | ✅ **Win**             |
+
+It also does things none of them do:
+
+- ✅ **Subscription plans go further.** It detects a subscription and optimizes
+  for finished work per unit of quota, not per dollar. It spends leftover 5-hour
+  capacity only while your week is on pace. Limit monitors show your usage; this
+  acts on it.
+- ✅ **Tasks still get done.** The same SWE-bench tasks were resolved with and
+  without it (7 of 7), at 0.71× the cost.
 
 <!-- ALT-A-CORPUS:START -- every figure between this marker and the next
      CORPUS:END must appear in `totals` of
      `bench/compression/alt-a/results/head-to-head.json`. Guarded by
      `node bench/compression/readme-alt-a.check.mjs`; do not hand-edit. -->
 
-**Against Alternative A**, run on its own fixtures and harness, the proxy removes
+**On Headroom's own benchmark**, its fixtures and its harness, the proxy removes
 **91.5%** of the tokens. Their best setting removes 61.4%. The proxy costs less
 on **18 of 18** workloads when nothing it moved out is read back, and on 17 of 18
 when all of it is.
@@ -134,15 +144,17 @@ when all of it is.
 
 **Where it loses:**
 
-- Without the proxy, the compressor removes fewer tokens than Alternative A on 8
+- Without the proxy, the compressor removes fewer tokens than Headroom on 8
   of 18 workloads. On those, they move content out of the request rather than
   shrink it.
+- On the live Claude Code task, Headroom used 0.9% fewer input tokens: a tie on
+  one small task, not a win.
 - In the four-product run, most of the saving came from its rules file. The hooks
   added no measurable cost saving on top.
 
 The competitor run is 1,050 runs from 2026-09-03:
 [bench/ledger/RESULTS-COMPETITORS.md](bench/ledger/RESULTS-COMPETITORS.md). The
-Alternative A tables are regenerated and checked by CI:
+Headroom tables are regenerated and checked by CI:
 [docs/COMPARISON.md](docs/COMPARISON.md).
 
 ## What it does
@@ -298,7 +310,7 @@ what it wrote, and names anything you have edited since. Step by step:
 | Page                                           | What is in it                                                         |
 | ---------------------------------------------- | --------------------------------------------------------------------- |
 | [How it works](docs/HOW_IT_WORKS.md)           | The mechanisms, subagents, the knowledge graph, trust and attribution |
-| [Benchmarks and comparison](docs/COMPARISON.md) | Head-to-head against Alternative A, what it does differently, where it loses |
+| [Benchmarks and comparison](docs/COMPARISON.md) | Head-to-head against Headroom, tokenjuice, Tokenade and claude-token-optimizer, what it does differently, where it loses |
 | [Installation](docs/INSTALLATION.md)           | All sixteen clients, requirements, verification and removal           |
 | [Reference](docs/REFERENCE.md)                 | Tools, compression statistics and the full technical reference        |
 | [Dashboard](docs/DASHBOARD.md)                 | What the local dashboard shows                                        |

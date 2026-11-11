@@ -257,8 +257,14 @@ const corpusKnown = flatten(record.totals, new Set());
 // vocabulary such a sentence uses, so a claim phrased some other way is missed.
 // It is not the guarantee, it is the trip-wire -- and it is why the figures rule
 // above is scoped to `totals` rather than trusted to a keyword.
+//
+// A SUMMARY TABLE ROW CANNOT SIT INSIDE A BLOCK: an HTML comment between two rows
+// ends the Markdown table. So a corpus-scoped line outside every block is held to
+// the same record, figure by figure, instead of failing on sight -- a wrong figure
+// still fails, which is all the markers were for. "own benchmark" is how the
+// summary tables name this corpus.
 const CORPUS_SCOPE =
-  /corpus|retention unit|identifiers|of the characters|of the tokens/i;
+  /corpus|retention unit|identifiers|of the characters|of the tokens|own benchmark/i;
 
 /**
  * Checks one file's ALT-A-CORPUS blocks against the record's totals, and fails
@@ -340,7 +346,17 @@ function checkCorpus(text, label, { required }) {
     .split(/\r?\n/)
     .map((line, index) => ({ line: index + 1, text: line }))
     .filter(({ line }) => !covered.has(line))
-    .filter(({ text: line }) => CORPUS_SCOPE.test(line) && FIGURE.test(line));
+    // No FIGURE.test here: FIGURE is global, so .test() carries lastIndex from
+    // one line to the next and skips figures. .match() below resets it.
+    .filter(({ text: line }) => CORPUS_SCOPE.test(line))
+    .map((entry) => ({
+      ...entry,
+      wrong: (entry.text.match(FIGURE) ?? []).filter(
+        (figure) =>
+          !corpusKnown.has(figure) && !corpusKnown.has(figure.replace(/,/g, ''))
+      ),
+    }))
+    .filter(({ wrong }) => wrong.length);
 
   console.log(
     `readme-alt-a.check: ${label}: ${corpusFigures.length} corpus figures across ` +
@@ -358,11 +374,13 @@ function checkCorpus(text, label, { required }) {
 
   if (unmarked.length) {
     console.error(
-      `\nreadme-alt-a.check FAILED. ${label}: corpus-scoped lines with figures\n` +
-        'that sit outside every ALT-A-CORPUS block, so nothing compares them to anything:'
+      `\nreadme-alt-a.check FAILED. ${label}: corpus-scoped lines outside every\n` +
+        'ALT-A-CORPUS block carry figures the record totals do not hold:'
     );
-    for (const { line, text: content } of unmarked)
-      console.error(`  ${label}:${line}: ${content.trim().slice(0, 96)}`);
+    for (const { line, text: content, wrong } of unmarked)
+      console.error(
+        `  ${label}:${line}: [${wrong.join(', ')}] ${content.trim().slice(0, 96)}`
+      );
     bad = true;
   }
   return bad;
