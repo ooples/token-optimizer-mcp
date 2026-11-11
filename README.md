@@ -109,19 +109,46 @@ the ones where it lost, and the per-instance data are in
 
 ## How it compares
 
-**Short answer: it beats every competitor we have measured on tokens saved, and
-ties Headroom on one small live task.** Every row links to its raw data.
+**Short answer: it saves more than every competitor we tested, in like-for-like
+runs, except one small Claude Code task against Headroom, which is a tie.** The
+fairness notes and every loss are below the table.
 
-| Competitor                 | What was measured                                   | Them                 | Token Optimizer   | Result                      |
-| -------------------------- | --------------------------------------------------- | -------------------- | ----------------- | --------------------------- |
-| **Headroom**               | Tokens removed on Headroom's own benchmark, 18 workloads | 61.4%           | 91.5%             | ✅ **Win**, figures below   |
-| **Headroom**               | Input tokens on 3 Codex tasks, every answer correct | 71,626               | 42,468            | ✅ **Win**, 40.7% fewer     |
-| **Headroom**               | Input tokens on a live Claude Code task, 4/4 tests  | 48,626               | 49,053            | ➖ **Tie**, 0.9% more       |
-| **tokenjuice**             | Cost vs plain Claude Code, real coding tasks        | 13.6% cheaper        | **33.6% cheaper** | ✅ **Win**                  |
-| **Tokenade**               | Same tasks; only its rules text could be tested     | 22.9% cheaper        | **33.6% cheaper** | ✅ **Win**                  |
-| **claude-token-optimizer** | Same tasks; its hooks did not run on Claude Code 2.1.251 | No measurable change | **33.6% cheaper** | ✅ **Win**             |
+| Competitor                 | How it was tested                                                  | Them                         | Token Optimizer                 | Result                                 |
+| -------------------------- | ------------------------------------------------------------------ | ---------------------------- | ------------------------------- | -------------------------------------- |
+| **Headroom**               | Tokens removed on Headroom's own benchmark, 18 workloads           | 61.4%                        | 91.5%                           | ✅ **Win**                             |
+| **Headroom**               | Installed proxy vs ours, 120 Codex task pairs                      | $30.43 est. cost, 120/120 passed | $22.26 est. cost, 119/120 passed | ✅ **26.9% cheaper**, 30.1% faster on average |
+| **Headroom**               | Installed proxy vs ours, one small Claude Code task, 4/4 tests     | 48,626 tokens                | 49,053 tokens                   | ➖ **Tie** (0.9% more)                 |
+| **tokenjuice**             | Product installed, same coding tasks for every arm                 | 13.6% cheaper                | **33.6% cheaper**               | ✅ **Win**                             |
+| **Tokenade**               | Its rules text vs our rules text (its CLI needs an account)        | 22.9% cheaper                | **32.0% cheaper**               | ✅ **Win**                             |
+| **claude-token-optimizer** | Product installed, its hooks fixed so they fire on Claude Code     | 2.7% cheaper, within noise   | **33.6% cheaper**               | ✅ **Win**                             |
 
-It also does things none of them do:
+How each row was kept fair, and what it does not show:
+
+- **claude-token-optimizer as shipped does nothing on Claude Code 2.1.251.** Its
+  hooks read a `CLAUDE_TOOL_NAME` variable that Claude Code does not set, so they
+  exit before checking anything. Scoring that would not be a fair comparison, so the row
+  uses their product with that one line changed to read the hook input Claude Code
+  actually sends. We confirmed the patched hooks fired and blocked oversized reads.
+  Its CLAUDE.md ships as an unfilled template, which understates it.
+- **Tokenade's product needs an account,** so only its rules text could run. It is
+  compared with our rules text alone, not our full product. If its hooks save
+  more, this row understates it.
+- **Headroom, first row:** the 91.5% is our proxy. Like Headroom, it moves some
+  content out of the request for the agent to fetch back if needed. Our
+  compressor alone removes fewer tokens than Headroom on 8 of the 18 workloads.
+- **Headroom, 120 pairs:** we wrote the 12 task families, including ones built to
+  make our proxy fail, and froze the plan before any run. Headroom's mode setting
+  is not recorded in that study. Our proxy crashed once (unknown usage) where
+  Headroom passed every task, and ours cost more on 30 of the 120 pairs. It is
+  cheaper on average, not on every task. Costs are over the 119 pairs where both
+  finished.
+- **The tokenjuice, Tokenade and claude-token-optimizer rows are one campaign:**
+  1,050 runs on 2026-09-03, Claude Code 2.1.251, cost per finished task against
+  plain Claude Code. Any of these products may have changed since. The campaign
+  had no bias-control task, so a task set that happens to favour us cannot be
+  ruled out.
+
+Beyond the table:
 
 - ✅ **Subscription plans go further.** It detects a subscription and optimizes
   for finished work per unit of quota, not per dollar. It spends leftover 5-hour
@@ -147,15 +174,17 @@ when all of it is.
 - Without the proxy, the compressor removes fewer tokens than Headroom on 8
   of 18 workloads. On those, they move content out of the request rather than
   shrink it.
-- On the live Claude Code task, Headroom used 0.9% fewer input tokens: a tie on
-  one small task, not a win.
+- Against Headroom, ours cost more on 30 of 120 task pairs and crashed once;
+  on one small Claude Code task Headroom used 0.9% fewer tokens.
+- On one 342 KB-file task in the 2026-09-03 campaign, our hooks took about 6
+  minutes per run against 0.3 for plain Claude Code. It cost no more in tokens,
+  but it was slower.
 - In the four-product run, most of the saving came from its rules file. The hooks
   added no measurable cost saving on top.
 
-The competitor run is 1,050 runs from 2026-09-03:
-[bench/ledger/RESULTS-COMPETITORS.md](bench/ledger/RESULTS-COMPETITORS.md). The
-Headroom tables are regenerated and checked by CI:
-[docs/COMPARISON.md](docs/COMPARISON.md).
+Raw data: [competitor campaign](bench/ledger/RESULTS-COMPETITORS.md),
+[Headroom 120-pair study](bench/live/evidence/joint-confirmation-2026-09-16/README.md), and the Headroom
+benchmark tables in [the comparison](docs/COMPARISON.md).
 
 ## What it does
 
