@@ -16,13 +16,13 @@ import {
   projectRootFor,
   unrootedRoot,
   wikiDir,
-} from '../../hooks-core/wiki.mjs';
+} from '../../src/hooks-core/wiki.mjs';
 import {
   isFilesystemRoot,
   writeHarvested,
-} from '../../hooks-core/harvest-write.mjs';
-import { canonicalPath } from '../../hooks-core/paths.mjs';
-import { ORIGIN_AGENT } from '../../hooks-core/curate.mjs';
+} from '../../src/hooks-core/harvest-write.mjs';
+import { canonicalPath } from '../../src/hooks-core/paths.mjs';
+import { ORIGIN_AGENT } from '../../src/hooks-core/curate.mjs';
 
 const scenario = process.env.TOKEN_OPTIMIZER_TEST_SCENARIO;
 const sandbox = process.env.TOKEN_OPTIMIZER_TEST_SANDBOX;

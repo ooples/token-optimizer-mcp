@@ -92,7 +92,7 @@ Each of these is encoded in the scripts rather than left to be rediscovered:
 - **The manifest needs an `mcpServers` wrapper.** Without it every run dies in
   ~1s with `Invalid MCP configuration: mcpServers: Invalid input`.
 - **The optimizer version must be pinned via a pre-seeded runtime.**
-  `plugin/launch.mjs` on a cold runtime serves whatever the npx cache holds, so
+  `src/plugin/launch.mjs` on a cold runtime serves whatever the npx cache holds, so
   an image pinned to one version can measure another.
 
 ## Reading results

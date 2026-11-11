@@ -17,9 +17,9 @@ import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 
-import { wikiDir, load, findingsFor, nodeId, canonicalKey, projectRootFor } from '../../hooks-core/wiki.mjs';
-import { writeHarvested } from '../../hooks-core/harvest-write.mjs';
-import { ORIGIN_AGENT } from '../../hooks-core/curate.mjs';
+import { wikiDir, load, findingsFor, nodeId, canonicalKey, projectRootFor } from '../../src/hooks-core/wiki.mjs';
+import { writeHarvested } from '../../src/hooks-core/harvest-write.mjs';
+import { ORIGIN_AGENT } from '../../src/hooks-core/curate.mjs';
 
 let project, target, shared;
 

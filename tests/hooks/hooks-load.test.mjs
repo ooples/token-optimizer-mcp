@@ -8,7 +8,7 @@
  * had been dead on arrival and the entire feedback pipeline with it.
  *
  * The full suite stayed green. Every test exercised the shared core through
- * `hooks-core/`, and nothing imported the hook scripts themselves, so a file
+ * `src/hooks-core/`, and nothing imported the hook scripts themselves, so a file
  * that could not be parsed was simply never parsed. Reported by CodeRabbit as a
  * missing `wikiDir` import, which was the second defect in the same file and the
  * one visible from a diff.
@@ -25,12 +25,12 @@ import { join } from 'path';
 import { ESLint } from 'eslint';
 
 const HOOK_DIRS = [
-  'plugin/hooks',
-  'integrations/codex/hooks',
-  'integrations/codex/plugin/hooks',
-  'integrations/gemini/hooks',
-  'integrations/qwen/hooks',
-  'integrations/opencode/hooks',
+  'src/plugin/hooks',
+  'src/integrations/codex/hooks',
+  'src/integrations/codex/plugin/hooks',
+  'src/integrations/gemini/hooks',
+  'src/integrations/qwen/hooks',
+  'src/integrations/opencode/hooks',
 ];
 
 function entryPoints() {
@@ -73,45 +73,87 @@ describe('hook entry points', () => {
     expect(r.status).toBe(0);
   }, 60_000);
 });
-
-describe('no hook entry point references an undefined name', () => {
-  // RUNNING THE HOOK IS NOT ENOUGH, which I established by trying it. Removing
-  // the `wikiDir` import from harvest-worker.mjs leaves the loadability test
-  // above completely green: `main()` returns early when it is handed no
-  // transcript, so the line that would throw is never reached. The same shape
-  // hid a missing `join` import in precompact-optimize.mjs, where the only
-  // caller sat behind a CLAUDE_PLUGIN_ROOT check.
-  //
-  // A fail-open hook is precisely the kind of program whose body does not run
-  // in a smoke test, so this is checked statically instead. `npm run lint`
-  // covers `src` only, which is why nothing was watching these files.
-  it('passes no-undef across every hook directory', async () => {
-    const eslint = new ESLint({
-      overrideConfigFile: true,
-      overrideConfig: {
-        languageOptions: {
-          ecmaVersion: 'latest',
-          sourceType: 'module',
-          globals: {
-            process: 'readonly', console: 'readonly', URL: 'readonly',
-            Buffer: 'readonly', setTimeout: 'readonly', clearTimeout: 'readonly',
-            setInterval: 'readonly', clearInterval: 'readonly',
-            TextEncoder: 'readonly', TextDecoder: 'readonly', fetch: 'readonly',
-            AbortController: 'readonly', SharedArrayBuffer: 'readonly',
-            Int32Array: 'readonly', Atomics: 'readonly', structuredClone: 'readonly',
-          },
-        },
-        rules: { 'no-undef': 'error' },
-      },
-    });
-
-    const results = await eslint.lintFiles(HOOK_DIRS.map((d) => `${d}/*.mjs`));
-    const problems = results.flatMap((r) =>
-      r.messages.map((m) => `${r.filePath}:${m.line} ${m.message}`)
-    );
-
-    // A glob that matched nothing would report zero problems and pass.
-    expect(results.length).toBeGreaterThan(5);
-    expect(problems).toEqual([]);
-  }, 120_000);
-});
+
+
+describe('no hook entry point references an undefined name', () => {
+
+  // RUNNING THE HOOK IS NOT ENOUGH, which I established by trying it. Removing
+
+  // the `wikiDir` import from harvest-worker.mjs leaves the loadability test
+
+  // above completely green: `main()` returns early when it is handed no
+
+  // transcript, so the line that would throw is never reached. The same shape
+
+  // hid a missing `join` import in precompact-optimize.mjs, where the only
+
+  // caller sat behind a CLAUDE_PLUGIN_ROOT check.
+
+  //
+
+  // A fail-open hook is precisely the kind of program whose body does not run
+
+  // in a smoke test, so this is checked statically instead. `npm run lint`
+
+  // covers `src` only, which is why nothing was watching these files.
+
+  it('passes no-undef across every hook directory', async () => {
+
+    const eslint = new ESLint({
+
+      overrideConfigFile: true,
+
+      overrideConfig: {
+
+        languageOptions: {
+
+          ecmaVersion: 'latest',
+
+          sourceType: 'module',
+
+          globals: {
+
+            process: 'readonly', console: 'readonly', URL: 'readonly',
+
+            Buffer: 'readonly', setTimeout: 'readonly', clearTimeout: 'readonly',
+
+            setInterval: 'readonly', clearInterval: 'readonly',
+
+            TextEncoder: 'readonly', TextDecoder: 'readonly', fetch: 'readonly',
+
+            AbortController: 'readonly', SharedArrayBuffer: 'readonly',
+
+            Int32Array: 'readonly', Atomics: 'readonly', structuredClone: 'readonly',
+
+          },
+
+        },
+
+        rules: { 'no-undef': 'error' },
+
+      },
+
+    });
+
+
+
+    const results = await eslint.lintFiles(HOOK_DIRS.map((d) => `${d}/*.mjs`));
+
+    const problems = results.flatMap((r) =>
+
+      r.messages.map((m) => `${r.filePath}:${m.line} ${m.message}`)
+
+    );
+
+
+
+    // A glob that matched nothing would report zero problems and pass.
+
+    expect(results.length).toBeGreaterThan(5);
+
+    expect(problems).toEqual([]);
+
+  }, 120_000);
+
+});
+

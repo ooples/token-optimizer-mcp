@@ -43,23 +43,23 @@ import {
   caseProbePath,
   searchPatternFromCommand,
   SESSION_CAP,
-} from '../../hooks-core/advise.mjs';
+} from '../../src/hooks-core/advise.mjs';
 import {
   seedProject,
   alreadySeeded,
   seedDisabled,
-} from '../../hooks-core/seed.mjs';
-import { loadState, saveState } from '../../hooks-core/policy.mjs';
+} from '../../src/hooks-core/seed.mjs';
+import { loadState, saveState } from '../../src/hooks-core/policy.mjs';
 import {
   load,
   withBatchedWrites,
   putNode,
   putEdge,
-} from '../../hooks-core/wiki.mjs';
+} from '../../src/hooks-core/wiki.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = join(HERE, '..', '..');
-const ROUTER = join(REPO, 'plugin', 'hooks', 'pretooluse-router.mjs');
+const ROUTER = join(REPO, 'src', 'plugin', 'hooks', 'pretooluse-router.mjs');
 
 let workspace;
 let graphDir;
@@ -356,7 +356,7 @@ describe('the seed keeps the promise its budget makes', () => {
 
       const result = spawnSync(
         process.execPath,
-        [join(REPO, 'plugin', 'hooks', 'session-start.mjs')],
+        [join(REPO, 'src', 'plugin', 'hooks', 'session-start.mjs')],
         {
           input: JSON.stringify({
             session_id: 'ss-' + Date.now(),
@@ -757,10 +757,18 @@ describe('seeding a project', () => {
     // repository, against a handful of flushes. Ten is wide of the batched
     // path and two orders of magnitude short of the unbatched one, and no
     // amount of parallel load moves either number.
+    //
+    // SEEDED FROM src/, AT 150 FILES. The seed walks breadth-first, so which
+    // files the cap reaches is a fact about the tree's shape. Since the package
+    // root moved under src/, the module asked about below sits one level deeper
+    // than it did, behind bench/, config/ and docs/: 100 files from the
+    // repository root never reach it, and 100 from src/ stop short of it.
+    // 150 from src/ reach it -- more work than before, not less.
     const dir = mkdtempSync(join(tmpdir(), 'advisory-real-'));
+    const root = join(REPO, 'src');
     try {
-      const seeded = seedProject(dir, REPO, {
-        maxFiles: 100,
+      const seeded = seedProject(dir, root, {
+        maxFiles: 150,
         budgetMs: 60_000,
       });
 
@@ -768,13 +776,13 @@ describe('seeding a project', () => {
       // the weight: the cap is what stops the pass, and the count below is
       // what proves the batch is applied.
       expect(seeded.stopped).toBe('file-cap');
-      expect(seeded.files).toBe(100);
+      expect(seeded.files).toBe(150);
       expect(seeded.writes).toBeLessThanOrEqual(10);
       expect(seeded.writes).toBeGreaterThan(0);
 
       // The other half of the original property: a working index, not a stub.
       const graph = load(dir);
-      const advice = adviseSearch(graph, 'seedProject', { root: REPO });
+      const advice = adviseSearch(graph, 'seedProject', { root });
       expect(advice).not.toBeNull();
       expect(advice.text).toContain('seed.mjs');
     } finally {

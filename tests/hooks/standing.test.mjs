@@ -15,7 +15,7 @@ import { tmpdir } from 'node:os';
 import {
   standingFiles, usageFrom, distinctiveTerms, staleClaims, verdictFor,
   auditStanding, renderStanding, MIN_SESSIONS, BLOAT_TOKENS,
-} from '../../hooks-core/standing.mjs';
+} from '../../src/hooks-core/standing.mjs';
 
 let cwd;
 

@@ -24,8 +24,8 @@
  * a different direction, and the fourth keeps the first from passing vacuously.
  */
 import { describe, it, expect, beforeEach, afterEach, afterAll } from '@jest/globals';
-import { forCommand } from '../../hooks-core/inject.mjs';
-import { load, putNode, putNodeWithEdges, sharedDir } from '../../hooks-core/wiki.mjs';
+import { forCommand } from '../../src/hooks-core/inject.mjs';
+import { load, putNode, putNodeWithEdges, sharedDir } from '../../src/hooks-core/wiki.mjs';
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';

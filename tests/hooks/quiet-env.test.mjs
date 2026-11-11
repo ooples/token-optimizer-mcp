@@ -19,7 +19,7 @@ import {
   applyQuietEnv,
   QUIET_ENV_DEFAULTS,
   QUIET_ENV_MARKER,
-} from '../../hooks-core/quiet-env.mjs';
+} from '../../src/hooks-core/quiet-env.mjs';
 
 const root = mkdtempSync(join(tmpdir(), 'quiet-env-'));
 afterAll(() => rmSync(root, { recursive: true, force: true }));
@@ -116,7 +116,7 @@ describe('the Claude Code SessionStart hook', () => {
     delete env.PYTEST_ADDOPTS;
     spawnSync(
       process.execPath,
-      [join(process.cwd(), 'plugin', 'hooks', 'session-start.mjs')],
+      [join(process.cwd(), 'src', 'plugin', 'hooks', 'session-start.mjs')],
       {
         cwd: workspace,
         env,

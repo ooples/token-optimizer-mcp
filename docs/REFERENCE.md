@@ -609,7 +609,7 @@ calls, three independent model families, direction-level non-inferiority, and
 remain below 1%. Run
 `npm run verify:ucr:study-design` to validate the frozen metric coverage. The
 full protocol and CLI driver contract are in
-[`evals/ucr/FULL_STUDY_CONTRACT.md`](../evals/ucr/FULL_STUDY_CONTRACT.md).
+[`src/evals/ucr/FULL_STUDY_CONTRACT.md`](../src/evals/ucr/FULL_STUDY_CONTRACT.md).
 
 #### Performance Controls
 
@@ -840,12 +840,12 @@ sed -i '' '1s/^\xef\xbb\xbf//' ~/.claude/settings.json
 
 ```powershell
 # Windows
-powershell -ExecutionPolicy Bypass -File install-hooks.ps1
+powershell -ExecutionPolicy Bypass -File src/install-hooks.ps1
 ```
 
 ```bash
 # macOS/Linux
-bash install-hooks.sh
+bash src/install-hooks.sh
 ```
 
 #### Issue: Low Cache Hit Rate (<50%)

@@ -11,7 +11,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import {
   putNode, putEdge, load, findingsFor, harvest, nodeId, contentHash, wikiDir,
-} from '../../hooks-core/wiki.mjs';
+} from '../../src/hooks-core/wiki.mjs';
 
 let dir;
 let workspace;

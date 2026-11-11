@@ -9,7 +9,7 @@
  * It needs `anchor.snapshot` to do it. `indexFile` writes snapshots correctly,
  * but `load()` defaults to `snapshots: false` and NOTHING in the codebase ever
  * passed true, so a loaded node never carried one and `refusalPayload` returned
- * null for every real file. `hooks-core/staleness.mjs` says so in its own
+ * null for every real file. `src/hooks-core/staleness.mjs` says so in its own
  * comment: the zero-turn refusal "never fired outside tests that hand-wrote the
  * snapshot themselves".
  *
@@ -30,7 +30,7 @@ import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const ROUTER = join(HERE, '..', '..', 'plugin', 'hooks', 'pretooluse-router.mjs');
+const ROUTER = join(HERE, '..', '..', 'src', 'plugin', 'hooks', 'pretooluse-router.mjs');
 
 let workspace;
 let graph;

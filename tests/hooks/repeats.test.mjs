@@ -3,7 +3,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { lineHunks, repeatKey, repeatResponse, REPEAT_WINDOW } from '../../hooks-core/repeats.mjs';
+import { lineHunks, repeatKey, repeatResponse, REPEAT_WINDOW } from '../../src/hooks-core/repeats.mjs';
 
 const pytest = (failing) =>
   [
@@ -75,7 +75,7 @@ describe('diff-only repeats', () => {
 // THE WIRING: the packaged PostToolUse hook, two runs of one command, state kept between them.
 describe('through the Claude Code PostToolUse hook', () => {
   const hook = (workspace, sessionId, stdout, extra = {}) =>
-    spawnSync(process.execPath, [join(process.cwd(), 'plugin', 'hooks', 'post-tool.mjs')], {
+    spawnSync(process.execPath, [join(process.cwd(), 'src', 'plugin', 'hooks', 'post-tool.mjs')], {
       cwd: workspace,
       encoding: 'utf8',
       timeout: 30_000,

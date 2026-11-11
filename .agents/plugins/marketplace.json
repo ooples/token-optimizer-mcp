@@ -9,7 +9,7 @@
       "source": {
         "source": "git-subdir",
         "url": "https://github.com/ooples/token-optimizer-mcp.git",
-        "path": "./integrations/codex/plugin",
+        "path": "./src/integrations/codex/plugin",
         "ref": "master"
       },
       "policy": {

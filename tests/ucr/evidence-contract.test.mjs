@@ -6,7 +6,7 @@ import {
   evidenceTierReport,
   sealEvidenceLedger,
   verifyEvidenceLedger,
-} from '../../ucr/index.mjs';
+} from '../../src/ucr/index.mjs';
 
 function run(evidenceClass, id = evidenceClass) {
   return createEvidenceRun({

@@ -1,6 +1,6 @@
 /**
- * Copilot CLI tool pruning (hooks-core/copilotprune.mjs) and its delivery by the
- * managed launcher (scripts/run-client.mjs).
+ * Copilot CLI tool pruning (src/hooks-core/copilotprune.mjs) and its delivery by the
+ * managed launcher (src/scripts/run-client.mjs).
  *
  * Each test pins a property the design depends on: a tool is left out only on
  * evidence from THIS repository's sessions, the tools every task needs are never
@@ -26,10 +26,10 @@ import {
   restoreCopilot,
   restoreLeanSwitches,
   runCopilotFold,
-} from '../../hooks-core/copilotprune.mjs';
-import { probeCopilotSwitches } from '../../hooks-core/doctor.mjs';
-import { learnedLocation } from '../../hooks-core/toolprune.mjs';
-import { runClient } from '../../scripts/run-client.mjs';
+} from '../../src/hooks-core/copilotprune.mjs';
+import { probeCopilotSwitches } from '../../src/hooks-core/doctor.mjs';
+import { learnedLocation } from '../../src/hooks-core/toolprune.mjs';
+import { runClient } from '../../src/scripts/run-client.mjs';
 
 const work = mkdtempSync(join(tmpdir(), 'copilot-tool-pruning-'));
 afterAll(() => rmSync(work, { recursive: true, force: true, maxRetries: 3, retryDelay: 50 }));

@@ -9,7 +9,7 @@ import {
   studyDriverRegistry,
   studyDirectionEnvironmentKey,
   validateStudyDriverResult,
-} from '../../ucr/index.mjs';
+} from '../../src/ucr/index.mjs';
 
 describe('universal live-study driver contract', () => {
   test('publishes the same driver protocol for every registered CLI client', () => {

@@ -14,10 +14,10 @@ import { tmpdir } from 'node:os';
 import {
   selectForConsolidation, irrecoverability, reuseProbability,
   consolidationRatio, aggregateConsolidation, costToRederive,
-} from '../../hooks-core/consolidate.mjs';
-import { classifySituation, restorationPlan } from '../../hooks-core/restore.mjs';
-import { load, putNode, putEdge, nodeId } from '../../hooks-core/wiki.mjs';
-import { indexFile } from '../../hooks-core/staleness.mjs';
+} from '../../src/hooks-core/consolidate.mjs';
+import { classifySituation, restorationPlan } from '../../src/hooks-core/restore.mjs';
+import { load, putNode, putEdge, nodeId } from '../../src/hooks-core/wiki.mjs';
+import { indexFile } from '../../src/hooks-core/staleness.mjs';
 
 let workspace;
 let dir;

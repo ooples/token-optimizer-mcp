@@ -25,7 +25,7 @@ version or edit `CHANGELOG.md` by hand — both are derived from the
 5. **Only if both platforms pass** does **`publish-npm`** run
    `npm publish --provenance --access public`.
 6. **`verify-published`** re-checks the real registry artifact through
-   `plugin/launch.mjs`, and opens an issue if it fails.
+   `src/plugin/launch.mjs`, and opens an issue if it fails.
 7. The **`notify`** job fans the version info out to every configured channel.
 
 ### Why the check is before the publish

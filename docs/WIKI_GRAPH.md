@@ -73,7 +73,7 @@ changes, the graph should record *that it changed and why*, not silently present
 the new one as if it had always been true. It is written, and it is disclosed:
 a served finding that something disputes carries `contradicted: true` and, when
 the other end resolves to a node, `contradictedBy` naming its key
-(`hooks-core/staleness.mjs`, `disputeOf`). Dispute is tracked separately from
+(`src/hooks-core/staleness.mjs`, `disputeOf`). Dispute is tracked separately from
 staleness — a finding can be disputed without being stale, and stale without
 being disputed.
 
@@ -86,7 +86,7 @@ path never produces the edge. It used to fire nowhere on a default install for
 that reason — its only other producer was the harvest worker, which needs a
 credential. `derive` is now a second producer that needs none: it runs in the
 Stop hook, where the session id comes from the hook payload rather than from a
-model (`hooks-core/derive.mjs`, `hooks-core/harvest-write.mjs`).
+model (`src/hooks-core/derive.mjs`, `src/hooks-core/harvest-write.mjs`).
 
 ## Harvest — structural free, semantic at boundaries
 
@@ -102,7 +102,7 @@ enters the working context, so the harvest cost is not paid by the session doing
 the work.
 
 **Local (zero cost, no credential, always on).** At `Stop`,
-[`hooks-core/derive.mjs`](../hooks-core/derive.mjs) reads evidence that is
+[`src/hooks-core/derive.mjs`](../src/hooks-core/derive.mjs) reads evidence that is
 already on disk — command outcomes and their exit codes, red-to-green
 transitions, user corrections, re-read churn — and writes findings from it. No
 model call, no credential, nothing sent anywhere. Precision is capped rather
@@ -123,7 +123,7 @@ Its real gate is a **credential**: with none it reports `off:no-key`, which is
 the state on CI, corporate machines and subscription-only logins. Point
 `TOKEN_OPTIMIZER_HARVEST_ENDPOINT` at a local model and it runs free and
 private, with nothing leaving the machine
-(`hooks-core/harvest.mjs`, `harvestMode`). The hit-rate numbers below describe a
+(`src/hooks-core/harvest.mjs`, `harvestMode`). The hit-rate numbers below describe a
 graph that has verdicts in it; a machine with neither a credential nor a local
 endpoint gets the structural layer and whatever `derive` could establish
 locally.
@@ -133,7 +133,7 @@ locally.
 Retrieval is graph traversal plus BM25 for fuzzy lookup. **No embedding model,
 no vector index.**
 
-BM25 is implemented in [`hooks-core/lexical.mjs`](../hooks-core/lexical.mjs) and
+BM25 is implemented in [`src/hooks-core/lexical.mjs`](../src/hooks-core/lexical.mjs) and
 is shared by both surfaces that search findings: the `wiki_query` tool's `search`
 operation and the dashboard's `/api/wiki/search` route. It replaced a substring
 `includes()` filter, which could not rank — and ranking is the whole value under
@@ -178,8 +178,8 @@ embeddings can be added later as *one more edge type* — never as the mechanism
 A vendored file is the same file wherever it sits, whatever path each copy is
 given. This repository is its own example: the shared hook core is vendored into
 eleven directories, byte-identical, so a finding recorded against
-`plugin/hooks/lib/adapter.mjs` said nothing at all to a reader touching
-`integrations/qwen/hooks/lib/adapter.mjs`.
+`src/plugin/hooks/lib/adapter.mjs` said nothing at all to a reader touching
+`src/integrations/qwen/hooks/lib/adapter.mjs`.
 
 **It is an index, not a second identity.** The obvious implementation mints a
 second anchor id of the form `content:<hash>:<size>` — and a second identity for
@@ -286,11 +286,11 @@ itself:
 
 1. **Queued at write, applied at the next graph read.** The post-tool hook
    already holds the write's evidence, so it appends one record to a pending
-   queue and exits (`hooks-core/pending.mjs`, `queueInvalidation`); it does not
+   queue and exits (`src/hooks-core/pending.mjs`, `queueInvalidation`); it does not
    load the graph, because loading a megabyte of JSONL on the return path of
    every write is the cost this shape exists to avoid. The next graph read —
    `forTouch`, `forCommand`, `sessionIndex`, `standingRules` — drains the queue
-   **before serving anything** (`hooks-core/inject.mjs`, `withPendingApplied`).
+   **before serving anything** (`src/hooks-core/inject.mjs`, `withPendingApplied`).
 2. **Lazy comparison at serve time**, which compares the anchor's stored hash
    against disk and so still covers changes the hooks never observed.
 
@@ -314,7 +314,7 @@ worst case, which is what the test asserts. The
 byte bound is not redundant with the line bound: with only the line cap in
 force, two 200,000-character single-line inputs produced 2 lines and 400,005
 bytes, and that output goes straight into model context
-(`hooks-core/staleness.mjs`, `diffLines`).
+(`src/hooks-core/staleness.mjs`, `diffLines`).
 
 **A separate, narrower check: `derivationCheck`.** A finding may record the
 anchor hashes that were in force when it was claimed, together with the file
@@ -356,10 +356,10 @@ Records are version-stamped. `load()` accepts a *range* of schema versions
 record's own `v` is carried rather than restamped. `GRAPH_VERSION` is still `1`
 because no record shape has changed. A future bump must add its upcast step
 **and** its `SUPPORTED_VERSIONS` entry in the same change, or older logs stop
-loading (`hooks-core/wiki.mjs`).
+loading (`src/hooks-core/wiki.mjs`).
 
-The core is vendored rather than imported: `scripts/sync-hook-core.mjs` copies
-`hooks-core/` into **eleven** client integration directories, so counting the
+The core is vendored rather than imported: `src/scripts/sync-hook-core.mjs` copies
+`src/hooks-core/` into **eleven** client integration directories, so counting the
 source there are twelve copies of each module — twelve `inject.mjs` files carry
 the injected text. `npm run sync:hooks:check` fails the build if any copy has
 drifted.
@@ -425,7 +425,7 @@ Three things answer it instead.
 
 **`tests/hooks/reachability.test.mjs`** asks whether an exported name is
 referenced by anything that ships, as opposed to only by its own tests. It scans
-`hooks-core` and `plugin/hooks` for declarations — functions *and* consts — and
+`hooks-core` and `src/plugin/hooks` for declarations — functions *and* consts — and
 searches all of `hooks-core`, `plugin`, `src` and `scripts` for uses. Comments
 are stripped, because prose is not a caller, and import specifiers are
 discounted, because an import is not a call. **String literals are deliberately

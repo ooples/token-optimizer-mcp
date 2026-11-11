@@ -65,7 +65,7 @@ handled. Every failure names its own fix.
 
 **Codex, Copilot CLI, Gemini CLI, Cursor and the rest.** Every client runs the
 same server, `npx -y @ooples/token-optimizer-mcp@latest`. Ready-made configuration
-for each one is in [`integrations/`](./integrations), and
+for each one is in [`src/integrations/`](./src/integrations), and
 [docs/INSTALLATION.md](docs/INSTALLATION.md) walks through all sixteen.
 
 <details>
@@ -194,15 +194,15 @@ refused.
 | Client             | What installs                                                                                  |
 | ------------------ | ---------------------------------------------------------------------------------------------- |
 | Claude Code        | Native plugin (see [Quick start](#quick-start))                                                |
-| Codex              | Native plugin in [`integrations/codex/plugin`](./integrations/codex/plugin), or standalone hooks |
-| GitHub Copilot CLI | Project hooks in [`integrations/copilot`](./integrations/copilot)                              |
+| Codex              | Native plugin in [`src/integrations/codex/plugin`](./src/integrations/codex/plugin), or standalone hooks |
+| GitHub Copilot CLI | Project hooks in [`src/integrations/copilot`](./src/integrations/copilot)                              |
 | Gemini CLI         | Gemini extension at the repository root                                                        |
-| Qwen Code          | Extension bundle in [`integrations/qwen`](./integrations/qwen)                                 |
-| Cursor             | Project hooks and rule in [`integrations/cursor`](./integrations/cursor)                       |
-| Cline              | Project hooks and rule in [`integrations/cline`](./integrations/cline)                         |
-| OpenCode           | In-process plugin and hooks in [`integrations/opencode`](./integrations/opencode)              |
-| Kilo               | In-process plugin and hooks in [`integrations/kilo`](./integrations/kilo)                      |
-| Windsurf           | Project hooks and rule in [`integrations/windsurf`](./integrations/windsurf)                   |
+| Qwen Code          | Extension bundle in [`src/integrations/qwen`](./src/integrations/qwen)                                 |
+| Cursor             | Project hooks and rule in [`src/integrations/cursor`](./src/integrations/cursor)                       |
+| Cline              | Project hooks and rule in [`src/integrations/cline`](./src/integrations/cline)                         |
+| OpenCode           | In-process plugin and hooks in [`src/integrations/opencode`](./src/integrations/opencode)              |
+| Kilo               | In-process plugin and hooks in [`src/integrations/kilo`](./src/integrations/kilo)                      |
+| Windsurf           | Project hooks and rule in [`src/integrations/windsurf`](./src/integrations/windsurf)                   |
 
 **Rules tier**: Roo Code, Zed, Amp, Continue, Crush and Droid have no veto API, so
 they get always-on routing rules instead.

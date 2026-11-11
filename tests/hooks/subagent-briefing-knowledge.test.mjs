@@ -15,11 +15,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { agentTranscriptFor, subagentKnowledge, subagentTask } from '../../hooks-core/briefing.mjs';
-import { load, nodeId, putEdge, putNode } from '../../hooks-core/wiki.mjs';
-import { indexFile } from '../../hooks-core/staleness.mjs';
-import { subagentBriefing } from '../../hooks-core/policy.mjs';
-import { readMetrics } from '../../hooks-core/metrics.mjs';
+import { agentTranscriptFor, subagentKnowledge, subagentTask } from '../../src/hooks-core/briefing.mjs';
+import { load, nodeId, putEdge, putNode } from '../../src/hooks-core/wiki.mjs';
+import { indexFile } from '../../src/hooks-core/staleness.mjs';
+import { subagentBriefing } from '../../src/hooks-core/policy.mjs';
+import { readMetrics } from '../../src/hooks-core/metrics.mjs';
 
 const ROOT = join(fileURLToPath(new URL('.', import.meta.url)), '..', '..');
 const TASK = 'Fix the failing Layers D shard: the npx jest command fails, find the repository test runner.';
@@ -116,7 +116,7 @@ describe('end to end through the packaged router', () => {
   test("a subagent's first call carries the briefing and the relevant finding", () => {
     seed('Run npm test instead of npx jest for this repository');
     const { transcript } = subagentSession(TASK);
-    const result = spawnSync(process.execPath, [join(ROOT, 'plugin/hooks/pretooluse-router.mjs')], {
+    const result = spawnSync(process.execPath, [join(ROOT, 'src/plugin/hooks/pretooluse-router.mjs')], {
       input: JSON.stringify({
         session_id: `brief-${randomUUID()}`,
         transcript_path: transcript,

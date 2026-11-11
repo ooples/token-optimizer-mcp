@@ -9,8 +9,8 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, wri
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { migrate, readTombstone, recover } from '../../hooks-core/migrate.mjs';
-import { projectStore, readState, storeId } from '../../hooks-core/maintenance.mjs';
+import { migrate, readTombstone, recover } from '../../src/hooks-core/migrate.mjs';
+import { projectStore, readState, storeId } from '../../src/hooks-core/maintenance.mjs';
 
 const ROOT = process.cwd();
 const quiet = () => ({ complete: true, found: [] });
@@ -84,7 +84,7 @@ describe('an in-repo store beside an existing per-user store', () => {
       [
         '--input-type=module',
         '-e',
-        `import { migrate } from ${JSON.stringify(pathToFileURL(join(ROOT, 'hooks-core', 'migrate.mjs')).href)};
+        `import { migrate } from ${JSON.stringify(pathToFileURL(join(ROOT, 'src', 'hooks-core', 'migrate.mjs')).href)};
          migrate(${JSON.stringify(repo)}, {
            processes: () => ({ complete: true, found: [] }),
            faultAt: (at) => { if (at === 'merged') process.exit(137); },

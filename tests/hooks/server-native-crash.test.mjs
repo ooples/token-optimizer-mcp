@@ -14,11 +14,11 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { serverCrashNotice } from '../../hooks-core/server-crash.mjs';
+import { serverCrashNotice } from '../../src/hooks-core/server-crash.mjs';
 
 const ROOT = process.cwd();
-const LAUNCH = join(ROOT, 'plugin', 'launch.mjs');
-const SESSION_START = join(ROOT, 'plugin', 'hooks', 'session-start.mjs');
+const LAUNCH = join(ROOT, 'src', 'plugin', 'launch.mjs');
+const SESSION_START = join(ROOT, 'src', 'plugin', 'hooks', 'session-start.mjs');
 const PACKAGE_DIR = join('node_modules', '@ooples', 'token-optimizer-mcp');
 
 let runtime;
@@ -31,7 +31,7 @@ beforeAll(async () => {
   const saved = process.env.TOKEN_OPTIMIZER_LAUNCH_IMPORT_ONLY;
   process.env.TOKEN_OPTIMIZER_LAUNCH_IMPORT_ONLY = '1';
   try {
-    ({ isNativeCrash, clearCrashWhenSurvived } = await import('../../plugin/launch.mjs'));
+    ({ isNativeCrash, clearCrashWhenSurvived } = await import('../../src/plugin/launch.mjs'));
   } finally {
     if (saved === undefined) delete process.env.TOKEN_OPTIMIZER_LAUNCH_IMPORT_ONLY;
     else process.env.TOKEN_OPTIMIZER_LAUNCH_IMPORT_ONLY = saved;

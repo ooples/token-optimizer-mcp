@@ -25,7 +25,7 @@ jobs:
       - name: HOL Plugin Scanner
         uses: hashgraph-online/ai-plugin-scanner-action@8f0a503ca2a70c1968a9a883e11fdff5737b7909 # v1 (v1.2.514)
         with:
-          plugin_dir: "integrations/codex/plugin"
+          plugin_dir: "src/integrations/codex/plugin"
           mode: scan
           min_score: 80
           fail_on_severity: high

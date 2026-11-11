@@ -14,7 +14,7 @@ import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
-import { canonicalPath } from '../../hooks-core/paths.mjs';
+import { canonicalPath } from '../../src/hooks-core/paths.mjs';
 import { dirname } from 'node:path';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -22,6 +22,7 @@ const ROUTER = join(
   HERE,
   '..',
   '..',
+  'src',
   'plugin',
   'hooks',
   'pretooluse-router.mjs'
@@ -400,14 +401,14 @@ describe('a repeated web fetch is the same REQUEST, not the same URL', () => {
   });
 
   test('the same question twice is collapsed', async () => {
-    const { decide, remember } = await import('../../hooks-core/decide.mjs');
+    const { decide, remember } = await import('../../src/hooks-core/decide.mjs');
     const state = {};
     remember(fetch('what version does it pin?'), state);
     expect(decide(fetch('what version does it pin?'), state, new Set())).not.toBeNull();
   });
 
   test('a different question about the same page still fetches', async () => {
-    const { decide, remember } = await import('../../hooks-core/decide.mjs');
+    const { decide, remember } = await import('../../src/hooks-core/decide.mjs');
     const state = {};
     remember(fetch('what version does it pin?'), state);
     expect(decide(fetch('what are the breaking changes?'), state, new Set())).toBeNull();
@@ -416,7 +417,7 @@ describe('a repeated web fetch is the same REQUEST, not the same URL', () => {
   test('only whitespace is normalised, so wording differences still fetch', async () => {
     // Deliberately strict: collapsing wrongly withholds information the model
     // cannot obtain any other way, while failing to collapse costs one fetch.
-    const { decide, remember } = await import('../../hooks-core/decide.mjs');
+    const { decide, remember } = await import('../../src/hooks-core/decide.mjs');
     const state = {};
     remember(fetch('what version does it pin?'), state);
     expect(decide(fetch('  what   version does it pin?  '), state, new Set())).not.toBeNull();

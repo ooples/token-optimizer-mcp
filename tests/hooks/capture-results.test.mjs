@@ -18,13 +18,13 @@ import {
   readEvidence,
   recordToolOutcome,
   record,
-} from '../../hooks-core/metrics.mjs';
+} from '../../src/hooks-core/metrics.mjs';
 import {
   outputFrom,
   exitFrom,
   toolSucceeded,
   mutationSucceeded,
-} from '../../hooks-core/adapter.mjs';
+} from '../../src/hooks-core/adapter.mjs';
 
 let dir;
 beforeEach(() => {

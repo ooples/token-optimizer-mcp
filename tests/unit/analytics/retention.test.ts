@@ -391,7 +391,7 @@ describe('the analytics store under retention', () => {
  */
 describe('the expansion-credit link outlives the pointer that needs it', () => {
   it('keeps rows at least as long as a disclosure ref can be expanded', async () => {
-    const expand = (await import('../../../hooks-core/expand.mjs')) as {
+    const expand = (await import('../../../src/hooks-core/expand.mjs')) as {
       ARTIFACT_TTL_MS: number;
     };
     const pointerDays = expand.ARTIFACT_TTL_MS / 86_400_000;

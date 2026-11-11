@@ -11,13 +11,13 @@
  * The redundancy is glaring once the content is real. Ripgrep prefixes EVERY
  * line with its path and line number:
  *
- *     hooks-core/derive.mjs:1204: export function commandOperand(command) {
- *     hooks-core/derive.mjs:1205:   const tokens = commandBody(command)
+ *     src/hooks-core/derive.mjs:1204: export function commandOperand(command) {
+ *     src/hooks-core/derive.mjs:1205:   const tokens = commandBody(command)
  *
  * On this repository that prefix averages a third of the line. Stating it once
  * per contiguous hunk removes all of it:
  *
- *     hooks-core/derive.mjs:1204-1205
+ *     src/hooks-core/derive.mjs:1204-1205
  *     export function commandOperand(command) {
  *       const tokens = commandBody(command)
  *

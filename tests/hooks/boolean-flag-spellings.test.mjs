@@ -1,4 +1,4 @@
-import { flagOn, flagOff } from '../../hooks-core/flags.mjs';
+import { flagOn, flagOff } from '../../src/hooks-core/flags.mjs';
 
 /**
  * Both readings are checked against an injected environment rather than
@@ -72,7 +72,7 @@ describe('the switches that were reading one spelling only', () => {
   it('turns the full harvest delta on for 1 as well as for true', async () => {
     // This one compared against 'true' alone, so TOKEN_OPTIMIZER_HARVEST_FULL=1
     // sent the digest instead of the delta and said nothing about it.
-    const { buildDigest } = await import('../../hooks-core/harvest.mjs');
+    const { buildDigest } = await import('../../src/hooks-core/harvest.mjs');
     expect(typeof buildDigest).toBe('function');
     for (const raw of ['1', 'true', 'yes', 'on']) {
       expect(await withEnv('TOKEN_OPTIMIZER_HARVEST_FULL', raw, () => flagOn('TOKEN_OPTIMIZER_HARVEST_FULL'))).toBe(
@@ -83,7 +83,7 @@ describe('the switches that were reading one spelling only', () => {
 
   it('opts a project out of the shared tier for true as well as for 1', async () => {
     // And this one compared against '1' alone, in the other direction.
-    const { quarantineSharedSource } = await import('../../hooks-core/harvest-write.mjs');
+    const { quarantineSharedSource } = await import('../../src/hooks-core/harvest-write.mjs');
     const ephemeral = `${process.env.TEMP || '/tmp'}/appdata/local/temp/a-study/project`.replace(/\\/g, '/');
     const quarantined = await withEnv('TOKEN_OPTIMIZER_ALLOW_EPHEMERAL_SHARED', '', () =>
       quarantineSharedSource(ephemeral)
@@ -97,7 +97,7 @@ describe('the switches that were reading one spelling only', () => {
   });
 
   it('disables the wiki for on as well as for 1, true and yes', async () => {
-    const { wikiDisabled } = await import('../../hooks-core/wiki.mjs');
+    const { wikiDisabled } = await import('../../src/hooks-core/wiki.mjs');
     for (const raw of ['1', 'true', 'yes', 'on']) {
       expect(await withEnv('TOKEN_OPTIMIZER_WIKI_DISABLED', raw, () => wikiDisabled())).toBe(true);
     }

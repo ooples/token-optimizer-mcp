@@ -1,5 +1,5 @@
 import { describe, it, expect } from '@jest/globals';
-import { tokenize, rank } from '../../hooks-core/lexical.mjs';
+import { tokenize, rank } from '../../src/hooks-core/lexical.mjs';
 
 // Ordered so the correct BM25 winner ("a") is NOT first in input order --
 // it is listed last. This defeats two confounds a k1 sweep cannot catch,

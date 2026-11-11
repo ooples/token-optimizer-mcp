@@ -23,8 +23,8 @@ import { tmpdir } from 'node:os';
 import {
   recordAuthoredContent,
   authoredContentFor,
-} from '../../hooks-core/authored.mjs';
-import { projectStore } from '../../hooks-core/maintenance.mjs';
+} from '../../src/hooks-core/authored.mjs';
+import { projectStore } from '../../src/hooks-core/maintenance.mjs';
 
 let dir;
 const CONTENT = 'export const a = 1;\n'.repeat(20);

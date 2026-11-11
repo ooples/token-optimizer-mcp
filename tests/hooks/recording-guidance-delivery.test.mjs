@@ -15,8 +15,8 @@ import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
-const CLAUDE_POST = join(ROOT, 'plugin', 'hooks', 'post-tool.mjs');
-const WINDSURF_POST = join(ROOT, 'integrations', 'windsurf', 'hooks', 'post-tool.mjs');
+const CLAUDE_POST = join(ROOT, 'src', 'plugin', 'hooks', 'post-tool.mjs');
+const WINDSURF_POST = join(ROOT, 'src', 'integrations', 'windsurf', 'hooks', 'post-tool.mjs');
 
 const scratch = mkdtempSync(join(tmpdir(), 'recording-delivery-'));
 afterAll(() => rmSync(scratch, { recursive: true, force: true }));

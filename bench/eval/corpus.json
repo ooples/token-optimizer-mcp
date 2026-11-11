@@ -56,7 +56,7 @@
         "raising a timeout or reducing the property-test iteration count"
       ],
       "finding": "A path containing U+10FFFF aborts the process on Windows: libuv's assert in `uv_wtf8_to_utf16` is `code_point < 0x10FFFF`, off by one. It is a NATIVE abort, so try/catch cannot catch it, and it reaches existsSync/statSync/readFileSync alike. Guard the path before the fs call.",
-      "anchors": ["hooks-core/paths.mjs", "hooks-core/decide.mjs"]
+      "anchors": ["src/hooks-core/paths.mjs", "src/hooks-core/decide.mjs"]
     },
     {
       "id": "manifest-drift",
@@ -82,7 +82,7 @@
         "not noticing two gates enforce @latest"
       ],
       "finding": "Client configs in this repo must use `@ooples/token-optimizer-mcp@latest`, not a numeric pin. A pin is a derived value release-please does not bump; it went stale for four releases and shipped a plugin that launched a server three versions behind. Two gates enforce this.",
-      "anchors": ["scripts/pin-mcp-version.mjs", "tests/unit/pinned-spec-tracks-package.test.ts"]
+      "anchors": ["src/scripts/pin-mcp-version.mjs", "tests/unit/pinned-spec-tracks-package.test.ts"]
     }
   ]
 }

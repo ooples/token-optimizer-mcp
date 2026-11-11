@@ -241,7 +241,7 @@ export const CORPUS_SPEC = [
   { kind: 'sources', root: ['src', 'server'], budget: 45_000 },
   {
     kind: 'search',
-    root: ['hooks-core'],
+    root: ['src', 'hooks-core'],
     pattern: /function |=> \{/,
     budget: 12_000,
   },
@@ -1032,7 +1032,7 @@ export function fixtures() {
       request: request(
         'You are a coding agent.',
         [
-          searchResults(join(REPO, 'hooks-core'), /function |=> \{/, 12_000),
+          searchResults(join(REPO, 'src', 'hooks-core'), /function |=> \{/, 12_000),
           'Reading hits.',
         ],
         [searchResults(join(REPO, 'src', 'tools'), /function |=> \{/, 60_000)]

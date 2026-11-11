@@ -19,14 +19,14 @@
 import { mkdtempSync, rmSync, writeFileSync, mkdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { load, putNode, putEdge, nodeId } from '../../hooks-core/wiki.mjs';
-import { indexFile, invalidateOnWrite, checkAnchor } from '../../hooks-core/staleness.mjs';
-import { extractSymbols, symbolKey } from '../../hooks-core/symbols.mjs';
-import { readCostBytes } from '../../hooks-core/decide.mjs';
-import { recordRead, record, report } from '../../hooks-core/metrics.mjs';
-import { refusalPayload, sessionIndex } from '../../hooks-core/inject.mjs';
-import { correct, create, audit, activeFindings } from '../../hooks-core/curate.mjs';
-import { loadState, saveState } from '../../hooks-core/policy.mjs';
+import { load, putNode, putEdge, nodeId } from '../../src/hooks-core/wiki.mjs';
+import { indexFile, invalidateOnWrite, checkAnchor } from '../../src/hooks-core/staleness.mjs';
+import { extractSymbols, symbolKey } from '../../src/hooks-core/symbols.mjs';
+import { readCostBytes } from '../../src/hooks-core/decide.mjs';
+import { recordRead, record, report } from '../../src/hooks-core/metrics.mjs';
+import { refusalPayload, sessionIndex } from '../../src/hooks-core/inject.mjs';
+import { correct, create, audit, activeFindings } from '../../src/hooks-core/curate.mjs';
+import { loadState, saveState } from '../../src/hooks-core/policy.mjs';
 
 let workspace;
 let dir;

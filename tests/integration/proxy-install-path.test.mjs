@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { pathToFileURL } from 'node:url';
-import { putNode } from '../../hooks-core/wiki.mjs';
+import { putNode } from '../../src/hooks-core/wiki.mjs';
 
 /**
  * Copy a built module and everything it reaches into the fixture, keeping each
@@ -38,9 +38,10 @@ describe('packaged graph module resolution', () => {
     const dir = fs.mkdtempSync(join(tmpdir(), 'optimizer résumé '));
     // A junction is used only for shared, read-only test dependencies. Unlink
     // it before cleanup so recursive deletion never walks the linked source.
-    const linked = join(dir, 'hooks-core');
+    const linked = join(dir, 'src', 'hooks-core');
     try {
       fs.mkdirSync(join(dir, 'dist/proxy'), { recursive: true });
+      fs.mkdirSync(join(dir, 'src'), { recursive: true });
       fs.writeFileSync(join(dir, 'package.json'), '{"type":"module"}');
       const copied = copyModuleGraph('dist/proxy/findings.js', dir);
       // A POSITIVE CONTROL ON THE COPIER. This used to name the two files it
@@ -51,7 +52,7 @@ describe('packaged graph module resolution', () => {
       // followed none would look identical to one with nothing to follow.
       expect(copied.length).toBeGreaterThan(1);
       fs.symlinkSync(
-        resolve('hooks-core'),
+        resolve('src', 'hooks-core'),
         linked,
         process.platform === 'win32' ? 'junction' : 'dir'
       );

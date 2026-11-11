@@ -12,12 +12,12 @@
       "extra-files": [
         {
           "type": "json",
-          "path": "plugin/.claude-plugin/plugin.json",
+          "path": "src/plugin/.claude-plugin/plugin.json",
           "jsonpath": "$.version"
         },
         {
           "type": "json",
-          "path": "integrations/codex/plugin/.codex-plugin/plugin.json",
+          "path": "src/integrations/codex/plugin/.codex-plugin/plugin.json",
           "jsonpath": "$.version"
         },
         {

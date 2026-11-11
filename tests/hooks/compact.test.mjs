@@ -7,7 +7,7 @@
  */
 
 import { describe, it, expect } from '@jest/globals';
-import { compact } from '../../hooks-core/compact.mjs';
+import { compact } from '../../src/hooks-core/compact.mjs';
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -147,7 +147,7 @@ describe('the pipe stage survives output too large to hold', () => {
   // smaller stream so it is fast, but drives the same truncation path -- the
   // retention floor is 1MB, so 3MB crosses it.
   const HERE = dirname(fileURLToPath(import.meta.url));
-  const STAGE = join(HERE, '..', '..', 'hooks-core', 'compact-stage.mjs');
+  const STAGE = join(HERE, '..', '..', 'src', 'hooks-core', 'compact-stage.mjs');
 
   it('emits a bound rather than dying, and keeps BOTH ends', () => {
     const previous = join(mkdtempSync(join(tmpdir(), 'stage-')), 'prev.txt');

@@ -25,7 +25,7 @@
 import { mkdtempSync, rmSync, existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { load, putNode, putEdge, wikiDisabled } from '../../hooks-core/wiki.mjs';
+import { load, putNode, putEdge, wikiDisabled } from '../../src/hooks-core/wiki.mjs';
 
 let dir;
 

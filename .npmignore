@@ -33,7 +33,7 @@ docs/
 
 # Examples and scripts
 examples/
-scripts/
+src/scripts/
 *.ps1
 *.sh
 

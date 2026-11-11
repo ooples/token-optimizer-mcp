@@ -13,11 +13,11 @@ import {
   record,
   recordFindingFeedback,
   recordToolOutcome,
-} from '../../hooks-core/metrics.mjs';
-import { load, wikiDir } from '../../hooks-core/wiki.mjs';
-import { writeHarvested } from '../../hooks-core/harvest-write.mjs';
-import { ORIGIN_AGENT } from '../../hooks-core/curate.mjs';
-import { forCommand, forTouch } from '../../hooks-core/inject.mjs';
+} from '../../src/hooks-core/metrics.mjs';
+import { load, wikiDir } from '../../src/hooks-core/wiki.mjs';
+import { writeHarvested } from '../../src/hooks-core/harvest-write.mjs';
+import { ORIGIN_AGENT } from '../../src/hooks-core/curate.mjs';
+import { forCommand, forTouch } from '../../src/hooks-core/inject.mjs';
 
 let workspace;
 let dir;

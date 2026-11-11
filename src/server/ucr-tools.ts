@@ -7,7 +7,7 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 
 async function runtime(): Promise<any> {
   return import(
-    pathToFileURL(path.join(here, '..', '..', 'ucr', 'index.mjs')).href
+    pathToFileURL(path.join(here, '..', '..', 'src', 'ucr', 'index.mjs')).href
   );
 }
 

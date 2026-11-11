@@ -83,7 +83,7 @@ function sourceFiles(dir: string): string[] {
 describe('source contains no stray control characters', () => {
   const files = sourceFiles(join(ROOT, 'src'))
     .concat(sourceFiles(join(ROOT, 'tests')))
-    .concat(sourceFiles(join(ROOT, 'hooks-core')));
+    .concat(sourceFiles(join(ROOT, 'src', 'hooks-core')));
 
   it('scanned a meaningful number of files', () => {
     expect(files.length).toBeGreaterThan(100);

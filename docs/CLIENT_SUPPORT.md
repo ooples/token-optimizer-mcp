@@ -17,7 +17,7 @@ never presented as having native automatic capture.
 | Cline, OpenCode, Kilo, Windsurf                                | native observation     | native routing/capture/delivery; semantic write through the active-model rule      |
 | Roo Code, Zed, Amp, Continue, Crush, Droid                     | MCP + rules            | MCP-visible activity and explicit graph tools; no claim over hidden built-in calls |
 
-The executable registry in `hooks-core/capabilities.mjs` contains the exact
+The executable registry in `src/hooks-core/capabilities.mjs` contains the exact
 per-client surfaces and prevents the adapter, generator, verifier, dashboard,
 and certification report from inventing different matrices.
 
@@ -34,10 +34,10 @@ No supported path delegates that judgment to a detached harvesting model.
 ## One decision engine
 
 Every native command-hook client runs the decision and graph engine in
-[`hooks-core/`](../hooks-core); generated entry files only name the client and
+[`src/hooks-core/`](../src/hooks-core); generated entry files only name the client and
 event. OpenCode and Kilo bridge their in-process plugin APIs into those same
 generated entries. Clients without command hooks receive rules generated from
-one source in `scripts/generate-client-configs.mjs`.
+one source in `src/scripts/generate-client-configs.mjs`.
 
 This is deliberate. Before it, Claude Code, Codex and Gemini each carried their
 own copy of the threshold constant and the guidance string, and they had already
@@ -47,7 +47,7 @@ drifted. Client integrations now differ only where the protocol differs.
 npm run sync:hooks          # regenerate vendored copies, entries, and configs
 npm run sync:hooks:check    # CI gate: fails if any copy has drifted
 npm run verify:certification # structured protocol certification for all 16
-node scripts/certify-clients.mjs --json # also detects installed exact versions
+node src/scripts/certify-clients.mjs --json # also detects installed exact versions
 ```
 
 The core is vendored into each native client directory rather than imported, because

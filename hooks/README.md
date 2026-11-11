@@ -79,7 +79,7 @@ token-optimizer-orchestrator.ps1
     ↓ (call MCP tool)
 invoke-token-optimizer.ps1
     ↓ (pipe JSON via stdin)
-cli-wrapper.mjs
+src/cli-wrapper.mjs
     ↓ (spawn & send JSON-RPC)
 token-optimizer-mcp server
     ↓ (execute tool)
@@ -148,7 +148,7 @@ The CLI wrapper uses Gemini's recommended stdin approach to avoid all JSON escap
 ```powershell
 # PowerShell side:
 $argsJson = $Arguments | ConvertTo-Json -Compress
-$result = $argsJson | node cli-wrapper.mjs count_tokens --stdin
+$result = $argsJson | node src/cli-wrapper.mjs count_tokens --stdin
 ```
 
 ```javascript

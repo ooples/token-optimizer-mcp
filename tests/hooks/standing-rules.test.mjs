@@ -11,9 +11,9 @@
  * is narrow and the budget is fixed rather than earned.
  */
 import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
-import { sessionIndex, standingRules } from '../../hooks-core/inject.mjs';
-import { readMetrics } from '../../hooks-core/metrics.mjs';
-import { load, putNode, wikiDir } from '../../hooks-core/wiki.mjs';
+import { sessionIndex, standingRules } from '../../src/hooks-core/inject.mjs';
+import { readMetrics } from '../../src/hooks-core/metrics.mjs';
+import { load, putNode, wikiDir } from '../../src/hooks-core/wiki.mjs';
 import { spawnSync } from 'child_process';
 import { mkdtempSync, rmSync, readFileSync, mkdirSync } from 'fs';
 import { join } from 'path';
@@ -201,7 +201,7 @@ describe('through the real SessionStart hook', () => {
       claim: 'Run npm test, not npx jest.',
     });
 
-    const r = spawnSync(process.execPath, [join(process.cwd(), 'plugin', 'hooks', 'session-start.mjs')], {
+    const r = spawnSync(process.execPath, [join(process.cwd(), 'src', 'plugin', 'hooks', 'session-start.mjs')], {
       input: '{}',
       encoding: 'utf8',
       timeout: 30_000,
@@ -224,8 +224,8 @@ describe('through the real SessionStart hook', () => {
     // Both the custom Claude entry and the generated shared adapter now pass
     // prompt-selected finding ids through the same fail-closed contract.
     for (const entry of [
-      join(process.cwd(), 'plugin', 'hooks', 'session-start.mjs'),
-      join(process.cwd(), 'integrations', 'codex', 'hooks', 'session-start.mjs'),
+      join(process.cwd(), 'src', 'plugin', 'hooks', 'session-start.mjs'),
+      join(process.cwd(), 'src', 'integrations', 'codex', 'hooks', 'session-start.mjs'),
     ]) {
       const relevantRun = spawnSync(process.execPath, [entry], {
         input: JSON.stringify({

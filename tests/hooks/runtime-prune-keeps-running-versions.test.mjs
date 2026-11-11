@@ -15,7 +15,7 @@
  * `Cannot find module .../versions/6.0.0/.../hooks-core/wiki.mjs` from every
  * wiki_write call for the rest of the session while every other tool worked, so
  * it read as a packaging bug in the published tarball. It was not: 6.0.1 ships
- * hooks-core/wiki.mjs and 6.0.0 had it too. The directory had been deleted
+ * src/hooks-core/wiki.mjs and 6.0.0 had it too. The directory had been deleted
  * underneath the process. The refresh interval is six hours, so an ordinary
  * working session outlives one routinely.
  *
@@ -36,7 +36,7 @@ import { join, resolve } from 'path';
 import { pathToFileURL } from 'url';
 
 const LAUNCHER = pathToFileURL(
-  resolve(process.cwd(), 'plugin', 'launch.mjs')
+  resolve(process.cwd(), 'src', 'plugin', 'launch.mjs')
 ).href;
 
 let runtime;

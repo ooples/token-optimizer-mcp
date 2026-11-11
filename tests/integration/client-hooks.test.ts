@@ -20,38 +20,38 @@ const repoRoot = resolve(process.cwd());
 // is why they passed on a stale tree and failed in CI once the files were gone.
 const codexSessionStart = join(
   repoRoot,
-  'integrations/codex/hooks/session-start.mjs'
+  'src/integrations/codex/hooks/session-start.mjs'
 );
-const codexPreTool = join(repoRoot, 'integrations/codex/hooks/pre-tool.mjs');
+const codexPreTool = join(repoRoot, 'src/integrations/codex/hooks/pre-tool.mjs');
 const geminiSessionStart = join(
   repoRoot,
-  'integrations/gemini/hooks/session-start.mjs'
+  'src/integrations/gemini/hooks/session-start.mjs'
 );
-const geminiPreTool = join(repoRoot, 'integrations/gemini/hooks/pre-tool.mjs');
+const geminiPreTool = join(repoRoot, 'src/integrations/gemini/hooks/pre-tool.mjs');
 const geminiPostTool = join(
   repoRoot,
-  'integrations/gemini/hooks/post-tool.mjs'
+  'src/integrations/gemini/hooks/post-tool.mjs'
 );
 const copilotSessionStart = join(
   repoRoot,
-  'integrations/copilot/.github/hooks/session-start.mjs'
+  'src/integrations/copilot/.github/hooks/session-start.mjs'
 );
 const copilotPreTool = join(
   repoRoot,
-  'integrations/copilot/.github/hooks/pre-tool.mjs'
+  'src/integrations/copilot/.github/hooks/pre-tool.mjs'
 );
 const legacyPowerShellDispatcher = join(repoRoot, 'hooks/dispatcher.ps1');
 const openCodePlugin = join(
   repoRoot,
-  'integrations/opencode/.opencode/plugins/token-optimizer.js'
+  'src/integrations/opencode/.opencode/plugins/token-optimizer.js'
 );
 const openCodeLegacyPlugin = join(
   repoRoot,
-  'integrations/opencode/legacy/.opencode/plugins/token-optimizer.js'
+  'src/integrations/opencode/legacy/.opencode/plugins/token-optimizer.js'
 );
 const kiloPlugin = join(
   repoRoot,
-  'integrations/kilo/.kilo/plugin/token-optimizer.js'
+  'src/integrations/kilo/.kilo/plugin/token-optimizer.js'
 );
 
 function runHook(
@@ -103,8 +103,8 @@ describe('native CLI hook integrations', () => {
     writeFileSync(smallFile, 'small');
 
     for (const [client, source] of [
-      ['opencode', join(repoRoot, 'integrations/opencode/hooks')],
-      ['kilo', join(repoRoot, 'integrations/kilo/hooks')],
+      ['opencode', join(repoRoot, 'src/integrations/opencode/hooks')],
+      ['kilo', join(repoRoot, 'src/integrations/kilo/hooks')],
     ] as const) {
       const destination = join(
         fixtureDir,
@@ -223,7 +223,7 @@ describe('native CLI hook integrations', () => {
 
   it('ships one shared core to every client, byte for byte', () => {
     // The invariant that replaced "these two advisor scripts are identical":
-    // every client runs the SAME decision logic, copied by scripts/sync-hook-core.mjs.
+    // every client runs the SAME decision logic, copied by src/scripts/sync-hook-core.mjs.
     // A client whose lib has drifted is a client with its own thresholds.
     // The synced copies carry a two-line "GENERATED FILE" banner, so the
     // comparison is of the logic beneath it rather than of the whole file.
@@ -240,15 +240,15 @@ describe('native CLI hook integrations', () => {
         )
         .join('\n');
     const core = stripBanner(
-      readFileSync(join(repoRoot, 'hooks-core/decide.mjs'), 'utf8')
+      readFileSync(join(repoRoot, 'src/hooks-core/decide.mjs'), 'utf8')
     );
     const clients = [
-      'plugin/hooks/lib/decide.mjs',
-      'integrations/codex/hooks/lib/decide.mjs',
-      'integrations/codex/plugin/hooks/lib/decide.mjs',
-      'integrations/gemini/hooks/lib/decide.mjs',
-      'integrations/opencode/hooks/lib/decide.mjs',
-      'integrations/qwen/hooks/lib/decide.mjs',
+      'src/plugin/hooks/lib/decide.mjs',
+      'src/integrations/codex/hooks/lib/decide.mjs',
+      'src/integrations/codex/plugin/hooks/lib/decide.mjs',
+      'src/integrations/gemini/hooks/lib/decide.mjs',
+      'src/integrations/opencode/hooks/lib/decide.mjs',
+      'src/integrations/qwen/hooks/lib/decide.mjs',
     ];
 
     for (const client of clients) {
@@ -260,8 +260,8 @@ describe('native CLI hook integrations', () => {
 
   it('loads valid hook manifests whose commands resolve to shipped scripts', () => {
     const manifests = [
-      join(repoRoot, 'integrations/codex/plugin/hooks/hooks.json'),
-      join(repoRoot, 'integrations/copilot/.github/hooks/token-optimizer.json'),
+      join(repoRoot, 'src/integrations/codex/plugin/hooks/hooks.json'),
+      join(repoRoot, 'src/integrations/copilot/.github/hooks/token-optimizer.json'),
       join(repoRoot, 'hooks/hooks.json'),
     ];
 
@@ -270,13 +270,13 @@ describe('native CLI hook integrations', () => {
       expect(dirname(manifest)).toBeTruthy();
     }
 
-    const pluginRoot = join(repoRoot, 'integrations/codex/plugin');
+    const pluginRoot = join(repoRoot, 'src/integrations/codex/plugin');
     const pluginManifest = JSON.parse(
       readFileSync(join(pluginRoot, 'hooks/hooks.json'), 'utf8')
     );
     const standaloneManifest = JSON.parse(
       readFileSync(
-        join(repoRoot, 'integrations/codex/hooks/hooks.json'),
+        join(repoRoot, 'src/integrations/codex/hooks/hooks.json'),
         'utf8'
       )
     );
@@ -332,7 +332,7 @@ describe('native CLI hook integrations', () => {
 
   it('observes Claude Code PowerShell calls on Windows', () => {
     const manifest = JSON.parse(
-      readFileSync(join(repoRoot, 'plugin/hooks/hooks.json'), 'utf8')
+      readFileSync(join(repoRoot, 'src/plugin/hooks/hooks.json'), 'utf8')
     );
     expect(manifest.hooks.PreToolUse[0].matcher).toContain('PowerShell');
     expect(manifest.hooks.PostToolUse[0].matcher).toContain('PowerShell');
@@ -379,7 +379,7 @@ describe('native CLI hook integrations', () => {
   it('ships a Codex plugin MCP config that Codex can discover', () => {
     const config = JSON.parse(
       readFileSync(
-        join(repoRoot, 'integrations/codex/plugin/.mcp.json'),
+        join(repoRoot, 'src/integrations/codex/plugin/.mcp.json'),
         'utf8'
       )
     );
@@ -402,22 +402,22 @@ describe('native CLI hook integrations', () => {
       'stop.mjs',
     ]) {
       const standalone = readFileSync(
-        join(repoRoot, 'integrations/codex/hooks', entry),
+        join(repoRoot, 'src/integrations/codex/hooks', entry),
         'utf8'
       );
       const plugin = readFileSync(
-        join(repoRoot, 'integrations/codex/plugin/hooks', entry),
+        join(repoRoot, 'src/integrations/codex/plugin/hooks', entry),
         'utf8'
       );
       // Identical except for `entryRel`, which tells the runtime switch where
       // THIS entry lives inside an installed package: each copy must name its
       // own directory, and nothing else may differ.
-      expect(plugin).toContain("entryRel: 'integrations/codex/plugin/hooks'");
-      expect(standalone).toContain("entryRel: 'integrations/codex/hooks'");
+      expect(plugin).toContain("entryRel: 'src/integrations/codex/plugin/hooks'");
+      expect(standalone).toContain("entryRel: 'src/integrations/codex/hooks'");
       expect(
         plugin.replaceAll(
-          "entryRel: 'integrations/codex/plugin/hooks'",
-          "entryRel: 'integrations/codex/hooks'"
+          "entryRel: 'src/integrations/codex/plugin/hooks'",
+          "entryRel: 'src/integrations/codex/hooks'"
         )
       ).toBe(standalone);
     }

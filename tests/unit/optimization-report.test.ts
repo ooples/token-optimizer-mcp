@@ -74,7 +74,7 @@ const manager = () =>
  */
 async function seedFindingWithDerivedCost() {
   const wiki = await import(
-    pathToFileURL(join(process.cwd(), 'hooks-core', 'wiki.mjs')).href
+    pathToFileURL(join(process.cwd(), 'src', 'hooks-core', 'wiki.mjs')).href
   );
   wiki.putNode(process.env.TOKEN_OPTIMIZER_WIKI_DIR, {
     kind: 'finding',

@@ -4,7 +4,7 @@ import { join } from 'path';
 import { tmpdir } from 'os';
 
 // @ts-expect-error -- hooks-core ships as plain ESM with no type declarations.
-import { probeServer } from '../../hooks-core/doctor.mjs';
+import { probeServer } from '../../src/hooks-core/doctor.mjs';
 
 /**
  * Issue #307: "MCP server exits before registering tools on Windows."
@@ -35,7 +35,7 @@ function givenServer(body: string, { asSourceCheckout = false } = {}) {
   if (asSourceCheckout) {
     mkdirSync(join(root, 'src', 'server'), { recursive: true });
     writeFileSync(join(root, 'src', 'server', 'index.ts'), '// source\n');
-    writeFileSync(join(root, 'tsconfig.json'), '{}\n');
+    writeFileSync(join(root, 'src', 'tsconfig.json'), '{}\n');
   }
 
   return root;

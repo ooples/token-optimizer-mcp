@@ -21,7 +21,7 @@ import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
 import { mkdtempSync, rmSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
-import { record, rereadWaste, rereadsByAnchor, fingerprint, recordRead } from '../../hooks-core/metrics.mjs';
+import { record, rereadWaste, rereadsByAnchor, fingerprint, recordRead } from '../../src/hooks-core/metrics.mjs';
 
 let dir;
 let project;

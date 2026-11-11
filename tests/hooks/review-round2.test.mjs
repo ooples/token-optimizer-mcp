@@ -12,11 +12,11 @@ import { mkdtempSync, rmSync, writeFileSync, readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
-import { decide, normalizeTool } from '../../hooks-core/decide.mjs';
-import { extractSymbols } from '../../hooks-core/symbols.mjs';
-import { load, putNode, GRAPH_VERSION } from '../../hooks-core/wiki.mjs';
-import { indexFile } from '../../hooks-core/staleness.mjs';
-import { record, recordRead, report } from '../../hooks-core/metrics.mjs';
+import { decide, normalizeTool } from '../../src/hooks-core/decide.mjs';
+import { extractSymbols } from '../../src/hooks-core/symbols.mjs';
+import { load, putNode, GRAPH_VERSION } from '../../src/hooks-core/wiki.mjs';
+import { indexFile } from '../../src/hooks-core/staleness.mjs';
+import { record, recordRead, report } from '../../src/hooks-core/metrics.mjs';
 
 // THE HOLDOUT IS OFF IN THIS SUITE, DELIBERATELY.
 //
@@ -206,7 +206,7 @@ describe('the server exposes no caller-controlled graph path', () => {
 });
 
 describe('the UI verification script cannot delete a real graph', () => {
-  const script = readFileSync(join(ROOT, 'scripts', 'verify-wiki-ui.mjs'), 'utf8');
+  const script = readFileSync(join(ROOT, 'src', 'scripts', 'verify-wiki-ui.mjs'), 'utf8');
 
   test('it seeds into a temp directory, not the repository', () => {
     // It pointed at <repo>/.token-optimizer/wiki and deleted it on entry and in

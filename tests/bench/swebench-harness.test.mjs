@@ -172,7 +172,7 @@ describe('the learned mode', () => {
         ];
         writeFileSync(join(transcripts, `s${index}.jsonl`), `${rows.map((row) => JSON.stringify(row)).join('\n')}\n`);
       }
-      const run = spawnSync(process.execPath, [FOLD, join(process.cwd(), 'plugin', 'hooks', 'lib'), cwd, transcripts, 'no-such-claude'], { env, encoding: 'utf8' });
+      const run = spawnSync(process.execPath, [FOLD, join(process.cwd(), 'src', 'plugin', 'hooks', 'lib'), cwd, transcripts, 'no-such-claude'], { env, encoding: 'utf8' });
       const summary = JSON.parse(run.stdout);
       expect(summary.dir).toBe(storeDir);
       expect(summary.applied).toEqual(['Agent']);

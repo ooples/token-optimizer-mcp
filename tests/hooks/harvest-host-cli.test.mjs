@@ -27,8 +27,8 @@ import {
   harvestEnabled,
   hostCliHarvest,
   ARG_STDIN_INSTRUCTION,
-} from '../../hooks-core/harvest.mjs';
-import { CLIENT_CAPABILITIES, CLIENT_HARVEST_CLI, harvestCliFor } from '../../hooks-core/capabilities.mjs';
+} from '../../src/hooks-core/harvest.mjs';
+import { CLIENT_CAPABILITIES, CLIENT_HARVEST_CLI, harvestCliFor } from '../../src/hooks-core/capabilities.mjs';
 
 const FINDING = {
   type: 'command',
@@ -36,7 +36,7 @@ const FINDING = {
   evidence: 'printed by the stub',
   applicability: 'while proving the host-CLI transport works',
   confidenceLabel: 'verified',
-  anchors: ['hooks-core/harvest.mjs'],
+  anchors: ['src/hooks-core/harvest.mjs'],
 };
 
 let dir;
@@ -295,7 +295,7 @@ describe('the payload reaches the CLI and the reply comes back', () => {
   test('stdin delivery harvests with no key and no local model', async () => {
     asStdinCli();
     const found = await extract('## Files touched\nhooks-core/harvest.mjs\n', {
-      knownFiles: new Set(['hooks-core/harvest.mjs']),
+      knownFiles: new Set(['src/hooks-core/harvest.mjs']),
     });
     expect(harvestFailure()).toBeNull();
     expect(found).toHaveLength(1);
@@ -310,7 +310,7 @@ describe('the payload reaches the CLI and the reply comes back', () => {
   test('prompt-file delivery hands over a readable path, not the payload', async () => {
     asFileCli();
     const found = await extract('## Files touched\nhooks-core/harvest.mjs\n', {
-      knownFiles: new Set(['hooks-core/harvest.mjs']),
+      knownFiles: new Set(['src/hooks-core/harvest.mjs']),
     });
     expect(harvestFailure()).toBeNull();
     expect(found).toHaveLength(1);
@@ -338,7 +338,7 @@ describe('the payload reaches the CLI and the reply comes back', () => {
     // characters on Windows. A path has no such ceiling.
     asFileCli();
     const huge = `## Files touched\nhooks-core/harvest.mjs\n${'x'.repeat(120_000)}`;
-    const found = await extract(huge, { knownFiles: new Set(['hooks-core/harvest.mjs']) });
+    const found = await extract(huge, { knownFiles: new Set(['src/hooks-core/harvest.mjs']) });
     expect(found).toHaveLength(1);
     const got = handed();
     expect(got.promptFile.length).toBeGreaterThan(120_000);
@@ -351,7 +351,7 @@ describe('the payload reaches the CLI and the reply comes back', () => {
     // derive events. Only the mode kill switch makes it inert.
     asStdinCli();
     await extract('## Files touched\nhooks-core/harvest.mjs\n', {
-      knownFiles: new Set(['hooks-core/harvest.mjs']),
+      knownFiles: new Set(['src/hooks-core/harvest.mjs']),
     });
     expect(handed().mode).toBe('off');
   });
@@ -364,7 +364,7 @@ describe('the payload reaches the CLI and the reply comes back', () => {
     asStdinCli();
     process.env.STUB_BANNER = '1';
     const found = await extract('## Files touched\nhooks-core/harvest.mjs\n', {
-      knownFiles: new Set(['hooks-core/harvest.mjs']),
+      knownFiles: new Set(['src/hooks-core/harvest.mjs']),
     });
     expect(harvestFailure()).toBeNull();
     expect(found).toHaveLength(1);
@@ -374,7 +374,7 @@ describe('the payload reaches the CLI and the reply comes back', () => {
     asStdinCli();
     process.env.STUB_REPLY = 'I could not find anything worth recording.';
     const found = await extract('## Files touched\nhooks-core/harvest.mjs\n', {
-      knownFiles: new Set(['hooks-core/harvest.mjs']),
+      knownFiles: new Set(['src/hooks-core/harvest.mjs']),
     });
     expect(found).toEqual([]);
     expect(harvestFailure()).toMatch(/no JSON array/);
@@ -385,7 +385,7 @@ describe('the payload reaches the CLI and the reply comes back', () => {
     process.env.STUB_SILENT = '1';
     process.env.STUB_EXIT = '3';
     const found = await extract('## Files touched\nhooks-core/harvest.mjs\n', {
-      knownFiles: new Set(['hooks-core/harvest.mjs']),
+      knownFiles: new Set(['src/hooks-core/harvest.mjs']),
     });
     expect(found).toEqual([]);
     expect(harvestFailure()).toMatch(/exited 3/);
@@ -398,7 +398,7 @@ describe('the payload reaches the CLI and the reply comes back', () => {
     asStdinCli();
     process.env.STUB_EXIT = '1';
     const found = await extract('## Files touched\nhooks-core/harvest.mjs\n', {
-      knownFiles: new Set(['hooks-core/harvest.mjs']),
+      knownFiles: new Set(['src/hooks-core/harvest.mjs']),
     });
     expect(found).toHaveLength(1);
     expect(harvestFailure()).toBeNull();
@@ -412,7 +412,7 @@ describe('the payload reaches the CLI and the reply comes back', () => {
     // an argument at all.
     asArgStdinCli();
     const found = await extract('## Files touched\\nhooks-core/harvest.mjs\\n', {
-      knownFiles: new Set(['hooks-core/harvest.mjs']),
+      knownFiles: new Set(['src/hooks-core/harvest.mjs']),
     });
     expect(harvestFailure()).toBeNull();
     expect(found).toHaveLength(1);
@@ -431,7 +431,7 @@ describe('the payload reaches the CLI and the reply comes back', () => {
     // `flag: 'wx'` closes the race; a random name removes the guess.
     asFileCli();
     await extract('## Files touched\\nhooks-core/harvest.mjs\\n', {
-      knownFiles: new Set(['hooks-core/harvest.mjs']),
+      knownFiles: new Set(['src/hooks-core/harvest.mjs']),
     });
     const named = handed().argv[0].match(/(\S+token-optimizer-harvest-\S+\.txt)/)[1];
     expect(named).not.toContain(String(process.pid));
@@ -451,7 +451,7 @@ describe('the payload reaches the CLI and the reply comes back', () => {
     process.env.STUB_IGNORE_STDIN = '1';
     process.env.STUB_SILENT = '1';
     const found = await extract('x'.repeat(600_000), {
-      knownFiles: new Set(['hooks-core/harvest.mjs']),
+      knownFiles: new Set(['src/hooks-core/harvest.mjs']),
     });
     expect(found).toEqual([]);
     expect(harvestFailure()).toBeTruthy();
@@ -462,7 +462,7 @@ describe('the payload reaches the CLI and the reply comes back', () => {
     process.env.TOKEN_OPTIMIZER_HARVEST_CLI_COMMAND =
       'token-optimizer-no-such-cli-exists-anywhere';
     const found = await extract('## Files touched\nhooks-core/harvest.mjs\n', {
-      knownFiles: new Set(['hooks-core/harvest.mjs']),
+      knownFiles: new Set(['src/hooks-core/harvest.mjs']),
     });
     expect(found).toEqual([]);
     expect(harvestFailure()).toBeTruthy();

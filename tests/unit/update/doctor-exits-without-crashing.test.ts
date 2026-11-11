@@ -21,7 +21,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const doctor = readFileSync(
-  join(process.cwd(), 'scripts', 'doctor.mjs'),
+  join(process.cwd(), 'src', 'scripts', 'doctor.mjs'),
   'utf8'
 );
 
@@ -31,7 +31,7 @@ const code = doctor
   .filter((line) => !line.trim().startsWith('//'))
   .join('\n');
 
-describe('scripts/doctor.mjs', () => {
+describe('src/scripts/doctor.mjs', () => {
   it('reports its verdict through process.exitCode', () => {
     expect(code).toContain('process.exitCode = result.healthy ? 0 : 1');
   });
@@ -48,7 +48,7 @@ describe('scripts/doctor.mjs', () => {
   });
 
   it('asks the registry for the published version', () => {
-    expect(code).toContain("await import(\n    '../dist/update/check.js'\n  )");
+    expect(code).toContain("await import(\n    '../../dist/update/check.js'\n  )");
     expect(code).toContain('checkForUpdate()');
   });
 });

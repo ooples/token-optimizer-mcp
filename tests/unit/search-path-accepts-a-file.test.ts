@@ -19,7 +19,7 @@ import { MetricsCollector } from '../../src/core/metrics.js';
  *     { success: true, totalMatches: 0, filesSearched: 0 }
  *
  * which is indistinguishable from "the pattern is not in that file". Measured
- * live against hooks-core/wiki.mjs: `path` = the file found 0 hits for a string
+ * live against src/hooks-core/wiki.mjs: `path` = the file found 0 hits for a string
  * on line 112, while the same search via `files: [<same path>]` found it. An
  * answer that is wrong and reports success is worse than an error, and this is
  * the third time this tool family has produced one from an argument it accepted

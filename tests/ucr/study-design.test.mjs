@@ -14,7 +14,7 @@ import {
   validateCausalChain,
   validateTrialResult,
   zeroFailureWilsonSampleSize,
-} from '../../ucr/index.mjs';
+} from '../../src/ucr/index.mjs';
 
 const tasks = BENCHMARK_FAMILIES.map((family, index) => ({
   id: `${family}-${index}`,

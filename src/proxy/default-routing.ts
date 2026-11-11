@@ -140,7 +140,7 @@ const TOOL_SEARCH = 'ENABLE_TOOL_SEARCH';
  * that much payload on every turn before we have compressed anything -- and the client had been
  * doing the deferral for free. `ENABLE_TOOL_SEARCH` keeps it on through the route.
  *
- * The same decision already exists in scripts/claude-routing.mjs for the launcher path; this is
+ * The same decision already exists in src/scripts/claude-routing.mjs for the launcher path; this is
  * the settings path, which is how most installs are actually routed, and it had no equivalent.
  *
  * Three conditions, all of them about not overriding a deliberate choice: a third-party backend
@@ -172,7 +172,7 @@ function toolSearchAppropriate(
   // BY ORIGIN, NOT BY STRING. `https://api.anthropic.com/` is the same endpoint
   // written with the trailing slash a URL bar adds, and a string comparison
   // calls it a gateway -- which would not merely decline to add the flag, it
-  // would take an existing one of ours back out. `scripts/claude-routing.mjs`
+  // would take an existing one of ours back out. `src/scripts/claude-routing.mjs`
   // already decides this by origin; this is the same rule.
   return sameOrigin(upstream, DEFAULT_UPSTREAM);
 }
@@ -417,7 +417,7 @@ function pidAlive(pid: number): boolean {
  * Process ids of the Claude Code sessions that read this settings file and are running now, other
  * than the one asking.
  *
- * From Claude Code's own registry, `<config>/sessions/<pid>.json`, as hooks-core/context-window.mjs
+ * From Claude Code's own registry, `<config>/sessions/<pid>.json`, as src/hooks-core/context-window.mjs
  * reads it. A file whose process has exited is left behind by a crash, so liveness is checked rather
  * than presence. A reused pid reads as a live session, which errs toward waiting -- the safe side.
  * `null` when there is no registry to read: the caller cannot tell, and must not assume none.
@@ -587,7 +587,7 @@ export async function applyDefaultRouting(
   // TWO DIFFERENT REASONS NOT TO WRITE IT, and only one of them is a reason to take it back.
   // "We must not assert this" -- a third-party backend, or a route forwarding to a gateway --
   // means a flag of ours in the file is wrong and has to go. "Someone else is already asserting
-  // it" does not: `scripts/run-client.mjs` puts ENABLE_TOOL_SEARCH in the environment of the
+  // it" does not: `src/scripts/run-client.mjs` puts ENABLE_TOOL_SEARCH in the environment of the
   // Claude it launches, so an MCP server running inside that child sees it set and would
   // otherwise delete the settings entry that serves every OTHER way the user starts Claude.
   const appropriate = toolSearchAppropriate(latest, upstream, env);
@@ -606,7 +606,7 @@ export async function applyDefaultRouting(
       // AND THE REASON CAN OUTLIVE THE FLAG. A route installed by a build that predates this
       // feature leaves the entry missing for ever, because the only other place we write it is
       // the branch that runs when the route MOVES -- and upgrading does not move the port.
-      // Absent means writable here for the same reason it does in `scripts/claude-routing.mjs`,
+      // Absent means writable here for the same reason it does in `src/scripts/claude-routing.mjs`,
       // which reads `ENABLE_TOOL_SEARCH === undefined` as permission to set it: switching
       // deferral off is done by giving the key a value, and a value is what `ours` protects.
       latest.env = { ...latest.env, [TOOL_SEARCH]: 'true' };

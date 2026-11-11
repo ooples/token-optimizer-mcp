@@ -1,5 +1,5 @@
 import { describe, it, expect } from '@jest/globals';
-import { probeVersion, semverBelow } from '../../hooks-core/doctor.mjs';
+import { probeVersion, semverBelow } from '../../src/hooks-core/doctor.mjs';
 
 /**
  * #499's real cause. smart_read's unasked pagination had been fixed for days,

@@ -10,13 +10,13 @@ import {
   checklist,
   probeProxy,
   entriesFor,
-} from '../../hooks-core/doctor.mjs';
+} from '../../src/hooks-core/doctor.mjs';
 import {
   managedClientIds,
   proxyEnvFor,
   hookInstallFor,
   CLIENT_HOOK_INSTALLS,
-} from '../../hooks-core/capabilities.mjs';
+} from '../../src/hooks-core/capabilities.mjs';
 
 /**
  * Issue #408: the doctor diagnosed a stale Claude Code install from a Codex session.
@@ -42,7 +42,7 @@ function givenPackage(version: string) {
     join(root, 'package.json'),
     JSON.stringify({ name: '@ooples/token-optimizer-mcp', version })
   );
-  mkdirSync(join(root, 'plugin', 'hooks'), { recursive: true });
+  mkdirSync(join(root, 'src', 'plugin', 'hooks'), { recursive: true });
   return root;
 }
 

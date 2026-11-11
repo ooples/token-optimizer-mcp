@@ -49,9 +49,9 @@ function fixture(newline: string): string {
       (n) => n >= 21 && n <= 23
     ),
     '--',
-    ...hunk('hooks-core/derive.mjs', 30, ['k', 'l', 'm'], (n) => n === 31),
+    ...hunk('src/hooks-core/derive.mjs', 30, ['k', 'l', 'm'], (n) => n === 31),
     '',
-    ...hunk('hooks-core/derive.mjs', 40, ['n', 'o', 'p'], () => false),
+    ...hunk('src/hooks-core/derive.mjs', 40, ['n', 'o', 'p'], () => false),
     ...hunk('a/b.txt', 50, ['q', 'r', 's', ''], () => true),
     // Below MIN_HUNK_LINES: restored with its own prefix rather than a header.
     ...hunk('a/b.txt', 99, ['lone'], () => false),
@@ -89,7 +89,7 @@ describe('plain search hunks reconstruct from the output alone', () => {
     // the shape worth asserting.
     const key = ` ~${result.stamp ?? ''}`;
     expect(text).toContain(
-      `[paths @0=src/proxy/supervisor.ts @1=hooks-core/derive.mjs @2=a/b.txt${key}]`
+      `[paths @0=src/proxy/supervisor.ts @1=src/hooks-core/derive.mjs @2=a/b.txt${key}]`
     );
     expect(text).toContain(`@0:10-15 (matched 10,12,15)${key}`);
     expect(text).toContain(`@0:20-23 (matched 21-23)${key}`);

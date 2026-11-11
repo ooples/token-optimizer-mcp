@@ -22,7 +22,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = fileURLToPath(new URL('../..', import.meta.url));
-const DIRS = ['hooks-core', join('plugin', 'hooks'), join('plugin', 'hooks', 'impl')];
+const DIRS = [join('src', 'hooks-core'), join('src', 'plugin', 'hooks'), join('src', 'plugin', 'hooks', 'impl')];
 
 /**
  * A budget, not a benchmark.
@@ -135,7 +135,7 @@ describe('regexes on the hook path are linear', () => {
          * characters -- so this budget sits about a thousandfold above it. A
          * breach at the margin therefore cannot be scanning cost; it is the
          * measurement absorbing a scheduling stall or a GC pause on a shared
-         * runner. That is what failed hooks-core/adapter.mjs at 256ms against
+         * runner. That is what failed src/hooks-core/adapter.mjs at 256ms against
          * 250ms in CI while the identical pattern passed everywhere else and
          * measured 0.2ms locally.
          *

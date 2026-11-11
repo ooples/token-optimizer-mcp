@@ -20,7 +20,8 @@ import { dirname } from 'path';
 const here = dirname(fileURLToPath(import.meta.url));
 
 function coreUrl(name: string): string {
-  return pathToFileURL(path.join(here, '..', '..', 'hooks-core', name)).href;
+  return pathToFileURL(path.join(here, '..', '..', 'src', 'hooks-core', name))
+    .href;
 }
 
 interface AuditModules {
@@ -183,7 +184,7 @@ export async function tokenAudit(input: {
   // SUBAGENTS RE-READ THEIR WHOLE FIXED CONTEXT ON EVERY TURN, and that was the
   // largest cost of a multi-agent session this audit could not see: 88% of 4.09M
   // tokens across nine agents was cache reads of a ~56k baseline, while the
-  // queue above reported 2.9k of re-read files. See hooks-core/subagents.mjs.
+  // queue above reported 2.9k of re-read files. See src/hooks-core/subagents.mjs.
   let tally = '';
   try {
     const agents = mods.subagents.subagentTally(mods.cache.transcriptFor(cwd));

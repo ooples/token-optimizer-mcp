@@ -68,7 +68,7 @@ function semanticFailure(
 
 describe('bounded UCR MCP runtime', () => {
   test('records verified active-model cognition and pages it back selectively', async () => {
-    const { signGraderReceipt } = await import('../../ucr/index.mjs');
+    const { signGraderReceipt } = await import('../../src/ucr/index.mjs');
     const priorDelivery = await runUcrTool('context_page', {
       query: 'an unrelated empty-graph request',
       taskId: 'earlier-task',
@@ -83,7 +83,7 @@ describe('bounded UCR MCP runtime', () => {
       },
       'integration-test-secret'
     );
-    const eventsBeforeVerification = (await import('../../ucr/index.mjs'))
+    const eventsBeforeVerification = (await import('../../src/ucr/index.mjs'))
       .EventStore;
     const beforeCount = new eventsBeforeVerification(root).read().events.length;
     await expect(
@@ -151,7 +151,7 @@ describe('bounded UCR MCP runtime', () => {
         deliveryEventId: 'missing-delivery',
       })
     ).resolves.toMatchObject({ valid: false, objectIds: [] });
-    const { EventStore, rebuildGraph } = await import('../../ucr/index.mjs');
+    const { EventStore, rebuildGraph } = await import('../../src/ucr/index.mjs');
     expect(
       rebuildGraph(new EventStore(root).read().events).integrity()
     ).toMatchObject({ valid: true });
@@ -166,7 +166,7 @@ describe('bounded UCR MCP runtime', () => {
   });
 
   test('creates/restores checkpoints and records correctness-first outcomes', async () => {
-    const { signGraderReceipt } = await import('../../ucr/index.mjs');
+    const { signGraderReceipt } = await import('../../src/ucr/index.mjs');
     const checkpoint = {
       goalDag: { nodes: [{ id: 'goal' }], edges: [] },
       plan: [],
@@ -226,7 +226,7 @@ describe('bounded UCR MCP runtime', () => {
   });
 
   test('atomically replaces, supersedes, and rematerializes active guards', async () => {
-    const { signGraderReceipt } = await import('../../ucr/index.mjs');
+    const { signGraderReceipt } = await import('../../src/ucr/index.mjs');
     const receipt = signGraderReceipt(
       {
         graderId: 'sync-check',

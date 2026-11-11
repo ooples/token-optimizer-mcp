@@ -1,5 +1,5 @@
 import { describe, expect, test } from '@jest/globals';
-import { studyQualificationVerdict } from '../../ucr/index.mjs';
+import { studyQualificationVerdict } from '../../src/ucr/index.mjs';
 
 const trial = (arm) => ({ arm, pairId: 'pair-1' });
 const row = (arm, totalTokens) => ({

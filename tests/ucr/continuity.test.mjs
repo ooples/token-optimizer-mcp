@@ -19,7 +19,7 @@ import {
   takeoverStudy,
   verifyCheckpoint,
   consolidationStudy,
-} from '../../ucr/index.mjs';
+} from '../../src/ucr/index.mjs';
 
 let root;
 beforeEach(() => {

@@ -19,7 +19,7 @@ import {
   modelSwitchCost,
   readCacheUsage,
   attributeInvalidation,
-} from '../../hooks-core/cache.mjs';
+} from '../../src/hooks-core/cache.mjs';
 
 let dir;
 beforeEach(() => {

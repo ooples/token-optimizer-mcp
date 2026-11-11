@@ -18,7 +18,7 @@ import {
   BUILD_LOG_MIN_BYTES,
   selectWithinBudget,
   OUTPUT_COMPACT_MIN_BYTES,
-} from '../../hooks-core/output-compact.mjs';
+} from '../../src/hooks-core/output-compact.mjs';
 
 const root = mkdtempSync(join(tmpdir(), 'output-compact-'));
 afterAll(() => rmSync(root, { recursive: true, force: true }));
@@ -437,7 +437,7 @@ describe('the Claude Code PostToolUse hook', () => {
     const stdout = ciLog();
     const r = spawnSync(
       process.execPath,
-      [join(process.cwd(), 'plugin', 'hooks', 'post-tool.mjs')],
+      [join(process.cwd(), 'src', 'plugin', 'hooks', 'post-tool.mjs')],
       {
         cwd: workspace,
         env,
@@ -480,7 +480,7 @@ describe('the Claude Code PostToolUse hook', () => {
     };
     const r = spawnSync(
       process.execPath,
-      [join(process.cwd(), 'plugin', 'hooks', 'post-tool.mjs')],
+      [join(process.cwd(), 'src', 'plugin', 'hooks', 'post-tool.mjs')],
       {
         cwd: workspace,
         env,

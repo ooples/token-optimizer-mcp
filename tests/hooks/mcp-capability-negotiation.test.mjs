@@ -16,14 +16,15 @@ import {
   optimizerToolEvidence,
   optimizerToolsForHook,
   rememberOptimizerTools,
-} from '../../hooks-core/capabilities.mjs';
-import { policyText } from '../../hooks-core/adapter.mjs';
-import { decide } from '../../hooks-core/decide.mjs';
+} from '../../src/hooks-core/capabilities.mjs';
+import { policyText } from '../../src/hooks-core/adapter.mjs';
+import { decide } from '../../src/hooks-core/decide.mjs';
 
 const ROOT = process.cwd();
-const CLAUDE_ROUTER = join(ROOT, 'plugin', 'hooks', 'pretooluse-router.mjs');
+const CLAUDE_ROUTER = join(ROOT, 'src', 'plugin', 'hooks', 'pretooluse-router.mjs');
 const CODEX_ROUTER = join(
   ROOT,
+  'src',
   'integrations',
   'codex',
   'plugin',

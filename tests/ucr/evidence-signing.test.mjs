@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import {
   loadProvisionedEvidenceIdentity,
   resolveEvidenceVerificationPublicKey,
-} from '../../ucr/index.mjs';
+} from '../../src/ucr/index.mjs';
 
 const roots = [];
 afterEach(() => {

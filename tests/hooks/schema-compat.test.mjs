@@ -27,7 +27,7 @@ import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
 import { mkdtempSync, rmSync, writeFileSync, appendFileSync, readFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { load, putNode, readable, SUPPORTED_VERSIONS, upcast, GRAPH_VERSION } from '../../hooks-core/wiki.mjs';
+import { load, putNode, readable, SUPPORTED_VERSIONS, upcast, GRAPH_VERSION } from '../../src/hooks-core/wiki.mjs';
 
 let dir;
 beforeEach(() => { dir = mkdtempSync(join(tmpdir(), 'schema-')); });

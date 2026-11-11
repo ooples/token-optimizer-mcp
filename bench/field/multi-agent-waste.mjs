@@ -37,7 +37,7 @@ import { createHash } from 'node:crypto';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline';
-import { OUTPUT_COMPACT_MIN_BYTES } from '../../hooks-core/output-compact.mjs';
+import { OUTPUT_COMPACT_MIN_BYTES } from '../../src/hooks-core/output-compact.mjs';
 
 const est = (n) => Math.ceil(n / 4);
 const hash = (s) => createHash('sha1').update(String(s)).digest('hex').slice(0, 12);

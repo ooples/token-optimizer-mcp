@@ -19,13 +19,13 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { checklist } from '../../hooks-core/doctor.mjs';
+import { checklist } from '../../src/hooks-core/doctor.mjs';
 import {
   NODE_FLOOR,
   nodeBelowFloor,
   nodeFloorNotice,
-} from '../../hooks-core/node-floor.mjs';
-import { serverCrashNotice } from '../../hooks-core/server-crash.mjs';
+} from '../../src/hooks-core/node-floor.mjs';
+import { serverCrashNotice } from '../../src/hooks-core/server-crash.mjs';
 
 const ROOT = process.cwd();
 const work = mkdtempSync(join(tmpdir(), 'node-floor-'));
@@ -115,8 +115,8 @@ function sessionStart(entry, node) {
 }
 
 describe.each([
-  ['plugin/hooks/session-start.mjs'],
-  ['integrations/codex/hooks/session-start.mjs'],
+  ['src/plugin/hooks/session-start.mjs'],
+  ['src/integrations/codex/hooks/session-start.mjs'],
 ])('%s', (entry) => {
   test('tells the session when Node is below the floor', () => {
     expect(sessionStart(entry, '22.2.0')).toContain(

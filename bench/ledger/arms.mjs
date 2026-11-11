@@ -12,7 +12,7 @@
 import { readFileSync, existsSync, statSync } from 'node:fs';
 import { join, dirname, isAbsolute } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { OUTPUT_DISCIPLINE } from '../../hooks-core/adapter.mjs';
+import { OUTPUT_DISCIPLINE } from '../../src/hooks-core/adapter.mjs';
 
 /** Vanilla Claude Code. No hooks, no MCP server, no optimizer. */
 export const control = {

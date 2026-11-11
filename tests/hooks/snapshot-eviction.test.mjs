@@ -2,7 +2,7 @@ import { test, expect } from '@jest/globals';
 import { mkdtempSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { putNode, nodeId } from '../../hooks-core/wiki.mjs';
+import { putNode, nodeId } from '../../src/hooks-core/wiki.mjs';
 
 test('snapshot budget is allocated only after evicting dead graph nodes', () => {
   const dir = mkdtempSync(join(tmpdir(), 'snapshot-eviction-'));

@@ -5,8 +5,8 @@
  * given. Until now a finding recorded against one copy was invisible from the
  * others, and this repository is its own best example: the shared hook core is
  * vendored into eleven directories, byte-identical, so a claim about
- * `plugin/hooks/lib/adapter.mjs` said nothing at all when a reader touched
- * `integrations/qwen/hooks/lib/adapter.mjs`.
+ * `src/plugin/hooks/lib/adapter.mjs` said nothing at all when a reader touched
+ * `src/integrations/qwen/hooks/lib/adapter.mjs`.
  *
  * WHY THIS IS AN INDEX AND NOT A SECOND IDENTITY, which is the question #319
  * asks and the reason `contentAnchor` was deleted rather than wired. That
@@ -37,8 +37,8 @@ import {
   putNodeWithEdges,
   findingsFor,
   contentPeers,
-} from '../../hooks-core/wiki.mjs';
-import { indexFile } from '../../hooks-core/staleness.mjs';
+} from '../../src/hooks-core/wiki.mjs';
+import { indexFile } from '../../src/hooks-core/staleness.mjs';
 
 const NL = String.fromCharCode(10);
 const VENDORED = 'export function run() {' + NL + '  return 1;' + NL + '}' + NL;
@@ -79,8 +79,8 @@ const keysFor = (path) =>
 
 describe('a finding reaches every identical copy', () => {
   test('surfaces from a sibling copy the finding was never anchored to', () => {
-    const source = vendor('plugin/hooks/lib/adapter.mjs');
-    const copy = vendor('integrations/qwen/hooks/lib/adapter.mjs');
+    const source = vendor('src/plugin/hooks/lib/adapter.mjs');
+    const copy = vendor('src/integrations/qwen/hooks/lib/adapter.mjs');
     findingAt('adapter-returns-one', source);
 
     // The claim was recorded against one copy and is asked for from the other.
@@ -93,7 +93,7 @@ describe('a finding reaches every identical copy', () => {
     // Eleven directories, byte-identical, which is the case that motivated the
     // issue rather than a hypothetical one.
     const paths = Array.from({ length: 11 }, (_, i) =>
-      vendor(`integrations/client-${i}/hooks/lib/adapter.mjs`)
+      vendor(`src/integrations/client-${i}/hooks/lib/adapter.mjs`)
     );
     findingAt('vendored-claim', paths[0]);
 

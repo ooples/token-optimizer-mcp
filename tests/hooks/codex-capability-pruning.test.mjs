@@ -1,5 +1,5 @@
 /**
- * Codex capability pruning (hooks-core/codexprune.mjs).
+ * Codex capability pruning (src/hooks-core/codexprune.mjs).
  *
  * Each test pins a property the design depends on: that a capability is
  * switched off only on evidence, that the person asking for it gives it back,
@@ -22,7 +22,7 @@ import {
   restoreCodex,
   runCodexFold,
   writeCodexConfig,
-} from '../../hooks-core/codexprune.mjs';
+} from '../../src/hooks-core/codexprune.mjs';
 
 const work = mkdtempSync(join(tmpdir(), 'codex-capability-pruning-'));
 afterAll(() => rmSync(work, { recursive: true, force: true, maxRetries: 3, retryDelay: 50 }));

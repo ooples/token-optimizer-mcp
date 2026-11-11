@@ -68,14 +68,14 @@ function targets(): Target[] {
       value: read('gemini-extension.json').version,
     },
     {
-      path: 'plugin/.claude-plugin/plugin.json',
+      path: 'src/plugin/.claude-plugin/plugin.json',
       jsonpath: '$.version',
-      value: read('plugin/.claude-plugin/plugin.json').version,
+      value: read('src/plugin/.claude-plugin/plugin.json').version,
     },
     {
-      path: 'integrations/codex/plugin/.codex-plugin/plugin.json',
+      path: 'src/integrations/codex/plugin/.codex-plugin/plugin.json',
       jsonpath: '$.version',
-      value: read('integrations/codex/plugin/.codex-plugin/plugin.json').version,
+      value: read('src/integrations/codex/plugin/.codex-plugin/plugin.json').version,
     },
   ];
 }
@@ -117,6 +117,6 @@ describe('manifest versions track package.json', () => {
     expect(missing).toEqual([]);
     // The plugin manifest has its own value test but the same wiring requirement,
     // and it is the one that already rotted through four releases.
-    expect(wired.has('plugin/.claude-plugin/plugin.json $.version')).toBe(true);
+    expect(wired.has('src/plugin/.claude-plugin/plugin.json $.version')).toBe(true);
   });
 });

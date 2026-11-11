@@ -4,10 +4,10 @@ import { join, resolve } from 'node:path';
 import { tmpdir, homedir } from 'node:os';
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import { repairManagedInstall } from '../../scripts/repair-managed-install.mjs';
-import { activateWindowsCommands } from '../../scripts/windows-commands.mjs';
-import { MANAGED_CLIENTS } from '../../hooks-core/capabilities.mjs';
-import { dedupeClaudePluginHooks } from '../../scripts/claude-hook-ownership.mjs';
+import { repairManagedInstall } from '../../src/scripts/repair-managed-install.mjs';
+import { activateWindowsCommands } from '../../src/scripts/windows-commands.mjs';
+import { MANAGED_CLIENTS } from '../../src/hooks-core/capabilities.mjs';
+import { dedupeClaudePluginHooks } from '../../src/scripts/claude-hook-ownership.mjs';
 
 const hash = (value) => createHash('sha256').update(value).digest('hex');
 const read = (path) => fs.readFileSync(path, 'utf8');
@@ -20,7 +20,7 @@ function installPlugin(home, settingsPath) {
     JSON.stringify({ name: 'token-optimizer' })
   );
   fs.copyFileSync(
-    resolve('plugin/hooks/hooks.json'),
+    resolve('src/plugin/hooks/hooks.json'),
     join(root, 'hooks', 'hooks.json')
   );
   fs.writeFileSync(join(root, 'hooks', 'stop.mjs'), '');
@@ -54,17 +54,18 @@ function fixture(fn, command = 'claude') {
   const profile = join(home, 'profile.ps1');
   const directory = join(home, 'bin');
   const settingsPath = join(home, 'settings.json');
-  for (const [dir, version] of [
-    [old, '7.0.0'],
-    [root, '7.3.0'],
+  // The old package predates the move under src/; the new one is this layout.
+  for (const [dir, version, base] of [
+    [old, '7.0.0', ''],
+    [root, '7.3.0', 'src/'],
   ]) {
-    fs.mkdirSync(join(dir, 'scripts'), { recursive: true });
-    fs.mkdirSync(join(dir, 'plugin/hooks'), { recursive: true });
+    fs.mkdirSync(join(dir, `${base}scripts`), { recursive: true });
+    fs.mkdirSync(join(dir, `${base}plugin/hooks`), { recursive: true });
     fs.writeFileSync(
       join(dir, 'package.json'),
       JSON.stringify({ name: '@ooples/token-optimizer-mcp', version })
     );
-    fs.writeFileSync(join(dir, 'scripts/run-client.mjs'), '');
+    fs.writeFileSync(join(dir, `${base}scripts/run-client.mjs`), '');
     // EVERY HOOK THE WIRING NAMES, because since #427 the installer refuses to wire an
     // event whose file is not in the directory it was pointed at -- correctly: that
     // refusal is what stops a half-copied install being registered as a working one.
@@ -79,7 +80,7 @@ function fixture(fn, command = 'claude') {
       'precompact-optimize.mjs',
       'stop.mjs',
     ])
-      fs.writeFileSync(join(dir, 'plugin/hooks', hook), '');
+      fs.writeFileSync(join(dir, `${base}plugin/hooks`, hook), '');
   }
   const body = `function global:${command} { & 'node' '${join(old, 'scripts/run-client.mjs')}' ${command} @args }`;
   const block = `# >>> token-optimizer managed clients >>>\n${body}\n# token-optimizer sha256: ${hash(body)}\n# <<< token-optimizer managed clients <<<`;
@@ -174,9 +175,9 @@ describe('automatic repair after a plugin upgrade', () => {
       execFileSync(
         process.execPath,
         [
-          resolve('scripts/wire-hooks.mjs'),
+          resolve('src/scripts/wire-hooks.mjs'),
           settingsPath,
-          join(root, 'plugin/hooks'),
+          join(root, 'src/plugin/hooks'),
         ],
         { windowsHide: true }
       );

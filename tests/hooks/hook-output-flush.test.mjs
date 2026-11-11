@@ -22,7 +22,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROUTER = fileURLToPath(
-  new URL('../../plugin/hooks/pretooluse-router.mjs', import.meta.url)
+  new URL('../../src/plugin/hooks/pretooluse-router.mjs', import.meta.url)
 );
 
 let GRAPH;

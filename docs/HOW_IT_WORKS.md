@@ -254,7 +254,7 @@ trusting us. `CHECKSUMS.sha256` ships alongside for offline checking.
 **If nothing seems to be happening, the lifecycle bundle is probably not
 installed.** An MCP server process cannot modify the host that launched it, and
 npm 11 gates lifecycle scripts behind `allow-scripts`. Install the native
-plugin/hook bundle listed for your client below; adding only the MCP server gives
+src/plugin/hook bundle listed for your client below; adding only the MCP server gives
 the model tools but no pre-execution veto. For a legacy global Claude Code
 installation, recovery is one line:
 

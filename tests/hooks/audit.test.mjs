@@ -13,7 +13,7 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { record, recordRead } from '../../hooks-core/metrics.mjs';
+import { record, recordRead } from '../../src/hooks-core/metrics.mjs';
 import {
   buildQueue,
   renderAudit,
@@ -22,16 +22,16 @@ import {
   habitTrend,
   raise,
   DECLINE_LIMIT,
-} from '../../hooks-core/audit.mjs';
-import { applyRemedy } from '../../hooks-core/remedy.mjs';
+} from '../../src/hooks-core/audit.mjs';
+import { applyRemedy } from '../../src/hooks-core/remedy.mjs';
 import {
   dollars,
   money,
   monthly,
   prices,
   priceNote,
-} from '../../hooks-core/pricing.mjs';
-import { detect } from '../../hooks-core/waste.mjs';
+} from '../../src/hooks-core/pricing.mjs';
+import { detect } from '../../src/hooks-core/waste.mjs';
 
 let workspace;
 let dir;

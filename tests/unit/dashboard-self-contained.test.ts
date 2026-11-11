@@ -76,12 +76,12 @@ describe('the dashboard is self-contained', () => {
     expect(pkg.dependencies['chart.js']).toBe('4.4.0');
 
     // The vendoring step moved out of an inline `node -e` in copy:assets and
-    // into scripts/copy-assets.mjs, so that a missing chart.js could fail with a
+    // into src/scripts/copy-assets.mjs, so that a missing chart.js could fail with a
     // remedy instead of a bare ENOENT. Assert it where it now lives -- deleting
     // the vendoring from that module must still fail this test.
-    expect(pkg.scripts['copy:assets']).toContain('scripts/copy-assets.mjs');
+    expect(pkg.scripts['copy:assets']).toContain('src/scripts/copy-assets.mjs');
     const copyAssets = readFileSync(
-      join(process.cwd(), 'scripts', 'copy-assets.mjs'),
+      join(process.cwd(), 'src', 'scripts', 'copy-assets.mjs'),
       'utf8'
     );
     expect(copyAssets).toContain('chart.umd.min.js'); // the vendored target

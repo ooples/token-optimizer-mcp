@@ -35,7 +35,7 @@ import { createInterface } from 'node:readline';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { compactToolResponse as treeCompactor } from '../../hooks-core/output-compact.mjs';
+import { compactToolResponse as treeCompactor } from '../../src/hooks-core/output-compact.mjs';
 import { classify, transcripts } from './multi-agent-waste.mjs';
 
 const args = process.argv.slice(2);
@@ -61,7 +61,7 @@ export function responseText(tool, response) {
  *
  * THE NOTICE'S POSITION, NOT ITS TEXT. The compactor appends its notice as the
  * last line of stdout (or Grep content), so only there does it mean anything:
- * a recorded `cat hooks-core/output-compact.mjs` contains the same literal in
+ * a recorded `cat src/hooks-core/output-compact.mjs` contains the same literal in
  * the middle of the source, and was skipped as if already compacted.
  */
 export function wasCompacted(tool, response) {

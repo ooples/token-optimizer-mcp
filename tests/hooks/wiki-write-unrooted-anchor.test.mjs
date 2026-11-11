@@ -13,8 +13,8 @@ import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 
-import { isFilesystemRoot } from '../../hooks-core/harvest-write.mjs';
-import { canonicalPath } from '../../hooks-core/paths.mjs';
+import { isFilesystemRoot } from '../../src/hooks-core/harvest-write.mjs';
+import { canonicalPath } from '../../src/hooks-core/paths.mjs';
 
 const PROBE = fileURLToPath(
   new URL('../fixtures/wiki-write-unrooted-probe.mjs', import.meta.url)

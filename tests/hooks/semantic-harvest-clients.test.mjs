@@ -3,7 +3,8 @@ import { afterEach, beforeEach, describe, expect, test } from '@jest/globals';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { spawnSync } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
+
 
 // These tests are about WHETHER the harvest prompt is generated; how it is
 // delivered (held for the next turn by default, 2026-10-21) is covered by
@@ -12,10 +13,10 @@ process.env.TOKEN_OPTIMIZER_HARVEST_TURN = '1';
 
 const ROOT = process.cwd();
 const CLIENTS = [
-  { name: 'Claude Code', root: 'plugin/hooks', decision: 'block' },
+  { name: 'Claude Code', root: 'src/plugin/hooks', decision: 'block' },
   {
     name: 'Codex',
-    root: 'integrations/codex/hooks',
+    root: 'src/integrations/codex/hooks',
     decision: 'block',
     // Match Codex's documented opaque tool response rather than inventing a
     // lifecycle status field that the host does not promise.
@@ -23,20 +24,20 @@ const CLIENTS = [
   },
   {
     name: 'Copilot',
-    root: 'integrations/copilot/.github/hooks',
+    root: 'src/integrations/copilot/.github/hooks',
     decision: 'block',
     result: { toolResult: { resultType: 'success', textResultForLlm: 'ok' } },
   },
   {
     name: 'Gemini',
-    root: 'integrations/gemini/hooks',
+    root: 'src/integrations/gemini/hooks',
     decision: 'deny',
     result: { tool_response: { llmContent: 'ok' } },
   },
-  { name: 'Qwen', root: 'integrations/qwen/hooks', decision: 'block' },
+  { name: 'Qwen', root: 'src/integrations/qwen/hooks', decision: 'block' },
   {
     name: 'Cursor',
-    root: 'integrations/cursor/hooks',
+    root: 'src/integrations/cursor/hooks',
     followup: true,
     result: { success: true },
   },
@@ -133,12 +134,12 @@ describe.each(CLIENTS)('$name semantic lifecycle', (client) => {
 describe.each([
   {
     name: 'Codex plugin',
-    root: 'integrations/codex/plugin/hooks',
+    root: 'src/integrations/codex/plugin/hooks',
     failed: { tool_response: { status: 'failed' } },
   },
   {
     name: 'Gemini',
-    root: 'integrations/gemini/hooks',
+    root: 'src/integrations/gemini/hooks',
     failed: { tool_response: { error: { message: 'write failed' } } },
   },
 ])('$name failed mutation', (client) => {
@@ -169,7 +170,7 @@ describe('rules-only clients', () => {
     (client) => {
       const candidates = ['token-optimizer.md', 'AGENTS.md'];
       const file = candidates
-        .map((name) => join(ROOT, 'integrations', client, name))
+        .map((name) => join(ROOT, 'src', 'integrations', client, name))
         .find((path) => {
           try {
             return Boolean(readFileSync(path, 'utf8'));

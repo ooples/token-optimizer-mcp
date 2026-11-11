@@ -4,9 +4,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { spawnSync } from 'node:child_process';
-import { loadState, saveState } from '../../hooks-core/policy.mjs';
-import { isVerificationCommand } from '../../hooks-core/verification.mjs';
-import { verificationSucceeded } from '../../hooks-core/adapter.mjs';
+import { loadState, saveState } from '../../src/hooks-core/policy.mjs';
+import { isVerificationCommand } from '../../src/hooks-core/verification.mjs';
+import { verificationSucceeded } from '../../src/hooks-core/adapter.mjs';
 
 const work = mkdtempSync(join(tmpdir(), 'subscription-review-'));
 const prior = process.env.TOKEN_OPTIMIZER_STATE_DIR;
@@ -36,7 +36,7 @@ test.each(['pytest -V', 'pytest -h', 'npx jest -v', 'npx vitest -v', 'npx tsc -v
 });
 
 function post(command, exitCode, response) {
-  const module = pathToFileURL(join(process.cwd(), 'hooks-core/adapter.mjs')).href;
+  const module = pathToFileURL(join(process.cwd(), 'src/hooks-core/adapter.mjs')).href;
   const child = spawnSync(process.execPath, ['--input-type=module', '-e', `import {run} from ${JSON.stringify(module)}; await run('codex','post-tool');`], {
     input: JSON.stringify({ session_id: 'actual-verification', cwd: work, tool_name: 'Bash', tool_input: { command }, tool_response: response ?? { stdout: exitCode ? 'FAIL' : 'PASS', exit_code: exitCode } }),
     encoding: 'utf8', windowsHide: true,
@@ -85,7 +85,7 @@ test.each([
 });
 
 function stop(session, limit, explicit = true) {
-  const module = pathToFileURL(join(process.cwd(), 'hooks-core/adapter.mjs')).href;
+  const module = pathToFileURL(join(process.cwd(), 'src/hooks-core/adapter.mjs')).href;
   const child = spawnSync(process.execPath, ['--input-type=module', '-e', `import {run} from ${JSON.stringify(module)}; await run('codex','stop');`], {
     input: JSON.stringify({ session_id: session, cwd: work }), encoding: 'utf8', windowsHide: true,
     env: { ...process.env, TOKEN_OPTIMIZER_MODE: 'assist', TOKEN_OPTIMIZER_HOLDOUT: '0', TOKEN_OPTIMIZER_HOME: join(work, 'home'), TOKEN_OPTIMIZER_WIKI_DIR: join(work, 'wiki'), TOKEN_OPTIMIZER_MAXIMIZE_SUBSCRIPTION: '1', TOKEN_OPTIMIZER_MAX_CONTINUATIONS: String(limit), TOKEN_OPTIMIZER_STOP_BACKLOG: explicit ? join(work, 'STOP_BACKLOG') : '' },

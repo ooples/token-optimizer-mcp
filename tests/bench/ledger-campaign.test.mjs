@@ -1003,7 +1003,7 @@ describe('arms are data, not code', () => {
     }
     expect(named.size).toBeGreaterThan(3);
     for (const file of named) {
-      expect([file, existsSync(join(root, 'plugin/hooks', file))]).toEqual([file, true]);
+      expect([file, existsSync(join(root, 'src/plugin/hooks', file))]).toEqual([file, true]);
     }
   });
 

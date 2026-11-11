@@ -32,8 +32,8 @@ import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { dirname } from 'node:path';
-import { remember } from '../../hooks-core/decide.mjs';
-import { loadState, saveState } from '../../hooks-core/policy.mjs';
+import { remember } from '../../src/hooks-core/decide.mjs';
+import { loadState, saveState } from '../../src/hooks-core/policy.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
@@ -116,7 +116,7 @@ describe('compaction ends the claim that the caller still holds a file', () => {
     saveState(sessionId, before);
     expect(Object.keys(loadState(sessionId).seen)).toHaveLength(1);
 
-    const hook = join(ROOT, 'plugin', 'hooks', 'precompact-optimize.mjs');
+    const hook = join(ROOT, 'src', 'plugin', 'hooks', 'precompact-optimize.mjs');
     const result = spawnSync(process.execPath, [hook], {
       input: JSON.stringify({ session_id: sessionId, cwd: ROOT, hook_event_name: 'PreCompact' }),
       encoding: 'utf8',
@@ -141,6 +141,6 @@ describe('compaction ends the claim that the caller still holds a file', () => {
 
   it('the precompact hook exists where the test drives it from', () => {
     // Guards against the hook being renamed and this suite silently testing nothing.
-    expect(existsSync(join(ROOT, 'plugin', 'hooks', 'precompact-optimize.mjs'))).toBe(true);
+    expect(existsSync(join(ROOT, 'src', 'plugin', 'hooks', 'precompact-optimize.mjs'))).toBe(true);
   });
 });

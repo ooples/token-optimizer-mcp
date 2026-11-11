@@ -1,0 +1,285 @@
+// GENERATED FILE -- do not edit.
+// Source of truth: src/hooks-core/surface.mjs. Regenerate with `npm run sync:hooks`.
+/**
+ * The entry point the forecast never had.
+ *
+ * forecast.mjs computes a runway, calibration.mjs scores it, and worthSurfacing decides whether a
+ * change is worth interrupting for -- and none of it ran. The reachability guard listed
+ * forecastPanel, worthSurfacing, logForecast and observeOutcome as unwired, which is a polite way
+ * of saying the feature did not exist for any user. This module is the missing half: it derives
+ * the session numbers the panel needs from the transcript, decides when the panel has earned an
+ * interruption, and closes the calibration loop when compaction fires.
+ *
+ * THREE COSTS ARE BOUNDED HERE, because this runs on the PreToolUse path and every tool call is a
+ * separate process:
+ *
+ *   THE READ      readCacheUsage parses up to 4 MB of transcript. Doing that on every tool call
+ *                 would tax the hook that exists to save the user money.
+ *   THE COMPUTE   the panel walks the metrics log, the balance log and the graph.
+ *   THE CONTEXT   the panel is only worth its own tokens when it says something actionable.
+ *
+ * So the throttle is checked FIRST, from persisted state, before any file is opened. Everything
+ * expensive happens after a clock comparison.
+ *
+ * NOTHING HERE IS ALLOWED TO BREAK A TOOL CALL. Every entry point returns null on failure rather
+ * than throwing: a forecast is a courtesy, and the hook's promise is that a defect in it costs the
+ * user nothing.
+ */
+
+import { forecastPanel, worthSurfacing } from './forecast.mjs';
+import { observeOutcome, logForecast } from './calibration.mjs';
+import { readCacheUsage } from './cache.mjs';
+import { readBalance } from './metrics.mjs';
+import { load } from './wiki.mjs';
+
+/**
+ * How long between two attempts to build the panel.
+ *
+ * Not a tuning knob so much as an admission: the panel costs a transcript parse, and a user makes
+ * many tool calls per minute. Two minutes is short enough that a runway falling into single digits
+ * is still caught with turns to spare, and long enough that the check is free in aggregate.
+ */
+export const SURFACE_INTERVAL_MS =
+  Number(process.env.TOKEN_OPTIMIZER_SURFACE_INTERVAL_MS) || 120_000;
+
+/**
+ * The context window to measure the runway against.
+ *
+ * NOT DISCOVERABLE from the transcript: the usage rows carry what was spent, never the ceiling it
+ * was spent against. Defaulting is therefore unavoidable, so the default is stated rather than
+ * buried, and overridable for anyone running a different window.
+ */
+export const DEFAULT_CAPACITY =
+  Number(process.env.TOKEN_OPTIMIZER_CONTEXT_CAPACITY) || 200_000;
+
+/** Requests since the last compaction before a growth rate is measured: two steps. */
+export const MIN_GROWTH_POINTS = 3;
+
+/** Context windows a session can be running against, smallest first. */
+const KNOWN_WINDOWS = [200_000, 1_000_000];
+
+/**
+ * What the session has spent, read from its own transcript.
+ *
+ * `used` is the FULL input size of the most recent request -- cache reads plus cache writes plus
+ * fresh input -- which is what the context window actually holds, rather than the marginal cost of
+ * that one turn. Summing the per-turn inputs instead would count the same carried prefix once per
+ * turn and report a number many times the window size.
+ *
+ * Returns null rather than a zeroed object when there is nothing to measure, so a caller cannot
+ * mistake "no data" for "an empty context".
+ */
+export function sessionUsage(transcriptPath, { capacity = DEFAULT_CAPACITY } = {}) {
+  let turns;
+  try {
+    turns = readCacheUsage(transcriptPath);
+  } catch {
+    return null;
+  }
+  if (!turns?.length) return null;
+
+  // ONE POINT PER REQUEST. Claude Code writes a row per content block of a
+  // response, each carrying the same usage, so consecutive equal sizes are one
+  // request.
+  const sizes = [];
+  for (const turn of turns) {
+    const size = (turn.read || 0) + (turn.written || 0) + (turn.input || 0);
+    if (size && size !== sizes[sizes.length - 1]) sizes.push(size);
+  }
+  // SINCE THE LAST COMPACTION: a context that shrank by more than 30% was
+  // compacted or cleared, and growth before that says nothing about now.
+  let start = 0;
+  for (let index = 1; index < sizes.length; index += 1) {
+    if (sizes[index] < sizes[index - 1] * 0.7) start = index;
+  }
+  const run = sizes.slice(start);
+  const used = run[run.length - 1];
+  if (!used) return null;
+  // GROWTH PER REQUEST, NOT SIZE PER REQUEST. `used / turns` charged the fixed
+  // prefix -- system prompt and tools, 25-30k tokens -- to the turns taken so
+  // far: one request into a session, 30k of 200k read as "~5 turns to
+  // compaction", and the model was told so on its first failed command
+  // (measured on a live session, 2026-11-09). The context grows by what each
+  // request adds; two growth steps are the least that make a rate.
+  const perTurn = run.length >= MIN_GROWTH_POINTS ? (used - run[0]) / (run.length - 1) : null;
+
+  // A CONTEXT ALREADY PAST THE ASSUMED WINDOW PROVES THE WINDOW IS LARGER. The
+  // ceiling is not in the transcript, so it is defaulted -- but a request that
+  // carried more than the default could only have been sent to a bigger window.
+  // Measuring against the default then reports "~0 turns to compaction" for a
+  // session with most of a 1M-token window left. Take the smallest known window
+  // that holds what was actually sent; past every known window, there is nothing
+  // honest to forecast.
+  //
+  // STRICTLY past. A request of exactly the default size fits the default
+  // window, and that session is at compaction -- the one moment the forecast
+  // exists for -- so equality must not be read as proof of a bigger window.
+  if (used > capacity) {
+    const larger = KNOWN_WINDOWS.find((window) => window > used);
+    if (!larger) return null;
+    capacity = larger;
+  }
+
+  return { used, capacity, turns: run.length, perTurn };
+}
+
+/**
+ * Findings this graph holds that know what they cost to derive.
+ *
+ * WIRING A PARAMETER THAT NOTHING EVER PASSED. `forecastPanel` takes `findings`
+ * and renders the consolidation line from them -- "N tokens of reasoning carried
+ * as M" -- and `forecast.test.mjs` covers it by handing the array in directly.
+ * The only caller of `maybeSurface` in the product is the PreToolUse router,
+ * which passes `{ transcriptPath, sessionId, state }` and no findings, so in
+ * production the array was always empty, `aggregateConsolidation` always
+ * returned null, and that line could never appear. Green, tested, inert -- the
+ * defect this codebase keeps naming, hiding behind a test that supplies the one
+ * input production does not.
+ *
+ * READ HERE RATHER THAN AT THE CALL SITE, and that is the whole reason this is
+ * a function instead of an argument. `maybeSurface` checks its throttle BEFORE
+ * any I/O, deliberately; loading the graph in the router to pass it in would pay
+ * for a graph read on every tool call including the throttled ones, which is
+ * exactly the cost that ordering exists to avoid.
+ *
+ * Only findings carrying `derivedCost` count, because that is what the ratio
+ * divides -- `expand.promote` is what persists it.
+ */
+function findingsWithCost(dir) {
+  try {
+    const graph = load(dir);
+    const found = [];
+    for (const node of graph.nodes.values()) {
+      if (node.kind !== 'finding' || node.retired) continue;
+      if (!Number.isFinite(node.derivedCost)) continue;
+      found.push(node);
+    }
+    return found;
+  } catch {
+    // A panel is a courtesy. An unreadable graph costs the consolidation line,
+    // never the tool call.
+    return [];
+  }
+}
+
+/** Intercepted touches recorded for this session, which converts a per-touch saving to per-turn. */
+function touchesFor(dir, sessionId) {
+  try {
+    return readBalance(dir).filter((e) => e.kind === 'inject' && e.sessionId === sessionId).length;
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * Should the forecast interrupt right now, and with what?
+ *
+ * The state object is the caller's persisted per-session state; this reads `forecast` from it and
+ * returns the value to store back, so the throttle and the last-shown runway survive across hook
+ * processes. Returning the next state rather than mutating it keeps this testable without a
+ * filesystem.
+ *
+ * @returns { text, state } -- text is null when nothing should be shown.
+ */
+export function maybeSurface(dir, {
+  transcriptPath, sessionId, state = {}, now = Date.now(), findings,
+} = {}) {
+  const previous = state.forecast || null;
+
+  // THE THROTTLE IS FIRST, and deliberately before any I/O. Everything below opens files.
+  if (previous?.checkedAt && now - previous.checkedAt < SURFACE_INTERVAL_MS) {
+    return { text: null, state: previous };
+  }
+
+  let usage;
+  try {
+    usage = sessionUsage(transcriptPath);
+  } catch {
+    return { text: null, state: previous };
+  }
+  // The clock is stamped even when there is nothing to measure, so a session with no usage rows
+  // does not re-attempt the transcript parse on every single tool call.
+  if (!usage) return { text: null, state: { ...previous, checkedAt: now } };
+
+  let panel;
+  try {
+    panel = forecastPanel(dir, {
+      ...usage,
+      sessionId,
+      touches: touchesFor(dir, sessionId),
+    // OMITTED AND EMPTY ARE DIFFERENT ANSWERS. `findings.length ? ... :` read
+    // an explicit `findings: []` -- a caller saying "there are none" -- as an
+    // absent argument and went to disk for persisted ones instead, so a caller
+    // could not suppress the consolidation line at all. Only `undefined` means
+    // "you decide"; an array, empty or not, is the caller's answer.
+    //
+    // An explicit array still wins, so the tests that hand one in keep
+    // exercising the render path directly. Past the throttle, so a suppressed
+    // call still opens nothing.
+    }, findings === undefined ? findingsWithCost(dir) : findings);
+  } catch {
+    return { text: null, state: { ...previous, checkedAt: now } };
+  }
+  if (!panel) return { text: null, state: { ...previous, checkedAt: now } };
+
+  // worthSurfacing compares against the last panel that was actually SHOWN, not the last one
+  // computed. Comparing against the last computed panel would let the runway drift down past the
+  // threshold one throttle window at a time and never trip the "crossed it" test.
+  //
+  // ZERO IS A RUNWAY THAT WAS SHOWN. `previous?.shown ? ... : null` read a stored
+  // runway of 0 as "nothing shown yet", so a session sitting at "~0 turns to
+  // compaction" was re-shown that panel on every throttle window for the rest of
+  // its life -- 397 times in one main session and 340 times across its
+  // subagents, each copy re-read on every later turn.
+  const shown =
+    previous?.shown != null ? { parts: { runway: { withGraph: previous.shown } } } : null;
+  if (!worthSurfacing(panel, shown)) {
+    return { text: null, state: { ...previous, checkedAt: now } };
+  }
+
+  // LOGGED HERE, AND ONLY HERE -- past the throttle and past worthSurfacing, so exactly one record
+  // is written per prediction a person is actually shown. forecastPanel used to log on every build;
+  // since most builds are rejected above, that appended open forecast records nobody saw, and
+  // observeOutcome closes only the newest one per session. The rest stayed open forever and piled
+  // up in balance.jsonl, whose tail-bytes read would then evict the inject/harvest/substitute rows
+  // BALANCE_KINDS protects -- undoing the very repair this work exists to make.
+  //
+  // The RAW runway is logged, not the calibrated one: scoring a corrected number would fold each
+  // correction into the next and the bias would chase its own tail.
+  try {
+    logForecast(dir, {
+      sessionId,
+      predictedTurns: panel.parts.runway.withGraph,
+      used: usage.used,
+      capacity: usage.capacity,
+      turns: usage.turns,
+    });
+  } catch { /* a forecast is a courtesy; failing to score it must not cost a tool call */ }
+
+  return {
+    text: panel.text,
+    state: { checkedAt: now, shown: panel.parts.runway.withGraph },
+  };
+}
+
+/**
+ * Closes the calibration loop, at the only moment that can close it.
+ *
+ * Compaction firing IS the ground truth a runway forecast was predicting, so this belongs on the
+ * PreCompact path and nowhere else. `actualTurns` is turns ELAPSED between the prediction and
+ * compaction, which is what predictedTurns meant -- so the forecast has to have recorded the turn
+ * it was made on, and observeOutcome subtracts.
+ *
+ * Silent by design: nothing is shown to anybody. It writes one record so that the NEXT session's
+ * forecast can be published with a track record instead of as a bare assertion.
+ */
+export function closeForecast(dir, { transcriptPath, sessionId } = {}) {
+  try {
+    const usage = sessionUsage(transcriptPath);
+    if (!usage) return false;
+    observeOutcome(dir, { sessionId, atTurn: usage.turns });
+    return true;
+  } catch {
+    return false;
+  }
+}

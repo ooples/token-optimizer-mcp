@@ -7,7 +7,7 @@ import {
   WIKI_WRITE_TOOL_DEFINITION,
   wikiWrite,
 } from '../../src/tools/intelligence/wiki-write.js';
-import { putNode, putNodeWithEdges, putEdge, load, nodeId } from '../../hooks-core/wiki.mjs';
+import { putNode, putNodeWithEdges, putEdge, load, nodeId } from '../../src/hooks-core/wiki.mjs';
 
 let workspace: string;
 let anchor: string;
@@ -26,7 +26,7 @@ let priorWikiDir: string | undefined;
  * path be exercised under this test runner at all.
  */
 beforeAll(async () => {
-  const here = join(process.cwd(), 'hooks-core');
+  const here = join(process.cwd(), 'src', 'hooks-core');
   for (const name of ['wiki.mjs', 'harvest-write.mjs', 'curate.mjs', 'metrics.mjs', 'projects.mjs']) {
     await import(pathToFileURL(join(here, name)).href);
   }
@@ -151,7 +151,7 @@ describe('active-model semantic finding contract', () => {
  *
  * These tests assert the CONSEQUENCE directly: even a task that fully covers
  * the anchor, keyed by exactly the `sessionId` supplied, produces no edge.
- * `plugin/hooks/harvest-worker.mjs` is where `authoritativeSessionId` is
+ * `src/plugin/hooks/harvest-worker.mjs` is where `authoritativeSessionId` is
  * actually supplied (Claude Code's own hook payload) and where `answers` can
  * fire -- covered in `tests/hooks/contradicts.test.mjs`, not here.
  */

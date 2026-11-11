@@ -10,8 +10,8 @@ import {
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { canonicalJson, sha256 } from '../../ucr/index.mjs';
-import { evaluateUcrGuards } from '../../hooks-core/ucr-guard.mjs';
+import { canonicalJson, sha256 } from '../../src/ucr/index.mjs';
+import { evaluateUcrGuards } from '../../src/hooks-core/ucr-guard.mjs';
 
 const temporary = [];
 const environmentKeys = [
@@ -126,15 +126,15 @@ describe('materialized UCR guards', () => {
       tool_input: { file_path: target },
     };
     const adapters = [
-      ['claude-code', 'plugin/hooks/pretooluse-router.mjs', common],
-      ['codex', 'integrations/codex/hooks/pre-tool.mjs', common],
-      ['copilot', 'integrations/copilot/.github/hooks/pre-tool.mjs', common],
-      ['gemini', 'integrations/gemini/hooks/pre-tool.mjs', common],
-      ['qwen', 'integrations/qwen/hooks/pre-tool.mjs', common],
-      ['cursor', 'integrations/cursor/hooks/pre-tool.mjs', common],
+      ['claude-code', 'src/plugin/hooks/pretooluse-router.mjs', common],
+      ['codex', 'src/integrations/codex/hooks/pre-tool.mjs', common],
+      ['copilot', 'src/integrations/copilot/.github/hooks/pre-tool.mjs', common],
+      ['gemini', 'src/integrations/gemini/hooks/pre-tool.mjs', common],
+      ['qwen', 'src/integrations/qwen/hooks/pre-tool.mjs', common],
+      ['cursor', 'src/integrations/cursor/hooks/pre-tool.mjs', common],
       [
         'cline',
-        'integrations/cline/hooks/token-optimizer/pre-tool.mjs',
+        'src/integrations/cline/hooks/token-optimizer/pre-tool.mjs',
         {
           taskId: 'session-1',
           workspaceRoots: [root],
@@ -144,11 +144,11 @@ describe('materialized UCR guards', () => {
           },
         },
       ],
-      ['opencode', 'integrations/opencode/hooks/pre-tool.mjs', common],
-      ['kilo', 'integrations/kilo/hooks/pre-tool.mjs', common],
+      ['opencode', 'src/integrations/opencode/hooks/pre-tool.mjs', common],
+      ['kilo', 'src/integrations/kilo/hooks/pre-tool.mjs', common],
       [
         'windsurf',
-        'integrations/windsurf/hooks/pre-tool.mjs',
+        'src/integrations/windsurf/hooks/pre-tool.mjs',
         {
           trajectory_id: 'session-1',
           agent_action_name: 'write_code',

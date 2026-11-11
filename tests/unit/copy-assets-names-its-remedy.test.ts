@@ -11,7 +11,7 @@ import { join } from 'path';
 import { tmpdir } from 'os';
 
 // @ts-expect-error -- scripts ship as plain ESM with no type declarations.
-import { copyAssets, VENDOR_SOURCE } from '../../scripts/copy-assets.mjs';
+import { copyAssets, VENDOR_SOURCE } from '../../src/scripts/copy-assets.mjs';
 
 /**
  * `npm run build` failed with a bare ENOENT that named neither the cause nor a
@@ -32,7 +32,7 @@ import { copyAssets, VENDOR_SOURCE } from '../../scripts/copy-assets.mjs';
  * which is how it survived long enough to be dismissed as environmental more
  * than once.
  *
- * hooks-core/doctor.mjs states the standard this violated: "Every check returns a
+ * src/hooks-core/doctor.mjs states the standard this violated: "Every check returns a
  * remedy on failure. A diagnosis without a next step is a complaint." A build
  * script owes the same.
  *
@@ -138,7 +138,7 @@ describe('the build wiring', () => {
       readFileSync(join(process.cwd(), 'package.json'), 'utf8')
     );
 
-    expect(pkg.scripts['copy:assets']).toContain('scripts/copy-assets.mjs');
+    expect(pkg.scripts['copy:assets']).toContain('src/scripts/copy-assets.mjs');
     expect(pkg.scripts['copy:assets']).not.toContain('node -e');
   });
 });

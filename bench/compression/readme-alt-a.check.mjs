@@ -203,7 +203,7 @@ if (missing.length) {
 // and a stale record has to be declared rather than merely not noticed.
 //
 // This does not prove the record is CURRENT. It cannot: the other arm needs a
-// clone CI has not got. `scripts/verify-blockers.mjs` carries that half, by
+// clone CI has not got. `src/scripts/verify-blockers.mjs` carries that half, by
 // refusing to call the tree shippable once `src/compress` has moved past the
 // commit named here.
 const provenance = [record.recordedAt, record.commit.slice(0, 8)].filter(

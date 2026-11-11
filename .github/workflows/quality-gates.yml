@@ -701,7 +701,7 @@ jobs:
   # paragraph two markers below it was not.
   #
   # `readme-alt-a` checks the Alternative A table and its corpus sentences against
-  # the recorded head-to-head run. It ran only from scripts/verify-blockers.mjs,
+  # the recorded head-to-head run. It ran only from src/scripts/verify-blockers.mjs,
   # so the table drifted through three re-records while CI stayed green (#505).
   #
   # They need the install and the build, which is why they are not in the

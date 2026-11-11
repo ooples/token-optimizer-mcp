@@ -10,7 +10,7 @@ import {
 } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { parsePackReport } from '../../scripts/npm-pack-report.mjs';
+import { parsePackReport } from '../../src/scripts/npm-pack-report.mjs';
 
 /**
  * npm's own cli.js, run under the node we are already running.
@@ -57,17 +57,17 @@ it('excludes runtime data from broad npm allowlists while keeping client assets'
     'hooks/hooks.json',
     'gemini-extension.json',
     'GEMINI.md',
-    'integrations/gemini/hooks/session-start.mjs',
+    'src/integrations/gemini/hooks/session-start.mjs',
   ];
   const excluded = [
     'hooks/logs/dispatcher.log',
-    'plugin/hooks/run.log',
+    'src/plugin/hooks/run.log',
     'integrations/codex/.cache/session.json',
     'hooks/.token-optimizer/wiki.json',
     'hooks/cache.db',
     'hooks/cache.db-wal',
-    'plugin/cache.sqlite3-shm',
-    'scripts/partial.tmp',
+    'src/plugin/cache.sqlite3-shm',
+    'src/scripts/partial.tmp',
     'hooks/.token-optimizer-edit-abcd.lock',
     'hooks/.env',
     'hooks/.env.local',

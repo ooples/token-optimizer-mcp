@@ -54,7 +54,7 @@ function load(): { authored: AuthoredModule; wiki: WikiModule } | null {
   if (modules) return modules;
   if (loadFailed) return null;
   try {
-    const root = join(here, '..', '..', '..', 'hooks-core');
+    const root = join(here, '..', '..', '..', 'src', 'hooks-core');
     modules = {
       authored: require(join(root, 'authored.mjs')) as AuthoredModule,
       wiki: require(join(root, 'wiki.mjs')) as WikiModule,

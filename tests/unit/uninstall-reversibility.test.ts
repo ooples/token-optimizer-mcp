@@ -1,5 +1,5 @@
 import { describe, it, expect } from '@jest/globals';
-import { wire, unwire, wiredEntries } from '../../hooks-core/wire.mjs';
+import { wire, unwire, wiredEntries } from '../../src/hooks-core/wire.mjs';
 
 /**
  * Install must be reversible, and uninstall must actually reverse it.

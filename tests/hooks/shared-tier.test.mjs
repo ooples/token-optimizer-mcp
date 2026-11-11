@@ -28,8 +28,8 @@ import { pathToFileURL } from 'node:url';
  * fail when the wiring is missing.
  */
 
-const ROUTER = join(process.cwd(), 'plugin', 'hooks', 'pretooluse-router.mjs');
-const CORE = (n) => pathToFileURL(join(process.cwd(), 'hooks-core', n)).href;
+const ROUTER = join(process.cwd(), 'src', 'plugin', 'hooks', 'pretooluse-router.mjs');
+const CORE = (n) => pathToFileURL(join(process.cwd(), 'src', 'hooks-core', n)).href;
 
 let writeHarvested, sharedDirOf, loadGraph;
 

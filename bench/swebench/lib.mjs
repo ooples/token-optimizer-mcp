@@ -39,7 +39,7 @@ export const DATASETS = Object.freeze({
  * the billing mode on purpose.
  */
 /**
- * The product's postures (hooks-core/policy.mjs), for `plan --mode`. A plan
+ * The product's postures (src/hooks-core/policy.mjs), for `plan --mode`. A plan
  * without a mode runs the product's default, which is what every plan made
  * before this option measured.
  */

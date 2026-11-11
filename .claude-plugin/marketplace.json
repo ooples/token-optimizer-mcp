@@ -11,7 +11,7 @@
   "plugins": [
     {
       "name": "token-optimizer",
-      "source": "./plugin",
+      "source": "./src/plugin",
       "description": "Context-window optimization (caching, compression, smart file tooling) as an MCP server + usage skill + auto-optimization hooks."
     }
   ]

@@ -40,9 +40,9 @@ import { spawnSync, spawn } from 'child_process';
 import { mkdtempSync, rmSync, readFileSync, existsSync, writeFileSync, utimesSync, statSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
-import { load } from '../../hooks-core/wiki.mjs';
+import { load } from '../../src/hooks-core/wiki.mjs';
 
-const WIKI = join(process.cwd(), 'hooks-core', 'wiki.mjs').replace(/\\/g, '/');
+const WIKI = join(process.cwd(), 'src', 'hooks-core', 'wiki.mjs').replace(/\\/g, '/');
 
 let dir;
 

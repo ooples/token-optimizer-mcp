@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from '@jest/globals';
-import { SemanticHarvestController } from '../../ucr/index.mjs';
+import { SemanticHarvestController } from '../../src/ucr/index.mjs';
 
 const semanticObject = {
   trigger: 'continue task one',

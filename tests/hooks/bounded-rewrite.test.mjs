@@ -19,7 +19,7 @@ import {
   boundNotice,
   isOutputHeavy,
   DEFAULT_BOUND_BYTES,
-} from '../../hooks-core/rewrite.mjs';
+} from '../../src/hooks-core/rewrite.mjs';
 
 const BASH = process.env.TOKEN_OPTIMIZER_TEST_BASH || 'bash';
 
@@ -303,6 +303,7 @@ const ROUTER = join(
   HERE,
   '..',
   '..',
+  'src',
   'plugin',
   'hooks',
   'pretooluse-router.mjs'

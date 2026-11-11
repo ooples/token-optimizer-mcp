@@ -17,7 +17,7 @@ import {
   offModeNotice,
   retireStrays,
   strayEntries,
-} from '../../hooks-core/install-health.mjs';
+} from '../../src/hooks-core/install-health.mjs';
 
 const NPM_HOOKS = 'C:/Users/u/AppData/Roaming/npm/node_modules/@ooples/token-optimizer-mcp/plugin/hooks';
 const SCRIPT_HOOKS = '/home/u/.claude-global/hooks/token-optimizer';

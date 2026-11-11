@@ -6,7 +6,7 @@
           {
             "type": "command",
             "name": "token-optimizer-session-guidance",
-            "command": "node \"${extensionPath}${/}integrations${/}gemini${/}hooks${/}session-start.mjs\"",
+            "command": "node \"${extensionPath}${/}src${/}integrations${/}gemini${/}hooks${/}session-start.mjs\"",
             "timeout": 5000,
             "description": "Load token-optimizer guidance into the Gemini session."
           }
@@ -20,7 +20,7 @@
           {
             "type": "command",
             "name": "token-optimizer-route",
-            "command": "node \"${extensionPath}${/}integrations${/}gemini${/}hooks${/}pre-tool.mjs\"",
+            "command": "node \"${extensionPath}${/}src${/}integrations${/}gemini${/}hooks${/}pre-tool.mjs\"",
             "timeout": 5000,
             "description": "Route expensive built-in operations to token-optimizer before they consume context."
           }
@@ -34,7 +34,7 @@
           {
             "type": "command",
             "name": "token-optimizer-capture",
-            "command": "node \"${extensionPath}${/}integrations${/}gemini${/}hooks${/}post-tool.mjs\"",
+            "command": "node \"${extensionPath}${/}src${/}integrations${/}gemini${/}hooks${/}post-tool.mjs\"",
             "timeout": 5000,
             "description": "Capture completed changes and inject relevant graph findings."
           }
@@ -47,7 +47,7 @@
           {
             "type": "command",
             "name": "token-optimizer-semantic-harvest",
-            "command": "node \"${extensionPath}${/}integrations${/}gemini${/}hooks${/}stop.mjs\"",
+            "command": "node \"${extensionPath}${/}src${/}integrations${/}gemini${/}hooks${/}stop.mjs\"",
             "timeout": 5000,
             "description": "Let the active Gemini model record durable conclusions before finishing."
           }

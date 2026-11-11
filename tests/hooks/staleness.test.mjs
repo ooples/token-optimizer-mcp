@@ -10,10 +10,10 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { extractSymbols, languageOf, spanText } from '../../hooks-core/symbols.mjs';
-import { indexFile, checkAnchor, diffLines, serve, invalidateOnWrite } from '../../hooks-core/staleness.mjs';
-import { load, putNode, putEdge, nodeId } from '../../hooks-core/wiki.mjs';
-import { forTouch } from '../../hooks-core/inject.mjs';
+import { extractSymbols, languageOf, spanText } from '../../src/hooks-core/symbols.mjs';
+import { indexFile, checkAnchor, diffLines, serve, invalidateOnWrite } from '../../src/hooks-core/staleness.mjs';
+import { load, putNode, putEdge, nodeId } from '../../src/hooks-core/wiki.mjs';
+import { forTouch } from '../../src/hooks-core/inject.mjs';
 
 // THE HOLDOUT IS PINNED OFF IN THIS SUITE.
 //
@@ -30,7 +30,7 @@ afterAll(() => {
   if (PRIOR_HOLDOUT === undefined) delete process.env.TOKEN_OPTIMIZER_HOLDOUT;
   else process.env.TOKEN_OPTIMIZER_HOLDOUT = PRIOR_HOLDOUT;
 });
-import { canonicalPath } from '../../hooks-core/paths.mjs';
+import { canonicalPath } from '../../src/hooks-core/paths.mjs';
 
 let workspace;
 let dir;
@@ -222,8 +222,8 @@ describe('the diff invariant -- a stale finding never arrives bare', () => {
   test('a workflow rule is not invalidated by its anchor file changing', () => {
     // MEASURED: 24 of 32 stale findings on real graphs were types whose truth
     // cannot depend on the anchor's contents -- 75%. The clearest case is a
-    // `failure` reading "Edit hooks-core/, never the generated copies", marked
-    // stale because hooks-core/wiki.mjs changed. That rule is about process;
+    // `failure` reading "Edit src/hooks-core/, never the generated copies", marked
+    // stale because src/hooks-core/wiki.mjs changed. That rule is about process;
     // the file's contents cannot make it wrong.
     const path = write('churny.ts', 'export const a = 1;');
     putNode(dir, { kind: 'file', key: path, hash: 'a-hash-that-no-longer-matches' });
@@ -232,7 +232,7 @@ describe('the diff invariant -- a stale finding never arrives bare', () => {
       kind: 'finding',
       key: 'process-rule',
       type: 'failure',
-      claim: 'Edit hooks-core/, never the generated copies.',
+      claim: 'Edit src/hooks-core/, never the generated copies.',
       confidence: 0.9,
     });
     putEdge(dir, rule, 'derived_from', nodeId('file', path));

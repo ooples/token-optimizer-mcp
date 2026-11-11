@@ -3,13 +3,13 @@ import { createServer } from 'node:http';
 import { mkdtempSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { runClient } from '../../scripts/run-client.mjs';
-import opencodePlugin from '../../scripts/opencode-plugin.mjs';
+import { runClient } from '../../src/scripts/run-client.mjs';
+import opencodePlugin from '../../src/scripts/opencode-plugin.mjs';
 import {
   MANAGED_CLIENTS,
   CLIENT_PROXY_ENV,
   upstreamFor,
-} from '../../hooks-core/capabilities.mjs';
+} from '../../src/hooks-core/capabilities.mjs';
 
 describe('every supported managed CLI recovers a recorded stale proxy endpoint', () => {
   it.each(Object.keys(MANAGED_CLIENTS))(

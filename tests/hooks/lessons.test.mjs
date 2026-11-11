@@ -13,11 +13,11 @@ import {
   isImperative,
   validateLessons,
   LESSON_PROMPT,
-} from '../../hooks-core/lessons.mjs';
-import { ORIGIN_HUMAN, ORIGIN_HARVESTED } from '../../hooks-core/curate.mjs';
-import { writeHarvested } from '../../hooks-core/harvest-write.mjs';
-import { standingRules, safeTrigger } from '../../hooks-core/inject.mjs';
-import { wikiDir, load, putNode } from '../../hooks-core/wiki.mjs';
+} from '../../src/hooks-core/lessons.mjs';
+import { ORIGIN_HUMAN, ORIGIN_HARVESTED } from '../../src/hooks-core/curate.mjs';
+import { writeHarvested } from '../../src/hooks-core/harvest-write.mjs';
+import { standingRules, safeTrigger } from '../../src/hooks-core/inject.mjs';
+import { wikiDir, load, putNode } from '../../src/hooks-core/wiki.mjs';
 import {
   mkdtempSync,
   mkdirSync,
@@ -425,7 +425,7 @@ describe('the lessons metrics event that nothing read', () => {
   }
 
   it('is written by no file in the live hook path', () => {
-    const files = ['hooks-core', 'plugin/hooks'].flatMap((root) => walk(join(REPO, root)));
+    const files = ['src/hooks-core', 'src/plugin/hooks'].flatMap((root) => walk(join(REPO, root)));
     expect(files.length).toBeGreaterThan(10); // a scan matching nothing would pass vacuously
 
     const offenders = files

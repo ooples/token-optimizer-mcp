@@ -20,7 +20,7 @@ import {
   wholeFileDump,
   isRecursiveSearch,
   adviseOnce,
-} from '../../hooks-core/decide.mjs';
+} from '../../src/hooks-core/decide.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
@@ -61,7 +61,7 @@ afterEach(() => rmSync(workspace, { recursive: true, force: true }));
 const route = (sessionId, toolName, toolInput) => {
   const result = spawnSync(
     process.execPath,
-    [join(ROOT, 'plugin/hooks/pretooluse-router.mjs')],
+    [join(ROOT, 'src/plugin/hooks/pretooluse-router.mjs')],
     {
       input: JSON.stringify({
         session_id: sessionId,
@@ -152,7 +152,7 @@ describe('outlines in the default install: assist, with the optimizer tools pres
   // does earn one, and the verdict path outlined only when refusals were on. In
   // the default assist mode the files the outline exists for were never outlined.
   const withTools = (sessionId, toolName, toolInput) => {
-    const result = spawnSync(process.execPath, [join(ROOT, 'plugin/hooks/pretooluse-router.mjs')], {
+    const result = spawnSync(process.execPath, [join(ROOT, 'src/plugin/hooks/pretooluse-router.mjs')], {
       input: JSON.stringify({ session_id: sessionId, cwd: workspace, tool_name: toolName, tool_input: toolInput }),
       encoding: 'utf8',
       env: {
@@ -182,7 +182,7 @@ describe('outlines in the default install: assist, with the optimizer tools pres
     const small = join(workspace, 'small.txt');
     writeFileSync(small, 'x\n');
     const call = (transcript) =>
-      spawnSync(process.execPath, [join(ROOT, 'plugin/hooks/pretooluse-router.mjs')], {
+      spawnSync(process.execPath, [join(ROOT, 'src/plugin/hooks/pretooluse-router.mjs')], {
         input: JSON.stringify({ session_id: session, transcript_path: transcript, cwd: workspace, tool_name: 'Read', tool_input: { file_path: small } }),
         encoding: 'utf8',
         env: { ...process.env, TOKEN_OPTIMIZER_STATE_DIR: stateDir },
@@ -220,7 +220,7 @@ describe('the subagent briefing rides on every exit', () => {
     ['deny', "p.deny('REASON')"],
     ['advise', "p.advise('REASON')"],
   ])('%s', (_, call) => {
-    const policy = pathToFileURL(join(ROOT, 'hooks-core', 'policy.mjs')).href;
+    const policy = pathToFileURL(join(ROOT, 'src', 'hooks-core', 'policy.mjs')).href;
     const result = spawnSync(
       process.execPath,
       ['--input-type=module', '-e', `import(${JSON.stringify(policy)}).then((p) => { p.precedeWith('BRIEFING'); ${call}; })`],
@@ -282,7 +282,7 @@ describe('advisories are said once', () => {
     const session = `twice-${randomUUID()}`;
     const stateDir = join(workspace, 'state');
     const post = (command) => {
-      const result = spawnSync(process.execPath, [join(ROOT, 'plugin/hooks/post-tool.mjs')], {
+      const result = spawnSync(process.execPath, [join(ROOT, 'src/plugin/hooks/post-tool.mjs')], {
         input: JSON.stringify({
           hook_event_name: 'PostToolUse',
           session_id: session,

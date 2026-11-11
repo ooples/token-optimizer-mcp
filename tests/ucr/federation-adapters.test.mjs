@@ -21,7 +21,7 @@ import {
   capabilitySurfaceAudit,
   createTiktokenCounter,
   certifyAdapterProcess,
-} from '../../ucr/index.mjs';
+} from '../../src/ucr/index.mjs';
 
 describe('secure cross-project federation', () => {
   const grant = {

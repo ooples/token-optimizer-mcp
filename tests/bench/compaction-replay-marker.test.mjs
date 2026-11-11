@@ -16,7 +16,7 @@ describe('wasCompacted', () => {
   });
 
   test('a file that merely contains the notice text was not', () => {
-    // A recorded `cat hooks-core/output-compact.mjs`.
+    // A recorded `cat src/hooks-core/output-compact.mjs`.
     const source =
       "  const parts = [`[token-optimizer: ${kb(originalBytes)} output compacted`];\n" +
       '  return `${parts.join(\'; \')}; ${how}]`;\n}\n';

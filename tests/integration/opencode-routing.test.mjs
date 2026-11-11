@@ -3,8 +3,8 @@ import { createServer } from 'node:http';
 import fs from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { putNode } from '../../hooks-core/wiki.mjs';
-import plugin from '../../scripts/opencode-plugin.mjs';
+import { putNode } from '../../src/hooks-core/wiki.mjs';
+import plugin from '../../src/scripts/opencode-plugin.mjs';
 
 describe('OpenCode provider-scoped routing', () => {
   it('uses the repository graph when the client starts in a subdirectory', async () => {

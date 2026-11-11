@@ -36,9 +36,9 @@ import {
   putNodeWithEdges,
   load,
   findingsFor,
-} from '../../hooks-core/wiki.mjs';
-import { recallProbe, MIN_PROBED, MAX_FINDINGS } from '../../hooks-core/recall.mjs';
-import { graphBalanceSheet } from '../../hooks-core/crosslayer.mjs';
+} from '../../src/hooks-core/wiki.mjs';
+import { recallProbe, MIN_PROBED, MAX_FINDINGS } from '../../src/hooks-core/recall.mjs';
+import { graphBalanceSheet } from '../../src/hooks-core/crosslayer.mjs';
 
 let workspace;
 let dir;

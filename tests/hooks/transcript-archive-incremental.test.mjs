@@ -14,7 +14,7 @@ import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { spawn } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { archive } from '../../hooks-core/transcript.mjs';
+import { archive } from '../../src/hooks-core/transcript.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
@@ -90,7 +90,7 @@ test('concurrent archivers do not append the same turns twice', async () => {
   archive(dir, transcript, { sessionId: 's1' });
   appendFileSync(transcript, lines(200, 2000));
 
-  const moduleUrl = pathToFileURL(join(ROOT, 'hooks-core', 'transcript.mjs')).href;
+  const moduleUrl = pathToFileURL(join(ROOT, 'src', 'hooks-core', 'transcript.mjs')).href;
   const script =
     `import(${JSON.stringify(moduleUrl)}).then(({ archive }) => ` +
     `archive(${JSON.stringify(dir)}, ${JSON.stringify(transcript)}, { sessionId: 's1' }))`;

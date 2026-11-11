@@ -16,7 +16,7 @@ import { tmpdir } from 'node:os';
 import { pathToFileURL } from 'node:url';
 
 const ROOT = process.cwd();
-const mod = (name) => pathToFileURL(join(ROOT, 'hooks-core', name)).href;
+const mod = (name) => pathToFileURL(join(ROOT, 'src', 'hooks-core', name)).href;
 
 let work;
 beforeEach(() => {

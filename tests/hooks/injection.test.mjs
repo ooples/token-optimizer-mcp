@@ -14,14 +14,14 @@ import {
   validate,
   buildDigest,
   harvestEnabled,
-} from '../../hooks-core/harvest.mjs';
+} from '../../src/hooks-core/harvest.mjs';
 import {
   forTouch,
   relevantFindingIdsForContext,
   sessionIndex,
   refusalPayload,
   linkCoOccurrence,
-} from '../../hooks-core/inject.mjs';
+} from '../../src/hooks-core/inject.mjs';
 import {
   inHoldout,
   record,
@@ -30,9 +30,9 @@ import {
   reportMany,
   indexBudget,
   latestEventTimestamp,
-} from '../../hooks-core/metrics.mjs';
-import { load, putNode, putEdge, nodeId } from '../../hooks-core/wiki.mjs';
-import { indexFile } from '../../hooks-core/staleness.mjs';
+} from '../../src/hooks-core/metrics.mjs';
+import { load, putNode, putEdge, nodeId } from '../../src/hooks-core/wiki.mjs';
+import { indexFile } from '../../src/hooks-core/staleness.mjs';
 
 let workspace;
 let dir;
@@ -508,7 +508,7 @@ describe('P5 measurement', () => {
     // Force the holdout arm. A cache-busting query gives a fresh module, since
     // the fraction is read once at load time.
     process.env.TOKEN_OPTIMIZER_HOLDOUT = '1';
-    return import('../../hooks-core/inject.mjs?holdout=1').then(
+    return import('../../src/hooks-core/inject.mjs?holdout=1').then(
       ({ forTouch: touch }) => {
         // If the withheld arm leaked anything, it would no longer be a control
         // and the whole measurement would be meaningless.

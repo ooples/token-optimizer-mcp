@@ -20,7 +20,7 @@ if (-not (Test-Path $logDir)) {
     New-Item -ItemType Directory -Path $logDir -Force | Out-Null
 }
 $LOG_FILE = Join-Path $logDir "token-optimizer-calls.log"
-$CLI_WRAPPER = Join-Path $repoRoot "cli-wrapper.mjs"
+$CLI_WRAPPER = Join-Path $repoRoot "src/cli-wrapper.mjs"
 
 function Write-Log {
     param([string]$Message, [string]$Level = "INFO")

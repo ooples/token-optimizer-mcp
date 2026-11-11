@@ -186,7 +186,7 @@ const ARM = {
     env: { TOKEN_OPTIMIZER_BLACKBOARD: '0' },
   },
   // Lean handoffs are opt-in and need Agent|Task in the PostToolUse matcher,
-  // which the shipped plugin leaves out (hooks-core/wire.mjs); this arm sets the
+  // which the shipped plugin leaves out (src/hooks-core/wire.mjs); this arm sets the
   // switch only, so it measures nothing until the matcher is widened as well.
   'ours-next-handoff': {
     plugin: 'next',

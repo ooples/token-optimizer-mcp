@@ -10,7 +10,7 @@ none. Every one of those would have shipped as a public claim.
 
 So a claim is not a sentence here, it is a measurement with a re-runnable
 producer. This script runs each probe against the INSTALLED competitor package
-and writes the numbers; scripts/verify-blockers.mjs validates the stamped file
+and writes the numbers; src/scripts/verify-blockers.mjs validates the stamped file
 and fails when a claim stops matching what the code does.
 
 WHAT IS DELIBERATELY NOT HERE. No conclusions, no prose about them, no

@@ -19,7 +19,7 @@ import { callContext } from '../../../src/tools/shared/call-context.js';
  * call (by toolUseId); the server adds that agent to the cache scope.
  */
 const agentScope = (await import(
-  pathToFileURL(resolve('hooks-core', 'agent-scope.mjs')).href
+  pathToFileURL(resolve('src', 'hooks-core', 'agent-scope.mjs')).href
 )) as {
   agentKey(path: string): string;
   agentForCall(id: string): string | null;
@@ -106,7 +106,7 @@ describe('the call-to-agent record', () => {
   it('the hook entry point records the pair from a PreToolUse payload', () => {
     const result = spawnSync(
       process.execPath,
-      [resolve('plugin', 'hooks', 'agent-scope.mjs')],
+      [resolve('src', 'plugin', 'hooks', 'agent-scope.mjs')],
       {
         input: JSON.stringify({
           hook_event_name: 'PreToolUse',

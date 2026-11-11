@@ -223,10 +223,12 @@ export async function flushHookSnapshot(
   let report: unknown;
   try {
     const moduleUrl = pathToFileURL(
-      fileURLToPath(new URL('../../hooks-core/metrics.mjs', import.meta.url))
+      fileURLToPath(
+        new URL('../../src/hooks-core/metrics.mjs', import.meta.url)
+      )
     ).href;
     const wikiUrl = pathToFileURL(
-      fileURLToPath(new URL('../../hooks-core/wiki.mjs', import.meta.url))
+      fileURLToPath(new URL('../../src/hooks-core/wiki.mjs', import.meta.url))
     ).href;
     const [metrics, wiki] = await Promise.all([
       import(moduleUrl),

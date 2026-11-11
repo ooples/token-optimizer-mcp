@@ -219,7 +219,7 @@ jobs:
       # attestation the publish below produces. Generated from the built tree so
       # it hashes exactly what ships.
       - name: Generate CHECKSUMS.sha256
-        run: node scripts/checksums.mjs
+        run: node src/scripts/checksums.mjs
 
       - name: Attach CHECKSUMS.sha256 to the release
         if: ${{ needs.release-please.outputs.tag_name != '' }}
@@ -380,7 +380,7 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Install and launch the published version through plugin/launch.mjs
+      - name: Install and launch the published version through src/plugin/launch.mjs
         env:
           RELEASE_VERSION: ${{ needs.release-please.outputs.version }}
         run: npm run verify:published-launch -- --version "$RELEASE_VERSION" --wait-minutes 45 --pending-ok

@@ -11,7 +11,7 @@ import { describe, expect, it } from '@jest/globals';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { claudePluginProvidesMcp, runClient } from '../../scripts/run-client.mjs';
+import { claudePluginProvidesMcp, runClient } from '../../src/scripts/run-client.mjs';
 
 const settings = (dir, body) => {
   mkdirSync(dir, { recursive: true });

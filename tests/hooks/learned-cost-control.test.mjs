@@ -22,7 +22,7 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { billingMode } from '../../hooks-core/billing.mjs';
+import { billingMode } from '../../src/hooks-core/billing.mjs';
 import {
   analyze,
   applyHoldout,
@@ -35,7 +35,7 @@ import {
   POLICY_FILE,
   shouldServe,
   WITHHOLDABLE,
-} from '../../hooks-core/injection-holdout.mjs';
+} from '../../src/hooks-core/injection-holdout.mjs';
 import {
   classifyTurn,
   currentTurn,
@@ -45,7 +45,7 @@ import {
   onToolFailure,
   recordTurnEnd,
   turnStats,
-} from '../../hooks-core/loopguard.mjs';
+} from '../../src/hooks-core/loopguard.mjs';
 import {
   candidates,
   costUnitsOf,
@@ -60,7 +60,7 @@ import {
   takeNotice,
   toolpruneSettings,
   writeDenyList,
-} from '../../hooks-core/toolprune.mjs';
+} from '../../src/hooks-core/toolprune.mjs';
 
 const ROOT = process.cwd();
 const work = mkdtempSync(join(tmpdir(), 'learned-cost-control-'));
@@ -147,7 +147,7 @@ describe('billing mode', () => {
   });
 
   test('credential files are never opened', () => {
-    const source = readFileSync(join(ROOT, 'hooks-core', 'billing.mjs'), 'utf8');
+    const source = readFileSync(join(ROOT, 'src', 'hooks-core', 'billing.mjs'), 'utf8');
     const code = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
     // The one file it does read is the non-secret account metadata.
     expect(code.match(/'[^']*\.json'/g)).toEqual(["'.claude.json'"]);
@@ -253,7 +253,7 @@ describe('tool pruning', () => {
   });
 
   test('a fold never writes a new prune while any session, its own included, is live; the waiter does once all are quiet', async () => {
-    const { waitAndApply } = await import('../../hooks-core/toolprune.mjs');
+    const { waitAndApply } = await import('../../src/hooks-core/toolprune.mjs');
     const transcripts = fresh('transcripts');
     const root = fresh('root');
     const dir = fresh('state');
@@ -580,7 +580,7 @@ describe('injection holdout', () => {
   });
 
   test('Holm keeps the family-wise error at alpha across classes', async () => {
-    const { holm } = await import('../../hooks-core/injection-holdout.mjs');
+    const { holm } = await import('../../src/hooks-core/injection-holdout.mjs');
     expect(holm([0.01, 0.04, null, 0.03])).toEqual([0.03, 0.06, null, 0.06]);
   });
 
@@ -604,7 +604,7 @@ describe('wiring', () => {
       rows.push(result(`b${index}`, 'Error: expected 3 to equal 4', true));
     }
     writeTranscript(path, rows);
-    const run = spawnSync(process.execPath, [join(ROOT, 'plugin', 'hooks', 'post-tool-failure.mjs')], {
+    const run = spawnSync(process.execPath, [join(ROOT, 'src', 'plugin', 'hooks', 'post-tool-failure.mjs')], {
       input: JSON.stringify({
         hook_event_name: 'PostToolUseFailure',
         session_id: 'e2e-session',
@@ -642,7 +642,7 @@ describe('wiring', () => {
     writeTranscript(path, [prompt('use two agents to review src and tests')]);
     const stop = (extra = {}) =>
       JSON.parse(
-        spawnSync(process.execPath, [join(ROOT, 'plugin', 'hooks', 'stop.mjs')], {
+        spawnSync(process.execPath, [join(ROOT, 'src', 'plugin', 'hooks', 'stop.mjs')], {
           input: JSON.stringify({ hook_event_name: 'Stop', session_id: 'live', transcript_path: path, cwd, ...extra }),
           env,
           encoding: 'utf8',
@@ -661,7 +661,7 @@ describe('wiring', () => {
   });
 
   test('a process this package started itself is never optimized', () => {
-    const run = spawnSync(process.execPath, [join(ROOT, 'plugin', 'hooks', 'stop.mjs')], {
+    const run = spawnSync(process.execPath, [join(ROOT, 'src', 'plugin', 'hooks', 'stop.mjs')], {
       input: JSON.stringify({ session_id: 'side', cwd: work }),
       env: { ...process.env, TOKEN_OPTIMIZER_SIDECALL: '1' },
       encoding: 'utf8',
@@ -688,7 +688,7 @@ describe('weekly-aware subscription pacing', () => {
   });
 
   test('room in the window and the week on pace allows pacing; ahead of pace does not', async () => {
-    const { quotaHeadroom, normalizeRateLimits } = await import('../../hooks-core/quota-policy.mjs');
+    const { quotaHeadroom, normalizeRateLimits } = await import('../../src/hooks-core/quota-policy.mjs');
     const now = Date.UTC(2026, 10, 7, 12);
     // 4 days left of 7: 42.9% of the week elapsed.
     expect(quotaHeadroom(normalizeRateLimits(limitsAt(now, 30, 40, 4).rate_limits), { now }).ok).toBe(true);
@@ -698,8 +698,8 @@ describe('weekly-aware subscription pacing', () => {
   });
 
   test('the pacer continues an unverified session only with fresh data, on a subscription, under policy pace-verify', async () => {
-    const { recordRateLimits } = await import('../../hooks-core/quota-policy.mjs');
-    const { nextPacedContinuation } = await import('../../hooks-core/quota-pacer.mjs');
+    const { recordRateLimits } = await import('../../src/hooks-core/quota-policy.mjs');
+    const { nextPacedContinuation } = await import('../../src/hooks-core/quota-pacer.mjs');
     const now = Date.now();
     const stateDir = fresh('pace-state');
     const home = subscriptionHome();
@@ -734,7 +734,7 @@ describe('weekly-aware subscription pacing', () => {
   });
 
   test('the status-line tap wraps an existing status line and uninstall puts it back exactly', async () => {
-    const { installStatusline, uninstallStatusline } = await import('../../scripts/learned.mjs');
+    const { installStatusline, uninstallStatusline } = await import('../../src/scripts/learned.mjs');
     const home = fresh('home');
     mkdirSync(join(home, '.claude'));
     const original = { statusLine: { type: 'command', command: 'bash -c "echo \'my line\' && date"', padding: 1 }, theme: 'dark' };
@@ -751,7 +751,7 @@ describe('weekly-aware subscription pacing', () => {
   test('the tap records usage and passes the wrapped command’s output through unchanged', () => {
     const stateDir = fresh('tap-state');
     const wrapped = Buffer.from(`"${process.execPath}" -e "process.stdout.write('WRAPPED')"`).toString('base64');
-    const run = spawnSync(process.execPath, [join(ROOT, 'scripts', 'statusline-tap.mjs'), '--wrap-b64', wrapped], {
+    const run = spawnSync(process.execPath, [join(ROOT, 'src', 'scripts', 'statusline-tap.mjs'), '--wrap-b64', wrapped], {
       input: JSON.stringify(limitsAt(Date.now(), 12, 30, 5)),
       env: { ...process.env, TOKEN_OPTIMIZER_STATE_DIR: stateDir },
       encoding: 'utf8',

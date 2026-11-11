@@ -9,14 +9,14 @@
 import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
 import {
   readTurns, archive, readArchive, prune, isArchived, transcriptDir, safeName,
-} from '../../hooks-core/transcript.mjs';
+} from '../../src/hooks-core/transcript.mjs';
 import { mkdtempSync, rmSync, writeFileSync, readdirSync, existsSync, mkdirSync } from 'fs';
 import { join, dirname, resolve } from 'path';
 import { tmpdir } from 'os';
 import { spawnSync } from 'child_process';
 import { fileURLToPath } from 'url';
-import { load, nodeId } from '../../hooks-core/wiki.mjs';
-import { failedResultsFromTranscript } from '../../hooks-core/transcript.mjs';
+import { load, nodeId } from '../../src/hooks-core/wiki.mjs';
+import { failedResultsFromTranscript } from '../../src/hooks-core/transcript.mjs';
 
 let dir;
 let transcript;
@@ -199,6 +199,7 @@ describe('the never-transmit guarantee is enforced, not merely stated', () => {
       dirname(fileURLToPath(import.meta.url)),
       '..',
       '..',
+      'src',
       'plugin',
       'hooks',
       'pretooluse-router.mjs'

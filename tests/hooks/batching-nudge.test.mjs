@@ -19,7 +19,7 @@ import {
   isSingleCommand,
   loadState,
   saveState,
-} from '../../hooks-core/policy.mjs';
+} from '../../src/hooks-core/policy.mjs';
 
 const ROOT = join(fileURLToPath(new URL('.', import.meta.url)), '..', '..');
 const bash = (command) => ({ tool_name: 'Bash', tool_input: { command } });
@@ -89,7 +89,7 @@ describe('through the packaged router', () => {
     };
     const outputs = [];
     for (let i = 0; i < BATCH_NUDGE_AFTER + 2; i++) {
-      const result = spawnSync(process.execPath, [join(ROOT, 'plugin/hooks/pretooluse-router.mjs')], {
+      const result = spawnSync(process.execPath, [join(ROOT, 'src/plugin/hooks/pretooluse-router.mjs')], {
         input: JSON.stringify({ session_id: session, cwd: ROOT, ...bash(`echo ${i}`) }),
         encoding: 'utf8',
         env,

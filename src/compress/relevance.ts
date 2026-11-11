@@ -18,7 +18,7 @@
  * always yield the same kept lines, so a benchmark number means something and a
  * regression is reproducible.
  *
- * THE SAME PRIMITIVE THE REST OF THE PACKAGE ALREADY USES. `hooks-core/
+ * THE SAME PRIMITIVE THE REST OF THE PACKAGE ALREADY USES. `src/hooks-core/
  * lexical.mjs` ranks wiki findings by BM25 with this tokenizer's semantics --
  * whole tokens plus their camelCase and letter-digit parts, so a query for
  * "skip lib check" finds `skipLibCheck`. It is reimplemented rather than

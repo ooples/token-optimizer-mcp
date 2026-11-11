@@ -32,7 +32,7 @@ import {
   DISCLOSE_THRESHOLD,
   WORTHWHILE_PREVIEW,
   withheldLines,
-} from '../../hooks-core/disclose.mjs';
+} from '../../src/hooks-core/disclose.mjs';
 import {
   capture,
   resolve,
@@ -43,9 +43,9 @@ import {
   promote,
   previewQuality,
   CHEAP_REGEN_MS,
-} from '../../hooks-core/expand.mjs';
-import { load, putNode, putEdge, nodeId } from '../../hooks-core/wiki.mjs';
-import { indexFile } from '../../hooks-core/staleness.mjs';
+} from '../../src/hooks-core/expand.mjs';
+import { load, putNode, putEdge, nodeId } from '../../src/hooks-core/wiki.mjs';
+import { indexFile } from '../../src/hooks-core/staleness.mjs';
 
 /** This file sits at tests/hooks, so the repository root is two up. */
 const REPO = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -503,7 +503,7 @@ describe('expand serves what it claims to serve', () => {
     // `expand` with request.params.arguments unvalidated and the schema declares a bare string.
     // `join` resolves `..`, so '../../notes' read notes.txt from anywhere on disk and returned it
     // as the expansion of the pointer the caller was holding.
-    const { resolve } = await import('../../hooks-core/expand.mjs');
+    const { resolve } = await import('../../src/hooks-core/expand.mjs');
     const dir = mkdtempSync(join(tmpdir(), 'exp-ref-'));
     try {
       // String.raw for the Windows case. Written as '..\..\notes' it collapsed to '....notes' --
@@ -530,7 +530,7 @@ describe('expand serves what it claims to serve', () => {
   });
 
   test('a well-formed but unknown digest is still null, not an adjacent file', async () => {
-    const { resolve } = await import('../../hooks-core/expand.mjs');
+    const { resolve } = await import('../../src/hooks-core/expand.mjs');
     const dir = mkdtempSync(join(tmpdir(), 'exp-miss-'));
     try {
       expect(resolve(dir, '0123456789abcdef')).toBeNull();
@@ -543,7 +543,7 @@ describe('expand serves what it claims to serve', () => {
     // The artifact store is never pruned while metrics is a bounded tail, so artifacts routinely
     // outlive their capture records. Staleness is then unanswerable -- and unanswerable rendered
     // as fresh, which the module header calls worse than serving nothing.
-    const { capture, resolve } = await import('../../hooks-core/expand.mjs');
+    const { capture, resolve } = await import('../../src/hooks-core/expand.mjs');
     const dir = mkdtempSync(join(tmpdir(), 'exp-unver-'));
     try {
       // Capture writes the artifact AND a metrics record; delete the metrics so only the
@@ -564,7 +564,7 @@ describe('expand serves what it claims to serve', () => {
   });
 
   test('the artifact TTL is exported so the bound is not silent', async () => {
-    const { ARTIFACT_TTL_MS } = await import('../../hooks-core/expand.mjs');
+    const { ARTIFACT_TTL_MS } = await import('../../src/hooks-core/expand.mjs');
     expect(ARTIFACT_TTL_MS).toBeGreaterThan(0);
   });
 });

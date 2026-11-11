@@ -10,14 +10,14 @@ import {
   gradeBehavior,
   handoffSchedule,
   targetFindingMatches,
-} from '../../scripts/run-handoff-eval.mjs';
-import { capturesByWriter } from '../../scripts/run-concurrent-handoff-eval.mjs';
-import { audit as writeFixtureAudit } from '../../evals/fixtures/mistake-transfer/scripts/audit.mjs';
+} from '../../src/scripts/run-handoff-eval.mjs';
+import { capturesByWriter } from '../../src/scripts/run-concurrent-handoff-eval.mjs';
+import { audit as writeFixtureAudit } from '../../src/evals/fixtures/mistake-transfer/scripts/audit.mjs';
 
 const ROOT = resolve(process.cwd());
 const suite = JSON.parse(
   await import('node:fs').then(({ readFileSync }) =>
-    readFileSync(join(ROOT, 'evals', 'handoff-suite.json'), 'utf8')
+    readFileSync(join(ROOT, 'src', 'evals', 'handoff-suite.json'), 'utf8')
   )
 );
 
@@ -25,7 +25,7 @@ let workspace;
 
 beforeEach(() => {
   workspace = mkdtempSync(join(tmpdir(), 'handoff-grade-'));
-  cpSync(join(ROOT, 'evals', 'fixtures', 'mistake-transfer'), workspace, { recursive: true });
+  cpSync(join(ROOT, 'src', 'evals', 'fixtures', 'mistake-transfer'), workspace, { recursive: true });
 });
 
 afterEach(() => rmSync(workspace, { recursive: true, force: true }));

@@ -2,10 +2,10 @@ import { afterAll, beforeAll, expect, test } from '@jest/globals';
 import { appendFileSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { loadState, saveState } from '../../hooks-core/policy.mjs';
-import { nextPacedContinuation, quotaWindowPath } from '../../hooks-core/quota-pacer.mjs';
-import { boardFor, recordReadOnBoard } from '../../hooks-core/blackboard.mjs';
-import { lineHunks } from '../../hooks-core/repeats.mjs';
+import { loadState, saveState } from '../../src/hooks-core/policy.mjs';
+import { nextPacedContinuation, quotaWindowPath } from '../../src/hooks-core/quota-pacer.mjs';
+import { boardFor, recordReadOnBoard } from '../../src/hooks-core/blackboard.mjs';
+import { lineHunks } from '../../src/hooks-core/repeats.mjs';
 
 const work = mkdtempSync(join(tmpdir(), 'quota-review-'));
 const prior = process.env.TOKEN_OPTIMIZER_STATE_DIR;
@@ -68,7 +68,7 @@ test('timing normalization still reports changed compiler lines', () => {
 });
 
 test('repeat replacement follows content when file contains metadata only', async () => {
-  const { repeatResponse } = await import('../../hooks-core/repeats.mjs');
+  const { repeatResponse } = await import('../../src/hooks-core/repeats.mjs');
   const response = { file: { filePath: 'source.txt' }, content: 'x'.repeat(1000) };
   const state = {};
   const args = { tool: 'Read', input: { file_path: 'source.txt' }, response, cwd: work, state };

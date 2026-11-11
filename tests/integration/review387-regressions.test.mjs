@@ -3,9 +3,9 @@ import fs from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { execFileSync } from 'node:child_process';
-import { claudeRoute } from '../../scripts/claude-routing.mjs';
-import { replaceProfile } from '../../scripts/profile-file.mjs';
-import { recoverProfileLock } from '../../scripts/recover-profile-lock.mjs';
+import { claudeRoute } from '../../src/scripts/claude-routing.mjs';
+import { replaceProfile } from '../../src/scripts/profile-file.mjs';
+import { recoverProfileLock } from '../../src/scripts/recover-profile-lock.mjs';
 import { auditChatProbe } from '../../bench/live/chat-route-audit.mjs';
 
 test.each(['not-a-url', '/relative', 'file:///private'])(

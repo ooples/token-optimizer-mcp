@@ -13,14 +13,14 @@
 import { mkdtempSync, rmSync, writeFileSync, existsSync, appendFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { record, recordRead } from '../../hooks-core/metrics.mjs';
-import { detect, derivedDetections, detectorScores } from '../../hooks-core/waste.mjs';
+import { record, recordRead } from '../../src/hooks-core/metrics.mjs';
+import { detect, derivedDetections, detectorScores } from '../../src/hooks-core/waste.mjs';
 import {
   applyRemedy, revertRemedy, activeRules, measureRemedy, briefing, wasteReport, proposal,
-} from '../../hooks-core/remedy.mjs';
-import { load, putNode, putEdge, nodeId } from '../../hooks-core/wiki.mjs';
-import { indexFile } from '../../hooks-core/staleness.mjs';
-import { decide } from '../../hooks-core/decide.mjs';
+} from '../../src/hooks-core/remedy.mjs';
+import { load, putNode, putEdge, nodeId } from '../../src/hooks-core/wiki.mjs';
+import { indexFile } from '../../src/hooks-core/staleness.mjs';
+import { decide } from '../../src/hooks-core/decide.mjs';
 
 let workspace;
 let dir;

@@ -2,12 +2,12 @@ import { describe, it, expect } from '@jest/globals';
 import { mkdtempSync, rmSync, writeFileSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { probeVersion, probeSessionStart, renderDiagnosis } from '../../hooks-core/doctor.mjs';
+import { probeVersion, probeSessionStart, renderDiagnosis } from '../../src/hooks-core/doctor.mjs';
 import { SmartGrepTool } from '../../src/tools/file-operations/smart-grep.js';
 import { CacheEngine } from '../../src/core/cache-engine.js';
 import { TokenCounter } from '../../src/core/token-counter.js';
 import { MetricsCollector } from '../../src/core/metrics.js';
-import { redactV7Proof } from '../../scripts/export-v7-proof.mjs';
+import { redactV7Proof } from '../../src/scripts/export-v7-proof.mjs';
 
 describe('v7 user reports', () => {
   it('exports portable proof records without changing measured evidence or private inputs', () => {

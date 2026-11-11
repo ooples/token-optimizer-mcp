@@ -686,7 +686,7 @@ app.get('/api/health', (_req, res) => {
 
 // The wiki graph API. Registered before the catch-all root handler so its
 // routes are matched first, and isolated in its own module because it loads the
-// graph from plain ESM under hooks-core/ rather than from this build.
+// graph from plain ESM under src/hooks-core/ rather than from this build.
 registerWikiRoutes(app);
 registerUcrRoutes(app);
 // The OrcaRouter provider API. Server-side because the browser must never hold an OrcaRouter key:

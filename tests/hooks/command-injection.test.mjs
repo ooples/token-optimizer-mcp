@@ -5,14 +5,14 @@
  * are about running things, and they are anchored to files nobody opens at the
  * moment they run the command. The case that proved it, from a real session:
  * the graph held "run the suite with npm test, not npx jest", anchored to
- * plugin/hooks/lib/harvest.mjs. The agent ran `npx jest`, lost a test cycle,
+ * src/plugin/hooks/lib/harvest.mjs. The agent ran `npx jest`, lost a test cycle,
  * and the finding never fired -- because it was never going to.
  *
  * These tests pin the trigger path that closes that gap.
  */
 import { describe, it, expect, beforeEach, afterEach, afterAll } from '@jest/globals';
-import { forCommand, actsOf } from '../../hooks-core/inject.mjs';
-import { load, putNodeWithEdges, putNode, nodeId } from '../../hooks-core/wiki.mjs';
+import { forCommand, actsOf } from '../../src/hooks-core/inject.mjs';
+import { load, putNodeWithEdges, putNode, nodeId } from '../../src/hooks-core/wiki.mjs';
 import { mkdtempSync, rmSync, writeFileSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
@@ -219,7 +219,7 @@ describe('forCommand', () => {
 
 describe('a model-supplied trigger cannot hang the hook', () => {
   it('refuses a catastrophically backtracking pattern instead of running it', async () => {
-    const { safeTrigger } = await import('../../hooks-core/inject.mjs');
+    const { safeTrigger } = await import('../../src/hooks-core/inject.mjs');
     // String.raw throughout. A plain single-quoted string resolves an unknown
     // escape to the bare character, so '(\d+)*$' was really passing `(d+)*$`
     // and '\bnpx\s+jest\b' was passing a BACKSPACE followed by `npxs+jest`.
@@ -245,7 +245,7 @@ describe('a model-supplied trigger cannot hang the hook', () => {
   });
 
   it('refuses a long run of unbounded quantifiers, and the run it allows is fast', async () => {
-    const { safeTrigger } = await import('../../hooks-core/inject.mjs');
+    const { safeTrigger } = await import('../../src/hooks-core/inject.mjs');
     // Polynomial, not exponential, but to the power of the count: eight `\w*`
     // before a `!` ran past fifteen seconds on a tool name.
     expect(safeTrigger(String.raw`\w*\w*\w*\w*\w*!`)).toBeNull();
@@ -279,14 +279,14 @@ describe('a model-supplied trigger cannot hang the hook', () => {
 
   it('matches a command in bounded time, whatever its length', async () => {
     const { triggerMatchesCommand, COMMAND_MATCH_CHARS } = await import(
-      '../../hooks-core/safe-text.mjs'
+      '../../src/hooks-core/safe-text.mjs'
     );
     // The command is unbounded, and cost grows as its length to the power of
     // (quantifiers + 1): `.*.*!` took 2.3 s on 2,000 characters, `.*.*.*!`
     // never finished on 512. The worst trigger a command allows runs against a
     // 2,000-character command in a child with a deadline.
     const { spawnSync } = await import('node:child_process');
-    const module = new URL('../../hooks-core/safe-text.mjs', import.meta.url).href;
+    const module = new URL('../../src/hooks-core/safe-text.mjs', import.meta.url).href;
     const command = 'npm run build '.padEnd(2_000, 'x');
     const result = spawnSync(
       process.execPath,
@@ -311,7 +311,7 @@ describe('a model-supplied trigger cannot hang the hook', () => {
   });
 
   it('counts quantifiers per top-level alternative, since those are tried one at a time', async () => {
-    const { safeTrigger, COMMAND_MAX_QUANTIFIERS } = await import('../../hooks-core/safe-text.mjs');
+    const { safeTrigger, COMMAND_MAX_QUANTIFIERS } = await import('../../src/hooks-core/safe-text.mjs');
     const limit = { maxQuantifiers: COMMAND_MAX_QUANTIFIERS };
     // A trigger stored in a real local graph: three branches, one `.*` each.
     expect(
@@ -324,7 +324,7 @@ describe('a model-supplied trigger cannot hang the hook', () => {
   });
 
   it('does not count a group modifier or a lazy suffix as a quantifier', async () => {
-    const { safeTrigger } = await import('../../hooks-core/inject.mjs');
+    const { safeTrigger } = await import('../../src/hooks-core/inject.mjs');
     // Four quantifiers, each made lazy: the `?` after them repeats nothing.
     expect(safeTrigger(String.raw`a+?b*?c+?d*?`)).not.toBeNull();
     // `(?:` `(?=` `(?!` open groups; the `?` there is no quantifier.
@@ -332,7 +332,7 @@ describe('a model-supplied trigger cannot hang the hook', () => {
   });
 
   it('reads escapes and character classes as literal, not as structure', async () => {
-    const { safeTrigger } = await import('../../hooks-core/inject.mjs');
+    const { safeTrigger } = await import('../../src/hooks-core/inject.mjs');
     // A `(` or `|` inside a class or after a backslash opens nothing.
     expect(safeTrigger(String.raw`[(|]+x`)).not.toBeNull();
     expect(safeTrigger(String.raw`\(a\|b\)+`)).not.toBeNull();
@@ -342,12 +342,12 @@ describe('a model-supplied trigger cannot hang the hook', () => {
   });
 
   it('refuses an absurdly long pattern', async () => {
-    const { safeTrigger } = await import('../../hooks-core/inject.mjs');
+    const { safeTrigger } = await import('../../src/hooks-core/inject.mjs');
     expect(safeTrigger('a'.repeat(500))).toBeNull();
   });
 
   it('still compiles the ordinary triggers this feature exists for', async () => {
-    const { safeTrigger } = await import('../../hooks-core/inject.mjs');
+    const { safeTrigger } = await import('../../src/hooks-core/inject.mjs');
     const REAL_TRIGGERS = [
       String.raw`\bnpx\s+jest\b`,
       String.raw`git\s+push`,

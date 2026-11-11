@@ -1,8 +1,8 @@
 import { describe, expect, test } from '@jest/globals';
 import {
   CLIENT_CAPABILITIES, CAPABILITY_TIERS, capabilitySummary, nativeClientProfiles,
-} from '../../hooks-core/capabilities.mjs';
-import { EXPERIMENT_ARMS, featuresForArm, episodeMeta, usageFrom } from '../../hooks-core/experiment.mjs';
+} from '../../src/hooks-core/capabilities.mjs';
+import { EXPERIMENT_ARMS, featuresForArm, episodeMeta, usageFrom } from '../../src/hooks-core/experiment.mjs';
 
 describe('cross-client capability contract', () => {
   test('names all sixteen clients and keeps rules-only promises bounded', () => {

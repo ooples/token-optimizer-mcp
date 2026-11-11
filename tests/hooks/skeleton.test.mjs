@@ -14,10 +14,10 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { execFileSync } from 'node:child_process';
-import { annotatedSkeleton, contestedHistory, gitSignals } from '../../hooks-core/skeleton.mjs';
-import { load, putNode, putEdge, nodeId } from '../../hooks-core/wiki.mjs';
-import { indexFile } from '../../hooks-core/staleness.mjs';
-import { substitutionBudget, record, recordRead } from '../../hooks-core/metrics.mjs';
+import { annotatedSkeleton, contestedHistory, gitSignals } from '../../src/hooks-core/skeleton.mjs';
+import { load, putNode, putEdge, nodeId } from '../../src/hooks-core/wiki.mjs';
+import { indexFile } from '../../src/hooks-core/staleness.mjs';
+import { substitutionBudget, record, recordRead } from '../../src/hooks-core/metrics.mjs';
 
 // THE HOLDOUT IS OFF IN THIS SUITE, DELIBERATELY.
 //
@@ -32,8 +32,8 @@ import { substitutionBudget, record, recordRead } from '../../hooks-core/metrics
 // behave -- it looks fixed.
 const PRIOR_HOLDOUT = process.env.TOKEN_OPTIMIZER_HOLDOUT;
 process.env.TOKEN_OPTIMIZER_HOLDOUT = '0';
-import { substitutionFor } from '../../hooks-core/inject.mjs';
-import { canonicalPath } from '../../hooks-core/paths.mjs';
+import { substitutionFor } from '../../src/hooks-core/inject.mjs';
+import { canonicalPath } from '../../src/hooks-core/paths.mjs';
 
 let workspace;
 let dir;

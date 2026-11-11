@@ -16,7 +16,7 @@ import {
   studyArmDecision,
   validateModelAttestation,
   verifyStudySemanticEvidence,
-} from '../../ucr/index.mjs';
+} from '../../src/ucr/index.mjs';
 
 describe('live study driver protocol helpers', () => {
   test('normalizes Codex JSONL without retaining model content', () => {

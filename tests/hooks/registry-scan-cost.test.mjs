@@ -89,7 +89,7 @@ afterEach(() => {
 describe('registerProject does not scale with registry size', () => {
   test('a large registry costs no more than a small one', async () => {
     const { registerProject } = await import(
-      '../../hooks-core/projects.mjs'
+      '../../src/hooks-core/projects.mjs'
     );
 
     seedRegistry(20);
@@ -110,7 +110,7 @@ describe('registerProject does not scale with registry size', () => {
 
   test('a repeat call within the process does not rescan at all', async () => {
     const { registerProject } = await import(
-      '../../hooks-core/projects.mjs'
+      '../../src/hooks-core/projects.mjs'
     );
     seedRegistry(200);
 
@@ -127,7 +127,7 @@ describe('registerProject does not scale with registry size', () => {
 describe('correctness is preserved', () => {
   test('a project is still registered and readable', async () => {
     const { registerProject, registeredProjects } =
-      await import('../../hooks-core/projects.mjs');
+      await import('../../src/hooks-core/projects.mjs');
 
     registerProject({
       root: repo,
@@ -141,7 +141,7 @@ describe('correctness is preserved', () => {
   });
 
   test('a non-repository is still refused', async () => {
-    const { registerProject } = await import('../../hooks-core/projects.mjs');
+    const { registerProject } = await import('../../src/hooks-core/projects.mjs');
     const plain = join(home, 'not-a-repo');
     fs.mkdirSync(plain, { recursive: true });
     expect(

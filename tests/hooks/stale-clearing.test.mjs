@@ -26,7 +26,7 @@ import { afterEach, beforeEach, describe, expect, test } from '@jest/globals';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { load, nodeId, putNode, putEdge, putNodeWithEdges } from '../../hooks-core/wiki.mjs';
+import { load, nodeId, putNode, putEdge, putNodeWithEdges } from '../../src/hooks-core/wiki.mjs';
 import {
   clearStale,
   indexFile,
@@ -34,18 +34,18 @@ import {
   invalidateOnWrite,
   reverify,
   serve,
-} from '../../hooks-core/staleness.mjs';
+} from '../../src/hooks-core/staleness.mjs';
 import {
   audit,
   contradict,
   correct,
   hasOutstandingContradiction,
   retire,
-} from '../../hooks-core/curate.mjs';
-import { writeHarvested } from '../../hooks-core/harvest-write.mjs';
-import { create } from '../../hooks-core/curate.mjs';
-import { forTouch } from '../../hooks-core/inject.mjs';
-import { canonicalPath } from '../../hooks-core/paths.mjs';
+} from '../../src/hooks-core/curate.mjs';
+import { writeHarvested } from '../../src/hooks-core/harvest-write.mjs';
+import { create } from '../../src/hooks-core/curate.mjs';
+import { forTouch } from '../../src/hooks-core/inject.mjs';
+import { canonicalPath } from '../../src/hooks-core/paths.mjs';
 
 const ORIGINAL = 'export function parse(x) {\n  return x.trim();\n}\n';
 const CHANGED = 'export function parse(x) {\n  return String(x).trim();\n}\n';

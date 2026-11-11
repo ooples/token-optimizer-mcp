@@ -11,10 +11,10 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, 
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { pathToFileURL } from 'node:url';
-import { liveLeases, storeId, SPOOL_MAX_BYTES, withWriteLease } from '../../hooks-core/maintenance.mjs';
+import { liveLeases, storeId, SPOOL_MAX_BYTES, withWriteLease } from '../../src/hooks-core/maintenance.mjs';
 
 const ROOT = process.cwd();
-const mod = (name) => pathToFileURL(join(ROOT, 'hooks-core', name)).href;
+const mod = (name) => pathToFileURL(join(ROOT, 'src', 'hooks-core', name)).href;
 
 let work;
 let home;

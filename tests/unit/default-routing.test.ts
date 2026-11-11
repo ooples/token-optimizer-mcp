@@ -401,7 +401,7 @@ describe('the route keeps Claude Code\u2019s own tool deferral on', () => {
   });
 
   it('leaves the file flag alone when our own launcher set the variable', async () => {
-    // `scripts/run-client.mjs` puts ENABLE_TOOL_SEARCH in the environment of the Claude it
+    // `src/scripts/run-client.mjs` puts ENABLE_TOOL_SEARCH in the environment of the Claude it
     // launches, so an MCP server running inside that child sees it set. That is someone already
     // asserting the flag, not a reason the flag is wrong -- and the settings entry is what serves
     // every other way the user starts Claude, so it has to survive the visit.
@@ -421,7 +421,7 @@ describe('the route keeps Claude Code\u2019s own tool deferral on', () => {
   it('reads the anthropic endpoint with a trailing slash as the anthropic endpoint', async () => {
     // A string comparison against 'https://api.anthropic.com' calls this a gateway, which does
     // not merely decline the flag -- it makes the value inappropriate, so a pass would take an
-    // existing one of ours back out. `scripts/claude-routing.mjs` already decides by origin.
+    // existing one of ours back out. `src/scripts/claude-routing.mjs` already decides by origin.
     write({ env: { ANTHROPIC_BASE_URL: 'https://api.anthropic.com/' } });
     await applyDefaultRouting(route, env);
     expect(read().env.ENABLE_TOOL_SEARCH).toBe('true');
@@ -449,7 +449,7 @@ describe('the route keeps Claude Code\u2019s own tool deferral on', () => {
     // The only other place we write it is the branch that runs when the route MOVES, and
     // upgrading does not move the port -- so a route installed by a build that predates this
     // feature would never gain the entry. An absent key is writable, exactly as
-    // `scripts/claude-routing.mjs` treats it; turning deferral off means giving it a value.
+    // `src/scripts/claude-routing.mjs` treats it; turning deferral off means giving it a value.
     write({ model: 'opus' });
     await applyDefaultRouting(route, env);
 

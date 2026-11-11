@@ -9,7 +9,7 @@ const packageRoot = path.join(here, '..', '..');
 
 async function runtime(): Promise<any> {
   return import(
-    pathToFileURL(path.join(here, '..', '..', 'ucr', 'index.mjs')).href
+    pathToFileURL(path.join(here, '..', '..', 'src', 'ucr', 'index.mjs')).href
   );
 }
 
@@ -34,6 +34,7 @@ async function releaseEvidence(ucr: any): Promise<any> {
     deterministic: readOptional(
       path.join(
         packageRoot,
+        'src',
         'evals',
         'ucr',
         'results',
@@ -43,6 +44,7 @@ async function releaseEvidence(ucr: any): Promise<any> {
     liveHandoff: readOptional(
       path.join(
         packageRoot,
+        'src',
         'evals',
         'ucr',
         'results',
@@ -52,6 +54,7 @@ async function releaseEvidence(ucr: any): Promise<any> {
     evidenceIndex: readOptional(
       path.join(
         packageRoot,
+        'src',
         'evals',
         'ucr',
         'results',
@@ -61,6 +64,7 @@ async function releaseEvidence(ucr: any): Promise<any> {
     productionExercise: readOptional(
       path.join(
         packageRoot,
+        'src',
         'evals',
         'ucr',
         'results',

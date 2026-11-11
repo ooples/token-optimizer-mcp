@@ -13,7 +13,7 @@
  * in one session; for `denied` it re-arms a refusal that was already issued.
  */
 import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
-import { loadState, saveState } from '../../hooks-core/policy.mjs';
+import { loadState, saveState } from '../../src/hooks-core/policy.mjs';
 import { mkdtempSync, rmSync, writeFileSync, existsSync, unlinkSync, utimesSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';

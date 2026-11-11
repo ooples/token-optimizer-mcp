@@ -33,7 +33,7 @@ import {
   REQUIRED_FAULTS,
   sloReport,
   tieredReleaseVerdict,
-} from '../../ucr/index.mjs';
+} from '../../src/ucr/index.mjs';
 
 describe('Cognitive Continuity Benchmark', () => {
   const manifest = freezeBenchmark({

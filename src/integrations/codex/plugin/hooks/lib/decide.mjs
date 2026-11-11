@@ -1,0 +1,1436 @@
+// GENERATED FILE -- do not edit.
+// Source of truth: src/hooks-core/decide.mjs. Regenerate with `npm run sync:hooks`.
+/**
+ * The routing decision, as a pure function.
+ *
+ * Deliberately free of process, stdin, and exit codes so it can be unit tested
+ * directly and reused by every client integration. Claude Code, Codex, Gemini
+ * and the rest differ in how a tool call is NAMED and how a refusal is
+ * EXPRESSED, not in which calls are wasteful -- so the judgement lives here
+ * once and the per-client adapters stay thin.
+ *
+ * Returns null to allow, or { reason, key } to challenge. `key` identifies the
+ * target for loop breaking, so a second attempt at the same thing gets through.
+ */
+
+import {
+  fileSize,
+  isBinaryPath,
+  isMachineOwned,
+  largeFileBytes,
+  mode,
+  MODE_ENFORCE,
+  refusalFloorBytes,
+} from './policy.mjs';
+import { statSync } from 'node:fs';
+import { join } from 'node:path';
+import { canonicalPath, resolvableCandidates, isFsSafePath } from './paths.mjs';
+import { activeRules } from './remedy.mjs';
+import { wikiDir, projectRootFor } from './wiki.mjs';
+
+const KB = (bytes) => Math.round(bytes / 1024);
+
+/** Whether a path names an existing directory. Never throws. */
+function isDirectory(path) {
+  // See fileSize: a native abort is not catchable, so the check precedes the
+  // stat rather than relying on the try below.
+  if (!isFsSafePath(path)) return false;
+  try {
+    return statSync(path).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Does this command DUMP file contents, rather than merely naming a file?
+ *
+ * `cat`, `head` and `grep` pay for the bytes; `Write`, `Edit` and a bare
+ * `wc -l` do not. Charging a full-file read for all of them overstated the very
+ * cost the holdout comparison is built on, and an inflated saving is the one
+ * failure this project cannot afford.
+ */
+export function isContentDump(command) {
+  if (typeof command !== 'string') return false;
+  // Heredoc bodies are data. A commit message that says `cat foo.ts` does not
+  // print foo.ts, and charging the session for its bytes would inflate the
+  // measured cost -- the one number this project must never overstate.
+  const runnable = stripHeredocs(command);
+  if (RECURSIVE_SEARCH.test(runnable)) return true;
+  if (!DUMP_COMMANDS.test(runnable)) return false;
+
+  // A DUMP WHOSE STDOUT GOES TO A FILE PUTS NOTHING IN CONTEXT, and refusing it is a false
+  // positive that blocks ordinary work. `cat >> file <<'EOF'` is the standard way to APPEND a
+  // heredoc -- cat is WRITING there, not printing -- and stripping the heredoc body leaves
+  // `cat >> file <<'EOF'`, which still matched \bcat\b and was refused.
+  //
+  // Hit while appending a test file to this very repository. The whole Bash call was denied, so
+  // the git checkout and the python edit chained inside it silently never ran, and the change
+  // looked applied when nothing had happened. A false positive here does not merely annoy: it
+  // fails silently in the middle of a compound command.
+  //
+  // The same reasoning covers `head -100 big.log > out.txt` -- those bytes land on disk, not in
+  // the transcript. Segments are checked individually, so `cat big.ts | head`, where the output
+  // DOES reach context, is still caught.
+  return segmentsOf(runnable).some(
+    (segment) => DUMP_COMMANDS.test(segment) && !redirectsStdoutToFile(segment)
+  );
+}
+
+/**
+ * Commands whose stdout is one whole file, verbatim.
+ *
+ * `head`, `tail`, `more`, `less` and `bat` are deliberately absent: head and tail
+ * bound their own output, the pagers are interactive, and bat decorates. Only a
+ * command that prints exactly the file can be answered with an outline of that
+ * file without changing what the model asked for.
+ */
+const WHOLE_DUMP_HEAD = /^(?:cat|type|Get-Content|gc)$/i;
+
+/**
+ * The single file a command prints in full, when that is ALL it does.
+ *
+ * THE SHELL HALF OF READ SUBSTITUTION. Subagents read files through the shell far
+ * more than through `Read`: across 42 workflow agents in one session, 2,071 reads
+ * went through `cat`, `sed`, `head` or `Get-Content` and 9 through `Read`. The
+ * outline substitution only ever saw `Read`, so for an agent it almost never
+ * fired.
+ *
+ * STRICT ON PURPOSE. A rewrite that changes what a command means is far worse
+ * than a missed saving, so anything other than one plain dump of one file is
+ * left alone: a pipeline (`cat f | jq`), a chain (`cat f && make`), a redirect, a
+ * heredoc, a subshell, a glob or variable, any flag but PowerShell's `-Raw`, or
+ * more than one operand. `cat -n f` numbers lines and `Get-Content -TotalCount`
+ * bounds them, so neither is a whole-file dump either.
+ *
+ * Returns `{ head, operand, path }` -- the command word, the operand as written,
+ * and the path that resolved on disk -- or null.
+ */
+export function wholeFileDump(command, cwd) {
+  if (typeof command !== 'string' || !command.trim()) return null;
+  // A heredoc, a redirect, a subshell or a substitution means the command does
+  // more than print a file.
+  if (stripHeredocs(command) !== command) return null;
+  if (/[<>`]|\$\(|[()]/.test(command)) return null;
+
+  const segments = shellSegments(command).filter((s) => s.trim());
+  if (segments.length !== 1) return null;
+  // `shellSegments` splits on `|`, `;`, `&` and newlines; a single segment can
+  // still have been joined by `&&` with an empty side, which the filter dropped.
+  if (/[|;&\n]/.test(command.replace(/"[^"]*"|'[^']*'/g, ''))) return null;
+
+  const tokens = segments[0].trim().match(/(?:"[^"]*"|'[^']*'|[^\s]+)/g) || [];
+  if (!tokens.length) return null;
+  const head = tokens[0].replace(/^.*[/\\]/, '');
+  if (!WHOLE_DUMP_HEAD.test(head)) return null;
+  const powershell = /^(?:Get-Content|gc)$/i.test(head);
+
+  const operands = [];
+  for (let i = 1; i < tokens.length; i++) {
+    const token = tokens[i];
+    if (powershell && /^-Raw$/i.test(token)) continue;
+    if (powershell && /^-(?:LiteralPath|Path)$/i.test(token)) {
+      if (i + 1 >= tokens.length) return null;
+      operands.push(tokens[++i]);
+      continue;
+    }
+    if (token.startsWith('-') || (token.startsWith('/') && /^\/[A-Za-z]$/.test(token))) return null;
+    operands.push(token);
+  }
+  if (operands.length !== 1) return null;
+
+  const operand = operands[0].replace(/^(['"])(.*)\1$/, '$2');
+  if (!operand || /[*?$]/.test(operand)) return null;
+
+  for (const path of candidatePaths(operand, cwd)) {
+    if (fileSize(path) > 0 && !isBinaryPath(path) && !isMachineOwned(path)) {
+      return { head, operand, path };
+    }
+  }
+  return null;
+}
+
+/** Command segments, split on the operators that end one command's stdout. */
+function segmentsOf(command) {
+  return String(command)
+    .split(/\|\||&&|[|;&\n]/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+/**
+ * Does this segment send its stdout to a file?
+ *
+ * `2>` is stderr and does not count, and `>&1`/`>&2` duplicate a descriptor rather than naming a
+ * file. Anything else of the form `>` or `>>` followed by a path captures output that would
+ * otherwise have reached the transcript.
+ */
+function redirectsStdoutToFile(segment) {
+  return /(?:^|[^0-9&2])>>?\s*(?!&)\S+/.test(String(segment));
+}
+
+/**
+ * Commands that print a whole file to stdout.
+ *
+ * This closes the obvious bypass: an agent that cannot `Read` a file will
+ * cheerfully `cat` it instead, and the bytes land in context either way. Both
+ * POSIX and PowerShell spellings are covered because Claude Code runs whichever
+ * shell the platform gives it.
+ */
+const DUMP_COMMANDS = /\b(?:cat|bat|head|tail|more|less|type|Get-Content|gc)\b/;
+
+/** Recursive searches, whose output is unbounded by construction. */
+const RECURSIVE_SEARCH =
+  /\b(?:grep|egrep|fgrep|rg|ag|ack|findstr|Select-String|sls)\b/;
+
+/** The search tools themselves, as a whole command word rather than a substring. */
+const SEARCH_TOOL =
+  /^(?:grep|egrep|fgrep|rg|ag|ack|findstr|Select-String|sls)$/i;
+
+/** Tools that walk directories with no flag asked for. */
+const RECURSES_BY_DEFAULT = /^(?:rg|ag|ack)$/i;
+
+/** Words that may precede the real command without changing what it is. */
+const COMMAND_PREFIX = /^(?:sudo|time|env|command|nice|ionice|nohup|xargs)$/;
+
+/** A built-in Grep capped at this many lines or fewer is already bounded. */
+const GREP_BOUNDED_LINES = 100;
+
+/**
+ * Removes heredoc BODIES, which are data the command carries rather than
+ * commands the shell will run.
+ *
+ * `git commit -F - <<'MSG' ... MSG` is one command that runs git. Every line of
+ * the message is text. This hook refused its own author three separate times
+ * over one afternoon -- a test body quoting `cat .git/index`, then two commit
+ * messages describing the greps they had just fixed -- because those lines were
+ * parsed as though the shell would execute them.
+ *
+ * Data is the safe reading. Treating a heredoc as commands produces refusals of
+ * things that will never run, which cost a turn each; treating it as data at
+ * worst misses an optimization on the rare `bash <<EOF` that really does pipe a
+ * script in.
+ */
+function stripHeredocs(command) {
+  const lines = String(command).split('\n');
+  const out = [];
+  let delimiter = null;
+
+  for (const line of lines) {
+    if (delimiter !== null) {
+      if (line.trim() === delimiter) delimiter = null;
+      continue;
+    }
+    out.push(line);
+    const opener = line.match(/<<-?\s*(['"]?)([A-Za-z_][A-Za-z0-9_]*)\1/);
+    if (opener) delimiter = opener[2];
+  }
+
+  return out.join('\n');
+}
+
+/**
+ * Splits a command into its pipeline/list segments WITHOUT splitting inside
+ * quotes.
+ *
+ * Quote awareness is the whole point. A `node -e "...; grep -r x ."` is one
+ * command that runs node; the text after the semicolon is an argument, not a
+ * segment, and treating it as one makes the hook react to strings that are
+ * merely mentioned.
+ */
+function shellSegments(command) {
+  const out = [];
+  let current = '';
+  let quote = null;
+
+  for (let i = 0; i < command.length; i++) {
+    const c = command[i];
+    if (quote) {
+      if (c === quote && command[i - 1] !== '\\') quote = null;
+      current += c;
+    } else if (c === '"' || c === "'") {
+      quote = c;
+      current += c;
+    } else if (c === ';' || c === '\n' || c === '|' || c === '&') {
+      if ((c === '|' || c === '&') && command[i + 1] === c) i++;
+      out.push(current);
+      current = '';
+    } else {
+      current += c;
+    }
+  }
+  out.push(current);
+  return out;
+}
+
+/**
+ * Is this command an unbounded recursive search?
+ *
+ * The question has to be asked PER SEGMENT, of the segment's head word. The
+ * previous version tested "does a search tool appear anywhere in the string"
+ * and "does a -r-ish flag appear anywhere in the string" INDEPENDENTLY, and
+ * denied when both were true anywhere. So this, caught live against a real
+ * build command, was refused as a recursive search:
+ *
+ *   rm -rf build && npm run verify | grep passed
+ *
+ * `rm -rf` supplied the flag, `grep passed` supplied the tool, and neither
+ * segment is a recursive search. Any `cp -r`, `chmod -R`, `ls -R` or `tar -rf`
+ * next to any grep hit the same false positive, and a wrongly refused command
+ * costs the user a whole turn to work around.
+ *
+ * Quote-aware segmentation fixes the mirror-image case at the same time: a
+ * `grep -rn` quoted inside a script body is a string, not a command.
+ */
+export function isRecursiveSearch(command) {
+  if (typeof command !== 'string') return false;
+
+  for (const segment of shellSegments(stripHeredocs(command))) {
+    const tokens = segment.match(/(?:"[^"]*"|'[^']*'|[^\s]+)/g) || [];
+
+    let i = 0;
+    while (
+      i < tokens.length &&
+      (/^\w+=/.test(tokens[i]) || COMMAND_PREFIX.test(tokens[i]))
+    )
+      i++;
+    if (i >= tokens.length) continue;
+
+    // `/usr/bin/grep` is grep. `git grep` searches the whole tracked tree by
+    // default, so it recurses with no flag at all.
+    let head = tokens[i].replace(/^.*[/\\]/, '');
+    if (head === 'git' && tokens[i + 1] === 'grep') return true;
+    if (!SEARCH_TOOL.test(head)) continue;
+
+    if (RECURSES_BY_DEFAULT.test(head)) return true;
+
+    const flags = tokens.slice(i + 1);
+
+    // POWERSHELL PARAMETERS ARE WORDS, NOT CLUSTERED SHORT FLAGS. The POSIX test
+    // below asks whether any `-xyz` token contains an `r`, and `-Pattern`, `-Path`
+    // and `-Raw` all do, so every single-file `Select-String -Path f -Pattern p`
+    // was reported as an unbounded recursive search. Select-String has no recurse
+    // switch of its own: it recurses only when it is fed by a recursive listing,
+    // and that lives in an EARLIER segment of the same command.
+    if (/^(?:Select-String|sls)$/i.test(head)) {
+      if (listsRecursively(command)) return true;
+      continue;
+    }
+
+    // findstr spells recursion `/s`.
+    if (/^findstr$/i.test(head)) {
+      if (flags.some((t) => /^\/[a-z]*s[a-z]*$/i.test(t))) return true;
+      continue;
+    }
+
+    if (
+      flags.some(
+        (t) => t === '--recursive' || /^-[A-Za-z]*[rR][A-Za-z]*$/.test(t)
+      )
+    )
+      return true;
+  }
+
+  return false;
+}
+
+/**
+ * A command split into stages, each with the operator that FOLLOWS it.
+ *
+ * shellSegments drops the operators, so "piped into" could only be recovered by
+ * searching the command text for the segment again -- which finds the wrong
+ * occurrence when a segment repeats. Same quote rules as shellSegments.
+ */
+function pipelineStages(command) {
+  const out = [];
+  let current = '';
+  let quote = null;
+  for (let i = 0; i < command.length; i++) {
+    const c = command[i];
+    if (quote) {
+      if (c === quote && command[i - 1] !== '\\') quote = null;
+      current += c;
+    } else if (c === '"' || c === "'") {
+      quote = c;
+      current += c;
+    } else if (c === '&' && (command[i - 1] === '>' || command[i + 1] === '>')) {
+      // A REDIRECTION, not an operator: `2>&1`, `>&2`, `&>file`. Splitting here
+      // made `grep -rn x . 2>&1 | head` a stage ending in `&`, so the pipe into
+      // head was never seen (review on #512).
+      current += c;
+    } else if (c === ';' || c === '\n' || c === '|' || c === '&') {
+      let op = c;
+      if ((c === '|' || c === '&') && command[i + 1] === c) {
+        op = c + c;
+        i++;
+      } else if (c === '|' && command[i + 1] === '&') {
+        // `|&` pipes stdout and stderr: still a pipe.
+        i++;
+      }
+      out.push({ text: current, op });
+      current = '';
+    } else {
+      current += c;
+    }
+  }
+  out.push({ text: current, op: null });
+  return out;
+}
+
+/** Stages that cap what reaches the terminal, whatever is piped into them. */
+function boundsItsInput(stage) {
+  const tokens = stage.match(/(?:"[^"]*"|'[^']*'|[^\s]+)/g) || [];
+  let i = 0;
+  while (i < tokens.length && (/^\w+=/.test(tokens[i]) || COMMAND_PREFIX.test(tokens[i]))) {
+    // `xargs head` runs head once per batch of input -- the first lines of EVERY
+    // file named -- so it caps nothing (review on #512). xargs stays a prefix for
+    // isRecursiveSearch, where it only locates the search tool.
+    if (/^xargs$/.test(tokens[i])) return false;
+    i++;
+  }
+  if (i >= tokens.length) return false;
+  const head = tokens[i].replace(/^.*[/\\]/, '');
+  // NOT EVERY head/tail BOUNDS. `tail -n +N` / `tail +N` prints from line N to
+  // the end and GNU `head -n -N` prints all but the last N, so both pass the
+  // whole search through (review on #512).
+  if (/^(?:head|tail)$/i.test(head)) {
+    const args = tokens.slice(i + 1);
+    for (let a = 0; a < args.length; a++) {
+      const t = args[a];
+      const count = /^(?:-n|--lines)$/.test(t) ? args[a + 1] : (/^(?:-n|--lines=)(.+)$/.exec(t) || [])[1];
+      if (count !== undefined && /^[+-]/.test(String(count))) {
+        if (/^tail$/i.test(head) && String(count).startsWith('+')) return false;
+        if (/^head$/i.test(head) && String(count).startsWith('-')) return false;
+      }
+      if (/^tail$/i.test(head) && /^\+\d/.test(t)) return false;
+    }
+    return true;
+  }
+  if (/^(?:wc|Measure-Object|measure)$/i.test(head)) return true;
+  if (/^(?:Select-Object|select)$/i.test(head))
+    return tokens.slice(i + 1).some((t) => /^-(?:First|Last|Index)$/i.test(t));
+  // `grep -c` / `grep -l` downstream print a count or names, not the matches.
+  if (/^(?:grep|egrep|fgrep|rg)$/i.test(head))
+    return tokens.slice(i + 1).some((t) => /^-[A-Za-z]*[cl][A-Za-z]*$/.test(t) || t === '--count' || t === '--files-with-matches');
+  return false;
+}
+
+/**
+ * Is every recursive search in this command piped into something that bounds it?
+ *
+ * `grep -rn x . | head -20` prints at most twenty lines, and was routed as an
+ * "unbounded" search on every call -- observed live four times in one session,
+ * each an advisory under assist and a refused turn under enforce. Only a direct
+ * chain of single pipes counts: `grep -r x . ; head f` bounds nothing.
+ */
+export function searchOutputBounded(command) {
+  if (typeof command !== 'string') return false;
+  const stages = pipelineStages(stripHeredocs(command));
+  let searches = 0;
+  for (let s = 0; s < stages.length; s++) {
+    // Select-String recurses only when an EARLIER stage lists recursively, so a
+    // stage tested alone cannot say; see isRecursiveSearch.
+    const searchesHere =
+      isRecursiveSearch(stages[s].text) ||
+      (/^\s*(?:Select-String|sls)\b/i.test(stages[s].text) && listsRecursively(command));
+    if (!searchesHere) continue;
+    searches++;
+    let bounded = false;
+    for (let j = s; j + 1 < stages.length && stages[j].op === '|'; j++) {
+      if (boundsItsInput(stages[j + 1].text)) {
+        bounded = true;
+        break;
+      }
+    }
+    if (!bounded) return false;
+  }
+  return searches > 0;
+}
+
+/**
+ * Does any segment of this command list a directory tree recursively?
+ *
+ * `Get-ChildItem -Recurse | Select-String foo` is the PowerShell spelling of
+ * `grep -r foo`, and it is the only way Select-String recurses.
+ */
+function listsRecursively(command) {
+  for (const segment of shellSegments(stripHeredocs(command))) {
+    const tokens = segment.match(/(?:"[^"]*"|'[^']*'|[^\s]+)/g) || [];
+    if (!tokens.length) continue;
+    const head = tokens[0].replace(/^.*[/\\]/, '');
+    if (!/^(?:Get-ChildItem|gci|ls|dir)$/i.test(head)) continue;
+    // `-Recurse` (PowerShell), `-R` (POSIX `ls`; lowercase `-r` there means
+    // reverse order) and `/s` (cmd's `dir`).
+    if (tokens.slice(1).some((t) => /^-Recurse$/i.test(t) || t === '-R' || /^\/s$/i.test(t))) return true;
+  }
+  return false;
+}
+
+/**
+ * Pulls candidate file arguments out of a shell command.
+ *
+ * Flags and their values are skipped, as are anything that looks like a glob or
+ * a subshell. The result is checked against the filesystem by the caller, which
+ * is what keeps this honest: a token that does not resolve to a real file on
+ * disk is simply not treated as one, so `git log | head -30` (no file operand)
+ * and `cat <<EOF` (no such file) both pass through untouched.
+ */
+function fileOperands(command) {
+  const operands = [];
+  // Only inspect the FIRST pipeline segment. `cat big.json | jq .name` still
+  // pays the read, but `git log | head` must not be mistaken for a file dump.
+  const segment = command.split('|')[0];
+  const tokens = segment.match(/(?:"[^"]*"|'[^']*'|[^\s]+)/g) || [];
+
+  for (let i = 1; i < tokens.length; i++) {
+    const token = tokens[i].replace(/^['"]|['"]$/g, '');
+    if (token.startsWith('-')) {
+      // `head -n 30 file` -- the count is a value, not a path.
+      if (/^-[a-zA-Z]$/.test(token) && /^\d+$/.test(tokens[i + 1] || '')) i++;
+      continue;
+    }
+    if (token.includes('*') || token.includes('$') || token.startsWith('<'))
+      continue;
+    operands.push(token);
+  }
+  return operands;
+}
+
+/**
+ * Candidate filesystem paths for one operand, most specific first.
+ *
+ * WINDOWS SHELLS WRITE PATHS NODE CANNOT STAT. A Bash tool call on Windows
+ * carries MSYS/Git-Bash paths -- `cat /c/Users/me/file.ts` -- because that is
+ * what the shell accepts. The hook only PARSES that string, so no MSYS
+ * translation ever happens, and `statSync('/c/Users/...')` fails ENOENT. The
+ * size check then silently found nothing and every shell dump was allowed
+ * through, on the one platform this runs on most.
+ *
+ * The `Read` tool passes `C:\Users\...`, which is why the same file was refused
+ * through one path and allowed through the other.
+ */
+function candidatePaths(operand, cwd) {
+  return resolvableCandidates(operand, cwd);
+}
+
+/**
+ * Every real file this call touches, canonicalised.
+ *
+ * THE GRAPH'S PRODUCER. Before this existed, only `tool_input.file_path` was
+ * ever observed -- so a session spent in the shell (`cat`, `grep -r`, reading a
+ * build log) produced no cost record and no graph node, and measured as though
+ * nothing had happened. Bash operands are real touches and belong in both.
+ *
+ * Only paths that RESOLVE are returned: an operand that is a flag, a glob or a
+ * heredoc marker is not a file, and inventing a node for it would put fiction
+ * in the graph.
+ */
+/**
+ * The project a COMMAND belongs to.
+ *
+ * `forCommand` was looked up with `projectRootFor(payload.cwd, payload.cwd)`, so
+ * the graph consulted was always the SESSION's. Run a command inside another
+ * checkout -- a worktree, a second repository, anything reached with `cd` -- and
+ * every finding recorded against that project was silently skipped: no
+ * injection, no metrics row, no error.
+ *
+ * `projectRootFor` documents this same defect being fixed for the FILE path:
+ * keying the graph on where the client happens to be running is wrong the moment
+ * a session touches a second repository. The command path kept the behaviour
+ * that comment calls wrong.
+ *
+ * Only a `cd` naming a directory that EXISTS is trusted, exactly as touchedFiles
+ * treats it: `cd $UNSET && npm test` must not re-root the lookup onto nothing.
+ */
+export function commandProjectRoot(payload, fallback) {
+  const raw = payload?.tool_input?.command;
+  const base = payload?.cwd ?? fallback;
+  if (typeof raw === 'string') {
+    const command = stripHeredocs(raw);
+    const cd = /(?:^|\n|;|&&)\s*cd\s+("[^"]+"|'[^']+'|\S+)/.exec(command);
+    if (cd) {
+      const target = canonicalPath(cd[1].replace(/^['"]|['"]$/g, ''), base);
+      // A pseudo-file inside the directory, because projectRootFor takes a FILE
+      // and starts from its dirname -- handing it a directory begins the walk one
+      // level too high and silently falls back. Same idiom as stop-harvest.mjs.
+      if (isDirectory(target))
+        return projectRootFor(join(target, '__command__'), base);
+    }
+  }
+  return projectRootFor(join(base, '__command__'), base);
+}
+
+export function touchedFiles(payload) {
+  const input = payload?.tool_input || {};
+  // path -> size. Resolving a candidate ALREADY stats it -- `fileSize() >= 0`
+  // is how a real file is told from a flag, a glob or a heredoc marker -- and
+  // throwing that answer away made every caller measure the same file again,
+  // on a hook that runs before EVERY tool call.
+  const out = new Map();
+
+  // A `cd` INSIDE the command changes where its relative operands resolve, and
+  // the hook payload's cwd knows nothing about it. Observed live: a Bash call
+  // that began `cd /other/repo` had every one of its relative operands resolved
+  // against the session's directory instead, found nothing, and recorded no
+  // touch at all -- so work in a second repository was invisible.
+  // Heredoc bodies stripped first, for the same reason the cost path strips
+  // them: a file named inside a commit message or a test fixture was mentioned,
+  // not touched, and a node built from it is fiction.
+  const command =
+    typeof input.command === 'string' ? stripHeredocs(input.command) : '';
+  const cd = /(?:^|\n|;|&&)\s*cd\s+("[^"]+"|'[^']+'|\S+)/.exec(command);
+  const cdTarget = cd
+    ? canonicalPath(cd[1].replace(/^['"]|['"]$/g, ''), payload?.cwd)
+    : null;
+  // Only trust a `cd` that names a directory which EXISTS. `cd $REPO && cat
+  // src/app.ts` -- an unexpanded variable, or a plain typo -- otherwise re-bases
+  // every relative operand onto a path resolving to nothing, so the call records
+  // no touch at all. Falling back to the session cwd is strictly better than
+  // losing the observation.
+  // `isDirectory` is a statSync, and it runs ahead of the per-candidate check
+  // below -- so guarding only the candidates left the abort reachable through
+  // any command beginning `cd <bad path> && ...`. The guard lives INSIDE
+  // isDirectory rather than here: a second check at this call site would mask
+  // the removal of the real one, and a mutation proved exactly that.
+  const cwd = cdTarget && isDirectory(cdTarget) ? cdTarget : payload?.cwd;
+
+  const add = (candidate) => {
+    if (!candidate || typeof candidate !== 'string') return;
+    for (const spelling of resolvableCandidates(candidate, cwd)) {
+      // Sizing a candidate stats it, and a path carrying U+10FFFF aborts libuv
+      // outright rather than throwing. This is where externally supplied paths
+      // first enter the hook, so refusing here keeps the character away from
+      // every downstream consumer instead of asking each one to defend itself.
+      if (!isFsSafePath(spelling)) continue;
+      const size = fileSize(spelling);
+      if (size >= 0) {
+        // Nothing under .git/, node_modules/ or a build directory belongs in a
+        // knowledge graph: it is not authored, it churns constantly, and it
+        // would thrash staleness for every file that anchors to it.
+        if (!isMachineOwned(spelling))
+          out.set(canonicalPath(spelling, cwd), size);
+        return;
+      }
+    }
+  };
+
+  add(input.file_path);
+  add(input.path);
+  add(input.notebook_path);
+
+  // Codex code mode carries apply_patch as the nested program text rather than
+  // as a first-class file_path. Without reading these headers, successful
+  // code-mode edits incremented the semantic-harvest counter but produced no
+  // structural file/symbol nodes, which is why the live dashboard showed very
+  // few nodes after substantial work. PostToolUse can resolve Add/Update paths
+  // because the file now exists; deleted paths deliberately remain absent.
+  for (const match of command.matchAll(
+    /^\*\*\* (?:Add|Update|Delete) File:\s*(.+)$/gm
+  )) {
+    add(match[1].trim().replace(/^['"]|['"]$/g, ''));
+  }
+  for (const match of command.matchAll(/^\*\*\* Move to:\s*(.+)$/gm)) {
+    add(match[1].trim().replace(/^['"]|['"]$/g, ''));
+  }
+
+  // EVERY pipeline segment, not just the first. `fileOperands` looks only at
+  // the head of the pipeline because that is where the COST is -- `git log |
+  // head` must not be mistaken for a file dump. But observation is a different
+  // question from cost: a file named after a pipe was still read, and dropping
+  // it loses a real touch. Non-files fall out anyway, since only operands that
+  // resolve are kept.
+  for (const segment of command.split('|')) {
+    for (const operand of fileOperands(segment)) add(operand);
+  }
+
+  return [...out].map(([path, size]) => ({ path, size }));
+}
+/** Dump commands as a whole word, for testing a segment's head. */
+const DUMP_HEAD = /^(?:cat|bat|head|tail|more|less|type|Get-Content|gc)$/i;
+
+/**
+ * The first large file this command will ACTUALLY PRINT.
+ *
+ * The dump check and the operand lookup have to be the same segment, or the
+ * hook refuses commands that print nothing. Measured live, on a command that
+ * merely counted the lines of a big file and tailed a log:
+ *
+ *   ls .token-optimizer/wiki/ && wc -l graph.jsonl
+ *   node web-server.js > dash.log &
+ *   grep -iE "listen|error" dash.log | head -5
+ *
+ * `head` (last segment, operating on a 4 KB log) satisfied a whole-string
+ * DUMP_COMMANDS test, and the operand search then returned graph.jsonl from the
+ * FIRST segment, producing "this command prints graph.jsonl (22840 KB) into the
+ * context". It prints a line count. Same defect as the recursive-search one
+ * fixed alongside it: two independent whole-string tests, joined by an `&&`
+ * that has nothing to do with either.
+ */
+function largeDumpedOperand(command, cwd) {
+  const threshold = largeFileBytes();
+  const runnable = stripHeredocs(command);
+  const segments = shellSegments(runnable);
+
+  for (let s = 0; s < segments.length; s++) {
+    const segment = segments[s];
+    const tokens = segment.match(/(?:"[^"]*"|'[^']*'|[^\s]+)/g) || [];
+
+    let i = 0;
+    while (
+      i < tokens.length &&
+      (/^\w+=/.test(tokens[i]) || COMMAND_PREFIX.test(tokens[i]))
+    )
+      i++;
+    if (i >= tokens.length) continue;
+    const head = tokens[i].replace(/^.*[/\\]/, '');
+    if (!DUMP_HEAD.test(head)) continue;
+
+    // A BOUNDED SLICE IS NOT A DUMP of the file, and saying "this command prints
+    // <file> (969 KB) into the context" about it is false. `head` and `tail`
+    // print ten lines by default and a stated count otherwise, and Get-Content's
+    // count parameters bound it the same way. Observed live: the advisory fired
+    // on `Get-Content f | Select-Object -Index (100..160)`, which prints 61 lines.
+    if (/^(?:head|tail)$/i.test(head)) continue;
+    if (
+      /^(?:Get-Content|gc)$/i.test(head) &&
+      tokens.slice(i + 1).some((t) => /^-(?:TotalCount|Tail|Head|First|Last)$/i.test(t))
+    )
+      continue;
+    if (pipesIntoFilter(runnable, segment, segments[s + 1])) continue;
+
+    // Only THIS segment's operands, and only from the dump command onwards.
+    for (const operand of fileOperands(tokens.slice(i).join(' '))) {
+      for (const path of candidatePaths(operand, cwd)) {
+        const size = fileSize(path);
+        if (size >= threshold && !isBinaryPath(path) && !isMachineOwned(path)) {
+          return { path: operand, size };
+        }
+      }
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Commands that, fed a file on stdin, print a bounded or filtered part of it.
+ */
+const FILTER_HEAD = /^(?:head|tail|grep|egrep|fgrep|rg|sed|awk|wc|sort|uniq|cut|Select-Object|select|Select-String|sls|Measure-Object|measure|findstr)$/i;
+
+/**
+ * Is `segment` piped (a single `|`, not `||`) into a filter?
+ *
+ * `shellSegments` splits on `|`, `;`, `&` and newlines alike, so the operator
+ * that ended this segment is recovered from the command text.
+ */
+function pipesIntoFilter(command, segment, next) {
+  if (!next) return false;
+  const at = command.indexOf(segment);
+  if (at < 0) return false;
+  const after = command.slice(at + segment.length);
+  if (!/^\s*\|(?!\|)/.test(after)) return false;
+  const tokens = next.match(/(?:"[^"]*"|'[^']*'|[^\s]+)/g) || [];
+  if (!tokens.length) return false;
+  return FILTER_HEAD.test(tokens[0].replace(/^.*[/\\]/, ''));
+}
+
+/** Resolves the first operand that is a real file over the size threshold. */
+function largeOperand(command, cwd) {
+  const threshold = largeFileBytes();
+  for (const operand of fileOperands(command)) {
+    for (const path of candidatePaths(operand, cwd)) {
+      const size = fileSize(path);
+      // Machine-owned too, not just binary-by-extension. `.git/index` has NO
+      // extension, so isBinaryPath cannot see it, and the advisory it produced
+      // named a 1.3 MB binary index and pointed at smart_read -- which would
+      // have dumped it. Observed live on this repository's own commit command.
+      if (size >= threshold && !isBinaryPath(path) && !isMachineOwned(path)) {
+        return { path: operand, size };
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Canonical tool names, per client.
+ *
+ * Every CLI agent spells the same six operations differently -- Claude Code's
+ * `Read` is Codex's `read_file` and Gemini's `read_file`, Cursor's `read_file`,
+ * OpenCode's `read`. The waste is identical in all of them, so the names are
+ * normalized here and the policy above stays written once.
+ */
+const TOOL_ALIASES = new Map(
+  Object.entries({
+    read: 'Read',
+    read_file: 'Read',
+    view_file: 'Read',
+    readfile: 'Read',
+    view: 'Read',
+    str_replace_editor_view: 'Read',
+    open_file: 'Read',
+    view_file_outline: 'Read',
+    view_code_item: 'Read',
+
+    grep: 'Grep',
+    search_file_content: 'Grep',
+    grep_search: 'Grep',
+    ripgrep_search: 'Grep',
+    codebase_search: 'Grep',
+    search: 'Grep',
+
+    glob: 'Glob',
+    find_files: 'Glob',
+    file_search: 'Glob',
+    list_dir: 'Glob',
+    glob_file_search: 'Glob',
+    find_by_name: 'Glob',
+
+    edit: 'Edit',
+    edit_file: 'Edit',
+    replace: 'Edit',
+    apply_patch: 'Edit',
+    str_replace: 'Edit',
+    multiedit: 'Edit',
+    search_replace: 'Edit',
+    replace_file_content: 'Edit',
+    multi_replace_file_content: 'MultiEdit',
+
+    write: 'Write',
+    write_file: 'Write',
+    write_to_file: 'Write',
+    create_file: 'Write',
+
+    bash: 'Bash',
+    powershell: 'Bash',
+    pwsh: 'Bash',
+    shell: 'Bash',
+    run_command: 'Bash',
+    execute_command: 'Bash',
+    // Gemini's shell tool. Its own hooks.json matcher already listed
+    // run_shell_command, so the hook fired and then normalizeTool returned null,
+    // silently allowing every shell call through on that client.
+    run_shell_command: 'Bash',
+    run_terminal_cmd: 'Bash',
+    terminal: 'Bash',
+
+    // THIS PROJECT'S OWN TOOLS, which the table did not list for as long as it
+    // existed. `src/plugin/hooks/hooks.json`'s PostToolUse matcher named
+    // `mcp__.*__(?:smart_edit|smart_write)` and Codex's AfterTool matcher named
+    // the bare `smart_edit|smart_write`, so both hooks fired -- and then
+    // `normalizeTool` returned null and the hook exited before a single line of
+    // accounting ran. Staleness, mutation counting and harvest pressure were all
+    // blind on exactly the path enforcement pushes the model toward, which is the
+    // worst place to be blind: the more effective the routing, the less the
+    // optimizer saw.
+    //
+    // These names are the CANONICAL operation, not a licence to redirect. A call
+    // that is already the replacement is excluded from routing by
+    // `isReplacementTool` below.
+    smart_read: 'Read',
+    smart_grep: 'Grep',
+    smart_glob: 'Glob',
+    smart_edit: 'Edit',
+    smart_write: 'Write',
+
+    // Claude Code's notebook editor. Same shape of gap: a real mutation of a
+    // real file on disk that arrived as null and so never reached
+    // `pending.mjs`'s MUTATING set, leaving every notebook write invisible to
+    // invalidation.
+    notebookedit: 'Edit',
+    notebook_edit: 'Edit',
+
+    // A subagent's report reaching its caller (lean handoffs, output-compact.mjs).
+    // Unmapped, the post-tool hook saw no tool name and exited before the
+    // handoff could be made.
+    agent: 'Agent',
+    task: 'Task',
+  })
+);
+
+/**
+ * The optimizer's own replacement tools, by canonical trailing segment.
+ *
+ * Kept separate from the alias table because the two answer different questions.
+ * The table answers "what operation is this", which post-tool accounting needs.
+ * This set answers "is this call ALREADY the thing we would have recommended",
+ * which routing needs -- and conflating them is the loop hazard: `smart_edit`
+ * resolves to `Edit`, the Edit branch recommends `smart_edit`, and the model is
+ * told to call the tool it just called.
+ */
+const REPLACEMENT_TOOLS = new Set([
+  'smart_read',
+  'smart_grep',
+  'smart_glob',
+  'smart_edit',
+  'smart_write',
+]);
+
+/**
+ * The tool name with an `mcp__<server>__` prefix removed, if it had one.
+ *
+ * Server segments contain underscores freely (`plugin_token-optimizer_token-optimizer`)
+ * and so do tool names (`smart_edit`), so the split is taken at the LAST `__`
+ * after the `mcp__` sentinel. Both halves must be non-empty: `mcp__edit` names
+ * no server and is not a name any host emits, and treating it as `edit` would
+ * coerce an unrecognised string into a built-in.
+ */
+function withoutMcpPrefix(name) {
+  const match = /^mcp__(.+)__(.+)$/.exec(name);
+  return match ? match[2] : name;
+}
+
+/** Whether this call IS one of the optimizer's replacements, however spelled. */
+export function isReplacementTool(name) {
+  if (!name) return false;
+  return REPLACEMENT_TOOLS.has(withoutMcpPrefix(String(name)).toLowerCase());
+}
+
+/**
+ * Maps a client's tool name onto the canonical one, or null if unhandled.
+ *
+ * PERMISSIVE IN ONE DIRECTION ONLY. An MCP-prefixed name is resolved by its
+ * trailing segment, but only against the same table every other client is held
+ * to -- so `mcp__vendor__deploy_to_prod` stays null. Coercing an unrecognised
+ * MCP tool into a built-in would change a routing verdict for a tool nobody has
+ * considered, which is a far worse failure than not accounting for it.
+ */
+export function normalizeTool(name) {
+  if (!name) return null;
+  const candidate = withoutMcpPrefix(String(name));
+  if (
+    ['Read', 'Grep', 'Glob', 'Edit', 'MultiEdit', 'Write', 'Bash'].includes(
+      candidate
+    )
+  )
+    return candidate;
+  return TOOL_ALIASES.get(candidate.toLowerCase()) || null;
+}
+
+/**
+ * Normalizes payload shape across clients.
+ *
+ * Clients disagree on the argument envelope (`tool_input` vs `tool_args` vs
+ * `arguments`) and on the path key (`file_path` vs `path` vs `absolute_path`),
+ * so both are resolved once here rather than in each decision branch.
+ */
+/** The keys a client may carry a file path under, in the order they are read. */
+export const PATH_KEYS = Object.freeze(['file_path', 'path', 'Path', 'AbsolutePath', 'absolute_path', 'filePath', 'target_file', 'TargetFile']);
+
+/** The keys a client may carry a shell command under, in the order they are read. */
+export const COMMAND_KEYS = Object.freeze(['command', 'CommandLine', 'cmd', 'script']);
+
+/**
+ * The tool's arguments exactly as the client sent them, as an object.
+ *
+ * camelCase is accepted for the CONTAINER too, not just for `toolName` and
+ * `sessionId`. Accepting `toolName` but not `toolArgs` meant a client that
+ * spoke camelCase throughout had its arguments silently dropped: the payload
+ * still carried a tool name, so the hook ran, found no path and no command,
+ * and allowed every call. A total no-op with nothing in stderr and no failing
+ * check anywhere -- the worst way for an integration to be broken.
+ *
+ * Exported because a REWRITE must be built from this, not from the normalised
+ * input: clients that validate a replacement against the tool's own schema
+ * (Qwen Code, Codex) reject the extra keys normalisation adds.
+ */
+export function rawToolInput(raw) {
+  const rawInput =
+    raw?.toolCall?.args ||
+    raw?.tool_input ||
+    raw?.toolInput ||
+    raw?.tool_args ||
+    raw?.toolArgs ||
+    raw?.arguments ||
+    raw?.args ||
+    raw?.parameters ||
+    {};
+  // Copilot CLI serializes toolArgs as a JSON string. Treating that string as
+  // an object preserved the tool name but discarded every argument, so every
+  // hook invocation silently allowed the call.
+  if (typeof rawInput === 'string') {
+    try {
+      const parsed = JSON.parse(rawInput);
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch {
+      return {};
+    }
+  }
+  return rawInput && typeof rawInput === 'object' ? rawInput : {};
+}
+
+/** The first of `keys` the input carries, or undefined. */
+export function firstKey(input, keys) {
+  // != null, as the ?? chain it replaces: a key present but null is skipped.
+  return keys.find((key) => input?.[key] != null);
+}
+
+export function normalizePayload(raw) {
+  const input = rawToolInput(raw);
+  const pathKey = firstKey(input, PATH_KEYS);
+  const filePath = pathKey === undefined ? undefined : input[pathKey];
+  const commandKey = firstKey(input, COMMAND_KEYS);
+  const command = commandKey === undefined ? undefined : input[commandKey];
+
+  const cwd = (Array.isArray(raw.workspacePaths) ? raw.workspacePaths[0] : undefined) ?? raw.cwd ?? raw.workspace_root ?? process.cwd();
+
+  return {
+    session_id:
+      raw.session_id ?? raw.sessionId ?? raw.conversation_id ?? raw.conversationId ?? 'default',
+    // WHICH AGENT, not just which session. Subagents inherit the parent's session
+    // id, so state keyed on the session alone is shared by every agent under it
+    // -- which made one agent's reads silence another's. The transcript path is
+    // per agent, and it has to survive normalisation to be usable: this function
+    // returns a NEW object rather than spreading `raw`, so a field that is not
+    // named here is silently dropped. That is exactly how it was lost the first
+    // time this fix was attempted.
+    transcript_path: raw.transcript_path ?? raw.transcriptPath ?? null,
+    cwd,
+    tool_name: normalizeTool(raw.tool_name ?? raw.toolName ?? raw.tool ?? raw.toolCall?.name),
+    // The client's own spelling, for the few rules that differ by client: Claude
+    // Code's `Edit` returns one line where another client's edit tool may not.
+    raw_tool_name: raw.tool_name ?? raw.toolName ?? raw.tool ?? raw.toolCall?.name ?? null,
+    // WHETHER THIS CALL IS ALREADY THE REPLACEMENT, carried alongside the
+    // canonical name rather than inferred from it -- because it cannot be
+    // inferred from it. `smart_edit` and `Edit` both normalise to `Edit`, and
+    // routing has to treat them as opposites while accounting treats them as
+    // the same. Absent by default (`false`), so a payload assembled by hand in
+    // a test or by a caller that predates this field is a normal built-in call.
+    replacement: isReplacementTool(raw.tool_name ?? raw.toolName ?? raw.tool ?? raw.toolCall?.name)
+      || /^(view_file_outline|view_code_item)$/i.test(String(raw.tool_name ?? raw.toolName ?? raw.tool ?? raw.toolCall?.name ?? '')),
+    tool_input: {
+      ...input,
+      // CANONICALISED HERE, once. Every consumer downstream -- the `seen` map
+      // that powers re-read detection, the verdict key that powers loop
+      // breaking, the size check, and the wiki anchor -- keys off this value,
+      // so normalising at the single point they all share is what makes one
+      // file one identity regardless of which tool spelled it.
+      ...(filePath !== undefined
+        ? { file_path: canonicalPath(filePath, cwd) }
+        : {}),
+      // The ORIGINAL spelling, kept for messages. Identity is internal and
+      // canonical; what the refusal says back to the model should be the path
+      // the model actually used, or the instruction reads as being about a
+      // different file than the one it asked for.
+      ...(filePath !== undefined ? { raw_file_path: filePath } : {}),
+      ...(command !== undefined ? { command } : {}),
+      // Gemini and Cursor express paging as start_line/end_line.
+      ...(input.start_line !== undefined ? { offset: input.start_line } : {}),
+      ...(input.end_line !== undefined ? { limit: input.end_line } : {}),
+      ...(input.StartLine !== undefined ? { offset: input.StartLine } : {}),
+      ...(input.EndLine !== undefined ? { limit: input.StartLine !== undefined ? Math.max(1, Number(input.EndLine) - Number(input.StartLine) + 1) : input.EndLine } : {}),
+      ...(input.ByteOffset !== undefined && input.StartLine === undefined ? { offset: input.ByteOffset } : {}),
+    },
+  };
+}
+
+/**
+ * @param {object} payload   Normalized payload (tool_name, tool_input, cwd).
+ * @param {object} state     Session state; `state.seen` maps path -> true.
+ */
+/**
+ * A skip rule covering this path, if one is in force.
+ *
+ * Only the rule types that mean "do not read the contents". A composite touch
+ * or a diff preference changes what is SERVED, not whether the call proceeds,
+ * and turning either into a refusal would deny a read nobody decided to deny.
+ */
+function matchingRule(cwd, path) {
+  const canonical = canonicalPath(path);
+  for (const rule of activeRules(wikiDir(cwd))) {
+    if (rule.type !== 'skip' && rule.type !== 'skeleton-only') continue;
+    if (rule.anchor && rule.anchor === canonical) return rule;
+  }
+  return null;
+}
+
+/**
+ * Whether a replacement schema is positively available to this hook session.
+ *
+ * `undefined` preserves the pure decision API used by callers that deliberately
+ * evaluate policy in isolation. Runtime hook entry points always pass a Set --
+ * including an empty Set when registration is unknown -- so production never
+ * converts install intent into a claim that an MCP tool exists.
+ */
+function replacementAvailable(availableTools, name) {
+  if (availableTools === undefined) return true;
+  return availableTools instanceof Set
+    ? availableTools.has(name)
+    : Array.isArray(availableTools) && availableTools.includes(name);
+}
+
+export function decide(payload, state, availableTools = undefined) {
+  // THE LOOP HAZARD, and the reason this guard is at the top rather than inside
+  // any one branch. Resolving `smart_edit` to `Edit` is what makes post-tool
+  // accounting work; it must not also make the Edit branch answer a smart_edit
+  // call with "call smart_edit instead". This is not theoretical on a matcher
+  // level either: Qwen's PreToolUse matcher is the unanchored regex
+  // `edit|write_file|run_shell_command`, and `edit` matches inside
+  // `mcp__x__smart_edit`, so that client really does hand the router calls to
+  // its own replacements.
+  //
+  // A tool that IS the replacement is never routed. There is nothing better to
+  // recommend, and every branch below would recommend itself.
+  if (payload.replacement) return null;
+
+  const tool = payload.tool_name;
+  const input = payload.tool_input || {};
+  const threshold = largeFileBytes();
+
+  if (tool === 'Read') {
+    const path = input.file_path;
+    const shown = input.raw_file_path ?? path;
+    // Machine-owned paths are never refused: there is no structure to offer
+    // and no knowledge to carry, so a refusal would promise both and deliver
+    // neither.
+    if (!path || isBinaryPath(path) || isMachineOwned(path)) return null;
+
+    // A paged read is already a deliberate act of token economy. Overriding it
+    // would replace a bounded read with an unbounded one.
+    if (input.offset != null || input.limit != null) return null;
+
+    const size = fileSize(path);
+    if (size < 0) return null;
+
+    // A REFUSAL IS NOT FREE. The message that replaces the file is itself
+    // 50-110 tokens, so below the floor every branch here spends more than the
+    // read would have cost. Measured live: a re-read of a 9-byte version.json
+    // (2 tokens) was refused with a 57-token message. Allowing the read is
+    // strictly cheaper, so allow it.
+    if (size < refusalFloorBytes()) return null;
+
+    // A FIX THAT HAS BEEN APPLIED HAS TO BITE, or it was a report with extra
+    // steps. Rules are derived from this project's own measured history -- a
+    // file read across many sessions that has never once been the source of a
+    // finding -- so the refusal states the measurement rather than a policy.
+    const rule = matchingRule(payload.cwd, path);
+    if (rule && replacementAvailable(availableTools, 'smart_read')) {
+      return {
+        key: `read:${path}`,
+        reason:
+          `${shown} is covered by a fix applied on ${new Date(rule.appliedAt).toISOString().slice(0, 10)}: ` +
+          `${rule.why}. Call smart_read with path="${shown}" for its structure, or ` +
+          `revert the rule with id "${rule.id}" if it is wrong.`,
+      };
+    }
+
+    // THE RE-READ CASE, which size-gating alone never caught. On a repeat visit
+    // smart_read returns only what CHANGED, so the saving is proportional to
+    // the whole file rather than to how much of it is new -- but only above the
+    // floor, because below it the refusal costs more than the file it replaces.
+    if (
+      state.seen[path] &&
+      replacementAvailable(availableTools, 'smart_read')
+    ) {
+      return {
+        key: `read:${path}`,
+        reason:
+          `You already read ${shown} earlier in this session. Call the ` +
+          `token-optimizer MCP tool smart_read with path="${shown}" instead -- ` +
+          `it returns only a diff of what changed since that read, typically a ` +
+          `few tokens rather than the whole file.`,
+      };
+    }
+
+    if (
+      size >= threshold &&
+      replacementAvailable(availableTools, 'smart_read')
+    ) {
+      return {
+        key: `read:${path}`,
+        reason:
+          `${shown} is ${KB(size)} KB, large enough to cost a meaningful share ` +
+          `of the context window. Call the token-optimizer MCP tool smart_read ` +
+          `with path="${shown}" instead -- it caches the content and returns ` +
+          `diffs on later reads.`,
+      };
+    }
+    return null;
+  }
+
+  // NO ADVICE ON CLAUDE CODE'S OWN GREP OR GLOB. Their results are compacted
+  // after the call (output-compact.mjs) with no tool to load, and in a subagent
+  // the smart tools are deferred: following the advice is a ToolSearch load that
+  // re-writes the agent's cached context, against its own briefing. Measured on
+  // the exploration benchmark: about 5 such notices per run (~650 characters
+  // each, re-read on every later call) and a load in 1 of 5 runs. ENFORCE keeps
+  // its refusal: that is a routing the user asked for. Claude Code alone spells
+  // these with a capital; other clients' search tools keep the rule.
+  if (
+    mode() !== MODE_ENFORCE &&
+    (tool === 'Grep' || tool === 'Glob') &&
+    (payload.raw_tool_name === 'Grep' || payload.raw_tool_name === 'Glob')
+  )
+    return null;
+
+  if (tool === 'Grep') {
+    // Content searches are the expensive mode; a paths-only search is already
+    // cheap and rewriting it would gain nothing.
+    if (input.output_mode && input.output_mode !== 'content') return null;
+    // An explicit small head_limit is already the bound smart_grep would apply;
+    // redirecting it cost a turn (enforce) or an advisory (assist) for nothing.
+    // Observed live: `Grep {head_limit: 20, glob: '*.{ps1,yml}'}` was redirected.
+    const limit = Number(input.head_limit);
+    if (Number.isFinite(limit) && limit > 0 && limit <= GREP_BOUNDED_LINES) return null;
+    if (!replacementAvailable(availableTools, 'smart_grep')) return null;
+    const pattern = input.pattern || '';
+    return {
+      key: `grep:${pattern}:${input.path || ''}`,
+      reason:
+        `Call the token-optimizer MCP tool smart_grep instead of the built-in ` +
+        `Grep (pattern="${pattern}"). It returns deduplicated, context-trimmed ` +
+        `matches rather than every raw hit.`,
+    };
+  }
+
+  if (tool === 'Glob') {
+    if (!replacementAvailable(availableTools, 'smart_glob')) return null;
+    const pattern = input.pattern || '';
+    return {
+      key: `glob:${pattern}`,
+      reason:
+        `Call the token-optimizer MCP tool smart_glob instead of the built-in ` +
+        `Glob (pattern="${pattern}"). It returns filtered, paginated paths ` +
+        `rather than an unbounded match list.`,
+    };
+  }
+
+  if (tool === 'Edit' || tool === 'MultiEdit') {
+    // NOT FOR CLAUDE CODE'S OWN EDIT. Its result is one line ("The file ... has
+    // been updated successfully."), never the file, so "returns a compact diff
+    // rather than echoing the file" is false there and smart_edit's diff is the
+    // LARGER answer. Observed live: the advice followed every edit of a file over
+    // 25 KB in a session -- seven times in an hour -- and under enforce each
+    // would have been a refused turn. Claude Code alone spells these with a
+    // capital; other clients' edit tools keep the rule.
+    if (payload.raw_tool_name === 'Edit' || payload.raw_tool_name === 'MultiEdit') return null;
+    if (!replacementAvailable(availableTools, 'smart_edit')) return null;
+    const path = input.file_path;
+    if (!path) return null;
+    const size = fileSize(path);
+    // On a small file the built-in edit is already compact; smart_edit's
+    // diffing only pays for itself once the file is sizeable.
+    if (size < threshold) return null;
+    return {
+      key: `edit:${path}`,
+      reason:
+        `${path} is ${KB(size)} KB. Call the token-optimizer MCP tool ` +
+        `smart_edit with path="${path}" instead -- it applies the change and ` +
+        `returns a compact unified diff rather than echoing the file.`,
+    };
+  }
+
+  // Write is deliberately NOT routed, and the asymmetry with Read is the reason.
+  //
+  // Every other redirection here refuses tokens that DO NOT EXIST YET: a Read's
+  // bytes, a Grep's match list and a Glob's path list are all produced by the
+  // tool, so refusing the call is what stops them entering context. The saving
+  // is real and the refusal pays for itself.
+  //
+  // A Write inverts that. Its `content` is authored by the model inside the very
+  // call being refused, so those tokens are already spent and unreclaimable by
+  // the time this function sees them. Refusing cannot un-spend them -- it can
+  // only demand an identical second copy through smart_write. The redirect
+  // therefore cost exactly one extra copy of the file, with certainty, every
+  // time, on a tool whose entire purpose is to reduce context spend.
+  //
+  // AND THE CACHE ENTRY IT CLAIMED TO BUY WAS NEVER BOUGHT. The refusal text
+  // promised smart_write would "store the content through the cache so later
+  // reads of this file diff against it". It does not: smart_write writes
+  // `generateCacheKey('file-write', {path})` while smart_read reads
+  // `generateCacheKey('smart-read', {path, options})` -- different namespaces,
+  // different keys. So the first smart_read after a smart_write already returned
+  // the whole file, exactly as it does after a built-in Write. Removing the
+  // redirect gives up nothing that was actually happening.
+  //
+  // Populating the smart-read cache after a write IS worth doing, and would
+  // make that first read a diff for the first time. It is deliberately not done
+  // here: the cache is a SQLite store owned by the MCP server process, and a
+  // PreToolUse hook cannot reach it without cross-process plumbing that does not
+  // belong in this change. Tracked in #350.
+  //
+  // Edit/MultiEdit above stay routed on purpose -- their inputs are a pair of
+  // small strings rather than the whole file, so this argument does not reach
+  // them.
+
+  if (tool === 'Web' + 'Fetch') {
+    const url = String(input.url || '');
+    if (!url) return null;
+    if (!state?.seenUrls?.[webFetchKey(url, input.prompt)]) return null;
+
+    // COLLAPSED, NOT REFUSED. A refusal would cost a turn -- measured at roughly
+    // one per refusal, which is the whole reason enforcement lost -- so the call
+    // proceeds with a rewritten prompt instead. WebFetch answers its `prompt`
+    // against the page using a small model, so a shorter prompt is a shorter
+    // result: the fetch still happens, and what comes back is a line instead of
+    // a page.
+    //
+    // SESSION-SCOPED, and the wording says so. The page may genuinely have
+    // changed, and a model that needs it again can say so in a new prompt. The
+    // claim made here is only "you already asked this session", which is a fact
+    // we hold rather than an inference about the page.
+    return {
+      key: `web:${url}`,
+      reason:
+        `This session already fetched ${url}. Reusing what you have avoids ` +
+        `sending the page again.`,
+      rewrite: {
+        prompt:
+          `This page was already fetched earlier in this session, so its ` +
+          `content is above in the conversation. Reply with exactly: ` +
+          `ALREADY FETCHED THIS SESSION -- reuse the earlier result. ` +
+          `Do not summarise the page again.`,
+      },
+    };
+  }
+
+  if (tool === 'Bash') {
+    const command = input.command || '';
+
+    {
+      const hit = largeDumpedOperand(command, payload.cwd);
+      if (hit && replacementAvailable(availableTools, 'smart_read')) {
+        return {
+          key: `bash:${hit.path}`,
+          reason:
+            `This command prints ${hit.path} (${KB(hit.size)} KB) into the ` +
+            `context. Call the token-optimizer MCP tool smart_read with ` +
+            `path="${hit.path}" instead -- same content, cached and diffed.`,
+        };
+      }
+    }
+
+    // A recursive search has no bound on its output. One with an explicit file
+    // operand does, so it is left alone.
+    if (
+      isRecursiveSearch(command) &&
+      !searchOutputBounded(command) &&
+      replacementAvailable(availableTools, 'smart_grep')
+    ) {
+      if (!largeOperand(command, payload.cwd)) {
+        return {
+          key: `bash:search:${command.slice(0, 80)}`,
+          reason:
+            `Recursive shell searches return unbounded output. Call the ` +
+            `token-optimizer MCP tool smart_grep instead -- it caps and ` +
+            `deduplicates results before they reach the context window.`,
+        };
+      }
+    }
+  }
+
+  return null;
+}
+
+/**
+ * The class a routing advisory belongs to, for saying it once.
+ *
+ * Search advisories are keyed by their pattern or command, so no two of them
+ * share a key and a per-key memory never suppresses one. They say the same
+ * sentence every time, so they are remembered by kind. A per-file advisory
+ * names the file, so it keeps its own key.
+ */
+function advisoryClass(key) {
+  const text = String(key || '');
+  if (text.startsWith('bash:search:')) return 'bash:search';
+  if (text.startsWith('grep:')) return 'grep';
+  if (text.startsWith('glob:')) return 'glob';
+  return text;
+}
+
+/**
+ * Should a routing advisory that is NOT a refusal be delivered this time?
+ *
+ * ONCE PER SESSION PER CLASS. An advisory delivered alongside a call that runs
+ * anyway cannot save that call, and repeating it only adds context the model
+ * has already learned to skip. Measured across 42 workflow subagents: the
+ * recursive-search advisory was injected 798 times and followed 17 times, and
+ * the main session received it 609 times. Every repeat is re-read on every later
+ * turn, so the cost of a noisy advisory grows with the length of the session.
+ *
+ * Records the delivery on `state`, which the caller persists.
+ */
+export function adviseOnce(state, verdict) {
+  if (!verdict?.key || !state) return Boolean(verdict);
+  const kind = advisoryClass(verdict.key);
+  const told = Array.isArray(state.routingAdvised) ? state.routingAdvised : [];
+  if (told.includes(kind)) return false;
+  state.routingAdvised = [...told, kind].slice(-200);
+  return true;
+}
+
+/**
+ * Records a successful (allowed) READ so a later repeat is recognised.
+ *
+ * READ ONLY, which is what this docstring always claimed. The condition also
+ * admitted `Write`, and a write is not a read: the model holds what it wrote, not
+ * the file, and for a small edit to a large file those are very different things.
+ *
+ * What that cost, observed live: a test file authored earlier in the session via
+ * Write was refused on its FIRST EVER Read with "UNCHANGED since you last read it
+ * this session -- use what you already have", and the harness then refused the
+ * following Write with "File has not been read yet", because from its side no read
+ * had happened. Neither side was wrong about its own bookkeeping; the hook had
+ * simply asserted a read that never occurred. Escapable only by retrying the Read.
+ */
+export function remember(payload, state) {
+  const path = payload.tool_input?.file_path;
+  if (path && payload.tool_name === 'Read' && !/^(view_file_outline|view_code_item)$/i.test(String(payload.raw_tool_name ?? ''))) {
+    state.seen[path] = true;
+  }
+  // A FETCHED URL IS A READ. The same session asking for the same page twice is
+  // the same waste as re-reading an unchanged file, and it was invisible: the
+  // PreToolUse matcher did not list WebFetch, so 4,499 recorded tool outcomes on
+  // the measuring machine contained ZERO web calls even in sessions that made
+  // them. Web research is 48.6% of the THOL battery's cost and the family the
+  // leader wins hardest (0.325), so being blind to it is not a small gap.
+  const url = payload.tool_input?.url;
+  if (url && payload.tool_name === 'WebFetch') {
+    state.seenUrls = state.seenUrls || {};
+    state.seenUrls[webFetchKey(String(url), payload.tool_input?.prompt)] = true;
+  }
+}
+
+/**
+ * What makes two WebFetch calls THE SAME call.
+ *
+ * THE URL ALONE IS NOT THE REQUEST. WebFetch answers a `prompt` against the
+ * page, so "what version does this document pin?" and "what are its breaking
+ * changes?" are two different questions about one URL -- and keying only on the
+ * URL made the second one unanswerable: it was collapsed into "ALREADY FETCHED
+ * THIS SESSION -- reuse the earlier result", which is false, because the earlier
+ * result answered a different question. The model could not recover the detail
+ * it asked for by any route, and the failure is silent.
+ *
+ * DELIBERATELY STRICT. Only whitespace is normalised -- not case, not wording --
+ * so anything short of a genuinely repeated request goes through and fetches.
+ * The asymmetry demands it: collapsing wrongly withholds information the model
+ * cannot get any other way, while failing to collapse costs one fetch.
+ */
+function webFetchKey(url, prompt) {
+  const question = String(prompt ?? '').trim().replace(/\s+/g, ' ');
+  // A newline cannot appear in the normalised question above, so it cannot be
+  // forged by a prompt that merely contains the separator.
+  return `${url}\n${question}`;
+}
+
+/**
+ * The size an allowed read actually cost, or 0 when it is not a read.
+ *
+ * This is the measurement the holdout comparison consumes. It has to be taken
+ * here, at the moment a read is permitted, because that is the only point where
+ * the cost is both known and attributable to an anchor.
+ */
+export function readCostBytes(payload) {
+  if (payload.tool_name !== 'Read') return 0;
+  // A REPLACEMENT DID NOT SPEND THE WHOLE FILE. `smart_read` normalises to
+  // `Read` so the graph sees the touch, but it returns a diff -- charging the
+  // full file size here would feed the holdout comparison a cost that was never
+  // paid, on the arm the optimizer is trying to show is cheaper. Better to
+  // record nothing than to record a number in the wrong direction.
+  if (payload.replacement) return 0;
+  const path = payload.tool_input?.file_path;
+  if (!path || isBinaryPath(path)) return 0;
+  const size = fileSize(path);
+  return size > 0 ? size : 0;
+}

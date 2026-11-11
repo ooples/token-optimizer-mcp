@@ -48,7 +48,7 @@ product. A client with a pre-execution veto can have the wasteful call refused;
 one without can only be told. Both are listed honestly below.
 
 Ready-made configuration for all sixteen lives in
-[`integrations/`](../integrations), generated from one source and validated by
+[`src/integrations/`](../src/integrations), generated from one source and validated by
 `npm run verify:clients`. Full matrix: [`docs/CLIENT_SUPPORT.md`](CLIENT_SUPPORT.md).
 
 Every MCP connection also receives capability-aware mandatory routing
@@ -68,15 +68,15 @@ retrieval, capture and harvest all on, no refusals. Set
 | Client                 | Installable lifecycle surface                                                                                                                    |
 | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
 | **Claude Code**        | Native plugin: `/plugin marketplace add ooples/token-optimizer-mcp`, then `/plugin install token-optimizer@token-optimizer`                      |
-| **Codex**              | Native plugin in [`integrations/codex/plugin`](../integrations/codex/plugin), or standalone hooks in [`integrations/codex`](../integrations/codex) |
-| **GitHub Copilot CLI** | Project hooks in [`integrations/copilot`](../integrations/copilot)                                                                                |
-| **Gemini CLI**         | Gemini extension at the repository root, backed by [`integrations/gemini`](../integrations/gemini)                                                |
-| **Qwen Code**          | Extension bundle in [`integrations/qwen`](../integrations/qwen)                                                                                   |
-| **Cursor**             | Project hooks and always-applied rule in [`integrations/cursor`](../integrations/cursor)                                                          |
-| **Cline**              | Project hooks and rule in [`integrations/cline`](../integrations/cline)                                                                           |
-| **OpenCode**           | In-process plugin and hooks in [`integrations/opencode`](../integrations/opencode)                                                                |
-| **Kilo**               | In-process plugin and hooks in [`integrations/kilo`](../integrations/kilo)                                                                        |
-| **Windsurf**           | Project hooks and rule in [`integrations/windsurf`](../integrations/windsurf)                                                                     |
+| **Codex**              | Native plugin in [`src/integrations/codex/plugin`](../src/integrations/codex/plugin), or standalone hooks in [`src/integrations/codex`](../src/integrations/codex) |
+| **GitHub Copilot CLI** | Project hooks in [`src/integrations/copilot`](../src/integrations/copilot)                                                                                |
+| **Gemini CLI**         | Gemini extension at the repository root, backed by [`src/integrations/gemini`](../src/integrations/gemini)                                                |
+| **Qwen Code**          | Extension bundle in [`src/integrations/qwen`](../src/integrations/qwen)                                                                                   |
+| **Cursor**             | Project hooks and always-applied rule in [`src/integrations/cursor`](../src/integrations/cursor)                                                          |
+| **Cline**              | Project hooks and rule in [`src/integrations/cline`](../src/integrations/cline)                                                                           |
+| **OpenCode**           | In-process plugin and hooks in [`src/integrations/opencode`](../src/integrations/opencode)                                                                |
+| **Kilo**               | In-process plugin and hooks in [`src/integrations/kilo`](../src/integrations/kilo)                                                                        |
+| **Windsurf**           | Project hooks and rule in [`src/integrations/windsurf`](../src/integrations/windsurf)                                                                     |
 
 ### Rules tier — mandatory routing where the host has no veto API
 
@@ -130,7 +130,7 @@ Start a new Codex conversation after installation so the new tools are discovere
 
 #### 3. Add optimization guidance and hooks
 
-The plugin supplies both automatically. For an MCP-only installation, add the guidance from [`integrations/AGENTS.md`](../integrations/AGENTS.md) to a project or global `AGENTS.md`. A ready-made standalone hook is also available under [`integrations/codex/hooks`](../integrations/codex/hooks); merge its `hooks.json` into `~/.codex/hooks.json`, copy the script to `~/.codex/hooks/`, and review it once with `/hooks`.
+The plugin supplies both automatically. For an MCP-only installation, add the guidance from [`src/integrations/AGENTS.md`](../src/integrations/AGENTS.md) to a project or global `AGENTS.md`. A ready-made standalone hook is also available under [`src/integrations/codex/hooks`](../src/integrations/codex/hooks); merge its `hooks.json` into `~/.codex/hooks.json`, copy the script to `~/.codex/hooks/`, and review it once with `/hooks`.
 
 The Codex hook injects guidance at `SessionStart`. Under `TOKEN_OPTIMIZER_MODE=enforce` it blocks expensive native operations when the bundled MCP has an exact replacement, including a single unambiguous code-mode shell call such as `cat` or `Get-Content`; multi-operation orchestration remains advisory so unrelated work is not discarded, and a second attempt at the same target passes through if the MCP is unavailable. The default is `assist`, which keeps retrieval and capture but never vetoes; `TOKEN_OPTIMIZER_MODE=advise` adds the routing advisory without vetoes, and `off` disables the hooks. The `AGENTS.md`/skill guidance remains important.
 
@@ -231,7 +231,7 @@ claude mcp add --transport stdio --scope user token-optimizer -- \
 ```
 
 Verify with `claude mcp get token-optimizer`, or `/mcp` inside Claude Code. Then
-add the recommendations from [`integrations/AGENTS.md`](../integrations/AGENTS.md)
+add the recommendations from [`src/integrations/AGENTS.md`](../src/integrations/AGENTS.md)
 to your `CLAUDE.md` — but be aware that guidance in a context file is advisory,
 and models routinely read past it.
 
@@ -269,7 +269,7 @@ If your Copilot CLI does not expose `copilot mcp` yet, save this as `~/.copilot/
 }
 ```
 
-A ready-made copy is available at [`integrations/copilot/mcp-config.json`](../integrations/copilot/mcp-config.json).
+A ready-made copy is available at [`src/integrations/copilot/mcp-config.json`](../src/integrations/copilot/mcp-config.json).
 
 #### 2. Verify the installation
 
@@ -282,7 +282,7 @@ Inside an interactive Copilot session, `/mcp show token-optimizer` displays the 
 
 #### 3. Add optimization guidance and hooks
 
-Keep [`integrations/AGENTS.md`](../integrations/AGENTS.md) as the repository's `AGENTS.md`, or adapt the same guidance into `.github/copilot-instructions.md`.
+Keep [`src/integrations/AGENTS.md`](../src/integrations/AGENTS.md) as the repository's `AGENTS.md`, or adapt the same guidance into `.github/copilot-instructions.md`.
 
 For native lifecycle integration, install the hooks with the bundled command. It
 copies the entry points AND composes the shared core beside them, which a plain
@@ -371,19 +371,19 @@ The output shows configured servers and their connection status.
 
 #### 3. Add optimization guidance and the local plugin
 
-Copy [`integrations/AGENTS.md`](../integrations/AGENTS.md) to the project as `AGENTS.md`; the `instructions` entry above loads it. Then copy the ready-made local plugin:
+Copy [`src/integrations/AGENTS.md`](../src/integrations/AGENTS.md) to the project as `AGENTS.md`; the `instructions` entry above loads it. Then copy the ready-made local plugin:
 
 ```bash
 mkdir -p .opencode/plugins
-cp integrations/opencode/.opencode/plugins/token-optimizer.js .opencode/plugins/
+cp src/integrations/opencode/.opencode/plugins/token-optimizer.js .opencode/plugins/
 ```
 
 ```powershell
 New-Item -ItemType Directory -Force .opencode/plugins | Out-Null
-Copy-Item integrations/opencode/.opencode/plugins/token-optimizer.js .opencode/plugins/
+Copy-Item src/integrations/opencode/.opencode/plugins/token-optimizer.js .opencode/plugins/
 ```
 
-On OpenCode 1.3.3 or earlier (check `opencode --version`), copy `integrations/opencode/legacy/.opencode/plugins/token-optimizer.js` to the same place instead. Those releases call every export of a plugin file as a plugin function, so they cannot load the current file, whose default export is the object OpenCode 2.x requires. Both files have the same name, so copying one replaces the other.
+On OpenCode 1.3.3 or earlier (check `opencode --version`), copy `src/integrations/opencode/legacy/.opencode/plugins/token-optimizer.js` to the same place instead. Those releases call every export of a plugin file as a plugin function, so they cannot load the current file, whose default export is the object OpenCode 2.x requires. Both files have the same name, so copying one replaces the other.
 
 The plugin preserves Token Optimizer usage state in OpenCode's compaction prompt. Under `TOKEN_OPTIMIZER_MODE=enforce` its `tool.execute.before` hook rejects full-file reads over 25 KB and steers the agent to `smart_read`; the default `assist` lets them through. Small and partial reads always pass normally, and `TOKEN_OPTIMIZER_MODE=advise` gives non-blocking guidance. Restart OpenCode after adding the plugin. See the official [OpenCode MCP guide](https://opencode.ai/docs/mcp-servers/) and [plugin hook guide](https://opencode.ai/docs/plugins/).
 
@@ -402,7 +402,7 @@ Any stdio-capable MCP client can launch Token Optimizer with:
 }
 ```
 
-Additional ready-made integration files are available for [Claude Desktop](../bench/examples/claude_desktop_config.json), [Codex](../integrations/codex/config.toml), [Gemini CLI](../integrations/gemini/), [OpenCode](../integrations/opencode/), and [GitHub Copilot](../integrations/copilot/mcp-config.json).
+Additional ready-made integration files are available for [Claude Desktop](../bench/examples/claude_desktop_config.json), [Codex](../src/integrations/codex/config.toml), [Gemini CLI](../src/integrations/gemini/), [OpenCode](../src/integrations/opencode/), and [GitHub Copilot](../src/integrations/copilot/mcp-config.json).
 
 ## Requirements and data
 

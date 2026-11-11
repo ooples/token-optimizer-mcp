@@ -58,8 +58,9 @@ export async function loadFindingsFrom(root: string): Promise<LoadedFindings> {
   try {
     const here = new URL('.', import.meta.url);
     const moduleUrl = (name: string): string =>
-      pathToFileURL(fileURLToPath(new URL(`../../hooks-core/${name}`, here)))
-        .href;
+      pathToFileURL(
+        fileURLToPath(new URL(`../../src/hooks-core/${name}`, here))
+      ).href;
 
     const [wikiMod, curateMod] = await Promise.all([
       import(moduleUrl('wiki.mjs')),

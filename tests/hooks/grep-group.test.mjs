@@ -3,7 +3,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { groupGrepByFile } from '../../hooks-core/output-compact.mjs';
+import { groupGrepByFile } from '../../src/hooks-core/output-compact.mjs';
 
 const root = mkdtempSync(join(tmpdir(), 'grep-group-'));
 afterAll(() => rmSync(root, { recursive: true, force: true }));
@@ -70,7 +70,7 @@ describe('through the Claude Code PostToolUse hook', () => {
     const workspace = mkdtempSync(join(root, 'ws-'));
     mkdirSync(join(workspace, '.git'));
     const content = [...hits('src/a.ts', 1, 15), ...hits('src/b.ts', 40, 15)].join('\n');
-    const r = spawnSync(process.execPath, [join(process.cwd(), 'plugin', 'hooks', 'post-tool.mjs')], {
+    const r = spawnSync(process.execPath, [join(process.cwd(), 'src', 'plugin', 'hooks', 'post-tool.mjs')], {
       cwd: workspace,
       encoding: 'utf8',
       timeout: 30_000,

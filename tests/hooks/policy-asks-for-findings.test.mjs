@@ -25,7 +25,7 @@ import { join } from 'path';
  */
 
 const ADAPTER = pathToFileURL(
-  join(process.cwd(), 'hooks-core', 'adapter.mjs')
+  join(process.cwd(), 'src', 'hooks-core', 'adapter.mjs')
 ).href;
 
 let policyText;
@@ -39,7 +39,7 @@ let volatileLines;
 beforeAll(async () => {
   ({ policyText, recordingGuidance } = await import(ADAPTER));
   ({ volatileLines } = await import(
-    pathToFileURL(join(process.cwd(), 'hooks-core', 'cache.mjs')).href
+    pathToFileURL(join(process.cwd(), 'src', 'hooks-core', 'cache.mjs')).href
   ));
 });
 
@@ -134,7 +134,7 @@ describe('the recording guidance is one short line in every harvest mode', () =>
 
   it('leaves the extraction options to doctor, which tells the person', async () => {
     const { probeHarvest } = await import(
-      pathToFileURL(join(process.cwd(), 'hooks-core', 'doctor.mjs')).href
+      pathToFileURL(join(process.cwd(), 'src', 'hooks-core', 'doctor.mjs')).href
     );
     const advice = probeHarvest().map((check) => check.detail).join('\n');
     expect(advice).toMatch(/TOKEN_OPTIMIZER_HARVEST_ENDPOINT/);

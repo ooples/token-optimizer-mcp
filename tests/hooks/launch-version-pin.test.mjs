@@ -26,7 +26,7 @@ import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const LAUNCH = join(HERE, '..', '..', 'plugin', 'launch.mjs');
+const LAUNCH = join(HERE, '..', '..', 'src', 'plugin', 'launch.mjs');
 const PACKAGE_DIR = join('node_modules', '@ooples', 'token-optimizer-mcp');
 
 let runtime;

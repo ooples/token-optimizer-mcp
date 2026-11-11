@@ -13,7 +13,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
-import { outlineRead, outlineShell } from '../../hooks-core/outline-rewrite.mjs';
+import { outlineRead, outlineShell } from '../../src/hooks-core/outline-rewrite.mjs';
 
 let workspace;
 let sessionId;

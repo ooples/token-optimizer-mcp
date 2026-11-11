@@ -1,0 +1,2275 @@
+/**
+ * The universal client adapter.
+ *
+ * CLI agents expose similar lifecycle levers under different envelopes. Rather
+ * than diverging advisor scripts (the state this replaces, where Codex, Gemini
+ * and Claude Code drifted their own thresholds and guidance), command-hook
+ * clients ship generated entry files that call this module with a client/event.
+ *
+ * WHAT ACTUALLY DIFFERS BETWEEN CLIENTS, and is therefore configured below:
+ *
+ *   - `hookEventName` echo. Claude Code requires the event name back in
+ *     hookSpecificOutput; Gemini does not read it. Emitting it always is
+ *     harmless, so the shape is shared.
+ *
+ *   - WHETHER A REFUSAL IS POSSIBLE and how it is represented: nested
+ *     permissionDecision, top-level decision, Cline cancel, Cursor permission,
+ *     or Windsurf's exit code 2. A post-tool event never claims to undo work.
+ */
+
+import {
+  loadState,
+  saveState,
+  alreadyDenied,
+  mode,
+  MODE_OFF,
+  MODE_ASSIST,
+  refusalsEnabled,
+  largeFileBytes,
+  readPayloadResult,
+  withEscape,
+  stateScope,
+  decorateOutput,
+} from './policy.mjs';
+import {
+  adviseOnce,
+  rawToolInput,
+  firstKey,
+  PATH_KEYS,
+  COMMAND_KEYS,
+  commandProjectRoot,
+  decide,
+  isContentDump,
+  remember,
+  normalizePayload,
+  readCostBytes,
+  touchedFiles,
+} from './decide.mjs';
+import { outlineRead, outlineShell, readNotice } from './outline-rewrite.mjs';
+import {
+  record,
+  recordRead,
+  fingerprint,
+  recordToolOutcome,
+  recordEpisodeOutcome,
+  readMetrics,
+} from './metrics.mjs';
+import { CORRECTION_OPENER, derive, projectRootFromActivity } from './derive.mjs';
+import {
+  contentHash,
+  harvest,
+  load,
+  loadFindings,
+  wikiDir,
+  projectRootFor,
+  unrootedRoot,
+} from './wiki.mjs';
+import { join, resolve } from 'node:path';
+import { readFileSync } from 'node:fs';
+import { briefing } from './remedy.mjs';
+import { stableText, transcriptFor } from './cache.mjs';
+import { scoreRefreshes } from './keepwarm.mjs';
+import { cachedRoutingBriefing } from './routing.mjs';
+import {
+  forCommand,
+  forRepeatedAct,
+  forSharedCommand,
+  forTouch,
+  noteActClasses,
+  relevantFindingIdsForContext,
+  sessionContext,
+  sessionIndex,
+  standingRules,
+} from './inject.mjs';
+import { indexFile } from './staleness.mjs';
+import { recordAuthoredContent } from './authored.mjs';
+import { observedWrites, queueInvalidation } from './pending.mjs';
+import {
+  absentToolsFromTranscript,
+  archive,
+  isArchived,
+  serverFailuresFromTranscript,
+  toolSearchOutcomesFromTranscript,
+  turnEvidence,
+} from './transcript.mjs';
+import { canonicalPath, isFsSafePath } from './paths.mjs';
+import {
+  isSubstantive,
+  recordingNudge,
+  semanticHarvestPrompt,
+} from './recording.mjs';
+import {
+  HOOK_MCP_TOOLS,
+  nativeClientProfiles,
+  markOptimizerToolAbsent,
+  markOptimizerToolOk,
+  observeOptimizerToolCall,
+  optimizerToolEvidence,
+  optimizerToolName,
+  optimizerToolsForHook,
+  rememberOptimizerTools,
+} from './capabilities.mjs';
+import { episodeMeta, featuresForArm, usageFrom } from './experiment.mjs';
+import { evaluateUcrGuards } from './ucr-guard.mjs';
+import { beginHookInvocation, noteHookOutput } from './observability.mjs';
+import { registerProject, registeredProjects } from './projects.mjs';
+import { runStopHarvest } from './stop-harvest.mjs';
+import { applyQuietEnv } from './quiet-env.mjs';
+import { resumeIfDue } from './migrate.mjs';
+import { takeSlowHookNotice } from './hook-latency.mjs';
+import { nodeFloorNotice } from './node-floor.mjs';
+import { serverCrashNotice } from './server-crash.mjs';
+import { CHECK_EVERY_CALLS, overWindowNotice } from './context-window.mjs';
+import { compactToolResponse, outputCompactEnabled } from './output-compact.mjs';
+import { repeatResponse, repeatsEnabled } from './repeats.mjs';
+import { isVerificationCommand } from './verification.mjs';
+import { recordOnBoard, recordReadOnBoard } from './blackboard.mjs';
+import { nextPacedContinuation, recordWindowActivity, pacerEnabled } from './quota-pacer.mjs';
+import { artifactPath, capture } from './expand.mjs';
+import { applyHoldout } from './injection-holdout.mjs';
+import { hasLiveRestorable, learnedLocation, restoreForPrompt, scheduleFold, takeNotice } from './toolprune.mjs';
+import { scheduleCodexFold, takeCodexNotice } from './codexprune.mjs';
+import { onToolFailure, recordTurnEnd } from './loopguard.mjs';
+
+/**
+ * An outline rewrite for this call, in the client's own input shape, or null.
+ *
+ * BUILT FROM THE RAW INPUT, NOT THE NORMALISED ONE. Qwen Code and Codex take
+ * `updatedInput` as a whole replacement and validate it against the tool's own
+ * schema, so it must carry exactly the keys the client sent -- `absolute_path`
+ * for Qwen's read_file, say -- with only the path or command swapped. The keys
+ * normalisation adds (`file_path`, `raw_file_path`) would fail that validation.
+ *
+ * A shell dump is rewritten only where the shell can be named: a tool called
+ * PowerShell, or a POSIX platform. On Windows a generic shell tool may be cmd,
+ * PowerShell or bash, and a command quoted for the wrong one is broken.
+ */
+function outlineRewrite(raw, payload, state, clientName) {
+  if (payload.replacement) return null;
+  // A Codex code-mode envelope orchestrates several operations; rewriting one
+  // would discard the rest, the same reason the refusal path leaves it alone.
+  if (clientName === 'codex' && payload.tool_input?.code_mode_envelope) return null;
+  const input = rawToolInput(raw);
+  const sessionId = payload.session_id || '';
+
+  if (payload.tool_name === 'Read') {
+    const key = firstKey(input, PATH_KEYS);
+    if (key === undefined) return null;
+    const outline = outlineRead({
+      sessionId,
+      filePath: payload.tool_input?.file_path,
+      offset: payload.tool_input?.offset,
+      limit: payload.tool_input?.limit,
+      state,
+    });
+    if (!outline) return null;
+    return {
+      input: { ...input, [key]: outline.target },
+      notice: readNotice(payload.tool_input.file_path, outline.found),
+    };
+  }
+
+  if (payload.tool_name === 'Bash') {
+    const key = firstKey(input, COMMAND_KEYS);
+    if (key === undefined || typeof input[key] !== 'string') return null;
+    const toolName = String(raw?.tool_name ?? raw?.toolName ?? raw?.tool ?? raw?.toolCall?.name ?? '');
+    const isAgy = clientName === 'antigravity' || clientName === 'agy' || Boolean(raw?.toolCall);
+    const shell = /powershell|pwsh/i.test(toolName) || (isAgy && process.platform === 'win32')
+      ? 'powershell'
+      : process.platform === 'win32'
+        ? null
+        : 'posix';
+    const outline = outlineShell({ sessionId, command: input[key], cwd: payload.cwd, shell, state });
+    if (!outline) return null;
+    return { input: { ...input, [key]: outline.command }, notice: outline.notice };
+  }
+
+  return null;
+}
+
+/**
+ * Per-client capability.
+ *
+ * `canDeny` is not a preference -- it is a statement of protocol fact. Setting
+ * it true where the client has no pre-execution veto would make the product
+ * claim enforcement it cannot deliver.
+ */
+export const CLIENTS = nativeClientProfiles();
+
+/** Never synchronously hash an unbounded build artifact on a hook path. */
+const HARVEST_MAX_BYTES =
+  Number(process.env.TOKEN_OPTIMIZER_HARVEST_MAX_BYTES) || 4_000_000;
+
+/**
+ * How many registered project graphs a session-end sweep may open.
+ *
+ * The registry is append-only and unbounded over time -- 4,033 records on this
+ * machine -- and each graph read is a tail of up to 2 MB. Bounded to the most
+ * recently seen handful, which is the only part of the registry a single
+ * session can plausibly have written to.
+ */
+const CROSS_PROJECT_SCAN_LIMIT =
+  Number(process.env.TOKEN_OPTIMIZER_CROSS_PROJECT_SCAN) || 12;
+
+/** A project the current session cannot have touched is not worth opening. */
+const CROSS_PROJECT_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * The activity this session recorded, gathered from every graph that could hold
+ * it.
+ *
+ * Capture is keyed on where the FILE lives (`recordToolOutcome(wikiDir(root))`,
+ * post-tool), not on the session's cwd. So when the client is started outside a
+ * repository -- a home directory, the common case -- the session's own file
+ * activity is written into each touched project's graph, and the unrooted graph
+ * that `cwd` resolves to holds none of it. Reading only that graph is why the
+ * inference below returned null in exactly the case it exists for: measured on
+ * this machine, the unrooted store holds 12,376 file anchors and ZERO of them
+ * under a repository.
+ *
+ * The sweep is confined to that case. A cwd that IS a repository already owns
+ * the graph its own files were captured into, so it pays nothing.
+ */
+export function sessionActivity(cwdRoot) {
+  let events = [];
+  try {
+    events = readMetrics(wikiDir(cwdRoot));
+  } catch {
+    events = [];
+  }
+  if (canonicalPath(cwdRoot) !== canonicalPath(unrootedRoot())) return events;
+  const cutoff = Date.now() - CROSS_PROJECT_MAX_AGE_MS;
+  let projects = [];
+  try {
+    // Sorted most-recently-seen first by `registeredProjects`.
+    projects = registeredProjects().filter((p) => (p.lastSeenAt || 0) >= cutoff);
+  } catch {
+    return events;
+  }
+  for (const project of projects.slice(0, CROSS_PROJECT_SCAN_LIMIT)) {
+    try {
+      events = events.concat(readMetrics(project.graphDir));
+    } catch {
+      // One unreadable store must not cost the session its inference.
+    }
+  }
+  return events;
+}
+
+/**
+ * The response envelopes a completed tool call can arrive in.
+ *
+ * Spelled out ONCE because FOUR readers depend on it -- mutation accounting,
+ * success classification, output capture and exit-code capture -- and clients
+ * disagree on the envelope name and on nothing else. Letting each reader name
+ * its own subset is exactly how both classifiers came to miss MCP's failure
+ * flag: `toolSucceeded` listed four envelopes and `mutationSucceeded` listed
+ * three, and neither list mentioned `isError` at all.
+ */
+function responseEnvelopes(raw) {
+  return [
+    raw?.tool_response,
+    raw?.toolResponse,
+    raw?.tool_result,
+    raw?.toolResult,
+    raw?.postToolUse,
+  ].filter((envelope) => envelope !== undefined && envelope !== null);
+}
+
+/**
+ * Did an MCP result declare itself an error?
+ *
+ * `isError` is the ONLY failure signal an MCP result carries -- there is no
+ * `error` field and no `status` -- and `src/server/index.ts` sets it in seven
+ * places. Shared by both classifiers so they cannot disagree about what a
+ * failed call from this project's own tools looks like.
+ *
+ * `=== true` EXACTLY. A client using the key for anything else must not have
+ * its successful calls silently reclassified, and `isError: false` is a
+ * successful MCP call, not a missing verdict.
+ */
+function reportedMcpError(raw) {
+  return [...responseEnvelopes(raw), raw].some(
+    (envelope) => envelope?.isError === true
+  );
+}
+
+/**
+ * A post-tool event is not universally proof of success. Some clients split
+ * success and failure into distinct events; others expose a result status.
+ * Keep mutation accounting conservative so a failed edit cannot arm Stop.
+ */
+export function mutationSucceeded(clientName, raw) {
+  if (raw?.error || raw?.tool_response?.error || raw?.toolResponse?.error)
+    return false;
+  if (raw?.postToolUse?.success === false || raw?.success === false)
+    return false;
+  // BEFORE the status read, the explicit-success read AND the client
+  // allowlist, because all three would otherwise pass a failed MCP write. The
+  // allowlist is the one that actually bit: it returns true for claude-code,
+  // codex, qwen, opencode, kilo and windsurf on any post-tool event with no
+  // error and no status, which is precisely the shape of a failed smart_write.
+  //
+  // WHY THIS IS THE SAME BUG AS THE ONE IN `toolSucceeded` AND NOT A COSMETIC
+  // ECHO OF IT: this function gates edit counting and harvest pressure, so
+  // counting a failed write to THE OPTIMIZER'S OWN TOOLS as a mutation
+  // inflates "the optimizer successfully edited a file". Different consumers
+  // from the effectiveness figures, same direction of bias -- toward
+  // flattering the thing being measured.
+  if (reportedMcpError(raw)) return false;
+
+  const status =
+    raw?.tool_response?.status ??
+    raw?.tool_response?.result_type ??
+    raw?.toolResponse?.status ??
+    raw?.toolResponse?.resultType ??
+    raw?.tool_result?.result_type ??
+    raw?.tool_result?.status ??
+    raw?.toolResult?.resultType ??
+    raw?.toolResult?.status;
+  if (status !== undefined) {
+    return /^(?:ok|success|succeeded|complete|completed)$/i.test(
+      String(status)
+    );
+  }
+
+  if (raw?.postToolUse?.success === true || raw?.success === true) return true;
+  if (clientName === 'gemini' && raw?.tool_response) return true;
+
+  // These lifecycle contracts fire this event only after a successful tool,
+  // or are called by our in-process bridge only from its successful after hook.
+  return new Set([
+    'claude-code',
+    'codex',
+    'qwen',
+    'opencode',
+    'kilo',
+    'windsurf',
+  ]).has(
+    clientName
+  );
+}
+
+/** Conservative success classification for any completed tool call. */
+export function toolSucceeded(raw) {
+  if (raw?.error || raw?.tool_response?.error || raw?.toolResponse?.error)
+    return false;
+  if (raw?.postToolUse?.success === false || raw?.success === false)
+    return false;
+  // MCP'S OWN FAILURE FLAG, which this function did not read for as long as it
+  // existed. It did not matter while `normalizeTool` dropped MCP names before
+  // any accounting ran; it matters now that `mcp__<server>__smart_edit` and
+  // `smart_write` reach the post-tool path, because an MCP result carries no
+  // `error` field and no `status` -- only `isError` -- so a failed smart_edit
+  // fell through to the optimistic `return true` below.
+  //
+  // WHY THIS IS A MEASUREMENT BUG AND NOT A COSMETIC ONE: this boolean feeds
+  // episode outcomes and effectiveness accounting, so recording every failed
+  // call to THE OPTIMIZER'S OWN TOOLS as a success biased all of it in the
+  // optimizer's favour. A measurement that flatters the thing being measured
+  // is worse than no measurement.
+  if (reportedMcpError(raw)) return false;
+  const status =
+    raw?.tool_response?.status ??
+    raw?.toolResponse?.status ??
+    raw?.tool_result?.status ??
+    raw?.toolResult?.status;
+  if (status !== undefined) {
+    if (
+      /^(?:error|failed|failure|cancelled|canceled|denied)$/i.test(
+        String(status)
+      )
+    )
+      return false;
+    if (/^(?:ok|success|succeeded|complete|completed)$/i.test(String(status)))
+      return true;
+  }
+  // A post-tool lifecycle event is evidence that the call completed, but not
+  // that its output proved the task.  `success` here is deliberately scoped to
+  // the tool call; task correctness comes only from an eval grader.
+  return true;
+}
+
+/** A non-empty string, or null.  Blank output is the same as none. */
+function nonEmpty(value) {
+  const text = String(value ?? '');
+  return text.trim() ? text : null;
+}
+
+/**
+ * The human-readable result text inside one envelope, or null.
+ *
+ * RETURNS NULL RATHER THAN GUESSING. An envelope shape nobody here has seen
+ * produces no capture at all, which costs one finding. Stringifying it instead
+ * would put `[object Object]` or a wall of JSON metadata into a claim that gets
+ * injected into model context -- a wrong observation, which is strictly worse
+ * than a missing one.
+ */
+function resultText(value) {
+  if (value === undefined || value === null) return null;
+  if (typeof value === 'string') return nonEmpty(value);
+  if (typeof value === 'number' || typeof value === 'boolean') return null;
+
+  // MCP content blocks, which is how THIS PROJECT'S OWN tools now arrive:
+  // `normalizeTool` resolves `mcp__<server>__smart_edit`, so smart_edit and
+  // smart_write reach the post-tool path for the first time and their results
+  // are `{ content: [{ type: 'text', text }], isError }` rather than a shell
+  // result. Both the bare array and the wrapping object are accepted because
+  // hosts differ on whether they hand the hook the result or its content.
+  if (Array.isArray(value)) {
+    const blocks = value
+      .map((block) =>
+        typeof block === 'string' ? block : nonEmpty(block?.text)
+      )
+      .filter(Boolean);
+    return blocks.length ? nonEmpty(blocks.join('\n')) : null;
+  }
+  if (typeof value !== 'object') return null;
+
+  // STDERR FIRST, and not because that is the order it was produced in. The
+  // cap can only ever cut the tail, and the diagnostic that explains a failure
+  // is almost always on stderr while the volume is almost always on stdout --
+  // so appending stderr would let a 3 MB build log push the one line worth
+  // capturing out of the window.
+  const streams = [nonEmpty(value.stderr), nonEmpty(value.stdout)].filter(
+    Boolean
+  );
+  if (streams.length) return streams.join('\n');
+
+  if (Array.isArray(value.content)) {
+    const inner = resultText(value.content);
+    if (inner) return inner;
+  }
+
+  const error = value.error;
+  if (error) {
+    const message =
+      typeof error === 'string' ? error : nonEmpty(error.message ?? error.msg);
+    if (message) return message;
+  }
+
+  return (
+    nonEmpty(value.output) ??
+    nonEmpty(value.text) ??
+    nonEmpty(value.message) ??
+    (typeof value.result === 'string' ? nonEmpty(value.result) : null)
+  );
+}
+
+/**
+ * The result text of a completed tool call, or null when the client reports
+ * none.  Redaction and the size cap are NOT applied here -- they belong at the
+ * `recordToolOutcome` boundary, which is the only place every caller passes.
+ */
+export function outputFrom(raw) {
+  for (const envelope of responseEnvelopes(raw)) {
+    const text = resultText(envelope);
+    if (text) return text;
+  }
+  return resultText(raw?.output) ?? resultText(raw?.stdout) ?? null;
+}
+
+/**
+ * Key names that mean "process exit code" and nothing else.
+ *
+ * `code` is deliberately ABSENT. JSON-RPC errors (`code: -32602`), Node errno
+ * objects (`code: 'ENOENT'`) and HTTP wrappers all reuse that name, so reading
+ * it would record a confident exit code for calls that never had one. A null
+ * here is honest; a -32602 claiming to be an exit status is not.
+ */
+const EXIT_KEYS = [
+  'exit_code',
+  'exitCode',
+  'exit',
+  'exit_status',
+  'exitStatus',
+  'return_code',
+  'returncode',
+];
+
+/** The numeric exit code a client reported, or null when it reported none. */
+export function exitFrom(raw) {
+  for (const envelope of [...responseEnvelopes(raw), raw]) {
+    if (!envelope || typeof envelope !== 'object') continue;
+    for (const key of EXIT_KEYS) {
+      const value = envelope[key];
+      if (Number.isInteger(value)) return value;
+      // A client that serializes the code as a digit string still reported it.
+      // Bounded so a hash or an id cannot be mistaken for a status.
+      if (typeof value === 'string' && /^-?\d{1,5}$/.test(value.trim()))
+        return Number(value.trim());
+    }
+  }
+  return null;
+}
+
+/** Verification requires affirmative evidence; a result envelope alone is not success. */
+export function verificationSucceeded(raw) {
+  const envelopes = [raw, ...responseEnvelopes(raw), raw?.postToolUse]
+    .filter((value) => value && typeof value === 'object');
+  if (!toolSucceeded(raw) || envelopes.some((value) =>
+    value.success === false || /^(?:error|failed|failure|cancelled|canceled|denied)$/i.test(String(value.status ?? ''))
+  )) return false;
+  const exitCodes = envelopes.flatMap((value) => EXIT_KEYS.flatMap((key) => {
+    const code = value[key];
+    if (Number.isInteger(code)) return [code];
+    if (typeof code === 'string' && /^-?\d{1,5}$/.test(code.trim())) return [Number(code.trim())];
+    return [];
+  }));
+  if (exitCodes.length) return exitCodes.every((code) => code === 0);
+  return envelopes.some((value) => value.success === true ||
+    /^(?:ok|success|succeeded|passed)$/i.test(String(value.status ?? '')));
+}
+
+
+function contextOutput(client, eventName, additionalContext) {
+  if (client.contextStyle === 'top-level') return { additionalContext };
+  if (client.contextStyle === 'cline') {
+    return {
+      cancel: false,
+      contextModification: additionalContext,
+      errorMessage: '',
+    };
+  }
+  if (client.contextStyle === 'cursor') {
+    return { continue: true, agent_message: additionalContext };
+  }
+  if (client.contextStyle === 'antigravity-ephemeral') {
+    if (eventName === 'PreToolUse' || eventName === 'PostToolUse') return null;
+    return additionalContext ? { injectSteps: [{ ephemeralMessage: additionalContext }] } : null;
+  }
+  if (client.contextStyle === 'silent') return null;
+  return {
+    hookSpecificOutput: { hookEventName: eventName, additionalContext },
+  };
+}
+
+/** Convert one static JavaScript string literal without evaluating code. */
+function codexStringLiteral(literal) {
+  if (typeof literal !== 'string' || literal.length < 2) return null;
+  const quote = literal[0];
+  if (!['"', "'", '`'].includes(quote) || literal.at(-1) !== quote) return null;
+
+  let decoded = '';
+  for (let index = 1; index < literal.length - 1; index += 1) {
+    const character = literal[index];
+    if (quote === '`' && character === '$' && literal[index + 1] === '{')
+      return null;
+    if (character !== '\\') {
+      decoded += character;
+      continue;
+    }
+
+    index += 1;
+    if (index >= literal.length - 1) return null;
+    const escaped = literal[index];
+    const simple = {
+      b: '\b', f: '\f', n: '\n', r: '\r', t: '\t', v: '\v', 0: '\0',
+      '\\': '\\', "'": "'", '"': '"', '`': '`', '$': '$',
+    };
+    if (Object.hasOwn(simple, escaped)) {
+      decoded += simple[escaped];
+      continue;
+    }
+    if (escaped === '\n') continue;
+    if (escaped === '\r') {
+      if (literal[index + 1] === '\n') index += 1;
+      continue;
+    }
+    if (escaped === 'x') {
+      const digits = literal.slice(index + 1, index + 3);
+      if (!/^[0-9a-f]{2}$/i.test(digits)) return null;
+      decoded += String.fromCodePoint(Number.parseInt(digits, 16));
+      index += 2;
+      continue;
+    }
+    if (escaped === 'u') {
+      const braced = literal[index + 1] === '{';
+      const close = braced ? literal.indexOf('}', index + 2) : index + 5;
+      const digits = braced
+        ? literal.slice(index + 2, close)
+        : literal.slice(index + 1, close);
+      if (
+        close < 0 ||
+        !(braced ? /^[0-9a-f]{1,6}$/i : /^[0-9a-f]{4}$/i).test(digits)
+      ) return null;
+      const codePoint = Number.parseInt(digits, 16);
+      if (codePoint > 0x10ffff) return null;
+      decoded += String.fromCodePoint(codePoint);
+      index = close;
+      continue;
+    }
+    // JavaScript identity escapes drop the slash (for example, '\q' is 'q').
+    decoded += escaped;
+  }
+  return decoded;
+}
+
+/**
+ * Cline's write tools, under the names the rest of the pipeline matches on.
+ *
+ * Cline calls them `write_to_file` and `replace_in_file`; authoredWrite tests
+ * membership of {Edit, MultiEdit, Write}, so without the rename the
+ * integration reads the right field and still never records an authored write.
+ */
+const CLINE_TOOL_NAMES = {
+  write_to_file: 'Write',
+  replace_in_file: 'Edit',
+};
+
+/**
+ * The names the optimizer's MCP server is registered under: every shipped
+ * client config uses `token-optimizer`, and Claude's plugin form qualifies it.
+ */
+const OPTIMIZER_SERVER_NAMES = new Set([
+  'token-optimizer',
+  'plugin_token-optimizer_token-optimizer',
+]);
+
+/**
+ * The host's own name for the tool a hook event reports, before any
+ * canonicalisation -- the name optimizer grading has to recognise.
+ *
+ * Most clients put it at the top level. Cline nests it under
+ * `postToolUse`/`preToolUse` as `toolName`, and an MCP call there may arrive as
+ * its generic `use_mcp_tool` with the real name in `parameters.tool_name`; both
+ * are read, so a successful `wiki_write` on Cline is graded as one (#485 review).
+ */
+export function hostToolName(raw) {
+  const body = raw?.postToolUse ?? raw?.preToolUse;
+  if (body?.toolName === 'use_mcp_tool') {
+    // ONLY THE OPTIMIZER'S OWN SERVER, BY ITS EXACT NAME. A bare `wiki_write`
+    // from any other server would otherwise be graded as an optimizer call that
+    // answered -- and a substring test let `other-token-optimizer` through.
+    const server = String(body.parameters?.server_name ?? body.parameters?.serverName ?? '');
+    if (!OPTIMIZER_SERVER_NAMES.has(server.toLowerCase())) return null;
+    const tool = body.parameters?.tool_name ?? body.parameters?.toolName;
+    return tool ? `mcp__${server}__${tool}` : null;
+  }
+  return raw?.tool_name ?? raw?.toolName ?? raw?.tool ?? raw?.toolCall?.name ?? body?.toolName ?? body?.tool ?? null;
+}
+
+/** Convert client-specific lifecycle envelopes into the common tool shape. */
+function codexStringBindings(source) {
+  const values = new Map();
+  const declaration = /\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*((?:"(?:\\.|[^"\\])*")|(?:'(?:\\.|[^'\\])*')|(?:`(?:\\.|[^`\\])*`))/gs;
+  for (const match of String(source || '').matchAll(declaration)) {
+    try {
+      const value = codexStringLiteral(match[2]);
+      if (value !== null) values.set(match[1], value);
+    } catch {
+      // A computed or malformed JavaScript expression is not safe to execute
+      // merely to understand a hook envelope. Leave it opaque.
+    }
+  }
+  return values;
+}
+
+function codexCallArguments(source, method) {
+  const calls = [];
+  const pattern = new RegExp(`(?:tools\\.)?${method}\\s*\\(\\s*([^),]+)`, 'gi');
+  for (const match of String(source || '').matchAll(pattern))
+    calls.push(match[1].trim());
+  return calls;
+}
+
+function codexLiteral(value, bindings) {
+  if (bindings.has(value)) return String(bindings.get(value));
+  return codexStringLiteral(value);
+}
+
+function codexExecCommands(source, bindings) {
+  const commands = [];
+  for (const call of String(source || '').matchAll(
+    /(?:tools\.)?exec_command\s*\(\s*\{([\s\S]*?)\}\s*\)/gi
+  )) {
+    const property = /\bcmd\s*:\s*((?:"(?:\\.|[^"\\])*")|(?:'(?:\\.|[^'\\])*')|(?:`(?:\\.|[^`\\])*`)|(?:[A-Za-z_$][\w$]*))/s.exec(call[1]);
+    if (!property) continue;
+    const command = codexLiteral(property[1], bindings);
+    if (command) commands.push(command);
+  }
+  return commands;
+}
+
+export function normalizeClientPayload(clientName, event, raw) {
+  if (clientName === 'codex') {
+    const outerName = String(raw.tool_name ?? raw.toolName ?? raw.tool ?? '');
+    if (/^(?:functions\.)?exec$/i.test(outerName)) {
+      const envelope = raw.tool_input ?? raw.toolInput ?? raw.arguments ?? raw.args;
+      const source =
+        typeof envelope === 'string'
+          ? envelope
+          : envelope?.code ?? envelope?.input ?? envelope?.source ?? '';
+      const bindings = codexStringBindings(source);
+      const patchCalls = codexCallArguments(source, 'apply_patch');
+      const patch = patchCalls
+        .map((argument) => codexLiteral(argument, bindings))
+        .find(Boolean);
+      const mutation = patchCalls.length > 0;
+      const commands = codexExecCommands(source, bindings);
+
+      // `functions.exec` is also the orchestration envelope for web, image and
+      // other non-filesystem tools. Do not reinterpret those as shell commands:
+      // doing so produced irrelevant cross-project advice and fabricated graph
+      // activity for operations the filesystem hooks never observed.
+      if (!mutation && !commands.length) return raw;
+      return {
+        ...raw,
+        tool_name: mutation ? 'apply_patch' : 'run_command',
+        tool_input: {
+          ...(envelope && typeof envelope === 'object' ? envelope : {}),
+          command: String(patch || commands.join('\n') || source || ''),
+          code_mode_envelope: true,
+          // A single nested shell call is unambiguous and safe to veto. Keep
+          // multi-operation programs advisory because rejecting their outer
+          // envelope would discard unrelated work in the same orchestration.
+          code_mode_single_shell_command:
+            !mutation && commands.length === 1,
+        },
+      };
+    }
+  }
+
+  if (clientName === 'cline') {
+    const body = event === 'post-tool' ? raw.postToolUse : raw.preToolUse;
+    if (!body) return raw;
+    // `toolName` IS THE FIELD CLINE SENDS. Reading only `body.tool` left
+    // `tool_name` null, and the handler exits on a null tool name -- so every
+    // Cline call fell out before authoredWrite or recordAuthoredContent could
+    // run, and the whole integration was a silent no-op. `body.tool` is kept as
+    // a fallback rather than replaced, because a payload carrying it costs
+    // nothing to accept.
+    const rawTool = body.toolName ?? body.tool;
+    return {
+      ...raw,
+      session_id: raw.taskId ?? raw.task_id,
+      cwd: raw.workspaceRoots?.[0] ?? raw.workspacePath,
+      model: raw.model?.slug,
+      // MAPPED TO THE CANONICAL NAMES the rest of the pipeline matches on.
+      // authoredWrite tests membership of {Edit, MultiEdit, Write}, so Cline's
+      // own spellings would still have missed even once the field was read.
+      tool: CLINE_TOOL_NAMES[rawTool] ?? rawTool,
+      parameters: body.parameters,
+    };
+  }
+
+  if (clientName === 'windsurf') {
+    // (see CLINE_TOOL_NAMES above for why the cline branch renames its tools)
+    const info = raw.tool_info || {};
+    const action = String(raw.agent_action_name || '');
+    const tool = action.includes('read_code')
+      ? 'read_file'
+      : action.includes('write_code')
+        ? 'write_file'
+        : action.includes('run_command')
+          ? 'run_shell_command'
+          : null;
+    return {
+      ...raw,
+      session_id: raw.trajectory_id,
+      cwd: info.working_directory ?? raw.working_directory,
+      model: raw.model_name,
+      tool,
+      args: {
+        ...info,
+        path: info.file_path,
+        command: info.command,
+      },
+    };
+  }
+
+  return raw;
+}
+
+/** Extract only user/task text, never cwd, ids, or other metadata. */
+export function sessionTaskContext(raw = {}) {
+  return [
+    raw.prompt,
+    raw.user_prompt,
+    raw.userPrompt,
+    raw.initial_prompt,
+    raw.initialPrompt,
+    raw.task_prompt,
+    raw.taskPrompt,
+    raw.task_description,
+    raw.taskDescription,
+    raw.task?.prompt,
+    raw.task?.text,
+    raw.message?.content,
+  ]
+    .filter((value) => typeof value === 'string' && value.trim())
+    .join('\n');
+}
+
+/**
+ * Whether the Stop hook's harvest nudge is held for the next turn instead of
+ * continuing this one. Claude Code only: its PostToolUse context reaches the
+ * model on the next call, which is what delivery needs. Other clients keep the
+ * continuation, since they have no such channel wired.
+ */
+function harvestDeferred(clientName) {
+  if (clientName !== 'claude-code') return false;
+  return !/^(1|true|yes|on)$/i.test(String(process.env.TOKEN_OPTIMIZER_HARVEST_TURN ?? '').trim());
+}
+
+function emit(object) {
+  object = decorateOutput(object);
+  const serialized = JSON.stringify(object);
+  noteHookOutput(object, Buffer.byteLength(serialized, 'utf8'));
+  process.stdout.write(serialized);
+}
+
+/**
+ * Fold what this session has OBSERVED about tool reachability into its state.
+ *
+ * Called from every branch that then reads the inventory, because an inventory
+ * read without this is a reading of what was declared rather than of what
+ * works. Both signals land in one writer so the two branches cannot drift --
+ * the Stop branch keeps its own evidence lookup, and when this lived inline it
+ * reached only the other one, which is how the fix for #469 first failed its
+ * own test.
+ *
+ * Fail-open and silent by design: grading is an optimization and must never
+ * cost a tool call.
+ */
+function gradeObservedTools(state, event, payload, raw) {
+  try {
+    // THE TRANSCRIPT IS THE ONLY SIGNAL ON THE PRIMARY CLIENT. Claude Code
+    // fires no PostToolUse for a failed tool call -- the measurement is in
+    // transcript.mjs's own header, 2,238 of 2,238 live events carrying
+    // `success: true` -- and a call to a tool the host never registered is the
+    // most complete failure there is, so it produces no event at all. Reading
+    // the transcript is what lets a session ever learn that the inventory it
+    // was handed is wrong.
+    const transcriptPath = payload?.transcript_path ?? payload?.transcriptPath;
+    for (const { name, at } of absentToolsFromTranscript(transcriptPath)) {
+      markOptimizerToolAbsent(state, name, at);
+    }
+    // A DEFERRED TOOL THE SESSION COULD NOT LOAD never reaches a call, so the
+    // read above has nothing to find (#484). Its tool searches are the signal:
+    // a miss marks it absent, and a later load revokes that like a later call.
+    // Once the tool has loaded or answered a call in this session -- possibly
+    // before the scanned tail -- it is out of the deferred registry, and an
+    // empty search can no longer say anything about it. A real refusal still
+    // reaches it through the call reader above.
+    const searched = toolSearchOutcomesFromTranscript(transcriptPath);
+    for (const { name, at } of searched.missed) {
+      if ((Number(state?.optimizerToolOkAt?.[name]) || 0) > 0) continue;
+      markOptimizerToolAbsent(state, name, at);
+    }
+    for (const { name, at } of searched.loaded) {
+      markOptimizerToolOk(state, name, at);
+    }
+    // THE HOST SAYS THE SERVER NEVER CONNECTED. Every optimizer tool is absent
+    // from that instant, even one that answered earlier: the server died. A
+    // reconnect revokes only an absence THE FAILURE caused, and only when it
+    // comes later: a tool a search could not load (#484) stays absent however
+    // often the host re-announces it, and a healthy session's own announcement
+    // never poses as a successful call.
+    const server = serverFailuresFromTranscript(transcriptPath);
+    for (const { name, at } of server.failed) {
+      markOptimizerToolAbsent(state, name, at);
+      state.optimizerServerFailedAt = Math.max(
+        Number(state.optimizerServerFailedAt) || 0,
+        at
+      );
+    }
+    const failedAt = Number(state?.optimizerServerFailedAt) || 0;
+    for (const { name, at } of server.restored) {
+      const absentAt = Number(state?.optimizerToolAbsentAt?.[name]) || 0;
+      if (failedAt > 0 && absentAt <= failedAt && at > failedAt) {
+        markOptimizerToolOk(state, name, at);
+      }
+    }
+    // And the event itself, for the ten clients that do report a failed call.
+    if (event === 'post-tool') {
+      // THE NAME THE HOST SENT, not the normalised one: normalisation maps
+      // smart_read to Read and wiki_write to nothing, and neither is an
+      // optimizer name, so no call was ever recorded as having answered.
+      observeOptimizerToolCall(state, hostToolName(raw) ?? payload?.tool_name, {
+        ok: toolSucceeded(raw),
+        text: outputFrom(raw),
+      });
+    }
+  } catch {
+    // Fail open, as above.
+  }
+  return state;
+}
+
+/** The session-start notice, shared verbatim so no client drifts its own copy. */
+/** Tool calls after which a session that has edited nothing still gets the recording guidance. */
+export const GUIDANCE_AFTER_CALLS = 10;
+
+/**
+ * The wiki_write guidance. It was part of the SessionStart block until #357
+ * (M5): it is the largest part of that block, and it only matters once there is
+ * something to record, so it is now delivered once, on the first post-tool
+ * event after the session shows real work, and a session that never gets that
+ * far never pays for it.
+ *
+ * ONE LINE, 2026-11-09. On the 15-pair learned SWE-bench pilot the ~1,000
+ * character block was injected in 8 of 13 plugin sessions and the model made 0
+ * wiki_write calls (0 calls to any optimizer tool). It keeps the instruction --
+ * what to record, the anchor the tool enforces, and the measured last-message
+ * rule (0.3 vs 0.9) -- and drops the per-mode extraction notice: that is about
+ * the person's configuration, and doctor's harvest check says it to them.
+ */
+export function recordingGuidance() {
+  return (
+    '## Record what you work out\n\nA durable finding -- a decision and the rejected alternative, ' +
+    "a failure's real cause, the command that worked -- goes to wiki_write with a real file anchor, " +
+    'before your answer, never as your last message.'
+  );
+}
+
+export function policyText(
+  canDeny,
+  availableTools = undefined,
+  registrationProven = availableTools !== undefined
+) {
+  const kb = Math.round(largeFileBytes() / 1024);
+  // Direct library callers historically asked for policyText(true) to render
+  // the core policy. Runtime entry points always pass an explicit Set, where
+  // an empty set means "do not claim or redirect to any MCP schema".
+  const tools =
+    availableTools === undefined
+      ? new Set(HOOK_MCP_TOOLS)
+      : new Set(availableTools);
+  const routes = [];
+  if (tools.has('smart_read')) {
+    routes.push(
+      `- Reading a file larger than ~${kb} KB, re-reading a file, or printing a large file -> smart_read`
+    );
+  }
+  if (tools.has('smart_grep'))
+    routes.push(
+      '- Searching file contents or running a recursive shell search -> smart_grep'
+    );
+  if (tools.has('smart_glob'))
+    routes.push('- Finding files with an unbounded pattern -> smart_glob');
+  if (tools.has('smart_edit'))
+    routes.push(`- Editing a file larger than ~${kb} KB -> smart_edit`);
+  if (tools.has('smart_write'))
+    routes.push(`- Writing a file larger than ~${kb} KB -> smart_write`);
+
+  // THE EVIDENCE GRADE IS NOT NARRATED (#469, 2026-11-07). It stays exact in
+  // `toolEvidence`; the prose that reported it at every session start -- "the
+  // host named N tools", "declares N tools; the host has not confirmed them" --
+  // described our plumbing and changed no decision. The SWE-bench pilot priced
+  // that kind of text: ~1,400 tokens of plugin context, written at the 1-hour
+  // cache rate and re-read every turn, made the plugin arm 1.23x control on
+  // short tasks. Only the instruction with a behaviour attached survives (see
+  // `unconfirmed`), and only where tools are recommended without proof.
+  // ASSIST SAYS NOTHING ABOUT ROUTING. The routing list plus its "these are
+  // recommendations" tail cost ~800 bytes of context in every session, and
+  // under assist they advise about a mechanism that is switched off -- which is
+  // precisely the per-session overhead assist exists to remove. Measured: 813
+  // bytes emitted under assist against 898 under enforce, where the advice is
+  // at least true.
+  //
+  // The graph guidance below is deliberately NOT suppressed: retrieval and
+  // harvest are what assist keeps, so telling the model how to record findings
+  // still earns its place.
+  const advertiseRouting = mode() !== MODE_ASSIST;
+  const routing = !advertiseRouting
+    ? ''
+    : routes.length
+      ? `\n\nPrefer only the registered replacements listed below; they cache, diff, or bound output:\n\n${routes.join('\n')}`
+      : "\n\nKeep the CLI's native tools available and bound their output. Do not redirect to or call an optimizer MCP tool unless its schema is visible in the current tool inventory.";
+  const enforcement =
+    advertiseRouting && routes.length
+      ? canDeny && refusalsEnabled()
+        ? '\n\nA built-in call is denied only when its exact replacement has positive registration evidence. A second attempt at the same target remains available.'
+        : '\n\nThese are recommendations; the built-in tools remain available.'
+      : '';
+  const unconfirmed =
+    advertiseRouting && routes.length && !registrationProven
+      ? '\n\nIf one of these reports no such tool, use the built-in tool and do not call it again.'
+      : '';
+  // NO UTILITY LINE. optimize_session is named in the MCP server instructions
+  // every client receives at initialization, so repeating it here was paid
+  // twice; get_optimization_report is a report for the person, not a step for
+  // the model, and naming it changed no decision.
+  // THE RECORDING GUIDANCE IS DELIVERED LATER, NOT HERE (#357, M5): see
+  // recordingGuidance. A session that never does real work never pays for it.
+
+  const discipline = outputDiscipline();
+  return `# Token optimization is active${discipline ? `\n\n${discipline}` : ''}${routing}${enforcement}${unconfirmed}${projectBriefing()}`;
+}
+
+/**
+ * The only guidance measured to move the expensive column.
+ *
+ * WHY THIS EXISTS, AND WHY IT IS SHORT. Every mechanism this product ships
+ * reduces what the model READS -- the bound, the compactor, outline
+ * substitution, the search advisory. Reads are cache_read at $0.30/M, the
+ * cheapest token class there is. What the model WRITES is output at $15/M,
+ * fifty times dearer per token.
+ *
+ * The leaderboard leader ships no interception worth the name: their own CLI is
+ * invoked 0.38 times per task. What they ship is a rules file, and on sixteen
+ * matched non-web tasks their output tokens are 0.722 of control against
+ * cache_read at 0.784 -- the smaller cut in the dearer column is worth more.
+ * They changed behaviour with instructions instead of intercepting calls.
+ *
+ * SHORTER THAN THEIRS, DELIBERATELY. Their file is 2,668 characters and roughly
+ * 60% of it advertises that barely-used CLI, paid as cache_creation on every
+ * session and re-read every turn. It is why their advantage shrinks with task
+ * length -- corr(length, ratio) = -0.689 -- and why their three losses are the
+ * three shortest tasks. Carrying only the part that works, at a fraction of the
+ * fixed cost, is how the short tasks are won rather than merely survived.
+ *
+ * THE LAST TWO LINES ARE NOT PADDING. Terseness trades against completeness,
+ * and a rule that only said "write less" would buy cost with quality -- which
+ * Ledger scores as cost per unit of work DELIVERED, so it would show up as no
+ * gain at all. Correctness and verbatim identifiers are what keep the trade
+ * honest.
+ *
+ * This block replaces internal status prose that described our own plumbing to
+ * the model -- "live graph capture is active through the lifecycle adapter",
+ * "the writer schema is not proven available" -- 139 tokens per session that
+ * changed no decision it was ever read by.
+ */
+/**
+ * The block itself, exported so a benchmark arm can deliver it the way a
+ * competitor delivers theirs -- as a CLAUDE.md, with no hooks at all.
+ *
+ * ONE SOURCE OF TRUTH, deliberately. The head-to-head compared our arm (hooks
+ * PLUS this text) against theirs (text alone) and I described it as text
+ * versus text, which it was not. Fixing that needs an arm carrying only these
+ * words; copying them into the benchmark would let the measured text drift
+ * from the shipped text, so the arm imports this constant instead.
+ */
+export const OUTPUT_DISCIPLINE = [
+  '## Keep output lean',
+  '',
+  'Every token you write is billed at output rates -- far dearer than reading.',
+  '- No preamble, recap, tool-call narration, or closing summary. Answer directly.',
+  '- Quote the shortest decisive line of a command result; never paste it whole.',
+  '- Write the least code that works; reuse what exists before adding.',
+  '- Keep identifiers, paths, API names and error strings verbatim -- never paraphrase.',
+  '- Correctness first: brevity that loses a fact is not a saving.',
+].join('\n');
+
+function outputDiscipline() {
+  // THE ISOLATING SWITCH. `assist` carries the bound, the compactor and outline
+  // substitution as well as this block, so a measurement of assist against
+  // control cannot attribute anything to the text. This exists so an arm can
+  // run every hook with the block removed and nothing else changed -- the only
+  // comparison that can say whether the instructions or the interception are
+  // doing the work.
+  const raw = String(process.env.TOKEN_OPTIMIZER_OUTPUT_DISCIPLINE || '').trim().toLowerCase();
+  if (raw === '0' || raw === 'off' || raw === 'false' || raw === 'no') return '';
+
+  return OUTPUT_DISCIPLINE;
+}
+
+/**
+ * This project's own waste facts, appended to the standing policy.
+ *
+ * The cheapest of the four remedy surfaces by an order of magnitude: a few
+ * dozen tokens that change what the model reaches for, with no call to
+ * intercept and no turn to spend. Waste that never starts costs nothing to
+ * stop.
+ *
+ * Deliberately concrete. A general exhortation to be efficient is worth
+ * nothing; "this file has never repaid a read here" is a fact about this
+ * project that changes a decision.
+ */
+function projectBriefing() {
+  try {
+    const cwd = process.cwd();
+    // THE GRAPH LIVES AT THE REPOSITORY ROOT, and wikiDir does no upward walk. Trusting the
+    // bare cwd meant that launching the agent from a subdirectory read an empty directory and
+    // reported "nothing learned" for a project whose graph was fully populated one level up --
+    // indistinguishable, to the reader, from a project that has genuinely learned nothing.
+    // The sentinel filename is what session-start.mjs uses: the walk wants a path INSIDE the
+    // tree, not the tree itself.
+    const dir = wikiDir(projectRootFor(join(cwd, '__session__'), cwd));
+
+    // Routing facts join the same briefing, and are number-free for the same
+    // reason the rest of it is: a count that ticks up as evidence accumulates
+    // would change the prefix every session and invalidate the cache behind it.
+    // The digits live in the model_routing tool, where changing costs nothing.
+    let routing = null;
+    try {
+      routing = cachedRoutingBriefing(dir, transcriptFor(cwd));
+    } catch {
+      /* no transcript, no routing facts; the rest still applies */
+    }
+
+    const text = briefing(dir, { extra: routing ? [routing] : [] });
+    if (!text) return '';
+
+    // CACHE-SAFE BY CONSTRUCTION. This text sits near the front of the prompt
+    // prefix, so a single character that differs between sessions invalidates
+    // everything after it -- and an optimizer that costs more cache than it
+    // saves tokens is worse than no optimizer. A line that would vary is
+    // dropped rather than emitted: missing guidance costs a little, a volatile
+    // line costs the whole prefix.
+    const { text: safe } = stableText(text);
+    return safe.trim()
+      ? `\n\n## What we have learned about this project\n\n${safe}`
+      : '';
+  } catch {
+    // A briefing is a bonus. It must never be the reason a session starts badly.
+    return '';
+  }
+}
+
+/**
+ * Observe one tool call and return knowledge that is relevant to it.
+ *
+ * This is the non-Claude delivery path. It deliberately mirrors the ordering
+ * in pretooluse-router.mjs: consult the graph before refreshing snapshots, then
+ * index the bytes for the next touch. The previous adapter only wrote read
+ * metrics. It never called forTouch/forCommand, so four advertised clients
+ * accumulated a graph that their active model could not receive.
+ */
+function observeAndInject(payload, state, episode, features, authored = false) {
+  const touched = touchedFiles(payload);
+  const dirFor = (path) => wikiDir(projectRootFor(path, payload.cwd));
+  const registerRoot = (root) => {
+    const dir = wikiDir(root);
+    registerProject({
+      root,
+      graphDir: dir,
+      client: episode.client || 'unknown',
+    });
+    return dir;
+  };
+
+  // SessionStart is not delivered consistently by every host/version. The
+  // graph was still written in that case, but the dashboard registry never
+  // learned it existed. Register every repository observed by a real tool call
+  // as a second, idempotent production path.
+  for (const { path } of touched)
+    registerRoot(projectRootFor(path, payload.cwd));
+
+  const bytes = readCostBytes(payload);
+  if (bytes && payload.tool_input.file_path) {
+    recordRead(dirFor(payload.tool_input.file_path), {
+      anchor: payload.tool_input.file_path,
+      sessionId: payload.session_id,
+      bytes,
+      fp: fingerprint(payload.tool_input.file_path),
+    });
+  } else if (isContentDump(payload.tool_input.command)) {
+    for (const { path, size } of touched) {
+      if (size > 0) {
+        recordRead(dirFor(path), {
+          anchor: path,
+          sessionId: payload.session_id,
+          bytes: size,
+          fp: fingerprint(path),
+        });
+      }
+    }
+  }
+
+  const parts = [];
+  state.injected = state.injected || [];
+  const alreadyInjected = new Set(state.injected);
+
+  if (features.retrieval) {
+    for (const { path } of touched) {
+      const dir = dirFor(path);
+      const note = forTouch(dir, load(dir), path, {
+        sessionId: payload.session_id,
+        alreadyInjected,
+        episode,
+      });
+      if (note) parts.push(note);
+    }
+
+    const command = payload.tool_input?.command;
+    if (command) {
+      const root = commandProjectRoot(payload, payload.cwd);
+      const dir = registerRoot(root);
+      const local = forCommand(dir, loadFindings(dir), command, {
+        sessionId: payload.session_id,
+        alreadyInjected,
+        episode,
+      });
+      if (local) parts.push(local);
+
+      const shared = forSharedCommand(dir, command, {
+        sessionId: payload.session_id,
+        alreadyInjected,
+        projectRoot: root,
+        episode,
+      });
+      if (shared) parts.push(shared);
+
+      const crossed = noteActClasses(state, command);
+      const repeated = forRepeatedAct(dir, command, crossed, {
+        sessionId: payload.session_id,
+        projectRoot: root,
+        episode,
+      });
+      if (repeated) parts.push(repeated);
+    }
+  }
+  state.injected = [...alreadyInjected];
+
+  // Structural capture is evidence about what was touched, not a semantic
+  // conclusion. It is therefore safe to automate for every client and leaves
+  // the active model responsible for wiki_write at completion.
+  if (features.capture)
+    for (const { path, size } of touched) {
+      try {
+        if (isArchived(path) || size > HARVEST_MAX_BYTES || !isFsSafePath(path))
+          continue;
+        const source = readFileSync(path, 'utf8');
+        const dir = dirFor(path);
+        harvest(dir, {
+          filePath: path,
+          sessionId: payload.session_id,
+          action: payload.tool_name,
+          hash: contentHash(path, source),
+        });
+        indexFile(dir, path, source);
+
+        // WHAT THIS SESSION WROTE -- and ONLY what it wrote.
+        //
+        // GATED ON A SUCCESSFUL MUTATION, because this loop is not one. It
+        // iterates `touchedFiles`, which covers every tool that NAMES a file,
+        // reads included, and its own comment above calls that "evidence about
+        // what was touched". Recording an authored base from a read would
+        // recreate the exact defect this store exists to avoid: a later
+        // smart_read in the same session would be told "no changes" about
+        // content the model never received.
+        //
+        // A failed write is excluded for the same reason -- the bytes on disk
+        // are not what we tried to write, so they are not a truthful base.
+        // `mutationSucceeded` is the existing conservative classifier, already
+        // used to gate edit counting, so this cannot disagree with the rest of
+        // the accounting about what a successful mutation is.
+        //
+        // Free when it does apply: the source is already in hand for the graph.
+        if (authored) {
+          recordAuthoredContent(
+            projectRootFor(path, payload.cwd),
+            payload.session_id,
+            path,
+            source
+          );
+        }
+      } catch {
+        // Graph bookkeeping must never break the user's tool call.
+      }
+    }
+
+  return parts.join('\n\n');
+}
+
+/**
+ * Runs one hook invocation.
+ *
+ * @param {string} clientName  Key into CLIENTS.
+ * @param {'session-start'|'pre-tool'|'post-tool'|'stop'} event
+ */
+export async function run(clientName, event) {
+  const invocation = beginHookInvocation(clientName, event);
+  try {
+    await runHook(clientName, event, invocation);
+    invocation.succeed();
+  } catch (error) {
+    // The optimizer must fail open, but the failure is now reconstructable.
+    invocation.fail(error);
+  }
+}
+
+async function runHook(clientName, event, invocation) {
+  const isAntigravity = clientName === 'antigravity' || clientName === 'agy';
+  const client = isAntigravity
+    ? {
+        ...CLIENTS.gemini,
+        name: 'Antigravity',
+        contextStyle: 'antigravity-ephemeral',
+        inputRewrite: 'antigravity-overwrite',
+        stopDecision: 'continue',
+      }
+    : CLIENTS[clientName] || CLIENTS['claude-code'];
+  const eventName =
+    event === 'session-start'
+      ? 'SessionStart'
+      : event === 'post-tool'
+        ? clientName === 'gemini'
+          ? 'AfterTool'
+          : 'PostToolUse'
+        : event === 'stop'
+          ? clientName === 'gemini'
+            ? 'AfterAgent'
+            : 'Stop'
+          : clientName === 'gemini'
+            ? 'BeforeTool'
+            : 'PreToolUse';
+
+  if (mode() === MODE_OFF) process.exit(0);
+
+  // A process this package started itself -- the tool-catalog probe or the
+  // loop guard's judge -- is not the person's session: nothing to optimize,
+  // learn from or announce there, and recursing into it would fork forever.
+  if (process.env.TOKEN_OPTIMIZER_SIDECALL) {
+    if (event === 'stop') emit({});
+    process.exit(0);
+  }
+
+  const features = featuresForArm();
+
+  // THE LOOP GUARD, on a failed tool call. Claude Code reports a failed call --
+  // a non-zero exit, a tool error -- through PostToolUseFailure, never through
+  // PostToolUse, so this is the only place a failing loop is visible as it
+  // happens. Its answer must name the event it answers or the host drops it.
+  if (event === 'post-tool-failure') {
+    const input = await readPayloadResult({ timeoutMs: 1000 });
+    const raw = input.payload || {};
+    invocation.bind(raw, null, input.bytes);
+    if (input.status !== 'ok') invocation.noteInput(input.status, input.bytes);
+    const sessionId = raw.session_id ?? raw.sessionId ?? 'default';
+    const cwd = raw.cwd || process.cwd();
+    try {
+      const result = await onToolFailure({
+        dir: learnedLocation(cwd).dir,
+        sessionId,
+        transcriptPath: raw.transcript_path ?? raw.transcriptPath ?? null,
+        payload: raw,
+      });
+      if (result) {
+        const output = {};
+        if (result.additionalContext) {
+          output.hookSpecificOutput = {
+            hookEventName: 'PostToolUseFailure',
+            additionalContext: result.additionalContext,
+          };
+        }
+        if (result.systemMessage) output.systemMessage = result.systemMessage;
+        emit(output);
+      }
+    } catch {
+      // The guard is advice; a defect in it must never touch the session.
+    }
+    process.exit(0);
+  }
+  if (event === 'pre-invocation' && isAntigravity) {
+    const input = await readPayloadResult({ timeoutMs: 250 });
+    const raw = input.payload || {};
+    invocation.bind(raw, null, input.bytes);
+    if (input.status !== 'ok') invocation.noteInput(input.status, input.bytes);
+    if (features.routing || features.retrieval || features.harvest) {
+      const sessionId = raw.session_id ?? raw.sessionId ?? raw.conversation_id ?? raw.conversationId ?? 'default';
+      const scope = stateScope(raw, raw.transcript_path ?? raw.transcriptPath ?? null);
+      const state = loadState(sessionId, scope);
+      if (typeof state.pendingHarvest === 'string' && state.pendingHarvest) {
+        emit({ injectSteps: [{ ephemeralMessage: state.pendingHarvest }] });
+        state.pendingHarvest = null;
+        saveState(sessionId, state, scope);
+      }
+    }
+    process.exit(0);
+  }
+
+
+  if (event === 'session-start') {
+    // Some hook hosts invoke SessionStart without closing stdin. Waiting the
+    // full pre-tool timeout would turn optional context into a five-second
+    // startup tax; lifecycle payloads are tiny and arrive immediately when
+    // the host supplies one.
+    const input = await readPayloadResult({ timeoutMs: 250 });
+    const raw = input.payload || {};
+    invocation.bind(raw, null, input.bytes);
+    if (input.status !== 'ok') invocation.noteInput(input.status, input.bytes);
+    const cwd = (Array.isArray(raw.workspacePaths) ? raw.workspacePaths[0] : undefined) || raw.cwd || raw.working_directory || process.cwd();
+    const root = projectRootFor(join(cwd, '__session__'), cwd);
+    // Finish a store migration a crash interrupted, or a refused one whose
+    // blockers may have cleared, before the store is used (#542). BEFORE the
+    // feature gate: a store left fenced must be recovered in every arm, the
+    // baseline included -- which then exits without saying so, because the
+    // baseline arm injects nothing.
+    const migrated = resumeIfDue(root || cwd);
+    if (!features.routing && !features.retrieval && !features.harvest)
+      process.exit(0);
+    const toolEvidence = optimizerToolEvidence(raw);
+    const sessionId = raw.session_id ?? raw.sessionId ?? raw.conversation_id ?? raw.conversationId;
+    let deferredToolContext = null;
+    if (sessionId) {
+      const scope = stateScope(raw, raw.transcript_path ?? raw.transcriptPath ?? null);
+      const state = loadState(sessionId, scope);
+      if (toolEvidence.proven) rememberOptimizerTools(state, toolEvidence);
+      if (typeof state.pendingHarvest === 'string' && state.pendingHarvest) {
+        deferredToolContext = state.pendingHarvest;
+        state.pendingHarvest = null;
+      }
+      if (toolEvidence.proven || deferredToolContext) saveState(sessionId, state, scope);
+    }
+    // ASSEMBLED IN CACHE ORDER, not in whatever order this function happens to
+    // discover the blocks. Everything emitted here sits near the FRONT of the
+    // prompt prefix, and a prefix cache invalidates from the first differing
+    // byte onward -- so the block that changes most often has to sit LAST, or it
+    // re-prices every block behind it on every session. `sessionContext` sorts
+    // by the declared volatility; inject.mjs records how each number was
+    // assigned and why.
+    const blocks = [
+      {
+        id: 'policy',
+        volatility: 0,
+        text: policyText(
+          client.canDeny,
+          toolEvidence.names,
+          toolEvidence.proven
+        ),
+      },
+    ];
+    const crashed = serverCrashNotice();
+    if (crashed) blocks.push({ id: 'server-crash', volatility: 0, text: crashed });
+    const oldNode = nodeFloorNotice();
+    if (oldNode) blocks.push({ id: 'node-floor', volatility: 0, text: oldNode });
+    // The floor notice already names the likeliest cause of slow hooks.
+    const slowHooks = oldNode ? null : takeSlowHookNotice();
+    if (slowHooks) blocks.push({ id: 'hook-latency', volatility: 4, text: slowHooks });
+    // Reduce at the source before anything runs: quiet defaults for the tools
+    // the agent will call, through the env file Claude Code sources for every
+    // later Bash call (quiet-env.mjs). A no-op for clients without one.
+    applyQuietEnv();
+    if (migrated) blocks.push({ id: 'storage', volatility: 4, text: migrated });
+    if (deferredToolContext) blocks.push({ id: 'deferred-tool-context', volatility: 4, text: deferredToolContext });
+    registerProject({ root, graphDir: wikiDir(root), client: clientName });
+    if (features.retrieval) {
+      try {
+        const dir = wikiDir(root);
+        // SessionStart needs hashes and claims, not stored file bodies. Parsing
+        // the snapshot sidecar here would make startup scale with repository
+        // history even though this compact index never renders a diff.
+        const graph = load(dir);
+        const episode = episodeMeta({ client: clientName, raw });
+        const rules = standingRules(dir, graph, { episode });
+        if (rules) blocks.push({ id: 'standing', volatility: 1, text: rules });
+        const relevantFindingIds = relevantFindingIdsForContext(
+          graph,
+          sessionTaskContext(raw)
+        );
+        const index = sessionIndex(dir, graph, {
+          episode,
+          relevantFindingIds,
+        });
+        if (index) blocks.push({ id: 'index', volatility: 2, text: index });
+      } catch {
+        // Retrieval is optional context; the policy must still reach the model.
+      }
+    }
+    // EVERY CLASS OF INJECTED CONTEXT HAS TO EARN ITS PLACE (injection-holdout.mjs):
+    // a small share of sessions withholds one class so its effect on session
+    // cost is measured, and a class shown to cost more than it saves is gated.
+    // Claude Code only: it is the client whose transcripts the background fold
+    // reads, so it is the only one where a withheld class buys a measurement.
+    // Withholding anywhere else would cost context and learn nothing.
+    const learned = learnedLocation(cwd);
+    const served = applyHoldout(blocks.map((block) => ({ ...block, cls: block.id })), {
+      dir: clientName === 'claude-code' ? learned.dir : null,
+      sessionId,
+    });
+    let output = contextOutput(client, eventName, sessionContext(served));
+    // LEARNED TOOL PRUNING (toolprune.mjs): finished sessions are folded in the
+    // background, and what changed is said to the PERSON, once, as a visible
+    // line -- not to the model, whose context it would only cost.
+    const transcriptPath = raw.transcript_path ?? raw.transcriptPath ?? null;
+    if (clientName === 'claude-code' && sessionId && transcriptPath) {
+      scheduleFold({ dir: learned.dir, root: learned.root, transcriptPath, sessionId });
+      const notice = takeNotice(learned.dir);
+      if (notice) output = { ...(output || {}), systemMessage: notice };
+    }
+    // Codex has capability switches rather than a per-tool deny list
+    // (codexprune.mjs); its rollouts are read from ~/.codex/sessions.
+    if (clientName === 'codex') {
+      scheduleCodexFold({ dir: learned.dir, root: learned.root });
+      const notice = takeCodexNotice(learned.dir);
+      if (notice) output = { ...(output || {}), systemMessage: notice };
+    }
+    if (output) emit(output);
+    process.exit(0);
+  }
+
+  const input = await readPayloadResult();
+  const raw = input.payload;
+  if (!raw) {
+    invocation.noteInput(input.status, input.bytes);
+    // Stop requires JSON on stdout even when it has nothing to add.
+    if (event === 'stop') emit({});
+    process.exit(0);
+  }
+
+  if (event === 'stop') {
+    // Stop has no normalized tool payload, but it is still a fully formed hook
+    // invocation. Bind its lifecycle identifiers so successful completions do
+    // not look like an input reader that never ran in cross-client telemetry.
+    invocation.bind(raw, null, input.bytes);
+    const sessionId =
+      raw.session_id ?? raw.sessionId ?? raw.conversation_id ?? raw.conversationId ?? 'default';
+    // The transcript FILE, for archiving and derivation; the state scope adds
+    // the agent id, which is not part of any path.
+    const transcriptPath = raw.transcript_path ?? raw.transcriptPath ?? null;
+    const agentScope = stateScope(raw, transcriptPath);
+    const state = loadState(sessionId, agentScope);
+    gradeObservedTools(state, event, raw, raw);
+    const toolEvidence = optimizerToolsForHook(raw, state);
+    rememberOptimizerTools(state, toolEvidence);
+    const episode = episodeMeta({ client: clientName, raw });
+    // Hoisted out of the try below, because the harvest needs the same resolved
+    // directory and resolving it twice is how two halves of one hook end up
+    // reasoning about different projects.
+    const cwd = (Array.isArray(raw.workspacePaths) ? raw.workspacePaths[0] : undefined) || raw.cwd || raw.working_directory || process.cwd();
+    try {
+      const dir = wikiDir(projectRootFor(join(cwd, '__session__'), cwd));
+      recordEpisodeOutcome(dir, {
+        ...episode,
+        status: 'completed',
+        ...usageFrom(raw),
+      });
+    } catch {
+      // Evidence is best effort and must never stop a session from finishing.
+    }
+    try {
+      // THE LOOP GUARD'S ENVELOPE: a turn that ended well teaches it how long a
+      // good turn runs in this repository (loopguard.mjs).
+      if (transcriptPath) {
+        recordTurnEnd(learnedLocation(cwd).dir, transcriptPath);
+      }
+    } catch {
+      // A turn that cannot be measured is simply not learned from.
+    }
+    // THE LIVE RESTORE (toolprune.mjs, LIVE_RESTORE). A pruned Agent cannot be
+    // reached for, so a person who asks for agents would be told there are
+    // none. Claude Code only: the turn's prompt is read from its transcript, and
+    // only when such a prune is applied, so an ordinary Stop pays one small
+    // JSON read. Never on a continuation, so it cannot loop.
+    let liveRestore = null;
+    if (clientName === 'claude-code' && transcriptPath && !raw.stop_hook_active && !raw.stopHookActive) {
+      try {
+        const learned = learnedLocation(cwd);
+        if (hasLiveRestorable(learned.dir)) {
+          const restored = restoreForPrompt({
+            dir: learned.dir,
+            root: learned.root,
+            prompt: turnEvidence(transcriptPath)?.opening,
+          });
+          if (restored.length) {
+            liveRestore = `The ${restored.join(' and ')} tool was pruned in this repository for disuse and is now restored, because this request asks for it. If the request needs it and the work is not done, continue with it now; otherwise just say the work is done.`;
+          }
+        }
+      } catch {
+        // A restore that fails leaves the prune; the fold restores on a typed name.
+      }
+    }
+    try {
+      // THE KEEP-WARM FEEDBACK ARM, at the boundary where a turn has just
+      // ended -- which is the only place the arrival question can be answered.
+      // Every refresh whose TTL has since elapsed is scored here as used or
+      // unused; anything the log cannot settle is left unscored rather than
+      // recorded as a miss, because an absent signal is not a miss.
+      //
+      // Nothing in this repository issues a refresh today -- cache_audit only
+      // recommends one -- so this scores nothing, and what it costs while
+      // dormant is one readBalance: median 70 ms on this machine's 3.5 MB log,
+      // against derive's 71-111 ms a few lines below on the same path. The
+      // firehose is read for ARRIVALS only if an unscored refresh exists, so
+      // the dormant case never pays for that. The moment an issuer exists, the
+      // decision starts learning with no second wiring change.
+      const cwd = (Array.isArray(raw.workspacePaths) ? raw.workspacePaths[0] : undefined) || raw.cwd || raw.working_directory || process.cwd();
+      const dir = wikiDir(projectRootFor(join(cwd, '__session__'), cwd));
+      scoreRefreshes(dir);
+    } catch {
+      // A refresh that cannot be scored costs a measurement, not a session.
+    }
+    try {
+      // THE ARCHIVE, WRITTEN BEFORE ANYTHING READS IT.
+      //
+      // This was lost rather than retired. `src/plugin/hooks/stop-harvest.mjs` called
+      // `archive()` at Stop, and #300 replaced that entry in `hooks.json` with the
+      // generated `stop.mjs`, which routes here -- so on Claude Code no session has
+      // been archived since. Nothing failed loudly: `readArchive` simply returns an
+      // empty list, so `derive`'s correction detector fell through to the live
+      // transcript (present only for a client that reports one) and `lessons.mjs`
+      // lost the only corpus it can verify a verbatim quote against, which is the
+      // single test that grants a feedback finding human origin.
+      //
+      // BEFORE `derive`, deliberately: the correction detector reads the archive
+      // first and treats the live transcript as the fallback, and the archive is
+      // the copy that survives into later sessions.
+      const cwd = (Array.isArray(raw.workspacePaths) ? raw.workspacePaths[0] : undefined) || raw.cwd || raw.working_directory || process.cwd();
+      const dir = wikiDir(projectRootFor(join(cwd, '__session__'), cwd));
+      if (transcriptPath) archive(dir, transcriptPath, { sessionId });
+    } catch {
+      // The archive is a record, not a result. A session still ends.
+    }
+    try {
+      // ZERO-COST DERIVATION, on every client, with no credential. The semantic
+      // harvest below needs an API key, so on a machine without one the graph
+      // accumulates structure and no verdicts at all. These detectors read only
+      // what is already on disk and send nothing anywhere.
+      //
+      // COUNTS are recorded rather than the candidates, and BOTH counts: how
+      // many findings a session's own evidence supports, and how many of them
+      // survived the storage budget and the anchor discipline. The gap between
+      // the two is the number that says whether the bound is doing anything --
+      // one figure alone cannot distinguish "nothing to derive" from "derived
+      // plenty and stored none of it".
+      const cwd = (Array.isArray(raw.workspacePaths) ? raw.workspacePaths[0] : undefined) || raw.cwd || raw.working_directory || process.cwd();
+      // WHERE THE WORK HAPPENED, NOT WHERE THE CLIENT WAS LAUNCHED.
+      //
+      // `projectRootFor` on a cwd with no VCS marker -- a home directory, which
+      // is how this client is commonly started -- returns the synthetic fallback
+      // `~/.token-optimizer/unrooted`. That is not null, so every `if
+      // (projectRoot)` gate downstream passes, and `projectAnchor` then hands
+      // back the directory itself because the fallback holds no project marker.
+      // `writeHarvested` resolves anchors through `indexFile`, which returns
+      // null for a directory, and the finding is refused as unanchorable.
+      //
+      // Measured consequence on this machine: 937 derive runs, 8 candidates,
+      // ZERO findings written, beside 2,965 symbol nodes in the same graph. The
+      // router already keys capture on where the FILE lives rather than on the
+      // session's cwd; this applies that rule to derivation too, and falls back
+      // to the cwd answer when the session touched nothing resolvable.
+      //
+      // The evidence is gathered by `sessionActivity`, NOT from the cwd graph
+      // alone: capture keyed on the file's project means an unrooted session's
+      // own activity was written into the graphs of the projects it touched.
+      // Reading only the unrooted graph found 12,376 file anchors and not one
+      // under a repository, so the inference was inert in precisely the case it
+      // was written for.
+      const cwdRoot = projectRootFor(join(cwd, '__session__'), cwd);
+      let projectRoot = cwdRoot;
+      try {
+        projectRoot =
+          projectRootFromActivity(sessionActivity(cwdRoot), {
+            resolve: (anchor) => projectRootFor(anchor, cwd),
+            cwd,
+            sessionId,
+          }) || cwdRoot;
+      } catch {
+        // Inferring the project is an improvement, never a precondition.
+      }
+      const dir = wikiDir(projectRoot);
+      const derived = derive(dir, {
+        sessionId,
+        projectRoot,
+        transcriptPath,
+        // The hook payload's own identity, not a value a model typed.
+        authoritativeSessionId: sessionId,
+      });
+      record(dir, {
+        kind: 'derive',
+        sessionId,
+        candidates: derived.candidates.length,
+        observations: derived.observations.length,
+        written: derived.written.length,
+        // Whether a locate detector would have anything to catch: `named` is
+        // searches carrying an identifier, `gap` the subset the symbol index
+        // cannot answer. Recorded rather than acted on -- a `gap` that stays
+        // near zero says the detector written for it should stay unmerged.
+        searchesNamed: derived.searchGap?.named ?? 0,
+        searchGap: derived.searchGap?.gap ?? 0,
+      });
+    } catch {
+      // A detector failing must never cost a user the end of their session.
+    }
+    const alreadyHarvested =
+      Number(state.edits || 0) > 0 &&
+      Number(state.harvestedEdits || 0) >= Number(state.edits || 0);
+    const prompt =
+      features.harvest && toolEvidence.names.has('wiki_write')
+        ? semanticHarvestPrompt({
+            edits: state.edits,
+            files: state.editedFiles,
+            model: raw.model,
+            // CLAUDE CODE ONLY: turnEvidence reads Claude Code's transcript
+            // format. Another client's transcript could parse as a turn with
+            // no failures while its failures use another shape, which would
+            // suppress the prompt there (review on #520). Null keeps it.
+            turn: (() => {
+              if (clientName !== 'claude-code') return null;
+              try {
+                const turn = turnEvidence(transcriptPath);
+                return turn && { ...turn, corrected: CORRECTION_OPENER.test(turn.opening) };
+              } catch {
+                return null;
+              }
+            })(),
+            stopHookActive:
+              raw.stop_hook_active === true ||
+              raw.stopHookActive === true ||
+              alreadyHarvested ||
+              (clientName === 'cursor' && Number(raw.loop_count || 0) > 0),
+            deferred: harvestDeferred(clientName),
+          })
+        : null;
+    // NO TURN OF ITS OWN (user decision 2026-10-21). A blocking Stop continues
+    // the turn, and that continuation re-reads the whole context: 11 of them in
+    // one session at ~344k average context. In Claude Code the nudge is kept and
+    // delivered with the next turn's first tool result instead, a call that is
+    // being made anyway. TOKEN_OPTIMIZER_HARVEST_TURN=1 restores the old turn.
+    let stopPrompt = prompt;
+    if (
+      !stopPrompt &&
+      client.stopDecision &&
+      !raw.stop_hook_active &&
+      !raw.stopHookActive &&
+      !(clientName === 'cursor' && Number(raw.loop_count ?? raw.loopCount ?? 0) > 0)
+    ) {
+      const paced = nextPacedContinuation({ cwd, state, client: clientName });
+      if (paced) {
+        stopPrompt = paced;
+        saveState(sessionId, state, agentScope);
+      }
+    }
+    if (prompt) {
+      state.harvestedEdits = Number(state.edits || 0);
+      if (harvestDeferred(clientName)) {
+        state.pendingHarvest = prompt;
+        stopPrompt = null;
+      }
+      saveState(sessionId, state, agentScope);
+    }
+    // THE OUT-OF-BAND HARVEST, which no client was running.
+    //
+    // The in-band `prompt` above asks the MODEL to call `wiki_write`, and the
+    // session pays for summarising itself -- the exact cost the design says the
+    // harvest exists to avoid ("out-of-band, so the session doing the work never
+    // pays for the harvest"). The out-of-band half lived in a Claude Code hook
+    // that #300 unregistered, and nothing replaced it, so on every client the
+    // transcript was never archived, the worker never spawned, refusals were
+    // never detected, and the notice explaining why no findings exist was never
+    // shown. Awaited because it must finish before the exit below; it spawns a
+    // DETACHED worker and returns immediately, so Stop is not delayed by a model
+    // call.
+    let harvestNotice = null;
+    try {
+      // NORMALIZED, NOT RAW. The identifiers were resolved a few lines up
+      // through every alias a host might use -- `sessionId`,
+      // `conversation_id`, `working_directory` -- and handing `raw` straight
+      // over threw that away: runStopHarvest reads `session_id` and `cwd`
+      // only, so on a client that sends an alias the session id came back
+      // undefined and the archive root fell back to `process.cwd()`. That
+      // shares the once-per-session notice and the debounce marker across
+      // every session, and files the transcript under whatever directory the
+      // hook happened to start in.
+      harvestNotice = await runStopHarvest({
+        ...raw,
+        session_id: sessionId,
+        cwd,
+        transcript_path: raw.transcript_path ?? raw.transcriptPath ?? null,
+        // So the harvest is not spent on a turn with nothing in it. The
+        // debounce marks the session as soon as a harvest starts, and on a
+        // session shorter than the interval that first mark is also the last.
+        edits: Number(state.edits || 0),
+      });
+    } catch {
+      // The harvest is a side effect of ending a session. It must never stop
+      // one from ending.
+    }
+
+    // After the harvest's own deferral, which would otherwise drop it.
+    if (liveRestore && client.stopDecision) stopPrompt = stopPrompt ? `${liveRestore}\n\n${stopPrompt}` : liveRestore;
+    if (stopPrompt && client.stopStyle === 'followup') {
+      emit({ followup_message: stopPrompt, ...(harvestNotice ? { systemMessage: harvestNotice } : {}) });
+    } else {
+      emit({
+        ...(stopPrompt ? { decision: client.stopDecision, reason: stopPrompt } : isAntigravity ? { decision: 'allow' } : {}),
+        ...(harvestNotice ? { systemMessage: harvestNotice } : {}),
+      });
+    }
+    process.exit(0);
+  }
+
+  if (
+    clientName === 'cline' &&
+    event === 'post-tool' &&
+    raw.postToolUse?.success === false
+  )
+    process.exit(0);
+  const payload = normalizePayload(
+    normalizeClientPayload(clientName, event, raw)
+  );
+  invocation.bind(raw, payload, input.bytes);
+  if (!payload.tool_name) {
+    // An optimizer tool routing has no alias for (wiki_write, wiki_query,
+    // optimize_session, ...) still answered or failed a call; without this the
+    // exit below dropped it (#484). This serves the clients that send every
+    // post-tool event. Claude Code's matcher never sends these at all, so there
+    // the transcript reader records the call instead.
+    if (event === 'post-tool' && optimizerToolName(hostToolName(raw))) {
+      const scope = stateScope(raw, payload.transcript_path || null);
+      const graded = loadState(payload.session_id, scope);
+      gradeObservedTools(graded, event, payload, raw);
+      saveState(payload.session_id, graded, scope);
+    }
+    if (event === 'pre-tool' && isAntigravity) {
+      emit({ decision: 'allow' });
+    }
+    process.exit(0);
+  }
+  const episode = episodeMeta({ client: clientName, raw, payload });
+
+  // THE AGENT, not just the session -- the same scope the Claude Code router
+  // applies. Subagents inherit the parent's session id, so keying state on the
+  // session alone lets one agent's reads silence another's: the router's comment
+  // records it observed live, an agent refusing a file it had never opened
+  // because a sibling had read it. That fix was never carried across to the four
+  // clients this adapter serves. `transcript_path` is per agent; absent, this
+  // falls back to session scope, which is right for a main session's own calls.
+  const agentScope = stateScope(raw, payload.transcript_path || null);
+  const state = loadState(payload.session_id, agentScope);
+  // GRADE THE CALL THAT JUST COMPLETED, BEFORE ANYTHING READS THE INVENTORY.
+  //
+  // A post-tool event is the only moment the hooks learn whether a declared
+  // optimizer tool exists: a host that never registered the server says so
+  // nowhere else (#469). Recording it above `optimizerToolsForHook` is what
+  // makes the same hook run act on it -- otherwise the run that was just told
+  // "no such tool" recommends that tool again on its way out, which is the
+  // loop the reporter actually saw.
+  gradeObservedTools(state, event, payload, raw);
+  const toolEvidence = optimizerToolsForHook(raw, state);
+  rememberOptimizerTools(state, toolEvidence);
+  let recordingContext = null;
+
+  // Count mutations AFTER Codex reports them, not in PreToolUse where a denied
+  // or failed apply_patch has not changed anything. Codex carries an
+  // apply_patch body under tool_input.command, so recover the file headers from
+  // that body when there is no ordinary file_path field.
+  if (
+    event === 'post-tool' &&
+    isSubstantive(payload.tool_name) &&
+    mutationSucceeded(clientName, raw)
+  ) {
+    try {
+      const edited = [];
+      if (payload.tool_input.file_path)
+        edited.push(payload.tool_input.file_path);
+      const patch = payload.tool_input.command;
+      if (typeof patch === 'string') {
+        for (const match of patch.matchAll(
+          /^\*\*\* (?:Add|Update|Delete) File:\s*(.+)$/gm
+        )) {
+          const candidate = match[1].trim().replace(/^['"]|['"]$/g, '');
+          if (candidate)
+            edited.push(resolve(payload.cwd || process.cwd(), candidate));
+        }
+      }
+
+      state.edits = (state.edits || 0) + 1;
+      state.editedFiles = [...edited, ...(state.editedFiles || [])]
+        .filter(Boolean)
+        .slice(0, 20);
+      const anchor =
+        state.editedFiles[0] ||
+        join(payload.cwd || process.cwd(), '__recording__');
+      const dir = wikiDir(projectRootFor(anchor, payload.cwd));
+      recordingContext =
+        features.harvest && toolEvidence.names.has('wiki_write')
+          ? recordingNudge(dir, {
+              state,
+              edits: state.edits,
+              files: state.editedFiles,
+            })
+          : null;
+      if (recordingContext) state.recordingNudged = true;
+    } catch {
+      // Recording pressure is an optimization and must never cost a tool call.
+    }
+  }
+  if (event === 'post-tool') {
+    try {
+      const command = payload.tool_input?.command;
+      const touched = touchedFiles(payload);
+      const anchor = command
+        ? String(command).slice(0, 120)
+        : touched[0]?.path || payload.tool_input?.file_path || '';
+      const root = command
+        ? commandProjectRoot(payload, payload.cwd)
+        : projectRootFor(
+            anchor || join(payload.cwd || process.cwd(), '__tool__'),
+            payload.cwd
+          );
+      if (pacerEnabled()) recordWindowActivity({ calls: 1, edits: isSubstantive(payload.tool_name) ? 1 : 0 });
+      if (
+        isVerificationCommand(command) &&
+        verificationSucceeded(raw)
+      ) {
+        state.verifiedEdits = Number(state.edits || 0);
+      }
+      recordToolOutcome(wikiDir(root), {
+        ...episode,
+        surface: command ? 'command' : 'file',
+        anchor,
+        toolName: payload.tool_name,
+        success: toolSucceeded(raw),
+        // The two fields a boolean cannot carry: which KIND of failure this
+        // was. Read through the same normalisers as `success`, never off `raw`
+        // at this call site.
+        output: outputFrom(raw),
+        exit: exitFrom(raw),
+        durationMs:
+          Number(
+            raw.duration_ms ?? raw.durationMs ?? raw.elapsed_ms ?? raw.elapsedMs
+          ) || null,
+        ...usageFrom(raw),
+      });
+    } catch {
+      // Causal tracing is fail-open like every other hook optimization.
+    }
+
+    // EAGER INVALIDATION, finally connected. `invalidateOnWrite` has existed,
+    // been tested and been described in staleness.mjs's own header since
+    // staleness landed, and its only reference in shipped code was a COMMENT in
+    // the PreToolUse router -- so the path that header calls load-bearing had
+    // never run once in production. It matters most for exactly this event: the
+    // lazy check compares the anchor's stored hash against disk, and the
+    // capture below re-points that hash at the bytes this write just produced,
+    // so a write the session performed ITSELF is invisible to lazy staleness.
+    //
+    // QUEUED, NOT APPLIED. Applying needs the graph, and loading a megabyte of
+    // JSONL on the return path of every write is what this shape exists to
+    // avoid. The next graph read drains it before serving anything.
+    try {
+      if (mutationSucceeded(clientName, raw)) {
+        for (const evidence of observedWrites(payload, raw)) {
+          // THE SAME DIRECTORY THE GRAPH ITSELF USES. `observeAndInject` keys
+          // every write on `wikiDir(projectRootFor(path, payload.cwd))`, and a
+          // queue written anywhere else is a queue nothing ever drains.
+          queueInvalidation(
+            wikiDir(projectRootFor(evidence.path, payload.cwd)),
+            evidence
+          );
+        }
+      }
+    } catch {
+      // Bookkeeping for a call that already completed. Never let it cost one.
+    }
+  }
+
+  const ucrGuardVerdict =
+    event === 'pre-tool'
+      ? evaluateUcrGuards(
+          payload,
+          touchedFiles(payload).map((item) => item.path)
+        )
+      : null;
+  const verdict =
+    ucrGuardVerdict ||
+    (features.routing ? decide(payload, state, toolEvidence.names) : null);
+  const repeat =
+    verdict && event === 'pre-tool' && !verdict.persistent
+      ? alreadyDenied(state, verdict.key)
+      : false;
+
+  if (event === 'pre-tool') {
+    // This agent's position in its session, which prices an outline.
+    state.toolCalls = (Number(state.toolCalls) || 0) + 1;
+  }
+
+  // A WHOLE-FILE READ IS ANSWERED WITH ITS OUTLINE, for every client whose
+  // PreToolUse can rewrite the call (issue #478). This used to exist only in the
+  // Claude Code router, so no other client was ever outlined. It comes before
+  // the refusal: a rewritten call goes through, so there is no turn to pay.
+  // NEVER PAST A UCR GUARD. A guard's verdict is a refusal that must stand; an
+  // outline rewrite allows the call, so a guarded read would go through.
+  if (event === 'pre-tool' && client.inputRewrite && !ucrGuardVerdict) {
+    const rewrite = outlineRewrite(raw, payload, state, clientName);
+    if (rewrite) {
+      const told = verdict && adviseOnce(state, verdict) ? verdict.reason : null;
+      remember(payload, state);
+      saveState(payload.session_id, state, agentScope);
+      const advise = [told, rewrite.notice].filter(Boolean).join('\n\n');
+      if (client.inputRewrite === 'antigravity-overwrite' || Boolean(raw?.toolCall)) {
+        if (advise) {
+          state.pendingHarvest = [state.pendingHarvest, advise].filter(Boolean).join('\n\n');
+          saveState(payload.session_id, state, agentScope);
+        }
+        emit({
+          decision: 'allow',
+          overwrite: rewrite.input,
+        });
+      } else {
+        emit({
+          hookSpecificOutput: {
+            hookEventName: eventName,
+            // Codex applies updatedInput only alongside an explicit allow.
+            permissionDecision: 'allow',
+            updatedInput: rewrite.input,
+            additionalContext: advise,
+          },
+        });
+      }
+      process.exit(0);
+    }
+  }
+
+  // A post-tool hook has already paid for the call, so a denial would cost a
+  // turn and save nothing. It advises about the NEXT one instead.
+  const canRefuse = Boolean(
+    verdict &&
+      client.canDeny &&
+      event === 'pre-tool' &&
+      !repeat &&
+      refusalsEnabled() &&
+      // Codex code mode presents orchestration as one outer `functions.exec`.
+      // Refuse only when it contains one shell call; a multi-operation envelope
+      // can include unrelated safe work that must not be discarded wholesale.
+      !(
+        clientName === 'codex' &&
+        payload.tool_input?.code_mode_envelope &&
+        !payload.tool_input?.code_mode_single_shell_command
+      )
+  );
+
+  if (canRefuse) {
+    remember(payload, state);
+    saveState(payload.session_id, state, agentScope);
+    // Every client's refusal carries the off switch, for the same reason Claude
+    // Code's does: enforcement that hides its own disable is coercive.
+    if (client.denyStyle === 'top-level') {
+      invocation.block('policy_denied');
+      emit({ decision: 'deny', reason: withEscape(verdict.reason) });
+    } else if (client.denyStyle === 'top-level-permission') {
+      invocation.block('policy_denied');
+      emit({
+        permissionDecision: 'deny',
+        permissionDecisionReason: withEscape(verdict.reason),
+      });
+    } else if (client.denyStyle === 'cline') {
+      invocation.block('policy_denied');
+      emit({
+        cancel: true,
+        contextModification: '',
+        errorMessage: withEscape(verdict.reason),
+      });
+    } else if (client.denyStyle === 'cursor') {
+      invocation.block('policy_denied');
+      emit({
+        continue: true,
+        permission: 'deny',
+        agent_message: withEscape(verdict.reason),
+        user_message:
+          'Token Optimizer redirected an expensive built-in operation.',
+      });
+    } else if (client.denyStyle === 'exit-2') {
+      invocation.block('policy_denied');
+      process.stderr.write(withEscape(verdict.reason));
+      process.exit(2);
+    } else {
+      invocation.block('policy_denied');
+      emit({
+        hookSpecificOutput: {
+          hookEventName: eventName,
+          permissionDecision: 'deny',
+          permissionDecisionReason: withEscape(verdict.reason),
+        },
+      });
+    }
+    process.exit(0);
+  }
+
+  // This call either is about to run, has already run, or is the bounded repeat
+  // escape after one refusal. All three are real observations. In particular,
+  // a post-tool verdict must not skip measurement merely because the same call
+  // would have been denied at pre-tool time -- that was why Gemini's large reads
+  // produced advice but zero metrics.
+  remember(payload, state);
+  let graphContext = null;
+  try {
+    // Computed HERE because clientName, event and raw are in scope here and
+    // not inside observeAndInject -- a first attempt referenced them there and
+    // would have thrown at runtime on the one path that matters.
+    const authoredWrite =
+      event === 'post-tool' &&
+      new Set(['Edit', 'MultiEdit', 'Write']).has(String(payload.tool_name || '')) &&
+      mutationSucceeded(clientName, raw);
+    graphContext = observeAndInject(
+      payload,
+      state,
+      episode,
+      features,
+      authoredWrite
+    );
+  } catch {
+    // Delivery is an optimization. Fail open.
+  }
+  // THE RESULT ITSELF, COMPACTED BEFORE THE MODEL READS IT (output-compact.mjs).
+  // Claude Code only: its PostToolUse `updatedToolOutput` replaces the result,
+  // and no other client's post-tool event can. The full output stays one Read
+  // away in the artifact store.
+  let updatedToolOutput = null;
+  if (
+    event === 'post-tool' &&
+    clientName === 'claude-code' &&
+    features.routing &&
+    outputCompactEnabled()
+  ) {
+    try {
+      const cwd = payload.cwd || process.cwd();
+      const dir = wikiDir(projectRootFor(join(cwd, '__tool__'), cwd));
+      const tool = String(payload.tool_name || '');
+      // A REPEAT FIRST (repeats.mjs): what the agent already has a few calls
+      // back is not sent again. Recorded on every call, rewritten or not.
+      if (repeatsEnabled())
+        updatedToolOutput = repeatResponse({
+          tool,
+          input: payload.tool_input,
+          response: raw.tool_response,
+          cwd,
+          call: Number(state.toolCalls) || 0,
+          state,
+          store: (text) => {
+            const ref = capture(dir, text, { tool, sessionId: payload.session_id, shape: 'repeat' });
+            return ref ? artifactPath(dir, ref) : null;
+          },
+        });
+      // THE SIBLING BLACKBOARD (blackboard.mjs): every read-only result, for
+      // the agents of this session that have not started yet.
+      const boardText = typeof raw.tool_response?.stdout === 'string'
+        ? raw.tool_response.stdout
+        : typeof raw.tool_response?.file?.content === 'string'
+          ? raw.tool_response.file.content
+          : outputFrom(raw);
+      if ((tool === 'Bash' || tool === 'PowerShell') && typeof boardText === 'string') {
+        const ref = boardText.length > 1000 ? capture(dir, boardText, { tool, sessionId: payload.session_id, shape: 'board' }) : null;
+        recordOnBoard({
+          sessionId: payload.session_id,
+          agent: String(raw.agent_id ?? raw.agentId ?? ''),
+          command: payload.tool_input?.command,
+          cwd,
+          output: boardText,
+          artifact: ref ? artifactPath(dir, ref) : null,
+        });
+      } else if (tool === 'Read' && typeof boardText === 'string' && boardText.length > 1000) {
+        const ref = capture(dir, boardText, { tool, sessionId: payload.session_id, shape: 'board-read' });
+        recordReadOnBoard({
+          sessionId: payload.session_id,
+          agent: String(raw.agent_id ?? raw.agentId ?? ''),
+          filePath: payload.tool_input?.file_path,
+          offset: payload.tool_input?.offset,
+          limit: payload.tool_input?.limit,
+          cwd,
+          output: boardText,
+          artifact: ref ? artifactPath(dir, ref) : null,
+        });
+      }
+      // A session pinned to its own version by a state-schema change still
+      // compacts with the installed runtime's compactor: it is pure, so the
+      // newer one is safe to borrow (runtime-switch.mjs PURE_MODULES).
+      const compact =
+        typeof globalThis.__tokenOptimizerPure?.compactToolResponse === 'function'
+          ? globalThis.__tokenOptimizerPure.compactToolResponse
+          : compactToolResponse;
+      if (!updatedToolOutput)
+        updatedToolOutput = compact({
+          tool,
+          input: payload.tool_input,
+          response: raw.tool_response,
+          dir,
+          sessionId: payload.session_id,
+        });
+    } catch {
+      updatedToolOutput = null;
+    }
+  }
+  // A verdict that reached this point is advice, not a refusal: the call runs (or
+  // has already run) either way. Say it once per session per kind -- see
+  // adviseOnce -- rather than on every matching call. Not when the output was
+  // just compacted: "that search was unbounded, use smart_grep" after the
+  // result is already bounded is advice about a cost nobody paid.
+  const advisory =
+    verdict && !updatedToolOutput && adviseOnce(state, verdict) ? verdict.reason : null;
+  // THE RECORDING GUIDANCE, ONCE, AFTER REAL WORK (#357, M5). It used to ride in
+  // every SessionStart, where it is the largest fixed cost a small session pays
+  // and buys nothing until there is something to record. The first edit is the
+  // clearest sign there will be; GUIDANCE_AFTER_CALLS tool calls is the fallback
+  // for an investigation that edits nothing but still works things out.
+  //
+  // Only where it can arrive and is wanted: an experiment arm with harvest off
+  // gets no recording instructions (the nudge above has the same gate), and a
+  // client whose context style is silent (Windsurf) cannot deliver any context,
+  // so it must not spend the once-only flag on a message nobody receives.
+  const canDeliverToolContext = contextOutput(client, eventName, 'x') !== null;
+  const guided =
+    event === 'post-tool' &&
+    !state.recordingGuided &&
+    features.harvest &&
+    client.contextStyle !== 'silent' &&
+    toolEvidence.names.has('wiki_write') &&
+    ((Number(state.edits) || 0) >= 1 ||
+      (Number(state.toolCalls) || 0) >= GUIDANCE_AFTER_CALLS);
+  if (guided) state.recordingGuided = true;
+  // The previous turn's harvest nudge, held back by the Stop hook so it never
+  // cost a turn of its own, rides on this result -- once.
+  const pendingHarvest =
+    event === 'post-tool' && canDeliverToolContext && typeof state.pendingHarvest === 'string'
+      ? state.pendingHarvest
+      : null;
+  // Cleared explicitly, so saveState knows this caller changed it.
+  if (pendingHarvest) state.pendingHarvest = null;
+  // A SESSION OVER ITS CONFIGURED COMPACTION WINDOW pays for the excess on
+  // every turn (context-window.mjs). Checked every CHECK_EVERY_CALLS calls
+  // from the transcript tail, and said once.
+  let overWindow = null;
+  if (
+    event === 'post-tool' &&
+    clientName === 'claude-code' &&
+    !state.overWindowNoted &&
+    (Number(state.toolCalls) || 0) % CHECK_EVERY_CALLS === 0
+  ) {
+    try {
+      overWindow = overWindowNotice(raw.transcript_path ?? raw.transcriptPath ?? null);
+    } catch {
+      overWindow = null;
+    }
+    if (overWindow) state.overWindowNoted = true;
+  }
+  // Through the injection holdout, so each class is measured against what it
+  // costs (injection-holdout.mjs). recordingContext is not a class: it is the
+  // reply to the model's own wiki_write, and withholding it would be withholding
+  // a tool result.
+  let holdoutDir = null;
+  if (clientName === 'claude-code') {
+    try {
+      holdoutDir = learnedLocation(payload.cwd || process.cwd()).dir;
+    } catch {
+      holdoutDir = null;
+    }
+  }
+  const context = applyHoldout(
+    [
+      { cls: 'advisory', text: advisory },
+      { cls: 'graph', text: graphContext },
+      { cls: 'guidance', text: guided ? recordingGuidance() : null },
+      { cls: 'recording', text: recordingContext },
+      { cls: 'harvest-nudge', text: pendingHarvest },
+      { cls: 'over-window', text: overWindow },
+    ],
+    { dir: holdoutDir, sessionId: payload.session_id }
+  )
+    .map((part) => part.text)
+    .join('\n\n');
+  if (context && !canDeliverToolContext && client.contextStyle === 'antigravity-ephemeral') {
+    state.pendingHarvest = [state.pendingHarvest, context].filter(Boolean).join('\n\n');
+  }
+  saveState(payload.session_id, state, agentScope);
+  if (updatedToolOutput) {
+    const withContext = context ? contextOutput(client, eventName, context) : null;
+    emit({
+      hookSpecificOutput: {
+        ...(withContext?.hookSpecificOutput ?? { hookEventName: eventName }),
+        updatedToolOutput,
+      },
+    });
+  } else if (context) {
+    const output = contextOutput(client, eventName, context);
+    if (output) {
+      emit(event === 'pre-tool' && isAntigravity ? { decision: 'allow', ...output } : output);
+    }
+  } else if (event === 'pre-tool' && isAntigravity) {
+    emit({ decision: 'allow' });
+  }
+  process.exit(0);
+}

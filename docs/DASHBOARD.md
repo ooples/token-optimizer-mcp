@@ -122,7 +122,7 @@ least 20 treated file touches and 5 holdouts exist with a downstream join; the
 dashboard does not manufacture a savings estimate from missing data.
 
 See the [cross-client capability contract](CLIENT_SUPPORT.md) and the
-[live evaluation suite](../evals/README.md).
+[live evaluation suite](../src/evals/README.md).
 
 ### Cross-client lifecycle diagnostics
 

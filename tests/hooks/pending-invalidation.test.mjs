@@ -11,8 +11,8 @@
  * defect being fixed here -- that defect was precisely a correct function with
  * passing tests and no caller, and three tasks on this branch have already
  * shipped code whose tests passed while the product path went unexercised. The
- * assertions that matter drive `plugin/hooks/post-tool.mjs` with a real Claude
- * Code PostToolUse payload and then `plugin/hooks/pretooluse-router.mjs` with a
+ * assertions that matter drive `src/plugin/hooks/post-tool.mjs` with a real Claude
+ * Code PostToolUse payload and then `src/plugin/hooks/pretooluse-router.mjs` with a
  * real Read, and check that the finding comes back MARKED.
  *
  * WHY THE SESSION'S OWN WRITES WERE NOT MERELY DEGRADED BUT UNCOVERED. Lazy
@@ -43,19 +43,19 @@ import {
 } from 'node:fs';
 import { join, sep } from 'node:path';
 import { tmpdir } from 'node:os';
-import { load, nodeId, putNodeWithEdges } from '../../hooks-core/wiki.mjs';
-import { indexFile } from '../../hooks-core/staleness.mjs';
-import { forTouch } from '../../hooks-core/inject.mjs';
+import { load, nodeId, putNodeWithEdges } from '../../src/hooks-core/wiki.mjs';
+import { indexFile } from '../../src/hooks-core/staleness.mjs';
+import { forTouch } from '../../src/hooks-core/inject.mjs';
 import {
   drainInvalidations,
   observedWrites,
   queueInvalidation,
-} from '../../hooks-core/pending.mjs';
+} from '../../src/hooks-core/pending.mjs';
 
 const ROOT = process.cwd();
-const POST_TOOL = join(ROOT, 'plugin', 'hooks', 'post-tool.mjs');
-const PRE_TOOL = join(ROOT, 'plugin', 'hooks', 'pretooluse-router.mjs');
-const SESSION_START = join(ROOT, 'plugin', 'hooks', 'session-start.mjs');
+const POST_TOOL = join(ROOT, 'src', 'plugin', 'hooks', 'post-tool.mjs');
+const PRE_TOOL = join(ROOT, 'src', 'plugin', 'hooks', 'pretooluse-router.mjs');
+const SESSION_START = join(ROOT, 'src', 'plugin', 'hooks', 'session-start.mjs');
 
 const BEFORE = 'export function parse(x) {\n  return x.trim();\n}\n';
 const AFTER = 'export function parse(x) {\n  return JSON.parse(x);\n}\n';

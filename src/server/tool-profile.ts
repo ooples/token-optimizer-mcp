@@ -13,7 +13,7 @@
 // ("expand <ref>" to recover compacted output; "wiki_query that key" for a
 // disputed finding), and the CallTool handler refuses an unadvertised name, so
 // dropping them would turn those instructions into dead ends. This list is
-// therefore exactly the hook-named set (hooks-core/capabilities.mjs
+// therefore exactly the hook-named set (src/hooks-core/capabilities.mjs
 // HOOK_MCP_TOOLS) plus expand.
 export const CORE_TOOL_NAMES = [
   'smart_read',

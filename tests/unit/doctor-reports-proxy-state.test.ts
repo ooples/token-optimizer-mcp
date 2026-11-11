@@ -6,11 +6,11 @@ import { join } from 'node:path';
 import {
   probeProxy as probeProxyActual,
   probeSupervisor,
-} from '../../hooks-core/doctor.mjs';
+} from '../../src/hooks-core/doctor.mjs';
 import {
   proxyEnvFor,
   CLIENT_PROXY_ENV,
-} from '../../hooks-core/capabilities.mjs';
+} from '../../src/hooks-core/capabilities.mjs';
 
 /**
  * The proxy's failure mode is silence, which is what this reports on.

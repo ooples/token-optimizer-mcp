@@ -33,7 +33,8 @@ export interface McpClientInfo {
 let cached: Promise<EvidenceModules> | null = null;
 
 function coreUrl(name: string): string {
-  return pathToFileURL(path.join(here, '..', '..', 'hooks-core', name)).href;
+  return pathToFileURL(path.join(here, '..', '..', 'src', 'hooks-core', name))
+    .href;
 }
 
 async function modules(): Promise<EvidenceModules> {

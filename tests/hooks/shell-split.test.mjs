@@ -1,10 +1,10 @@
 /**
- * The shared shell scanner (hooks-core/shell-split.mjs): operators split a
+ * The shared shell scanner (src/hooks-core/shell-split.mjs): operators split a
  * command only outside quotes, and only outside comments.
  */
 
 import { describe, expect, test } from '@jest/globals';
-import { shellStatements } from '../../hooks-core/shell-split.mjs';
+import { shellStatements } from '../../src/hooks-core/shell-split.mjs';
 
 describe('shellStatements', () => {
   test.each([

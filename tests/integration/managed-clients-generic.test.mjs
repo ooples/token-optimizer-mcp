@@ -22,11 +22,11 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { runClient } from '../../scripts/run-client.mjs';
+import { runClient } from '../../src/scripts/run-client.mjs';
 import {
   launcherCommands,
   commandExists,
-} from '../../scripts/managed-clients.mjs';
+} from '../../src/scripts/managed-clients.mjs';
 
 /** A fake client that dumps the environment and argv it was launched with. */
 function recorder(dir) {

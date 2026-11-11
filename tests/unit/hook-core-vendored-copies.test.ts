@@ -4,8 +4,8 @@
  * Eleven directories hold byte-identical copies of the same core -- 10.87MB of
  * tarball for 1.44MB of unique content. Ten of them are the client
  * integrations, and `files` now excludes those: the tarball carries
- * `hooks-core/` once plus `plugin/hooks/lib`, and
- * `scripts/install-client-hooks.mjs` composes a client's copy INTO THE
+ * `src/hooks-core/` once plus `src/plugin/hooks/lib`, and
+ * `src/scripts/install-client-hooks.mjs` composes a client's copy INTO THE
  * DESTINATION when the user installs it.
  *
  * Which is not the design this file was written against. That one composed "on
@@ -20,7 +20,7 @@
  *
  * So the claims left here are the ones that survive the exclusion: what the
  * repo vendors is what the shared module composes, the committed copies carry
- * no version stamp, `plugin/hooks/lib` still ships whole because Claude Code
+ * no version stamp, `src/plugin/hooks/lib` still ships whole because Claude Code
  * loads it straight out of the package, and each client copy is still COMPLETE
  * IN THE TREE, because that tree is what the installer composes from.
  *
@@ -39,7 +39,7 @@ import {
   PLUGIN_TARGETS,
   coreFiles,
   composeCoreFile,
-} from '../../scripts/lib/hook-core.mjs';
+} from '../../src/scripts/lib/hook-core.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
@@ -64,7 +64,7 @@ describe('what is composed equals what the repo vendors', () => {
   it('keeps the version stamp out of the committed copies', () => {
     // A version literal in a generated-and-committed file makes
     // "generated output == committed file" unable to hold across a release.
-    // scripts/sync-hook-core.mjs carries the post-mortem; this holds the line.
+    // src/scripts/sync-hook-core.mjs carries the post-mortem; this holds the line.
     for (const target of [...PLUGIN_TARGETS, ...CLIENT_TARGETS]) {
       const observability = readFileSync(
         join(ROOT, target, 'observability.mjs'),
@@ -74,7 +74,7 @@ describe('what is composed equals what the repo vendors', () => {
       // on an empty read or a path that does not exist -- which the repo's
       // own local/no-vacuous-assertions rule caught here.
       expect(observability).toContain('// GENERATED FILE -- do not edit.');
-      expect(observability).toContain('Source of truth: hooks-core/');
+      expect(observability).toContain('Source of truth: src/hooks-core/');
       expect(observability).not.toContain('TOKEN_OPTIMIZER_VERSION =');
     }
   });
@@ -125,7 +125,7 @@ describe('the tarball carries the core once, the tree carries every copy', () =>
     'keeps the whole core in the TREE under %s',
     (target) => {
       // Not shipped is not the same as not needed: the installer composes from
-      // hooks-core/, and `npm run sync:hooks:check` compares against these
+      // src/hooks-core/, and `npm run sync:hooks:check` compares against these
       // committed copies, so a copy missing a module is still drift.
       const missing = coreFiles(ROOT).filter(
         (name) => !existsSync(join(ROOT, target, name))
@@ -135,7 +135,7 @@ describe('the tarball carries the core once, the tree carries every copy', () =>
   );
 
   it('ships hooks-core, which every copy is composed from', () => {
-    expect(packed.filter((p) => p.startsWith('hooks-core/')).length).toBe(
+    expect(packed.filter((p) => p.startsWith('src/hooks-core/')).length).toBe(
       coreFiles(ROOT).length
     );
   });

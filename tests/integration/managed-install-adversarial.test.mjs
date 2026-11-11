@@ -5,11 +5,11 @@ import { join } from 'node:path';
 import {
   activateShells,
   bashLoginProfile,
-} from '../../scripts/managed-shell.mjs';
-import { replaceProfile } from '../../scripts/profile-file.mjs';
-import { codexRoute } from '../../scripts/run-client.mjs';
-import { claudeRoute } from '../../scripts/claude-routing.mjs';
-import { claudeManagedRouting } from '../../scripts/managed-policy.mjs';
+} from '../../src/scripts/managed-shell.mjs';
+import { replaceProfile } from '../../src/scripts/profile-file.mjs';
+import { codexRoute } from '../../src/scripts/run-client.mjs';
+import { claudeRoute } from '../../src/scripts/claude-routing.mjs';
+import { claudeManagedRouting } from '../../src/scripts/managed-policy.mjs';
 
 function fixture(fn) {
   const dir = fs.mkdtempSync(join(tmpdir(), 'optimizer-adversary-'));
