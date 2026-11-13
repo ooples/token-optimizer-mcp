@@ -10,18 +10,23 @@ updates:
       time: "09:00"
       timezone: "UTC"
 
-    # Group minor and patch updates together
+    # One PR per kind of update, not one per package. Every PR runs the full
+    # pipeline on the shared runner pool, and separate bumps conflict in
+    # package-lock.json: each merge leaves the others dirty. On 2026-11-13
+    # hono and @hono/node-server arrived as two PRs (#566, #569) because
+    # security updates ignore groups unless a group applies to them, and the
+    # old split (development minor+patch, production patch only) sent every
+    # production minor bump on its own. Majors stay separate on purpose: a
+    # breaking bump that has to be held must not hold the week's patches.
     groups:
-      development-dependencies:
-        dependency-type: "development"
+      npm-minor-and-patch:
+        patterns: ["*"]
         update-types:
           - "minor"
           - "patch"
-
-      production-dependencies:
-        dependency-type: "production"
-        update-types:
-          - "patch"
+      npm-security:
+        applies-to: security-updates
+        patterns: ["*"]
 
     # Customize commit messages
     commit-message:
@@ -70,6 +75,14 @@ updates:
     labels:
       - "github-actions"
       - "automated"
+
+    # Every action bump in one PR; a pinned-SHA change does not need its own run.
+    groups:
+      github-actions:
+        patterns: ["*"]
+      github-actions-security:
+        applies-to: security-updates
+        patterns: ["*"]
 
     reviewers:
       - "ooples"
