@@ -113,6 +113,7 @@ const KNOWN_ARMS = new Set([
   'agents-opt',
   'agents-opt-nodigest',
   'agents-opt-inherit',
+  'agents-opt-fg',
   'agents-opt-proxy',
   'agents-opt-proxynowarm',
   'forks-plain',
@@ -595,6 +596,8 @@ async function runArm(arm, rep, stamp) {
       ...(variant === 'nodigest' ? { TOKEN_OPTIMIZER_AGENT_DIGEST: 'off' } : {}),
       // agents-opt-inherit keeps every worker on the parent's model.
       ...(variant === 'inherit' ? { TOKEN_OPTIMIZER_WORKER_MODEL: 'inherit' } : {}),
+      // agents-opt-fg starts every agent in the foreground (agent-spawn.mjs inForeground).
+      ...(variant === 'fg' ? { TOKEN_OPTIMIZER_AGENT_FOREGROUND: '1' } : {}),
       ...(variant === 'enforce' ? { TOKEN_OPTIMIZER_MODE: 'enforce' } : {}),
       ...(proxy ? { ANTHROPIC_BASE_URL: proxy.url } : {}),
     },
@@ -748,6 +751,8 @@ async function main() {
     // cheaper model than the parent (agent-spawn.mjs workerModel), dollars do.
     agentsOptOverSoloOptUsd: usdRatio('agents-opt', 'solo-opt'),
     agentsOptOverInheritUsd: usdRatio('agents-opt', 'agents-opt-inherit'),
+    agentsFgOverAgentsOptUsd: usdRatio('agents-opt-fg', 'agents-opt'),
+    agentsFgOverSoloOptUsd: usdRatio('agents-opt-fg', 'solo-opt'),
   };
   appendFileSync(out, `${JSON.stringify(verdict)}\n`);
   console.log('');
@@ -776,6 +781,14 @@ async function main() {
   if (verdict.agentsOptOverInheritUsd !== null)
     console.log(
       `agents-opt / inherit $    ${fmt(verdict.agentsOptOverInheritUsd)}  (workers on a cheaper model, against the parent's)`
+    );
+  if (verdict.agentsFgOverAgentsOptUsd !== null)
+    console.log(
+      `agents-opt-fg / agents-opt $ ${fmt(verdict.agentsFgOverAgentsOptUsd)}  (foreground agents stay only if < 1)`
+    );
+  if (verdict.agentsFgOverSoloOptUsd !== null)
+    console.log(
+      `agents-opt-fg / solo-opt $   ${fmt(verdict.agentsFgOverSoloOptUsd)}  (target: <= 1, in dollars)`
     );
   if (GATE) {
     const allCorrect = rows.every((r) => r.correct);

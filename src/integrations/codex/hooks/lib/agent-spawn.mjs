@@ -167,6 +167,28 @@ export function workerModel({ input, routed, parentModel, env = process.env }) {
   return MODEL_TIERS[want];
 }
 
+/**
+ * The spawn with `run_in_background: false`, or null to leave it alone.
+ *
+ * WHY. Claude Code starts agents in the background unless told otherwise, and
+ * every background agent costs its parent a launch receipt (~270 tokens) and a
+ * completion notice (~250), each written into the parent's context at its
+ * cache tier and re-read on every later turn -- and, when the notices arrive
+ * apart, a parent turn per notice re-reading the whole context: 9 extra turns
+ * of ~45k in one measured run (#567). In the foreground, a batch spawned in one
+ * message still runs concurrently and returns every result in one turn.
+ *
+ * OPT-IN (TOKEN_OPTIMIZER_AGENT_FOREGROUND=1) until the bench shows it pays:
+ * a parent that wants to keep working while one agent runs loses that. Never
+ * over an explicit choice, and never for a fork.
+ */
+export function inForeground(input, env = process.env) {
+  if (!/^(1|true|yes|on)$/i.test(String(env.TOKEN_OPTIMIZER_AGENT_FOREGROUND || '').trim())) return null;
+  if (!input || typeof input !== 'object' || input.subagent_type === 'fork') return null;
+  if (input.run_in_background !== undefined) return null;
+  return { ...input, run_in_background: false };
+}
+
 /** At most this many paths go into the shared briefing. */
 export const DIGEST_MAX_PATHS = 20;
 /** The marker that keeps the shared briefing from being appended twice. */
@@ -340,7 +362,8 @@ export function planSpawn({ input, contextTokens = 0, batch = 1, first = true, b
   const model = workerModel({ input, routed, parentModel, env });
   const worker = routed && model ? { ...routed, model } : routed;
   const shaped = worker ?? withReportBudget(input, env);
-  const updatedInput = withSharedBriefing(shaped ?? input, found, { cwd, env }) ?? shaped;
+  const briefed = withSharedBriefing(shaped ?? input, found, { cwd, env }) ?? shaped;
+  const updatedInput = inForeground(briefed ?? input, env) ?? briefed;
   const notes = [];
   let deny = null;
   // The parent must know what its agent was told: measured live, a parent that

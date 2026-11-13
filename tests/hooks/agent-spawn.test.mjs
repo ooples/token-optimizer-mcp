@@ -21,6 +21,7 @@ import {
   modelTier,
   workerModel,
   BURST_GAP_MS,
+  inForeground,
   nextSpawnState,
   recordSpawn,
   saveSpawnState,
@@ -60,6 +61,24 @@ describe('parentState', () => {
 
   test('a missing transcript is an empty state, not an error', () => {
     expect(parentState(join(tmpdir(), 'nope.jsonl'), 'x')).toEqual({ contextTokens: 0, batch: 1, first: true, found: [], model: null });
+  });
+});
+
+describe('foreground agents', () => {
+  const on = { TOKEN_OPTIMIZER_AGENT_FOREGROUND: '1' };
+  test('opt-in: a spawn runs in the foreground, never over an explicit choice, never a fork', () => {
+    expect(inForeground({ prompt: 'x' }, {})).toBeNull();
+    expect(inForeground({ prompt: 'x' }, on)).toEqual({ prompt: 'x', run_in_background: false });
+    expect(inForeground({ prompt: 'x', run_in_background: true }, on)).toBeNull();
+    expect(inForeground({ prompt: 'x', subagent_type: 'fork' }, on)).toBeNull();
+  });
+
+  test('planSpawn applies it on top of the budget and the briefing', () => {
+    const plan = planSpawn({ input: { prompt: 'Audit.' }, found: ['/w/a.js'], cwd: '/w', env: on });
+    expect(plan.updatedInput.run_in_background).toBe(false);
+    expect(plan.updatedInput.prompt).toContain(BUDGET_MARKER);
+    expect(plan.updatedInput.prompt).toContain(DIGEST_MARKER);
+    expect(planSpawn({ input: { prompt: 'Audit.' }, env: {} }).updatedInput.run_in_background).toBeUndefined();
   });
 });
 
