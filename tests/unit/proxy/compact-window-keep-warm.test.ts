@@ -289,13 +289,15 @@ describe('keep-warm for subagents (#567)', () => {
     expect(pingDelay(500, 0)).toBe(1000);
   });
 
-  it('holds a typical subagent context warm', () => {
+  // Pinging a ~35k-token agent context measured as a loss (1.09x, #567), so a
+  // typical agent prefix is left to expire and only a large one is held.
+  it('leaves a typical subagent context to expire', () => {
     const body = Buffer.from(
       JSON.stringify({
         messages: [{ role: 'user', content: 'x'.repeat(140_000) }],
       })
     );
-    expect(body.length).toBeGreaterThanOrEqual(MIN_PREFIX_BYTES);
+    expect(body.length).toBeLessThan(MIN_PREFIX_BYTES);
     const warm = new KeepWarm({
       sender: async () => ({ status: 200, json: {} }),
     });
@@ -306,7 +308,7 @@ describe('keep-warm for subagents (#567)', () => {
       body,
       ttlMs: 300_000,
     });
-    expect(warm.size()).toBe(1);
+    expect(warm.size()).toBe(0);
     warm.stop();
   });
 

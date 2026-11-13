@@ -28,12 +28,12 @@ import { createHash } from 'node:crypto';
 /**
  * Below this many bytes sent, a rewrite is too small to be worth holding warm.
  *
- * 100 KB, about 25k tokens: a subagent starts from 35-61k tokens of fixed
- * context (measured, #567), and the earlier 200 KB floor left roughly half of
- * them -- the conversations that idle longest, waiting on a build or a test --
- * re-writing their whole prefix after every 5-minute gap.
+ * 200 KB, about 50k tokens. Lowering it to 100 KB so agent-sized contexts
+ * qualify was measured in #567 and lost: on a task with 330 s waits (Haiku,
+ * 3 reps each) agents cost $0.0210 with pings against $0.0193 without. A
+ * small prefix is cheap to re-write, so the pings cost more than they save.
  */
-export const MIN_PREFIX_BYTES = 100_000;
+export const MIN_PREFIX_BYTES = 200_000;
 /** Pings after the last real turn: at the one-hour tier, three hours covered. */
 export const DEFAULT_MAX_PINGS = 3;
 /** Fire at most this long before the entry would expire. */

@@ -8,6 +8,7 @@ import { repairManagedInstall } from '../../src/scripts/repair-managed-install.m
 import { activateWindowsCommands } from '../../src/scripts/windows-commands.mjs';
 import { MANAGED_CLIENTS } from '../../src/hooks-core/capabilities.mjs';
 import { dedupeClaudePluginHooks } from '../../src/scripts/claude-hook-ownership.mjs';
+import { WIRING } from '../../src/hooks-core/wire.mjs';
 
 const hash = (value) => createHash('sha256').update(value).digest('hex');
 const read = (path) => fs.readFileSync(path, 'utf8');
@@ -71,15 +72,10 @@ function fixture(fn, command = 'claude') {
     // refusal is what stops a half-copied install being registered as a working one.
     // A fixture holding only stop.mjs therefore modelled an install that cannot exist,
     // and the refusal it earned had nothing to do with what this test is asserting.
-    for (const hook of [
-      'session-start.mjs',
-      'pretooluse-router.mjs',
-      'agent-scope.mjs',
-      'post-tool.mjs',
-      'post-tool-failure.mjs',
-      'precompact-optimize.mjs',
-      'stop.mjs',
-    ])
+    // Read from the installer's own table, so a hook added to it (agent-spawn.mjs
+    // and subagent-stop.mjs, #567) cannot leave this fixture modelling a
+    // half-copied install again.
+    for (const hook of new Set(WIRING.map((w) => w.file)))
       fs.writeFileSync(join(dir, `${base}plugin/hooks`, hook), '');
   }
   const body = `function global:${command} { & 'node' '${join(old, 'scripts/run-client.mjs')}' ${command} @args }`;
