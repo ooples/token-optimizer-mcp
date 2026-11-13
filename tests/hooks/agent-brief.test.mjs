@@ -425,6 +425,6 @@ describe('the generated worker agents', () => {
     });
     expect(result.status).toBe(0);
     const out = JSON.parse(result.stdout).hookSpecificOutput;
-    expect(out.updatedInput).toEqual({ prompt: 'Fix it.', subagent_type: USER_WORKER });
+    expect(out.updatedInput).toEqual({ prompt: 'Fix it.', subagent_type: USER_WORKER, run_in_background: false });
   });
 });

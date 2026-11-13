@@ -99,6 +99,7 @@ if (!['small', 'large', 'slow'].includes(FIXTURE))
 // rather than assumed:
 //   -nodigest      the shared briefing off
 //   -inherit       workers stay on the parent's model
+//   -bg            agents start in the background, as Claude Code does unasked
 //   -proxy         through this checkout's proxy, keep-warm on; its pings,
 //                  which no transcript records, are read from the proxy's
 //                  accounting ledger and added to the run
@@ -113,7 +114,7 @@ const KNOWN_ARMS = new Set([
   'agents-opt',
   'agents-opt-nodigest',
   'agents-opt-inherit',
-  'agents-opt-fg',
+  'agents-opt-bg',
   'agents-opt-proxy',
   'agents-opt-proxynowarm',
   'forks-plain',
@@ -596,8 +597,8 @@ async function runArm(arm, rep, stamp) {
       ...(variant === 'nodigest' ? { TOKEN_OPTIMIZER_AGENT_DIGEST: 'off' } : {}),
       // agents-opt-inherit keeps every worker on the parent's model.
       ...(variant === 'inherit' ? { TOKEN_OPTIMIZER_WORKER_MODEL: 'inherit' } : {}),
-      // agents-opt-fg starts every agent in the foreground (agent-spawn.mjs inForeground).
-      ...(variant === 'fg' ? { TOKEN_OPTIMIZER_AGENT_FOREGROUND: '1' } : {}),
+      // agents-opt-bg leaves agents in the background (agent-spawn.mjs inForeground is on by default).
+      ...(variant === 'bg' ? { TOKEN_OPTIMIZER_AGENT_FOREGROUND: 'off' } : {}),
       ...(variant === 'enforce' ? { TOKEN_OPTIMIZER_MODE: 'enforce' } : {}),
       ...(proxy ? { ANTHROPIC_BASE_URL: proxy.url } : {}),
     },
@@ -751,8 +752,8 @@ async function main() {
     // cheaper model than the parent (agent-spawn.mjs workerModel), dollars do.
     agentsOptOverSoloOptUsd: usdRatio('agents-opt', 'solo-opt'),
     agentsOptOverInheritUsd: usdRatio('agents-opt', 'agents-opt-inherit'),
-    agentsFgOverAgentsOptUsd: usdRatio('agents-opt-fg', 'agents-opt'),
-    agentsFgOverSoloOptUsd: usdRatio('agents-opt-fg', 'solo-opt'),
+    agentsOptOverBackgroundUsd: usdRatio('agents-opt', 'agents-opt-bg'),
+    agentsBackgroundOverSoloOptUsd: usdRatio('agents-opt-bg', 'solo-opt'),
   };
   appendFileSync(out, `${JSON.stringify(verdict)}\n`);
   console.log('');
@@ -782,13 +783,13 @@ async function main() {
     console.log(
       `agents-opt / inherit $    ${fmt(verdict.agentsOptOverInheritUsd)}  (workers on a cheaper model, against the parent's)`
     );
-  if (verdict.agentsFgOverAgentsOptUsd !== null)
+  if (verdict.agentsOptOverBackgroundUsd !== null)
     console.log(
-      `agents-opt-fg / agents-opt $ ${fmt(verdict.agentsFgOverAgentsOptUsd)}  (foreground agents stay only if < 1)`
+      `agents-opt / background $  ${fmt(verdict.agentsOptOverBackgroundUsd)}  (foreground agents stay only if < 1)`
     );
-  if (verdict.agentsFgOverSoloOptUsd !== null)
+  if (verdict.agentsBackgroundOverSoloOptUsd !== null)
     console.log(
-      `agents-opt-fg / solo-opt $   ${fmt(verdict.agentsFgOverSoloOptUsd)}  (target: <= 1, in dollars)`
+      `agents-opt-bg / solo-opt $   ${fmt(verdict.agentsBackgroundOverSoloOptUsd)}  (agents in the background, in dollars)`
     );
   if (GATE) {
     const allCorrect = rows.every((r) => r.correct);

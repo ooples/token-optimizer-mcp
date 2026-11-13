@@ -176,12 +176,15 @@ export function workerModel({ input, routed, parentModel, env = process.env }) {
  * of ~45k in one measured run (#567). In the foreground, a batch spawned in one
  * message still runs concurrently and returns every result in one turn.
  *
- * OPT-IN (TOKEN_OPTIMIZER_AGENT_FOREGROUND=1) until the bench shows it pays:
- * a parent that wants to keep working while one agent runs loses that. Never
- * over an explicit choice, and never for a fork.
+ * MEASURED (bench/agents agents-opt-fg, Sonnet parent, large task, 3/3
+ * correct each): median $0.202 against $0.243 in the background (0.831x) and
+ * $0.274 solo (0.736x); the parent fell from ~107-166k to ~87-91k weighted.
+ * On by default; TOKEN_OPTIMIZER_AGENT_FOREGROUND=off restores the background
+ * for a parent that wants to keep working while an agent runs. Never over an
+ * explicit choice, and never for a fork.
  */
 export function inForeground(input, env = process.env) {
-  if (!/^(1|true|yes|on)$/i.test(String(env.TOKEN_OPTIMIZER_AGENT_FOREGROUND || '').trim())) return null;
+  if (/^(0|false|no|off)$/i.test(String(env.TOKEN_OPTIMIZER_AGENT_FOREGROUND || '').trim())) return null;
   if (!input || typeof input !== 'object' || input.subagent_type === 'fork') return null;
   if (input.run_in_background !== undefined) return null;
   return { ...input, run_in_background: false };

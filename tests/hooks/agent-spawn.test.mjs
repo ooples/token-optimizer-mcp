@@ -65,9 +65,10 @@ describe('parentState', () => {
 });
 
 describe('foreground agents', () => {
-  const on = { TOKEN_OPTIMIZER_AGENT_FOREGROUND: '1' };
-  test('opt-in: a spawn runs in the foreground, never over an explicit choice, never a fork', () => {
-    expect(inForeground({ prompt: 'x' }, {})).toBeNull();
+  const on = {};
+  test('by default a spawn runs in the foreground, never over an explicit choice, never a fork', () => {
+    expect(inForeground({ prompt: 'x' }, { TOKEN_OPTIMIZER_AGENT_FOREGROUND: 'off' })).toBeNull();
+    expect(inForeground({ prompt: 'x' }, { TOKEN_OPTIMIZER_AGENT_FOREGROUND: '0' })).toBeNull();
     expect(inForeground({ prompt: 'x' }, on)).toEqual({ prompt: 'x', run_in_background: false });
     expect(inForeground({ prompt: 'x', run_in_background: true }, on)).toBeNull();
     expect(inForeground({ prompt: 'x', subagent_type: 'fork' }, on)).toBeNull();
@@ -78,7 +79,10 @@ describe('foreground agents', () => {
     expect(plan.updatedInput.run_in_background).toBe(false);
     expect(plan.updatedInput.prompt).toContain(BUDGET_MARKER);
     expect(plan.updatedInput.prompt).toContain(DIGEST_MARKER);
-    expect(planSpawn({ input: { prompt: 'Audit.' }, env: {} }).updatedInput.run_in_background).toBeUndefined();
+    expect(
+      planSpawn({ input: { prompt: 'Audit.' }, env: { TOKEN_OPTIMIZER_AGENT_FOREGROUND: 'off' } }).updatedInput
+        .run_in_background
+    ).toBeUndefined();
   });
 });
 
@@ -292,8 +296,11 @@ describe('the hook, end to end', () => {
     expect(garbage.stdout).toBe('');
   });
 
-  test('with the budget off, a plain spawn is left completely alone', () => {
-    const { out } = run({ tool_name: 'Agent', tool_input: { prompt: 'x' } }, { TOKEN_OPTIMIZER_AGENT_REPORT_BUDGET: 'off' });
+  test('with the budget and foreground off, a plain spawn is left completely alone', () => {
+    const { out } = run(
+      { tool_name: 'Agent', tool_input: { prompt: 'x' } },
+      { TOKEN_OPTIMIZER_AGENT_REPORT_BUDGET: 'off', TOKEN_OPTIMIZER_AGENT_FOREGROUND: 'off' }
+    );
     expect(out).toBeNull();
   });
 
@@ -311,12 +318,16 @@ describe('the hook, end to end', () => {
     expect(note()).toBeNull();
   });
 
-  test('passes on where the parent already looked; both switches off leave it alone', () => {
+  test('passes on where the parent already looked; every switch off leaves it alone', () => {
     const transcript = parent({ before: EXPLORED });
     const payload = { tool_name: 'Agent', tool_use_id: 't1', transcript_path: transcript, cwd: 'C:\\work', tool_input: { prompt: 'Fix it.' } };
     expect(run(payload).out.hookSpecificOutput.updatedInput.prompt).toContain('src/lexer.js');
     expect(
-      run(payload, { TOKEN_OPTIMIZER_AGENT_REPORT_BUDGET: 'off', TOKEN_OPTIMIZER_AGENT_DIGEST: 'off' }).out
+      run(payload, {
+        TOKEN_OPTIMIZER_AGENT_REPORT_BUDGET: 'off',
+        TOKEN_OPTIMIZER_AGENT_DIGEST: 'off',
+        TOKEN_OPTIMIZER_AGENT_FOREGROUND: 'off',
+      }).out
     ).toBeNull();
   });
 });
