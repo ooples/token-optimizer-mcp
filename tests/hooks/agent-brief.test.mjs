@@ -27,6 +27,7 @@ import {
   renderWorkerAgent,
   routeToWorker,
   sessionStartedAt,
+  withoutComments,
   workerAgentPath,
 } from '../../src/hooks-core/agent-brief.mjs';
 import { BUDGET_MARKER, planSpawn } from '../../src/hooks-core/agent-spawn.mjs';
@@ -64,6 +65,15 @@ function sandbox() {
   mkdirSync(project, { recursive: true });
   return { root, project, env: { TOKEN_OPTIMIZER_HOME: home, CLAUDE_CONFIG_DIR: join(root, 'claude') } };
 }
+
+describe('withoutComments', () => {
+  test('a comment rebuilt by removing an inner one is removed too, and an unterminated one drops the rest', () => {
+    expect(withoutComments('keep <!-<!-- x -->- hidden --> this')).toBe('keep  this');
+    expect(withoutComments('a <!-- b --> c <!-- d --> e')).toBe('a  c  e');
+    expect(withoutComments('rule\n<!-- never closed\nsecret')).toBe('rule\n');
+    expect(parseBrief('## Rules\n- Keep it.\n<!-<!-- x -->- hidden -->\n')[0].text).toBe('- Keep it.');
+  });
+});
 
 describe('draftBrief', () => {
   const draft = draftBrief([{ path: 'CLAUDE.md', text: INSTRUCTIONS }]);

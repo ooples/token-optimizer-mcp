@@ -196,6 +196,22 @@ export function draftBrief(files) {
   return `${parts.join('\n').trimEnd()}\n`;
 }
 
+/**
+ * The text with every HTML comment removed. One pass is not enough: removing
+ * the inner comment of `<!-<!-- x -->- note -->` joins its halves into a new
+ * one, so it repeats until nothing changes. An unterminated `<!--` drops the
+ * rest of the text, as a renderer would hide it.
+ */
+export function withoutComments(text) {
+  let out = text;
+  for (let previous = null; previous !== out; ) {
+    previous = out;
+    out = out.replace(/<!--[\s\S]*?-->/g, '');
+  }
+  const open = out.indexOf('<!--');
+  return open < 0 ? out : out.slice(0, open);
+}
+
 /** A brief file parsed: [{ heading, when: string[] | null, text }]. Comments outside a when: line are dropped. */
 export function parseBrief(markdown) {
   const out = [];
@@ -210,7 +226,7 @@ export function parseBrief(markdown) {
       }
       lines.push(raw);
     }
-    const body = lines.join('\n').replace(/<!--[\s\S]*?-->/g, '').trim();
+    const body = withoutComments(lines.join('\n')).trim();
     if (!body) continue;
     out.push({ heading: section.heading, when: when && when.length ? when : null, text: body });
   }
