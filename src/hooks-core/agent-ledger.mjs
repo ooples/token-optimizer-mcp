@@ -281,6 +281,37 @@ function median(values) {
   return sorted[Math.floor(sorted.length / 2)];
 }
 
+/**
+ * One line on who owns the subagent cache TTL and how to change it, for the
+ * doctor. The setting is written into the user's own settings file, so where it
+ * came from and how to take it back must be askable without reading the source.
+ */
+export function describeSubagentTtl(settingsPath, env = process.env) {
+  let settings = null;
+  try {
+    settings = JSON.parse(readFileSync(settingsPath, 'utf8'));
+  } catch {
+    /* an unreadable file owns nothing */
+  }
+  const record = ttlRecord(env);
+  const owner = ttlOwner(settings, env);
+  const value = owner === 'environment'
+    ? String(env.CLAUDE_CODE_SUBAGENT_PROMPT_CACHE_TTL).trim()
+    : owner === 'settings'
+      ? String(settings.subagentPromptCacheTtl)
+      : null;
+  const optedOut = /^(off|0|false|no)$/i.test(String(env.TOKEN_OPTIMIZER_SUBAGENT_CACHE_TTL || '').trim());
+  if (owner === 'environment') return `subagent cache TTL ${value}, set by CLAUDE_CODE_SUBAGENT_PROMPT_CACHE_TTL (yours; never changed by token-optimizer).`;
+  if (owner === 'settings' && record && !record.undoneAt && value === record.value) {
+    return `subagent cache TTL ${value}, written by token-optimizer on ${new Date(record.at).toISOString().slice(0, 10)} from measured agent cache expiry. ` +
+      'Set subagentPromptCacheTtl yourself to override it, or run token-optimizer-uninstall --apply to remove it.';
+  }
+  if (owner === 'settings') return `subagent cache TTL ${value}, set in ${settingsPath} (yours; never changed by token-optimizer).`;
+  if (record) return 'subagent cache TTL is the 5-minute default; token-optimizer wrote 1h once and it was removed since, so it is never written again.';
+  if (optedOut) return 'subagent cache TTL is the 5-minute default; TOKEN_OPTIMIZER_SUBAGENT_CACHE_TTL=off keeps it so.';
+  return 'subagent cache TTL is the 5-minute default; token-optimizer sets 1h once finished agents show that cache expiry costs more than it would.';
+}
+
 /** The subagent TTL record, if token-optimizer ever wrote the setting. */
 export function ttlRecord(env = process.env) {
   try {

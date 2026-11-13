@@ -16,6 +16,7 @@ import { fileURLToPath } from 'node:url';
 import {
   agentRow,
   applySubagentTtl,
+  describeSubagentTtl,
   readLedger,
   recordAgent,
   ttlDecision,
@@ -228,5 +229,33 @@ describe('the SubagentStop hook, end to end', () => {
     expect(run.status).toBe(0);
     expect(run.stdout).toBe('');
     expect(existsSync(join(env.TOKEN_OPTIMIZER_HOME, 'agents.jsonl'))).toBe(false);
+  });
+});
+
+describe('describeSubagentTtl (doctor)', () => {
+  const evidence = () => [slowRow(), slowRow(), slowRow()];
+
+  test('names who owns the value and how to take ours back', () => {
+    const { env, settingsPath } = sandbox({});
+    expect(describeSubagentTtl(settingsPath, env)).toMatch(/5-minute default; token-optimizer sets 1h once/);
+    expect(describeSubagentTtl(settingsPath, { ...env, TOKEN_OPTIMIZER_SUBAGENT_CACHE_TTL: 'off' })).toMatch(/=off keeps it/);
+    applySubagentTtl(settingsPath, { env, rows: evidence() });
+    const ours = describeSubagentTtl(settingsPath, env);
+    expect(ours).toMatch(/^subagent cache TTL 1h, written by token-optimizer on \d{4}-\d\d-\d\d/);
+    expect(ours).toContain('token-optimizer-uninstall --apply');
+    writeFileSync(settingsPath, JSON.stringify({ subagentPromptCacheTtl: '5m' }));
+    expect(describeSubagentTtl(settingsPath, env)).toMatch(/TTL 5m, set in .*\(yours/);
+    writeFileSync(settingsPath, '{}');
+    expect(describeSubagentTtl(settingsPath, env)).toMatch(/removed since, so it is never written again/);
+    expect(describeSubagentTtl(settingsPath, { ...env, CLAUDE_CODE_SUBAGENT_PROMPT_CACHE_TTL: '1h' })).toMatch(
+      /TTL 1h, set by CLAUDE_CODE_SUBAGENT_PROMPT_CACHE_TTL/
+    );
+  });
+
+  test('an undone write reads as the default', () => {
+    const { env, settingsPath } = sandbox({});
+    applySubagentTtl(settingsPath, { env, rows: evidence() });
+    expect(undoSubagentTtl({ env }).undone).toBe(true);
+    expect(describeSubagentTtl(settingsPath, env)).toMatch(/5-minute default; token-optimizer wrote 1h once/);
   });
 });

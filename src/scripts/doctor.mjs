@@ -103,6 +103,20 @@ try {
 }
 
 console.log('');
+console.log('Subagents:');
+try {
+  const { describeSubagentTtl } = await import(
+    '../hooks-core/agent-ledger.mjs'
+  );
+  const { claudeSettingsPath } = await import(
+    '../hooks-core/install-health.mjs'
+  );
+  console.log(`  ${describeSubagentTtl(claudeSettingsPath())}`);
+} catch {
+  console.log('  Cannot read the subagent cache setting.');
+}
+
+console.log('');
 console.log('Anonymous usage data:');
 try {
   const { describePolicy } = await import('../../dist/telemetry/policy.js');
