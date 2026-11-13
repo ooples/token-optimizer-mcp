@@ -25,6 +25,7 @@ import {
 } from '../hooks-core/manifest.mjs';
 import { unwire, wiredEntries } from '../hooks-core/wire.mjs';
 import { undoSubagentTtl } from '../hooks-core/agent-ledger.mjs';
+import { undoMainTtl } from '../hooks-core/main-cache-ttl.mjs';
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
@@ -73,12 +74,18 @@ if (apply) {
     console.log('Removed the subagentPromptCacheTtl setting this install added.');
   else if (ttl.reason === 'the value was changed since; it is yours now')
     console.log('Left subagentPromptCacheTtl alone: it is no longer the value we wrote.');
+  const mainTtl = undoMainTtl();
+  if (mainTtl.undone)
+    console.log('Removed the promptCacheTtl setting this install added.');
+  else if (mainTtl.reason === 'the value was changed since; it is yours now')
+    console.log('Left promptCacheTtl alone: it is no longer the value we wrote.');
 } else {
   console.log(
     'Would remove default proxy routing from the Claude Code settings file.'
   );
   console.log('Would remove the autoCompactWindow setting this install added, if unchanged.');
   console.log('Would remove the subagentPromptCacheTtl setting this install added, if unchanged.');
+  console.log('Would remove the promptCacheTtl setting this install added, if unchanged.');
 }
 
 const manifest = readManifest();

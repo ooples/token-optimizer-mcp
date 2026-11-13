@@ -14,7 +14,7 @@ import { fileURLToPath } from 'node:url';
 const repo = join(fileURLToPath(import.meta.url), '..', '..', '..');
 const LINE = "Agents you start receive the user's approved rules";
 
-function sessionStart({ brief }) {
+function sessionStart({ brief, extra = {} }) {
   const root = mkdtempSync(join(tmpdir(), 'brief-start-'));
   const home = join(root, 'home');
   const project = join(root, 'project');
@@ -35,6 +35,7 @@ function sessionStart({ brief }) {
       TOKEN_OPTIMIZER_MODE: 'assist',
       TOKEN_OPTIMIZER_EXPERIMENT_ARM: '',
       TOKEN_OPTIMIZER_HOLDOUT: 'off',
+      ...extra,
     },
   });
   return result.stdout;
@@ -43,6 +44,12 @@ function sessionStart({ brief }) {
 describe('the short-prompts line at session start', () => {
   test('is said when a brief is approved', () => {
     expect(sessionStart({ brief: true })).toContain(LINE);
+  });
+
+  test('is not said when switched off', () => {
+    const out = sessionStart({ brief: true, extra: { TOKEN_OPTIMIZER_AGENT_BRIEF_NOTICE: 'off' } });
+    expect(out.length).toBeGreaterThan(0);
+    expect(out).not.toContain(LINE);
   });
 
   test('is never said without one', () => {

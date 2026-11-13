@@ -100,6 +100,11 @@ if (!['small', 'large', 'slow'].includes(FIXTURE))
 //   -nodigest      the shared briefing off
 //   -inherit       workers stay on the parent's model
 //   -bg            agents start in the background, as Claude Code does unasked
+//   -noroute       no routing to the brief's worker (so no Haiku either)
+//   -nobudget      no report budget on the agent's prompt
+//   -nonotice      no short-prompts line at session start
+//   -ttl5m         subagents write the 5m cache tier, Claude Code's default
+//                  (agents-opt's worker writes 1h, from its own frontmatter)
 //   -proxy         through this checkout's proxy, keep-warm on; its pings,
 //                  which no transcript records, are read from the proxy's
 //                  accounting ledger and added to the run
@@ -115,6 +120,10 @@ const KNOWN_ARMS = new Set([
   'agents-opt-nodigest',
   'agents-opt-inherit',
   'agents-opt-bg',
+  'agents-opt-noroute',
+  'agents-opt-nobudget',
+  'agents-opt-nonotice',
+  'agents-opt-ttl5m',
   'agents-opt-proxy',
   'agents-opt-proxynowarm',
   'forks-plain',
@@ -594,11 +603,17 @@ async function runArm(arm, rep, stamp) {
       // The bench never writes the user's settings; the worker's 1h tier comes
       // from its own frontmatter.
       TOKEN_OPTIMIZER_SUBAGENT_CACHE_TTL: 'off',
+      TOKEN_OPTIMIZER_MAIN_CACHE_TTL: 'off',
       ...(variant === 'nodigest' ? { TOKEN_OPTIMIZER_AGENT_DIGEST: 'off' } : {}),
       // agents-opt-inherit keeps every worker on the parent's model.
       ...(variant === 'inherit' ? { TOKEN_OPTIMIZER_WORKER_MODEL: 'inherit' } : {}),
       // agents-opt-bg leaves agents in the background (agent-spawn.mjs inForeground is on by default).
       ...(variant === 'bg' ? { TOKEN_OPTIMIZER_AGENT_FOREGROUND: 'off' } : {}),
+      ...(variant === 'noroute' ? { TOKEN_OPTIMIZER_AGENT_ROUTE: 'off' } : {}),
+      ...(variant === 'nobudget' ? { TOKEN_OPTIMIZER_AGENT_REPORT_BUDGET: 'off' } : {}),
+      ...(variant === 'nonotice' ? { TOKEN_OPTIMIZER_AGENT_BRIEF_NOTICE: 'off' } : {}),
+      // The env form outranks the worker's frontmatter, and never touches the user's settings.
+      ...(variant === 'ttl5m' ? { CLAUDE_CODE_SUBAGENT_PROMPT_CACHE_TTL: '5m' } : {}),
       ...(variant === 'enforce' ? { TOKEN_OPTIMIZER_MODE: 'enforce' } : {}),
       ...(proxy ? { ANTHROPIC_BASE_URL: proxy.url } : {}),
     },

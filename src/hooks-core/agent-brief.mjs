@@ -73,6 +73,7 @@ export function briefPaths({ cwd = process.cwd(), env = process.env } = {}) {
  * the prompt is written, so session start is the only point that can change it.
  */
 export function agentBriefNotice({ cwd = process.cwd(), env = process.env } = {}) {
+  if (/^(off|0|false|no)$/i.test(String(env.TOKEN_OPTIMIZER_AGENT_BRIEF_NOTICE || '').trim())) return null;
   try {
     const { global, project } = briefPaths({ cwd, env });
     if (![global, project].some((path) => path && existsSync(path))) return null;

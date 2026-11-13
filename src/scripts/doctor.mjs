@@ -112,6 +112,8 @@ try {
     '../hooks-core/install-health.mjs'
   );
   console.log(`  ${describeSubagentTtl(claudeSettingsPath())}`);
+  const { describeMainTtl } = await import('../hooks-core/main-cache-ttl.mjs');
+  console.log(`  ${describeMainTtl(claudeSettingsPath())}`);
   const { briefPaths, workerAgentPath } = await import(
     '../hooks-core/agent-brief.mjs'
   );
