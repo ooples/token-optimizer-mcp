@@ -20,8 +20,11 @@
  * So this runs at PreToolUse on Agent/Task:
  *   - it asks the agent for a short report, with detail written to a file
  *     (the report budget), by appending to the agent's prompt;
- *   - it tells the parent what a large fork or a batch of agents costs, and in
- *     enforce mode refuses a large fork with the cheaper alternative named.
+ *   - it tells the parent what a batch of agents costs, and refuses a large
+ *     fork with the cheaper alternative named (TOKEN_OPTIMIZER_FORK_GUARD=off
+ *     to advise instead);
+ *   - it starts agents in the foreground (TOKEN_OPTIMIZER_AGENT_FOREGROUND=off
+ *     to leave them in the background).
  *
  * Every function here is pure or reads a bounded tail; the hook fails open.
  */
@@ -84,7 +87,12 @@ export function saveSpawnState(sessionId, state, env = process.env) {
   renameSync(temporary, path);
 }
 
-/** A fork larger than this is worth a sentence before it is copied. */
+/** Whether a large fork is refused rather than advised on (TOKEN_OPTIMIZER_FORK_GUARD=off to advise). */
+export function forkGuard(env = process.env) {
+  return !/^(0|false|no|off)$/i.test(String(env.TOKEN_OPTIMIZER_FORK_GUARD || '').trim());
+}
+
+/** A fork larger than this is refused before it is copied (advised on with the guard off). */
 export const FORK_ADVISE_TOKENS = 60_000;
 /** A batch at least this large is worth a sentence before it is spawned. */
 export const BATCH_ADVISE = 3;
@@ -377,12 +385,11 @@ export function withReportBudget(input, env = process.env) {
  * @param {number} args.batch        Agent/Task calls in the same parent message
  * @param {boolean} args.first       whether this is the batch's first call (the one that speaks)
  * @param {number} args.agentBase    median starting context of this machine's agents
- * @param {string} args.mode         assist | advise | enforce
  * @param {string} args.cwd          the session's directory, for the project's agent brief
  * @param {number} args.sessionStart when the session started (ms), so only agents it loaded are named
  * @returns {{ updatedInput: object|null, context: string|null, deny: string|null }}
  */
-export function planSpawn({ input, contextTokens = 0, batch = 1, first = true, batchSpeaks = null, routedNoted = false, found = [], parentModel = null, agentBase = DEFAULT_AGENT_BASE, mode = 'assist', env = process.env, cwd = process.cwd(), sessionStart = null }) {
+export function planSpawn({ input, contextTokens = 0, batch = 1, first = true, batchSpeaks = null, routedNoted = false, found = [], parentModel = null, agentBase = DEFAULT_AGENT_BASE, env = process.env, cwd = process.cwd(), sessionStart = null }) {
   // A general-purpose agent goes to the lean worker with the user's approved
   // brief when there is one (agent-brief.mjs); the worker's own prompt asks for
   // the short report, so the budget is not appended to it as well.
@@ -416,7 +423,11 @@ export function planSpawn({ input, contextTokens = 0, batch = 1, first = true, b
       `${batch > 1 ? `${batch} forks copy` : 'This fork copies'} the whole conversation: ~${k(copied)} tokens of context ` +
       `before any work, re-read on every turn of each fork. A fresh agent starts from ~${k(agentBase)}` +
       `${batch > 1 ? ` (~${k(fresh)} for ${batch})` : ''}; give it the files and facts it needs in its prompt instead.`;
-    if (mode === 'enforce') deny = `${line} Retry with a non-fork subagent_type and a self-contained prompt.`;
+    // Refused in assist as well as enforce: advice reaches the parent only after
+    // the batch it was about has started. Measured on 12 forks of a ~76k parent
+    // (bench/agents forks-opt-enforce, 3/3 correct each): $0.46 refused against
+    // $2.44 advised. TOKEN_OPTIMIZER_FORK_GUARD=off keeps it to advice.
+    if (forkGuard(env)) deny = `${line} Retry with a non-fork subagent_type and a self-contained prompt.`;
     else if (first) notes.push(line);
   } else if (batch >= BATCH_ADVISE && (batchSpeaks ?? first)) {
     notes.push(

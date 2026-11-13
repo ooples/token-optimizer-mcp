@@ -53,7 +53,6 @@ try {
         found,
         parentModel: model,
         agentBase: measured > 0 ? measured : DEFAULT_AGENT_BASE,
-        mode: current,
         sessionStart: sessionStartedAt(transcript),
         ...(typeof payload.cwd === 'string' && payload.cwd ? { cwd: payload.cwd } : {}),
       });

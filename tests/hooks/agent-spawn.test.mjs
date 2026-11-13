@@ -22,6 +22,7 @@ import {
   workerModel,
   BURST_GAP_MS,
   inForeground,
+  forkGuard,
   nextSpawnState,
   recordSpawn,
   saveSpawnState,
@@ -260,19 +261,33 @@ describe('the shared briefing', () => {
 });
 
 describe('planSpawn', () => {
-  test('a large fork is priced against a fresh agent, and refused only in enforce', () => {
+  test('a large fork is priced against a fresh agent and refused; with the guard off, advised once', () => {
     const input = { prompt: 'continue', subagent_type: 'fork' };
-    const assist = planSpawn({ input, contextTokens: 150_000, batch: 3 });
-    expect(assist.context).toContain('3 forks copy');
-    expect(assist.context).toContain('~450k');
-    expect(assist.deny).toBeNull();
-    expect(planSpawn({ input, contextTokens: 150_000, batch: 3, first: false }).context).toBeNull();
-    const enforce = planSpawn({ input, contextTokens: 150_000, mode: 'enforce' });
-    expect(enforce.deny).toContain('non-fork subagent_type');
+    const refused = planSpawn({ input, contextTokens: 150_000, batch: 3, env: {} });
+    expect(refused.deny).toContain('3 forks copy');
+    expect(refused.deny).toContain('~450k');
+    expect(refused.deny).toContain('non-fork subagent_type');
+    expect(refused.context).toBeNull();
+    // Every call of the batch is refused, not only the first.
+    expect(planSpawn({ input, contextTokens: 150_000, batch: 3, first: false, env: {} }).deny).toContain('non-fork');
+    const off = { TOKEN_OPTIMIZER_FORK_GUARD: 'off' };
+    const advised = planSpawn({ input, contextTokens: 150_000, batch: 3, env: off });
+    expect(advised.deny).toBeNull();
+    expect(advised.context).toContain('3 forks copy');
+    expect(planSpawn({ input, contextTokens: 150_000, batch: 3, first: false, env: off }).context).toBeNull();
+  });
+
+  test('the guard is on unless switched off', () => {
+    expect(forkGuard({})).toBe(true);
+    expect(forkGuard({ TOKEN_OPTIMIZER_FORK_GUARD: 'off' })).toBe(false);
+    expect(forkGuard({ TOKEN_OPTIMIZER_FORK_GUARD: ' 0 ' })).toBe(false);
+    expect(forkGuard({ TOKEN_OPTIMIZER_FORK_GUARD: 'on' })).toBe(true);
   });
 
   test('a small fork says nothing', () => {
-    expect(planSpawn({ input: { prompt: 'x', subagent_type: 'fork' }, contextTokens: 20_000 }).context).toBeNull();
+    const small = planSpawn({ input: { prompt: 'x', subagent_type: 'fork' }, contextTokens: 20_000, env: {} });
+    expect(small.context).toBeNull();
+    expect(small.deny).toBeNull();
   });
 
   test('a batch is priced once, by its first call', () => {
