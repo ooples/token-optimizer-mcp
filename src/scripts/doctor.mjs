@@ -112,6 +112,14 @@ try {
     '../hooks-core/install-health.mjs'
   );
   console.log(`  ${describeSubagentTtl(claudeSettingsPath())}`);
+  const { briefPaths } = await import('../hooks-core/agent-brief.mjs');
+  const { existsSync } = await import('node:fs');
+  const briefs = Object.values(briefPaths()).filter((p) => p && existsSync(p));
+  console.log(
+    briefs.length
+      ? `  agent brief approved (${briefs.join(', ')}): general-purpose agents start as token-optimizer:worker with it when the plugin is loaded.`
+      : '  no agent brief approved: agents start with your full instruction files. token-optimizer-agent-brief draft compiles one to review.'
+  );
 } catch {
   console.log('  Cannot read the subagent cache setting.');
 }

@@ -23,7 +23,8 @@
     "token-optimizer-run": "./src/scripts/run-client.mjs",
     "token-optimizer-route": "./src/scripts/route-client.mjs",
     "token-optimizer-learned": "./src/scripts/learned.mjs",
-    "token-optimizer-statusline": "./src/scripts/statusline-tap.mjs"
+    "token-optimizer-statusline": "./src/scripts/statusline-tap.mjs",
+    "token-optimizer-agent-brief": "./src/scripts/agent-brief.mjs"
   },
   "files": [
     "dist/**/*",

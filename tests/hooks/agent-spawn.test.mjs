@@ -47,6 +47,8 @@ describe('the report budget', () => {
     expect(once.subagent_type).toBe('general-purpose');
     expect(withReportBudget(once)).toBeNull();
     expect(withReportBudget({ prompt: 'continue', subagent_type: 'fork' })).toBeNull();
+    // the worker's own prompt carries the budget
+    expect(withReportBudget({ prompt: 'x', subagent_type: 'token-optimizer:worker' })).toBeNull();
   });
 
   test('is off when asked', () => {

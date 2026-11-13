@@ -37,6 +37,7 @@ try {
         first,
         agentBase: measured > 0 ? measured : DEFAULT_AGENT_BASE,
         mode: current,
+        ...(typeof payload.cwd === 'string' && payload.cwd ? { cwd: payload.cwd } : {}),
       });
       const out = { hookEventName: 'PreToolUse' };
       if (plan.deny) {
