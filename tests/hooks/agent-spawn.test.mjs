@@ -20,6 +20,10 @@ import {
   withSharedBriefing,
   modelTier,
   workerModel,
+  BURST_GAP_MS,
+  nextSpawnState,
+  recordSpawn,
+  saveSpawnState,
 } from '../../src/hooks-core/agent-spawn.mjs';
 
 const repo = join(fileURLToPath(import.meta.url), '..', '..', '..');
@@ -56,6 +60,39 @@ describe('parentState', () => {
 
   test('a missing transcript is an empty state, not an error', () => {
     expect(parentState(join(tmpdir(), 'nope.jsonl'), 'x')).toEqual({ contextTokens: 0, batch: 1, first: true, found: [], model: null });
+  });
+});
+
+describe('the spawn record', () => {
+  test('spawns within the gap are one burst; a pause starts a new one', () => {
+    let s = nextSpawnState(null, 1_000);
+    expect(s.burst).toBe(1);
+    s = nextSpawnState(s, 2_000);
+    s = nextSpawnState(s, 3_000);
+    expect(s.burst).toBe(3);
+    expect(nextSpawnState(s, 3_000 + BURST_GAP_MS).burst).toBe(1);
+    // a clock that went backwards is not the same burst
+    expect(nextSpawnState(s, 500).burst).toBe(1);
+    expect(nextSpawnState({ ...s, routedNoted: true }, 3_100).routedNoted).toBe(true);
+  });
+
+  test('is per session and persisted; no session id records nothing', () => {
+    const env = { TOKEN_OPTIMIZER_STATE_DIR: mkdtempSync(join(tmpdir(), 'spawn-state-')) };
+    expect(recordSpawn('s1', { now: 1_000, env }).burst).toBe(1);
+    expect(recordSpawn('s1', { now: 2_000, env }).burst).toBe(2);
+    expect(recordSpawn('s2', { now: 2_100, env }).burst).toBe(1);
+    saveSpawnState('s1', { lastAt: 2_000, burst: 2, routedNoted: true }, env);
+    expect(recordSpawn('s1', { now: 2_500, env })).toEqual({ lastAt: 2_500, burst: 3, routedNoted: true });
+    expect(recordSpawn('', { env })).toBeNull();
+  });
+
+  test('a burst-counted batch speaks once, at the threshold, as a lower bound', () => {
+    const input = { prompt: 'x' };
+    expect(planSpawn({ input, batch: 2, first: false, batchSpeaks: false }).context).toBeNull();
+    const at = planSpawn({ input, batch: 3, first: false, batchSpeaks: true, agentBase: 10_000 }).context;
+    expect(at).toContain('At least 3 agents');
+    expect(at).toContain('~30k or more together');
+    expect(planSpawn({ input, batch: 4, first: false, batchSpeaks: false }).context).toBeNull();
   });
 });
 
@@ -239,6 +276,20 @@ describe('the hook, end to end', () => {
   test('with the budget off, a plain spawn is left completely alone', () => {
     const { out } = run({ tool_name: 'Agent', tool_input: { prompt: 'x' } }, { TOKEN_OPTIMIZER_AGENT_REPORT_BUDGET: 'off' });
     expect(out).toBeNull();
+  });
+
+  test('a streamed batch (calls not yet in the transcript) is counted from the session record', () => {
+    const env = { TOKEN_OPTIMIZER_STATE_DIR: mkdtempSync(join(tmpdir(), 'spawn-burst-')) };
+    const one = { tool_name: 'Agent', session_id: 'sess-burst', tool_input: { prompt: 'Fix it.' } };
+    const note = () => run(one, env).out?.hookSpecificOutput?.additionalContext ?? null;
+    // The first spawn of a session never speaks for a batch.
+    expect(note()).toBeNull();
+    // Seeded rather than spawned three times, so a slow machine cannot open
+    // a gap between the hook processes and split the burst.
+    saveSpawnState('sess-burst', { lastAt: Date.now(), burst: 2, routedNoted: false }, env);
+    expect(note()).toContain('At least 3 agents');
+    saveSpawnState('sess-burst', { lastAt: Date.now(), burst: 3, routedNoted: false }, env);
+    expect(note()).toBeNull();
   });
 
   test('passes on where the parent already looked; both switches off leave it alone', () => {

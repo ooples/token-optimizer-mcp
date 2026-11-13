@@ -13,7 +13,14 @@
  * Fail open: any error prints nothing, and the agent starts exactly as asked.
  */
 import { readFileSync } from 'node:fs';
-import { DEFAULT_AGENT_BASE, parentState, planSpawn } from '../lib/agent-spawn.mjs';
+import {
+  BATCH_ADVISE,
+  DEFAULT_AGENT_BASE,
+  parentState,
+  planSpawn,
+  recordSpawn,
+  saveSpawnState,
+} from '../lib/agent-spawn.mjs';
 import { sessionStartedAt } from '../lib/agent-brief.mjs';
 import { agentOverhead, readLedger } from '../lib/agent-ledger.mjs';
 import { mode } from '../lib/policy.mjs';
@@ -27,16 +34,22 @@ try {
     const input = payload.tool_input ?? payload.toolInput;
     if ((tool === 'Agent' || tool === 'Task') && input && typeof input === 'object') {
       const transcript = payload.transcript_path ?? payload.transcriptPath;
-      const { contextTokens, batch, first, found, model } = parentState(
-        transcript,
-        payload.tool_use_id ?? payload.toolUseId
-      );
+      const state = parentState(transcript, payload.tool_use_id ?? payload.toolUseId);
+      const { contextTokens, found, model } = state;
+      // The transcript sees a batch only when the client wrote its calls before
+      // the hook ran; Claude Code does not, so the session's spawn record counts
+      // the burst instead, and the batch note speaks once it reaches the threshold.
+      const sessionId = payload.session_id ?? payload.sessionId;
+      const spawn = recordSpawn(sessionId);
+      const fromRecord = state.batch <= 1 && spawn !== null;
       const measured = agentOverhead(readLedger()).medianBase;
       const plan = planSpawn({
         input,
         contextTokens,
-        batch,
-        first,
+        batch: fromRecord ? spawn.burst : state.batch,
+        first: fromRecord ? spawn.burst === 1 : state.first,
+        batchSpeaks: fromRecord ? spawn.burst === BATCH_ADVISE : null,
+        routedNoted: spawn?.routedNoted === true,
         found,
         parentModel: model,
         agentBase: measured > 0 ? measured : DEFAULT_AGENT_BASE,
@@ -44,6 +57,13 @@ try {
         sessionStart: sessionStartedAt(transcript),
         ...(typeof payload.cwd === 'string' && payload.cwd ? { cwd: payload.cwd } : {}),
       });
+      if (plan.routedNote && spawn) {
+        try {
+          saveSpawnState(sessionId, { ...spawn, routedNoted: true });
+        } catch {
+          /* the note is said again next time; the spawn itself is unaffected */
+        }
+      }
       const out = { hookEventName: 'PreToolUse' };
       if (plan.deny) {
         out.permissionDecision = 'deny';

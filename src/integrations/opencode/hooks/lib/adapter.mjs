@@ -129,6 +129,7 @@ import { recordOnBoard, recordReadOnBoard } from './blackboard.mjs';
 import { nextPacedContinuation, recordWindowActivity, pacerEnabled } from './quota-pacer.mjs';
 import { artifactPath, capture } from './expand.mjs';
 import { applyHoldout } from './injection-holdout.mjs';
+import { isWorkerType } from './agent-brief.mjs';
 import { hasLiveRestorable, learnedLocation, restoreForPrompt, scheduleFold, takeNotice } from './toolprune.mjs';
 import { scheduleCodexFold, takeCodexNotice } from './codexprune.mjs';
 import { onToolFailure, recordTurnEnd } from './loopguard.mjs';
@@ -2194,9 +2195,14 @@ async function runHook(clientName, event, invocation) {
   // client whose context style is silent (Windsurf) cannot deliver any context,
   // so it must not spend the once-only flag on a message nobody receives.
   const canDeliverToolContext = contextOutput(client, eventName, 'x') !== null;
+  // NEVER TO OUR OWN WORKER. Its prompt says not to record notes, and the
+  // guidance overrode it: measured on #567's bench, 2 of 12 workers spent a
+  // ToolSearch and a wiki_write turn on it. Every Claude Code hook payload
+  // carries `agent_type`, so the worker is known exactly.
   const guided =
     event === 'post-tool' &&
     !state.recordingGuided &&
+    !isWorkerType(raw?.agent_type ?? raw?.agentType) &&
     features.harvest &&
     client.contextStyle !== 'silent' &&
     toolEvidence.names.has('wiki_write') &&

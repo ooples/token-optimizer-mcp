@@ -175,7 +175,12 @@ describe('routeToWorker', () => {
     expect(routed.prompt).not.toContain(BUDGET_MARKER);
     const told = planSpawn({ input: { prompt: 'Fix it.' }, cwd: project, env });
     expect(told.context).toContain('runs as token-optimizer:worker');
-    expect(planSpawn({ input: { prompt: 'Fix it.' }, cwd: project, env, batch: 2, first: false }).context).toBeNull();
+    expect(told.routedNote).toBe(true);
+    // Said once per session: a later spawn, of the same batch or not, is quiet.
+    const later = planSpawn({ input: { prompt: 'Fix it.' }, cwd: project, env, routedNoted: true });
+    expect(later.context).toBeNull();
+    expect(later.routedNote).toBe(false);
+    expect(later.updatedInput.subagent_type).toBe(WORKER_AGENT);
     const kept = planSpawn({ input: { prompt: 'Fix it.', subagent_type: 'my-reviewer' }, cwd: project, env }).updatedInput;
     expect(kept.subagent_type).toBe('my-reviewer');
     expect(kept.prompt).toContain(BUDGET_MARKER);

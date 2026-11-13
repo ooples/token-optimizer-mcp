@@ -32,6 +32,7 @@ import {
   rememberOptimizerTools,
 } from './lib/capabilities.mjs';
 import { restorationPlan } from './lib/restore.mjs';
+import { agentBriefNotice } from './lib/agent-brief.mjs';
 import { applyQuietEnv } from './lib/quiet-env.mjs';
 import { resumeIfDue } from './lib/migrate.mjs';
 import { takeSlowHookNotice } from './lib/hook-latency.mjs';
@@ -218,6 +219,9 @@ const blocks = [
     text: policyText(true, toolEvidence.names, toolEvidence.proven),
   },
 ];
+// Short agent prompts: said only when a brief is approved, so only when true.
+const briefNotice = agentBriefNotice({ cwd: payload?.cwd || process.env.CLAUDE_PROJECT_DIR || process.cwd() });
+if (briefNotice) blocks.push({ id: 'agent-brief', volatility: 0, text: briefNotice });
 const crashed = serverCrashNotice();
 if (crashed) blocks.push({ id: 'server-crash', volatility: 0, text: crashed });
 const oldNode = nodeFloorNotice();

@@ -28,8 +28,63 @@
  * Every function here is pure or reads a bounded tail; the hook fails open.
  */
 
-import { closeSync, openSync, readSync, statSync } from 'node:fs';
+import { closeSync, mkdirSync, openSync, readFileSync, readSync, renameSync, statSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { isWorkerType, routeToWorker } from './agent-brief.mjs';
+
+/** Spawns closer together than this are one batch. */
+export const BURST_GAP_MS = 5_000;
+
+/**
+ * WHY A RECORD AND NOT THE TRANSCRIPT. Claude Code runs each Agent call's
+ * PreToolUse hook before that call reaches the transcript, so a hook reading
+ * the transcript never sees its siblings: every call of a 12-agent batch read
+ * as a batch of one and as its first, the routing note was said 11 times into
+ * the parent's context (measured on #567's bench), and the batch-cost note
+ * never fired at all. The record is per session and keeps two facts: how many
+ * spawns the current burst has had, and whether the routing note was said.
+ */
+function spawnStatePath(sessionId, env) {
+  const key = createHash('sha256').update(String(sessionId)).digest('hex').slice(0, 16);
+  return join(env.TOKEN_OPTIMIZER_STATE_DIR || join(tmpdir(), 'token-optimizer-hooks'), 'agent-spawn', `${key}.json`);
+}
+
+/** The burst this spawn belongs to, given the previous record. Pure. */
+export function nextSpawnState(prev, now) {
+  const last = Number(prev?.lastAt) || 0;
+  const burst = last && now - last >= 0 && now - last < BURST_GAP_MS ? (Number(prev?.burst) || 0) + 1 : 1;
+  return { lastAt: now, burst, routedNoted: Boolean(prev?.routedNoted) };
+}
+
+/** Count this spawn into the session's record; null without a session id or on any failure. */
+export function recordSpawn(sessionId, { now = Date.now(), env = process.env } = {}) {
+  if (!sessionId) return null;
+  try {
+    const path = spawnStatePath(sessionId, env);
+    let prev = null;
+    try {
+      prev = JSON.parse(readFileSync(path, 'utf8'));
+    } catch {
+      /* the session's first spawn */
+    }
+    const next = nextSpawnState(prev, now);
+    saveSpawnState(sessionId, next, env);
+    return next;
+  } catch {
+    return null;
+  }
+}
+
+/** Write the record atomically, so concurrent hooks never read a torn file. */
+export function saveSpawnState(sessionId, state, env = process.env) {
+  const path = spawnStatePath(sessionId, env);
+  mkdirSync(join(path, '..'), { recursive: true });
+  const temporary = `${path}.tmp-${process.pid}`;
+  writeFileSync(temporary, JSON.stringify(state));
+  renameSync(temporary, path);
+}
 
 /** A fork larger than this is worth a sentence before it is copied. */
 export const FORK_ADVISE_TOKENS = 60_000;
@@ -277,7 +332,7 @@ export function withReportBudget(input, env = process.env) {
  * @param {number} args.sessionStart when the session started (ms), so only agents it loaded are named
  * @returns {{ updatedInput: object|null, context: string|null, deny: string|null }}
  */
-export function planSpawn({ input, contextTokens = 0, batch = 1, first = true, found = [], parentModel = null, agentBase = DEFAULT_AGENT_BASE, mode = 'assist', env = process.env, cwd = process.cwd(), sessionStart = null }) {
+export function planSpawn({ input, contextTokens = 0, batch = 1, first = true, batchSpeaks = null, routedNoted = false, found = [], parentModel = null, agentBase = DEFAULT_AGENT_BASE, mode = 'assist', env = process.env, cwd = process.cwd(), sessionStart = null }) {
   // A general-purpose agent goes to the lean worker with the user's approved
   // brief when there is one (agent-brief.mjs); the worker's own prompt asks for
   // the short report, so the budget is not appended to it as well.
@@ -290,7 +345,8 @@ export function planSpawn({ input, contextTokens = 0, batch = 1, first = true, f
   let deny = null;
   // The parent must know what its agent was told: measured live, a parent that
   // was not told read the brief's effect on the reply as the agent disobeying.
-  if (routed && first) {
+  // Once per session: the parent keeps it in context, so a second copy is waste.
+  if (routed && !routedNoted) {
     notes.push(
       `${batch > 1 ? 'These general-purpose agents run' : 'This general-purpose agent runs'} as ${routed.subagent_type}` +
         `${model ? ` on ${model}` : ''} with the user's approved agent brief (rules from their instruction files) in front of the task, ` +
@@ -308,13 +364,14 @@ export function planSpawn({ input, contextTokens = 0, batch = 1, first = true, f
       `${batch > 1 ? ` (~${k(fresh)} for ${batch})` : ''}; give it the files and facts it needs in its prompt instead.`;
     if (mode === 'enforce') deny = `${line} Retry with a non-fork subagent_type and a self-contained prompt.`;
     else if (first) notes.push(line);
-  } else if (batch >= BATCH_ADVISE && first) {
+  } else if (batch >= BATCH_ADVISE && (batchSpeaks ?? first)) {
     notes.push(
-      `${batch} agents each start from ~${k(agentBase)} tokens of fixed context (~${k(agentBase * batch)} together) ` +
+      `${batchSpeaks === null ? '' : 'At least '}${batch} agents each start from ~${k(agentBase)} tokens of fixed context ` +
+        `(~${k(agentBase * batch)}${batchSpeaks === null ? '' : ' or more'} together) ` +
         'and re-read it every turn. That pays for independent work that runs in parallel; for steps that depend ' +
         'on each other, or a handful of reads, doing it directly is cheaper.'
     );
   }
 
-  return { updatedInput, context: notes.length ? `token-optimizer: ${notes.join(' ')}` : null, deny };
+  return { updatedInput, context: notes.length ? `token-optimizer: ${notes.join(' ')}` : null, deny, routedNote: Boolean(routed && !routedNoted) };
 }

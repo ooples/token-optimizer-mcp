@@ -66,6 +66,27 @@ export function briefPaths({ cwd = process.cwd(), env = process.env } = {}) {
   };
 }
 
+/**
+ * SHORT AGENT PROMPTS (#567): the session-start line, or null without an
+ * approved brief. With one, every agent the session starts already gets the
+ * user's rules and the paths the session has read (agent-spawn.mjs), yet the
+ * parent restated both in each prompt -- measured on the bench, ~40% of every
+ * agent prompt was rules, written as output at 5x. The spawn hook runs after
+ * the prompt is written, so session start is the only point that can change it.
+ */
+export function agentBriefNotice({ cwd = process.cwd(), env = process.env } = {}) {
+  try {
+    const { global, project } = briefPaths({ cwd, env });
+    if (![global, project].some((path) => path && existsSync(path))) return null;
+  } catch {
+    return null;
+  }
+  return (
+    "Agents you start receive the user's approved rules and the paths of files you have read. " +
+    'Give each agent only its task and what you know about it; do not restate rules or instructions.'
+  );
+}
+
 /** The instruction files Claude Code loads for `cwd`, global first, nearest last. */
 export function instructionFiles({ cwd = process.cwd(), env = process.env, ceiling = null } = {}) {
   const config = env.CLAUDE_CONFIG_DIR || join(env.USERPROFILE || env.HOME || homedir(), '.claude');
