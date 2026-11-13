@@ -54,7 +54,7 @@ function spawnStatePath(sessionId, env) {
   return join(env.TOKEN_OPTIMIZER_STATE_DIR || join(tmpdir(), 'token-optimizer-hooks'), 'agent-spawn', `${key}.json`);
 }
 
-/** The burst this spawn belongs to, given the previous record. Pure. */
+/** Which burst a new agent call joins, given the previous record. Pure. */
 export function nextSpawnState(prev, now) {
   const last = Number(prev?.lastAt) || 0;
   const burst = last && now - last >= 0 && now - last < BURST_GAP_MS ? (Number(prev?.burst) || 0) + 1 : 1;
