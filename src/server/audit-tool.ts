@@ -190,6 +190,11 @@ export async function tokenAudit(input: {
     const agents = mods.subagents.subagentTally(mods.cache.transcriptFor(cwd));
     const finding = mods.subagents.fixedContextFinding(agents);
     if (finding) findings.push(finding);
+    // The larger lever, measured 2026-11-12: subagents write their cache at the
+    // 5-minute tier, and an agent waiting on a build loses all of it. 90% of the
+    // cache writes of 37 agents were that re-write.
+    const ttl = mods.subagents.cacheTtlFinding(agents);
+    if (ttl) findings.push(ttl);
     tally = mods.subagents.renderTally(agents);
   } catch {
     /* subagent accounting is a bonus; never fail the audit over it */

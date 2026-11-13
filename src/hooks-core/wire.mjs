@@ -79,6 +79,9 @@ export const WIRING = [
   { event: 'PostToolUseFailure', file: 'post-tool-failure.mjs', matcher: null },
   { event: 'PreCompact', file: 'precompact-optimize.mjs', matcher: null },
   { event: 'Stop', file: 'stop.mjs', matcher: null },
+  // What each finished agent cost, and the subagent cache-TTL tier its evidence
+  // justifies (agent-ledger.mjs). One bounded transcript read per agent.
+  { event: 'SubagentStop', file: 'subagent-stop.mjs', matcher: null },
 ];
 
 /**
