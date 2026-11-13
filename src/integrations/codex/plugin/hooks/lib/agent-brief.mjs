@@ -9,7 +9,7 @@
  * Claude Code 2.1.323 for an agent asked to reply with one word, re-read on
  * every one of its turns and re-written whenever its 5-minute cache lapses. The
  * plugin's `token-optimizer:worker` agent starts from 9,724 (omitClaudeMd, no
- * skill list, 1h cache) -- but without the user's rules, and "never commit to
+ * skill list) -- but without the user's rules, and "never commit to
  * master" is not optional for a delegated agent.
  *
  * So the instruction files are compiled ONCE into a brief: the rules, without

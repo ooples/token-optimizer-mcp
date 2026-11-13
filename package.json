@@ -153,6 +153,7 @@
     "bench:screen": "bash bench/thol/run-campaign.sh",
     "bench:confirm": "REPS=3 bash bench/thol/run-campaign.sh",
     "bench:debug-loop": "node bench/debug-loop/run.mjs",
+    "bench:agents": "node bench/agents/ab.mjs",
     "bench:field": "node bench/field/report.mjs",
     "bench:pack": "node src/scripts/bench-pack.mjs",
     "verify:onnx": "node src/scripts/verify-onnx-adapter.mjs",

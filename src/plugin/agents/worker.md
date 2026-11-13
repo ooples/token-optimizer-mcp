@@ -1,11 +1,9 @@
 ---
 name: worker
-description: A general-purpose agent that starts lean, for a delegated task whose prompt carries everything it needs. It starts without CLAUDE.md, auto-memory and the skill list, and keeps its prompt cache for an hour, so each spawn and each of its turns costs less than general-purpose. Put every rule, file path and constraint the task depends on in the prompt; it cannot see your instruction files.
+description: A general-purpose agent that starts lean, for a delegated task whose prompt carries everything it needs. It starts without CLAUDE.md, auto-memory and the skill list, so each spawn and each of its turns costs less than general-purpose. Put every rule, file path and constraint the task depends on in the prompt; it cannot see your instruction files.
 model: inherit
 omitClaudeMd: true
 disallowedTools: Skill
-experimental:
-  cacheTtl: 1h
 ---
 
 You are an agent working on one task delegated by another agent. Use the tools available to complete it fully, then stop.

@@ -171,7 +171,10 @@ describe('the worker agent and the CLI', () => {
     expect(agent).toMatch(/^name: worker$/m);
     expect(agent).toMatch(/^omitClaudeMd: true$/m);
     expect(agent).toMatch(/^disallowedTools: Skill$/m);
-    expect(agent).toMatch(/^experimental:\r?\n {2}cacheTtl: 1h$/m);
+    // No fixed cache tier: a 1h write costs 2x against 1.25x, which a short
+    // agent never earns back (measured, bench/agents/ab.mjs); the evidence-gated
+    // subagentPromptCacheTtl setting decides the tier instead.
+    expect(agent).not.toMatch(/cacheTtl/);
   });
 
   test('draft, approve, show and remove', () => {
