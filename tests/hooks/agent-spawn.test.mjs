@@ -1,0 +1,125 @@
+/**
+ * PreToolUse on Agent/Task: the report budget, and what a fork or a batch costs
+ * before it is spawned (#567).
+ */
+
+import { describe, expect, test } from '@jest/globals';
+import { spawnSync } from 'node:child_process';
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { BUDGET_MARKER, parentState, planSpawn, withReportBudget } from '../../src/hooks-core/agent-spawn.mjs';
+
+const repo = join(fileURLToPath(import.meta.url), '..', '..', '..');
+
+/** A parent transcript whose last request carried `context` tokens and spawned `ids`. */
+function parent({ context = 150_000, ids = ['t1'], streamed = false } = {}) {
+  const dir = mkdtempSync(join(tmpdir(), 'spawn-'));
+  const path = join(dir, 'parent.jsonl');
+  const usage = { input_tokens: 10, cache_read_input_tokens: context - 1_010, cache_creation_input_tokens: 1_000 };
+  const blocks = ids.map((id) => ({ type: 'tool_use', id, name: 'Agent', input: { prompt: 'x' } }));
+  const entries = streamed
+    ? blocks.map((b) => ({ type: 'assistant', message: { id: 'msg_1', usage, content: [b] } }))
+    : [{ type: 'assistant', message: { id: 'msg_1', usage, content: blocks } }];
+  writeFileSync(
+    path,
+    [{ type: 'user', message: { content: 'go' } }, ...entries].map((e) => JSON.stringify(e)).join('\n') + '\n'
+  );
+  return path;
+}
+
+describe('parentState', () => {
+  test('reads the context and the batch, also when the message is streamed per block', () => {
+    expect(parentState(parent({ ids: ['a', 'b', 'c'] }), 'b')).toEqual({ contextTokens: 150_000, batch: 3, first: false });
+    expect(parentState(parent({ ids: ['a', 'b', 'c'], streamed: true }), 'a')).toEqual({ contextTokens: 150_000, batch: 3, first: true });
+  });
+
+  test('a missing transcript is an empty state, not an error', () => {
+    expect(parentState(join(tmpdir(), 'nope.jsonl'), 'x')).toEqual({ contextTokens: 0, batch: 1, first: true });
+  });
+});
+
+describe('the report budget', () => {
+  test('is appended once, and never to a fork', () => {
+    const once = withReportBudget({ prompt: 'Find the bug.', subagent_type: 'general-purpose' });
+    expect(once.prompt).toContain(BUDGET_MARKER);
+    expect(once.subagent_type).toBe('general-purpose');
+    expect(withReportBudget(once)).toBeNull();
+    expect(withReportBudget({ prompt: 'continue', subagent_type: 'fork' })).toBeNull();
+  });
+
+  test('is off when asked', () => {
+    expect(withReportBudget({ prompt: 'x' }, { TOKEN_OPTIMIZER_AGENT_REPORT_BUDGET: 'off' })).toBeNull();
+  });
+});
+
+describe('planSpawn', () => {
+  test('a large fork is priced against a fresh agent, and refused only in enforce', () => {
+    const input = { prompt: 'continue', subagent_type: 'fork' };
+    const assist = planSpawn({ input, contextTokens: 150_000, batch: 3 });
+    expect(assist.context).toContain('3 forks copy');
+    expect(assist.context).toContain('~450k');
+    expect(assist.deny).toBeNull();
+    expect(planSpawn({ input, contextTokens: 150_000, batch: 3, first: false }).context).toBeNull();
+    const enforce = planSpawn({ input, contextTokens: 150_000, mode: 'enforce' });
+    expect(enforce.deny).toContain('non-fork subagent_type');
+  });
+
+  test('a small fork says nothing', () => {
+    expect(planSpawn({ input: { prompt: 'x', subagent_type: 'fork' }, contextTokens: 20_000 }).context).toBeNull();
+  });
+
+  test('a batch is priced once, by its first call', () => {
+    const input = { prompt: 'x' };
+    expect(planSpawn({ input, batch: 4, first: true, agentBase: 50_000 }).context).toContain('~200k together');
+    expect(planSpawn({ input, batch: 4, first: false }).context).toBeNull();
+    expect(planSpawn({ input, batch: 2 }).context).toBeNull();
+  });
+});
+
+describe('the hook, end to end', () => {
+  function run(payload, env = {}) {
+    const home = mkdtempSync(join(tmpdir(), 'spawn-home-'));
+    const result = spawnSync(process.execPath, [join(repo, 'src', 'plugin', 'hooks', 'agent-spawn.mjs')], {
+      input: JSON.stringify(payload),
+      encoding: 'utf8',
+      env: { ...process.env, TOKEN_OPTIMIZER_HOME: home, TOKEN_OPTIMIZER_STATE_DIR: join(home, 's'), TOKEN_OPTIMIZER_MODE: '', ...env },
+      timeout: 30_000,
+    });
+    return { status: result.status, out: result.stdout ? JSON.parse(result.stdout) : null };
+  }
+
+  test('rewrites the prompt with the budget and says what the batch costs', () => {
+    const transcript = parent({ ids: ['a', 'b', 'c'] });
+    const { status, out } = run({
+      hook_event_name: 'PreToolUse',
+      tool_name: 'Agent',
+      tool_use_id: 'a',
+      transcript_path: transcript,
+      tool_input: { description: 'd', prompt: 'Audit the parser.', subagent_type: 'general-purpose' },
+    });
+    expect(status).toBe(0);
+    expect(out.hookSpecificOutput.updatedInput.prompt).toContain('Audit the parser.');
+    expect(out.hookSpecificOutput.updatedInput.prompt).toContain(BUDGET_MARKER);
+    expect(out.hookSpecificOutput.updatedInput.description).toBe('d');
+    expect(out.hookSpecificOutput.additionalContext).toContain('3 agents');
+  });
+
+  test('prints nothing in off mode, for other tools, and for garbage', () => {
+    const payload = { tool_name: 'Agent', tool_input: { prompt: 'x' } };
+    expect(run(payload, { TOKEN_OPTIMIZER_MODE: 'off' }).out).toBeNull();
+    expect(run({ tool_name: 'Read', tool_input: { file_path: 'x' } }).out).toBeNull();
+    const garbage = spawnSync(process.execPath, [join(repo, 'src', 'plugin', 'hooks', 'agent-spawn.mjs')], {
+      input: 'nope',
+      encoding: 'utf8',
+    });
+    expect(garbage.status).toBe(0);
+    expect(garbage.stdout).toBe('');
+  });
+
+  test('with the budget off, a plain spawn is left completely alone', () => {
+    const { out } = run({ tool_name: 'Agent', tool_input: { prompt: 'x' } }, { TOKEN_OPTIMIZER_AGENT_REPORT_BUDGET: 'off' });
+    expect(out).toBeNull();
+  });
+});

@@ -315,6 +315,66 @@ function renderGraph(
   return lines;
 }
 
+interface AgentOverhead {
+  agents: number;
+  turns: number;
+  weighted: number;
+  output: number;
+  toolOutput: number;
+  medianBase: number;
+  fixedReread: number;
+  expiryRewrite: number;
+  expiries: number;
+  avoidableAt1h: number;
+}
+
+/**
+ * What subagents cost beyond their work (#567), from the agent ledger the
+ * SubagentStop hook keeps.
+ *
+ * THE REPORT ONLY EVER COUNTED ONE SIDE. "Verified saved" is trimmed tool
+ * output, so a session that spawned five agents reported the same savings as
+ * one that did the work itself, while each agent started from 35-61k tokens of
+ * fixed context and lost its cache whenever it waited on a build. This section
+ * puts that cost beside the saving, in the same uncached-input-equivalent unit,
+ * so the two can be compared. Fails open like graphSection.
+ */
+async function agentSection(args: {
+  startDate?: string;
+  endDate?: string;
+}): Promise<{ overhead: AgentOverhead; ttl: unknown; lines: string[] } | null> {
+  try {
+    const ledger = await import(coreUrl('agent-ledger.mjs'));
+    const since = args.startDate ? Date.parse(args.startDate) : 0;
+    const until = args.endDate ? Date.parse(args.endDate) : Infinity;
+    const overhead: AgentOverhead = ledger.agentOverhead(ledger.readLedger(), {
+      since: Number.isFinite(since) ? since : 0,
+      until: Number.isFinite(until) ? until : Infinity,
+    });
+    if (!overhead.agents) return null;
+    const ttl = ledger.ttlRecord();
+    const ttlLine = ttl?.undoneAt
+      ? 'subagent cache TTL : 1h was set, then undone by you'
+      : ttl
+        ? `subagent cache TTL : set to ${ttl.value} on ${new Date(ttl.at).toISOString().slice(0, 10)} from ${num(ttl.evidence?.agents ?? 0)} agents' evidence`
+        : overhead.avoidableAt1h > 0
+          ? `subagent cache TTL : 5m; the 1h tier would have saved ${num(overhead.avoidableAt1h)} (set once the evidence is sufficient)`
+          : 'subagent cache TTL : 5m, which these agents were cheapest on';
+    const lines = [
+      '',
+      '▸ Agent overhead (not part of "verified saved"; uncached-input equivalents)',
+      `  agents finished     : ${num(overhead.agents)} over ${num(overhead.turns)} turns, total ${num(overhead.weighted)}`,
+      `  starting context    : median ${num(overhead.medianBase)} tokens per agent, re-read each turn = ${num(overhead.fixedReread)}`,
+      `  cache expiry        : ${num(overhead.expiries)} times while agents waited, re-writing ${num(overhead.expiryRewrite)}`,
+      `  tool output (the part tools can trim): ${num(overhead.toolOutput)}`,
+      `  ${ttlLine}`,
+    ];
+    return { overhead, ttl, lines };
+  } catch {
+    return null;
+  }
+}
+
 export function getOptimizationReportTool(analyticsManager: AnalyticsManager) {
   return async (args: {
     startDate?: string;
@@ -356,6 +416,7 @@ export function getOptimizationReportTool(analyticsManager: AnalyticsManager) {
 
       const cost = directPrice(scopedEntries);
       const graph = await graphSection();
+      const agents = await agentSection(args);
 
       const formatted = [
         '╔══ Token Optimizer — Verified Savings Report ══╗',
@@ -377,6 +438,7 @@ export function getOptimizationReportTool(analyticsManager: AnalyticsManager) {
         renderTable('▸ By hook phase', hook.byHook, topN),
         renderTable('▸ By MCP server', server.byServer, topN),
         ...(graph ? graph.lines : []),
+        ...(agents ? agents.lines : []),
       ].join('\n');
 
       return JSON.stringify(
@@ -399,6 +461,7 @@ export function getOptimizationReportTool(analyticsManager: AnalyticsManager) {
               'rows without versioned comparable-baseline provenance are excluded',
           },
           graph: graph ? graph.sheet : null,
+          agents: agents ? { ...agents.overhead, ttl: agents.ttl } : null,
           byAction,
           byHook: hook.byHook,
           byServer: server.byServer,

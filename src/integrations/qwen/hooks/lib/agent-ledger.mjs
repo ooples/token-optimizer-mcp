@@ -229,3 +229,65 @@ export function undoSubagentTtl({ env = process.env, now = Date.now() } = {}) {
   writeFileSync(ttlRecordPath(env), `${JSON.stringify({ ...record, undoneAt: now }, null, 2)}\n`);
   return { undone: true, reason: 'removed' };
 }
+
+/**
+ * What agents cost beyond their work, in uncached-input token equivalents, for
+ * the savings report. The report's "verified saved" counts trimmed tool output
+ * only; this is the other side of the ledger, which it never showed:
+ *
+ *   fixedReread   every turn after the first re-reads the agent's starting
+ *                 context (system prompt, tools, instructions, memory) at 0.1x
+ *   expiryRewrite cache re-written after a gap outlived the TTL, at the tier's
+ *                 write price
+ *   avoidableAt1h what the 1h tier would have saved on the rows written at 5m
+ *                 (zero or less means 5m was right)
+ */
+export function agentOverhead(rows, { since = 0, until = Infinity } = {}) {
+  const inRange = (rows || []).filter((r) => r.at >= since && r.at <= until);
+  const sum = (key) => inRange.reduce((total, r) => total + (Number(r[key]) || 0), 0);
+  const fixedReread = Math.round(
+    inRange.reduce((total, r) => total + 0.1 * (r.baseContext || 0) * Math.max(0, (r.turns || 0) - 1), 0)
+  );
+  const expiryRewrite = Math.round(
+    inRange.reduce((total, r) => total + (r.expiryTokens || 0) * ((r.write1h || 0) > (r.write5m || 0) ? 2 : 1.25), 0)
+  );
+  const at5mRows = inRange.filter((r) => (r.write5m || 0) > (r.write1h || 0));
+  const weighted = Math.round(
+    inRange.reduce(
+      (total, r) =>
+        total +
+        (r.input || 0) +
+        0.1 * (r.cacheRead || 0) +
+        1.25 * (r.write5m || 0) +
+        2 * (r.write1h || 0),
+      0
+    )
+  );
+  return {
+    agents: inRange.length,
+    turns: sum('turns'),
+    weighted,
+    output: sum('output'),
+    toolOutput: sum('toolOutput'),
+    medianBase: median(inRange.map((r) => r.baseContext || 0)),
+    fixedReread,
+    expiryRewrite,
+    expiries: sum('expiries'),
+    avoidableAt1h: at5mRows.reduce((total, r) => total + ((r.at5m || 0) - (r.at1h || 0)), 0),
+  };
+}
+
+function median(values) {
+  if (!values.length) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  return sorted[Math.floor(sorted.length / 2)];
+}
+
+/** The subagent TTL record, if token-optimizer ever wrote the setting. */
+export function ttlRecord(env = process.env) {
+  try {
+    return JSON.parse(readFileSync(ttlRecordPath(env), 'utf8'));
+  } catch {
+    return null;
+  }
+}

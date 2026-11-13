@@ -69,6 +69,9 @@ export const WIRING = [
   { event: 'PreToolUse', file: 'pretooluse-router.mjs', matcher: 'Read|Grep|Glob|Edit|MultiEdit|Write|Bash|PowerShell|WebFetch|WebSearch' },
   // Records which agent made each cached-file call, so the server scopes its cache per agent (#488).
   { event: 'PreToolUse', file: 'agent-scope.mjs', matcher: 'mcp__.*__(?:smart_read|smart_config_read|smart_write|smart_edit)' },
+  // Before an agent is spawned: its report budget, and what a fork or a batch
+  // costs (agent-spawn.mjs, #567). Fires once per agent, not per tool call.
+  { event: 'PreToolUse', file: 'agent-spawn.mjs', matcher: 'Agent|Task' },
   // NOT Read, Agent or Task: each matched call spawns this hook (~170 ms: Node
   // start plus module load). For a Read its only work, the unchanged re-read
   // pointer, never fires -- Claude Code answers an unchanged re-read itself --
