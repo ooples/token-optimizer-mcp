@@ -78,6 +78,7 @@ import { routeReadOnlySubagent } from '../compress/model-route.js';
 import {
   KeepWarm,
   keepWarmEnabled,
+  warmConversationKey,
   maxPingsFromEnv,
   ttlOf,
 } from './keep-warm.js';
@@ -1092,7 +1093,7 @@ function compressBodyOnce(
   // cache has certainly expired, the whole prefix is re-written this turn
   // whatever we send, so the strategy may compress all of it. Keyed the same
   // way keep-warm tracks it, so whichever body goes out maps back here.
-  const convKey = anchorConversationKey(parsed);
+  const convKey = warmConversationKey(parsed, anchorConversationKey(parsed));
   bodyKeys.set(body, convKey);
   // NOT WHEN THINKING BLOCKS ARE IN THE HISTORY. On models that bind thinking
   // to the conversation (Opus 5.5, Sonnet 5.5, Haiku 5.5, Fable 5.1), a client-
