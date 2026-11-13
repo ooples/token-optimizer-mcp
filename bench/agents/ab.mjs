@@ -103,6 +103,7 @@ const KNOWN_ARMS = new Set([
   'solo-opt',
   'agents-opt',
   'agents-opt-nodigest',
+  'agents-opt-inherit',
 ]);
 for (const arm of ARMS)
   if (!KNOWN_ARMS.has(arm)) throw new Error(`unknown arm ${arm}`);
@@ -423,6 +424,20 @@ function agentTypes(agentFiles) {
   });
 }
 
+/** The model an agent ran on: the first real assistant message's. */
+function firstModel(path) {
+  try {
+    for (const line of readFileSync(path, 'utf8').split('\n')) {
+      if (!line.includes('"assistant"')) continue;
+      const model = JSON.parse(line)?.message?.model;
+      if (typeof model === 'string' && !model.startsWith('<')) return model;
+    }
+  } catch {
+    /* an unreadable transcript has no model to report */
+  }
+  return null;
+}
+
 const weightOf = (t) =>
   t.input + 1.25 * t.write5m + 2 * t.write1h + 0.1 * t.cacheRead + 5 * t.output;
 
@@ -477,6 +492,8 @@ function runArm(arm, rep, stamp) {
       // from its own frontmatter.
       TOKEN_OPTIMIZER_SUBAGENT_CACHE_TTL: 'off',
       ...(variant === 'nodigest' ? { TOKEN_OPTIMIZER_AGENT_DIGEST: 'off' } : {}),
+      // agents-opt-inherit keeps every worker on the parent's model.
+      ...(variant === 'inherit' ? { TOKEN_OPTIMIZER_WORKER_MODEL: 'inherit' } : {}),
     },
   });
   const seconds = Math.round((Date.now() - started) / 1000);
@@ -517,6 +534,7 @@ function runArm(arm, rep, stamp) {
     costUsd: json?.total_cost_usd ?? null,
     agents: agents.length,
     agentTypes: files ? agentTypes(files.agents) : [],
+    agentModels: files ? files.agents.map(firstModel) : [],
     agentStartContext: agents.map((a) => a.baseContext),
     parentWeighted: Math.round(weightOf(parent)),
     agentsWeighted: Math.round(agents.reduce((n, a) => n + weightOf(a), 0)),
@@ -586,7 +604,7 @@ function main() {
       console.log(
         `${arm.padEnd(20)} rep ${rep}: ${row.correct ? 'correct' : 'WRONG  '} weighted ${String(row.weighted).padStart(8)}` +
           ` (parent ${row.parentWeighted}, ${row.agents} agent(s) ${row.agentsWeighted})` +
-          ` $${row.costUsd ?? '?'} ${row.seconds}s${row.agentTypes.length ? ` [${[...new Set(row.agentTypes)].join(', ')}]` : ''}`
+          ` $${row.costUsd ?? '?'} ${row.seconds}s${row.agentTypes.length ? ` [${[...new Set(row.agentTypes)].join(', ')} on ${[...new Set(row.agentModels)].join(', ')}]` : ''}`
       );
     }
   }
@@ -608,6 +626,10 @@ function main() {
     summary[a]?.medianWeighted && summary[b]?.medianWeighted
       ? summary[a].medianWeighted / summary[b].medianWeighted
       : null;
+  const usdRatio = (a, b) =>
+    summary[a]?.medianCostUsd && summary[b]?.medianCostUsd
+      ? summary[a].medianCostUsd / summary[b].medianCostUsd
+      : null;
   const verdict = {
     kind: 'summary',
     summary,
@@ -615,6 +637,10 @@ function main() {
     agentsOptOverAgentsPlain: ratio('agents-opt', 'agents-plain'),
     agentsOptOverSoloOpt: ratio('agents-opt', 'solo-opt'),
     agentsOptOverNoDigest: ratio('agents-opt', 'agents-opt-nodigest'),
+    // Weighted tokens do not compare across models; once workers run on a
+    // cheaper model than the parent (agent-spawn.mjs workerModel), dollars do.
+    agentsOptOverSoloOptUsd: usdRatio('agents-opt', 'solo-opt'),
+    agentsOptOverInheritUsd: usdRatio('agents-opt', 'agents-opt-inherit'),
   };
   appendFileSync(out, `${JSON.stringify(verdict)}\n`);
   console.log('');
@@ -636,6 +662,13 @@ function main() {
   if (verdict.agentsOptOverNoDigest !== null)
     console.log(
       `agents-opt / no digest    ${fmt(verdict.agentsOptOverNoDigest)}  (the shared briefing stays only if < 1)`
+    );
+  console.log(
+    `agents-opt / solo-opt $   ${fmt(verdict.agentsOptOverSoloOptUsd)}  (target: <= 1, in dollars)`
+  );
+  if (verdict.agentsOptOverInheritUsd !== null)
+    console.log(
+      `agents-opt / inherit $    ${fmt(verdict.agentsOptOverInheritUsd)}  (workers on a cheaper model, against the parent's)`
     );
   if (GATE) {
     const allCorrect = rows.every((r) => r.correct);

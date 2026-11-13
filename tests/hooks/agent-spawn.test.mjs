@@ -18,6 +18,8 @@ import {
   planSpawn,
   withReportBudget,
   withSharedBriefing,
+  modelTier,
+  workerModel,
 } from '../../src/hooks-core/agent-spawn.mjs';
 
 const repo = join(fileURLToPath(import.meta.url), '..', '..', '..');
@@ -40,12 +42,45 @@ function parent({ context = 150_000, ids = ['t1'], streamed = false, before = []
 
 describe('parentState', () => {
   test('reads the context and the batch, also when the message is streamed per block', () => {
-    expect(parentState(parent({ ids: ['a', 'b', 'c'] }), 'b')).toEqual({ contextTokens: 150_000, batch: 3, first: false, found: [] });
-    expect(parentState(parent({ ids: ['a', 'b', 'c'], streamed: true }), 'a')).toEqual({ contextTokens: 150_000, batch: 3, first: true, found: [] });
+    expect(parentState(parent({ ids: ['a', 'b', 'c'] }), 'b')).toEqual({ contextTokens: 150_000, batch: 3, first: false, found: [], model: null });
+    expect(parentState(parent({ ids: ['a', 'b', 'c'], streamed: true }), 'a')).toEqual({ contextTokens: 150_000, batch: 3, first: true, found: [], model: null });
+  });
+
+  test('reads the parent model, skipping harness-made messages', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'spawn-model-'));
+    const path = join(dir, 'p.jsonl');
+    const said = (model) => JSON.stringify({ type: 'assistant', message: { id: model, model, content: [] } });
+    writeFileSync(path, [said('claude-sonnet-5-5'), said('<synthetic>')].join('\n') + '\n');
+    expect(parentState(path, 'x').model).toBe('claude-sonnet-5-5');
   });
 
   test('a missing transcript is an empty state, not an error', () => {
-    expect(parentState(join(tmpdir(), 'nope.jsonl'), 'x')).toEqual({ contextTokens: 0, batch: 1, first: true, found: [] });
+    expect(parentState(join(tmpdir(), 'nope.jsonl'), 'x')).toEqual({ contextTokens: 0, batch: 1, first: true, found: [], model: null });
+  });
+});
+
+describe('workerModel', () => {
+  const routed = { prompt: 'x', subagent_type: 'token-optimizer-worker' };
+  const at = (parentModel, env = {}, input = { prompt: 'x' }) => workerModel({ input, routed, parentModel, env });
+
+  test('a routed worker under a dearer parent runs on haiku', () => {
+    expect(modelTier('claude-opus-5-5')).toBe(2);
+    expect(at('claude-opus-5-5')).toBe('haiku');
+    expect(at('claude-sonnet-5-5')).toBe('haiku');
+    expect(at('claude-opus-5-5', { TOKEN_OPTIMIZER_WORKER_MODEL: 'sonnet' })).toBe('sonnet');
+    expect(at('claude-opus-5-5', { TOKEN_OPTIMIZER_WORKER_MODEL: '' })).toBe('haiku');
+  });
+
+  test('never upward, never sideways, never from an unknown parent, never over the caller, never when off', () => {
+    expect(at('claude-haiku-5-5')).toBeNull();
+    expect(at('claude-sonnet-5-5', { TOKEN_OPTIMIZER_WORKER_MODEL: 'sonnet' })).toBeNull();
+    expect(at('claude-sonnet-5-5', { TOKEN_OPTIMIZER_WORKER_MODEL: 'opus' })).toBeNull();
+    expect(at('claude-fable-5-2')).toBeNull();
+    expect(at(null)).toBeNull();
+    expect(at('claude-opus-5-5', {}, { prompt: 'x', model: 'opus' })).toBeNull();
+    expect(at('claude-opus-5-5', { TOKEN_OPTIMIZER_WORKER_MODEL: 'inherit' })).toBeNull();
+    expect(at('claude-opus-5-5', { TOKEN_OPTIMIZER_WORKER_MODEL: 'nonsense' })).toBeNull();
+    expect(workerModel({ input: { prompt: 'x' }, routed: null, parentModel: 'claude-opus-5-5', env: {} })).toBeNull();
   });
 });
 

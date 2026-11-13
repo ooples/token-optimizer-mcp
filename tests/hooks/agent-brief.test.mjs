@@ -170,6 +170,22 @@ describe('routeToWorker', () => {
     expect(kept.subagent_type).toBe('my-reviewer');
     expect(kept.prompt).toContain(BUDGET_MARKER);
   });
+
+  test('planSpawn puts a routed worker on a cheaper model than the parent, and says so', () => {
+    const { project, env } = withBrief();
+    const plan = planSpawn({ input: { prompt: 'Fix it.' }, cwd: project, env, parentModel: 'claude-opus-5-5' });
+    expect(plan.updatedInput.subagent_type).toBe(WORKER_AGENT);
+    expect(plan.updatedInput.model).toBe('haiku');
+    expect(plan.context).toContain('on haiku');
+    expect(plan.context).toContain('Pass model explicitly');
+    // an unrouted agent keeps the parent's model
+    const kept = planSpawn({ input: { prompt: 'x', subagent_type: 'my-reviewer' }, cwd: project, env, parentModel: 'claude-opus-5-5' });
+    expect(kept.updatedInput.model).toBeUndefined();
+    // and a routed one without a known parent model says nothing about a model
+    const unknown = planSpawn({ input: { prompt: 'Fix it.' }, cwd: project, env });
+    expect(unknown.updatedInput.model).toBeUndefined();
+    expect(unknown.context).not.toContain('Pass model');
+  });
 });
 
 describe('the worker agent and the CLI', () => {

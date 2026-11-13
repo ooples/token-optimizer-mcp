@@ -73,6 +73,45 @@ function lines(text) {
   return out;
 }
 
+/**
+ * Price tiers, cheapest first. A model outside them -- one this file does not
+ * know the price of -- is never routed from or to.
+ */
+export const MODEL_TIERS = ['haiku', 'sonnet', 'opus'];
+/** The worker's model when the parent runs a dearer one. */
+export const DEFAULT_WORKER_MODEL = 'haiku';
+
+/** The tier of a model id or alias (`claude-opus-5-5`, `sonnet`), or -1. */
+export function modelTier(model) {
+  const id = String(model || '').toLowerCase();
+  return MODEL_TIERS.findIndex((tier) => id.includes(tier));
+}
+
+/**
+ * The model a routed worker runs on, or null to leave it on the parent's.
+ *
+ * WHY. Measured on #567's bench, agents cost 2.8x solo on a twelve-file task
+ * even with every fixed-context saving applied: the parent's orchestration alone
+ * costs about what solo does for the whole job, because solo batches its tool
+ * calls and finishes in a handful of turns. No context diet closes that. A
+ * delegated sub-task with an approved brief and a self-contained prompt does
+ * not need the parent's model, and a cheaper tier is the one lever left.
+ *
+ * Only a routed worker, only when the caller named no model, only to a cheaper
+ * tier than the parent's, and never when the parent's model is unknown.
+ * TOKEN_OPTIMIZER_WORKER_MODEL picks the model; `inherit` (or off) disables it.
+ */
+export function workerModel({ input, routed, parentModel, env = process.env }) {
+  if (!routed || !input || input.model) return null;
+  // `inherit`, `off` and any other non-tier value are tier -1, and so is an
+  // unknown parent model -- which no tier is below.
+  // An empty value is unset, as everywhere else in this package's switches.
+  const want = modelTier(env.TOKEN_OPTIMIZER_WORKER_MODEL || DEFAULT_WORKER_MODEL);
+  const parent = modelTier(parentModel);
+  if (want < 0 || want >= parent) return null;
+  return MODEL_TIERS[want];
+}
+
 /** At most this many paths go into the shared briefing. */
 export const DIGEST_MAX_PATHS = 20;
 /** The marker that keeps the shared briefing from being appended twice. */
@@ -172,9 +211,12 @@ export function parentState(transcriptPath, toolUseId) {
   let contextTokens = 0;
   let batch = 1;
   let first = true;
+  let model = null;
   for (const entry of entries) {
     const message = entry?.message;
     if (entry?.type !== 'assistant' || !message) continue;
+    // `<synthetic>` marks harness-made messages, not the parent's model.
+    if (typeof message.model === 'string' && message.model && !message.model.startsWith('<')) model = message.model;
     const usage = message.usage;
     if (usage) {
       contextTokens =
@@ -198,7 +240,7 @@ export function parentState(transcriptPath, toolUseId) {
       first = !calls.length || calls[0] === toolUseId;
     }
   }
-  return { contextTokens, batch, first, found: parentFindings(entries) };
+  return { contextTokens, batch, first, found: parentFindings(entries), model };
 }
 
 const k = (n) => `${Math.round(n / 1000)}k`;
@@ -235,12 +277,14 @@ export function withReportBudget(input, env = process.env) {
  * @param {number} args.sessionStart when the session started (ms), so only agents it loaded are named
  * @returns {{ updatedInput: object|null, context: string|null, deny: string|null }}
  */
-export function planSpawn({ input, contextTokens = 0, batch = 1, first = true, found = [], agentBase = DEFAULT_AGENT_BASE, mode = 'assist', env = process.env, cwd = process.cwd(), sessionStart = null }) {
+export function planSpawn({ input, contextTokens = 0, batch = 1, first = true, found = [], parentModel = null, agentBase = DEFAULT_AGENT_BASE, mode = 'assist', env = process.env, cwd = process.cwd(), sessionStart = null }) {
   // A general-purpose agent goes to the lean worker with the user's approved
   // brief when there is one (agent-brief.mjs); the worker's own prompt asks for
   // the short report, so the budget is not appended to it as well.
   const routed = routeToWorker(input, { cwd, env, sessionStart });
-  const shaped = routed ?? withReportBudget(input, env);
+  const model = workerModel({ input, routed, parentModel, env });
+  const worker = routed && model ? { ...routed, model } : routed;
+  const shaped = worker ?? withReportBudget(input, env);
   const updatedInput = withSharedBriefing(shaped ?? input, found, { cwd, env }) ?? shaped;
   const notes = [];
   let deny = null;
@@ -248,9 +292,10 @@ export function planSpawn({ input, contextTokens = 0, batch = 1, first = true, f
   // was not told read the brief's effect on the reply as the agent disobeying.
   if (routed && first) {
     notes.push(
-      `${batch > 1 ? 'These general-purpose agents run' : 'This general-purpose agent runs'} as ${routed.subagent_type} ` +
-        "with the user's approved agent brief (rules from their instruction files) in front of the task, " +
-        'instead of the full instruction files.'
+      `${batch > 1 ? 'These general-purpose agents run' : 'This general-purpose agent runs'} as ${routed.subagent_type}` +
+        `${model ? ` on ${model}` : ''} with the user's approved agent brief (rules from their instruction files) in front of the task, ` +
+        'instead of the full instruction files.' +
+        (model ? ' Pass model explicitly on the Agent call for a sub-task that needs a stronger model.' : '')
     );
   }
 

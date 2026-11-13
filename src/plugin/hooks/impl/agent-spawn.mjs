@@ -27,7 +27,7 @@ try {
     const input = payload.tool_input ?? payload.toolInput;
     if ((tool === 'Agent' || tool === 'Task') && input && typeof input === 'object') {
       const transcript = payload.transcript_path ?? payload.transcriptPath;
-      const { contextTokens, batch, first, found } = parentState(
+      const { contextTokens, batch, first, found, model } = parentState(
         transcript,
         payload.tool_use_id ?? payload.toolUseId
       );
@@ -38,6 +38,7 @@ try {
         batch,
         first,
         found,
+        parentModel: model,
         agentBase: measured > 0 ? measured : DEFAULT_AGENT_BASE,
         mode: current,
         sessionStart: sessionStartedAt(transcript),
