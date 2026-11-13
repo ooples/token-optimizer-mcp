@@ -112,16 +112,35 @@ try {
     '../hooks-core/install-health.mjs'
   );
   console.log(`  ${describeSubagentTtl(claudeSettingsPath())}`);
-  const { briefPaths } = await import('../hooks-core/agent-brief.mjs');
+  const { briefPaths, workerAgentPath } = await import(
+    '../hooks-core/agent-brief.mjs'
+  );
   const { existsSync } = await import('node:fs');
   const briefs = Object.values(briefPaths()).filter((p) => p && existsSync(p));
+  const agents = ['project', 'user']
+    .map((scope) => workerAgentPath(scope))
+    .filter((p) => existsSync(p));
   console.log(
     briefs.length
-      ? `  agent brief approved (${briefs.join(', ')}): general-purpose agents start as token-optimizer:worker with it when the plugin is loaded.`
+      ? `  agent brief approved (${briefs.join(', ')}): general-purpose agents start as ${agents.length ? `the generated worker (${agents.join(', ')})` : 'token-optimizer:worker when the plugin is loaded'}, with its rules instead of your instruction files.`
       : '  no agent brief approved: agents start with your full instruction files. token-optimizer-agent-brief draft compiles one to review.'
   );
 } catch {
   console.log('  Cannot read the subagent cache setting.');
+}
+
+console.log('');
+console.log('Skills:');
+try {
+  const { measureSkillDiet } = await import('../hooks-core/skill-diet.mjs');
+  const plan = measureSkillDiet();
+  console.log(
+    plan.skills.length
+      ? `  ${plan.skills.length} skill(s) described in every session and never invoked in ${plan.sessions}: ~${Math.round(plan.savedChars / 4)} tokens a session. token-optimizer-learned skilldiet shows them; skilldiet apply lists them by name only.`
+      : `  no skill described without use across ${plan.sessions} recent session(s).`
+  );
+} catch {
+  console.log('  Cannot read the skill listings.');
 }
 
 console.log('');

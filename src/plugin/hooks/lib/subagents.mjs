@@ -332,7 +332,8 @@ export function cacheTtlFinding(agents, { minSaving = 50_000, minShare = 0.05 } 
       `${expiry.count} times while they waited on long tool calls, re-writing ` +
       `${expiry.tokens.toLocaleString()} tokens. Replayed at the 1-hour tier the same requests cost ` +
       `${pct}% less (${at5m.toLocaleString()} -> ${at1h.toLocaleString()} weighted tokens). ` +
-      'Set "subagentPromptCacheTtl": "1h" in ~/.claude/settings.json; `token-optimizer doctor --fix` does it.',
+      'token-optimizer sets "subagentPromptCacheTtl": "1h" in ~/.claude/settings.json once finished agents show this ' +
+      '(unless you or the environment already set it); token-optimizer-doctor shows who owns it, or set it yourself now.',
     costPerSession: saving,
     savingShare: saving / at5m,
     file: 'subagents',
