@@ -117,7 +117,7 @@ fairness notes and every loss are below the table.
 | -------------------------- | ------------------------------------------------------------------ | ---------------------------- | ------------------------------- | -------------------------------------- |
 | **Headroom**               | Tokens removed on Headroom's own benchmark, 18 workloads           | 61.4%                        | 91.5%                           | ✅ **Win**                             |
 | **Headroom**               | Installed proxy vs ours, 120 Codex task pairs                      | $30.43 est. cost, 120/120 passed | $22.26 est. cost, 119/120 passed | ✅ **26.9% cheaper**, 30.1% faster on average |
-| **Headroom**               | Installed proxy vs ours, one small Claude Code task, 4/4 tests     | 48,626 tokens                | 49,053 tokens                   | ➖ **Tie** (0.9% more)                 |
+| **Headroom**               | Installed proxy vs ours, one small Claude Code task, 4/4 tests     | 48,626 weighted input        | 49,053 weighted input           | ➖ **Tie** (0.9% more)                 |
 | **tokenjuice**             | Product installed, same coding tasks for every arm                 | 13.6% cheaper                | **33.6% cheaper**               | ✅ **Win**                             |
 | **Tokenade**               | Its rules text vs our rules text; its full product not yet run    | 22.9% cheaper                | **32.0% cheaper**               | ✅ **Win**                             |
 | **claude-token-optimizer** | Product installed, its hooks fixed so they fire on Claude Code     | 2.7% cheaper, within noise   | **33.6% cheaper**               | ✅ **Win**                             |
@@ -136,7 +136,9 @@ How each row was kept fair, and what it does not show:
   our full product, and if its hooks save more, this row understates it.
 - **Headroom, first row:** the 91.5% is our proxy. Like Headroom, it moves some
   content out of the request for the agent to fetch back if needed. Our
-  compressor alone removes fewer tokens than Headroom on 8 of the 18 workloads.
+  compressor alone removes fewer tokens than Headroom on 9 of the 18 workloads.
+- **Headroom, Claude Code task:** "weighted input" is input + 1.25 × cache
+  writes + 0.1 × cache reads, the way they are billed. It excludes output tokens.
 - **Headroom, 120 pairs:** we wrote the 12 task families, including ones built to
   make our proxy fail, and froze the plan before any run. Headroom's mode setting
   is not recorded in that study. Our proxy crashed once (unknown usage) where
@@ -172,9 +174,10 @@ when all of it is.
 
 **Where it loses:**
 
-- Without the proxy, the compressor removes fewer tokens than Headroom on 8
-  of 18 workloads. On those, they move content out of the request rather than
-  shrink it.
+- Without the proxy, the compressor removes fewer tokens than Headroom on 9
+  of 18 workloads. On 8 of them Headroom moves content out of the request rather
+  than shrink it; on agentic-conversation it simply compresses better, 33.4%
+  against our 30.8%.
 - Against Headroom, ours cost more on 30 of 120 task pairs and crashed once;
   on one small Claude Code task Headroom used 0.9% fewer tokens.
 - On one 342 KB-file task in the 2026-09-03 campaign, our hooks took about 6

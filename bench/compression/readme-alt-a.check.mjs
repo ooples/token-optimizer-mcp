@@ -248,6 +248,28 @@ const C_END = '<!-- ALT-A-CORPUS:END -->';
 
 const corpusKnown = flatten(record.totals, new Set());
 
+// COUNTS THE PROSE QUOTES THAT `totals` DOES NOT CARRY, derived from the rows so
+// they cannot drift from them. "Our compressor alone removes fewer tokens than
+// theirs on N of the 18 workloads" was hand-written as 8 for a month while the
+// rows said 9: eight are workloads where their best setting differs from their
+// comparable one (it moves content out of the request), and one is a plain
+// compression loss.
+const pct = (value) => Number.parseFloat(String(value));
+const compressorLosses = record.workloads.filter(
+  (w) => pct(w.tokens.ours) < pct(w.tokens.theirs)
+);
+const offloadLosses = compressorLosses.filter(
+  (w) => pct(w.tokens.theirs) !== pct(w.tokens.theirsComparable)
+);
+corpusKnown.add(String(compressorLosses.length));
+corpusKnown.add(String(offloadLosses.length));
+corpusKnown.add(String(compressorLosses.length - offloadLosses.length));
+corpusKnown.add(String(record.workloads.length));
+for (const w of compressorLosses.filter((x) => !offloadLosses.includes(x))) {
+  corpusKnown.add(w.tokens.ours);
+  corpusKnown.add(w.tokens.theirs);
+}
+
 // MARKERS ARE ONLY WORTH ANYTHING IF THEY ARE NOT OPTIONAL. Nothing stops the
 // next corpus claim from being written outside a pair, which is exactly how the
 // 233 unread figures got here, so a corpus-scoped line carrying a figure and
@@ -261,10 +283,15 @@ const corpusKnown = flatten(record.totals, new Set());
 // A SUMMARY TABLE ROW CANNOT SIT INSIDE A BLOCK: an HTML comment between two rows
 // ends the Markdown table. So a corpus-scoped line outside every block is held to
 // the same record, figure by figure, instead of failing on sight -- a wrong figure
-// still fails, which is all the markers were for. "own benchmark" is how the
+// still fails, which is all the markers were for. "Headroom's own benchmark" is how the
 // summary tables name this corpus.
+//
+// A CLAIM WRAPS ACROSS LINES, so the scan is by paragraph: "removes fewer tokens
+// than Headroom on 8 of the 18 workloads" sat on a line with no scope word and
+// was never read. Table rows stay one per line. "N of (the) 18 workloads" names
+// this corpus too.
 const CORPUS_SCOPE =
-  /corpus|retention unit|identifiers|of the characters|of the tokens|own benchmark/i;
+  /corpus|retention unit|identifiers|of the characters|of the tokens|(?:Headroom's|their|its) own benchmark|\bof (?:the )?18 workloads/i;
 
 /**
  * Checks one file's ALT-A-CORPUS blocks against the record's totals, and fails
@@ -342,10 +369,24 @@ function checkCorpus(text, label, { required }) {
     const last = text.slice(0, to_).split(/\r?\n/).length;
     for (let line = first; line <= last; line += 1) covered.add(line);
   }
-  const unmarked = text
-    .split(/\r?\n/)
-    .map((line, index) => ({ line: index + 1, text: line }))
-    .filter(({ line }) => !covered.has(line))
+  const units = [];
+  let paragraph = null;
+  text.split(/\r?\n/).forEach((content, index) => {
+    const line = index + 1;
+    const isRow = content.trimStart().startsWith('|');
+    if (covered.has(line) || !content.trim() || isRow) {
+      paragraph = null;
+      if (!covered.has(line) && isRow) units.push({ line, text: content });
+      return;
+    }
+    // A list item starts a new unit, so one bullet's figures are not judged by
+    // the scope words of the bullet before it.
+    if (!paragraph || /^\s*[-*] /.test(content)) {
+      paragraph = { line, text: content };
+      units.push(paragraph);
+    } else paragraph.text += ` ${content.trim()}`;
+  });
+  const unmarked = units
     // No FIGURE.test here: FIGURE is global, so .test() carries lastIndex from
     // one line to the next and skips figures. .match() below resets it.
     .filter(({ text: line }) => CORPUS_SCOPE.test(line))

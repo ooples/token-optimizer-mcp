@@ -2,7 +2,7 @@
   "name": "@ooples/token-optimizer-mcp",
   "version": "7.10.0",
   "mcpName": "io.github.ooples/token-optimizer-mcp",
-  "description": "91.5% fewer tokens on tool output, where Headroom gets 61.4% on its own benchmark, and the same tasks solved. Plus memory across sessions and subscription quota pacing. Claude Code, Codex, Copilot, Gemini and 12 more. Local, MIT.",
+  "description": "91.5% fewer tokens on tool output on Headroom's own benchmark, where Headroom removes 61.4%. Separately, the same SWE-bench tasks resolved at 0.71x the cost of plain Claude Code. Plus memory across sessions and subscription quota pacing. Claude Code, Codex, Copilot, Gemini and 12 more. Local, MIT.",
   "main": "dist/server/index.js",
   "types": "dist/server/index.d.ts",
   "bin": {
