@@ -186,6 +186,23 @@ describe('routeToWorker', () => {
     expect(kept.prompt).toContain(BUDGET_MARKER);
   });
 
+  test('a worker the parent names itself is routed too: the plugin worker gets the brief, both get the model', () => {
+    const { project, env } = withBrief();
+    const named = routeToWorker({ prompt: 'Fix it.', subagent_type: WORKER_AGENT }, { cwd: project, env });
+    expect(named.subagent_type).toBe(WORKER_AGENT);
+    expect(named.prompt.startsWith(BRIEF_MARKER)).toBe(true);
+    const plan = planSpawn({ input: { prompt: 'Fix it.', subagent_type: WORKER_AGENT }, cwd: project, env, parentModel: 'claude-sonnet-5-5' });
+    expect(plan.updatedInput.model).toBe('haiku');
+    expect(plan.context).toContain(`${WORKER_AGENT} agents run on haiku`);
+    expect(plan.context).not.toContain('general-purpose');
+    // a generated worker named directly keeps its type, gets the model, and its rules stay in its own prompt
+    const generated = planSpawn({ input: { prompt: 'Fix it.', subagent_type: 'token-optimizer-project-worker' }, cwd: project, env, parentModel: 'claude-sonnet-5-5' });
+    expect(generated.updatedInput.subagent_type).toBe('token-optimizer-project-worker');
+    expect(generated.updatedInput.model).toBe('haiku');
+    // a caller's explicit model still wins
+    expect(planSpawn({ input: { prompt: 'x', subagent_type: WORKER_AGENT, model: 'opus' }, cwd: project, env, parentModel: 'claude-sonnet-5-5' }).updatedInput.model).toBe('opus');
+  });
+
   test('planSpawn puts a routed worker on a cheaper model than the parent, and says so', () => {
     const { project, env } = withBrief();
     const plan = planSpawn({ input: { prompt: 'Fix it.' }, cwd: project, env, parentModel: 'claude-opus-5-5' });

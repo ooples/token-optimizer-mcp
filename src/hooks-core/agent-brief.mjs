@@ -424,10 +424,23 @@ export function routeToWorker(input, { cwd = process.cwd(), env = process.env, s
   if (/^(off|0|false|no)$/i.test(String(env.TOKEN_OPTIMIZER_AGENT_ROUTE || '').trim())) return null;
   if (!input || typeof input.prompt !== 'string' || !input.prompt.trim()) return null;
   const type = input.subagent_type;
-  if (type !== undefined && type !== null && type !== '' && type !== 'general-purpose') return null;
   if (input.prompt.includes(BRIEF_MARKER)) return null;
   const { global, project } = briefPaths({ cwd, env });
   if (!(existsSync(global) || (project && existsSync(project)))) return null;
+  // A WORKER NAMED DIRECTLY IS ROUTED TOO. Once a session knows its agents get
+  // the brief, the parent picks the worker type itself -- measured on #567's
+  // bench, 2 of 3 runs -- and a spawn left alone for not being general-purpose
+  // lost the model routing and, for the plugin's worker, the brief: its parent
+  // then wrote the rules into every prompt. The type it named is kept.
+  if (type === USER_WORKER || type === PROJECT_WORKER) {
+    const scoped = scopedBriefFor(input.prompt, { cwd, env, scope: type === PROJECT_WORKER ? 'project' : 'user' });
+    return { ...input, prompt: scoped ? withRules(scoped, input.prompt) : input.prompt };
+  }
+  if (type === WORKER_AGENT) {
+    const brief = briefFor(input.prompt, { cwd, env });
+    return brief ? { ...input, prompt: withRules(brief, input.prompt) } : { ...input };
+  }
+  if (type !== undefined && type !== null && type !== '' && type !== 'general-purpose') return null;
   const generated = generatedWorker({ cwd, env, sessionStart });
   if (generated) {
     const scoped = scopedBriefFor(input.prompt, { cwd, env, scope: generated.scope });

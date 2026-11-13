@@ -344,12 +344,15 @@ export function planSpawn({ input, contextTokens = 0, batch = 1, first = true, b
   // The parent must know what its agent was told: measured live, a parent that
   // was not told read the brief's effect on the reply as the agent disobeying.
   // Once per session: the parent keeps it in context, so a second copy is waste.
-  if (routed && !routedNoted) {
+  const stronger = model ? ' Pass model explicitly on the Agent call for a sub-task that needs a stronger model.' : '';
+  if (routed && !routedNoted && isWorkerType(input?.subagent_type)) {
+    // The parent chose the worker itself and knows what it is; only the model is news.
+    if (model) notes.push(`${routed.subagent_type} agents run on ${model}.${stronger}`);
+  } else if (routed && !routedNoted) {
     notes.push(
       `${batch > 1 ? 'These general-purpose agents run' : 'This general-purpose agent runs'} as ${routed.subagent_type}` +
         `${model ? ` on ${model}` : ''} with the user's approved agent brief (rules from their instruction files) in front of the task, ` +
-        'instead of the full instruction files.' +
-        (model ? ' Pass model explicitly on the Agent call for a sub-task that needs a stronger model.' : '')
+        `instead of the full instruction files.${stronger}`
     );
   }
 

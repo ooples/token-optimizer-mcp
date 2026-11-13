@@ -50,7 +50,7 @@
  *
  * Spends real API usage: 4 arms x 3 reps = 12 sessions by default.
  */
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
   existsSync,
@@ -92,11 +92,20 @@ const OUT = option('--out', join(here, 'results'));
 const TIMEOUT_MS = Number(option('--timeout-min', '15')) * 60_000;
 
 const FIXTURE = option('--fixture', 'small');
-if (FIXTURE !== 'small' && FIXTURE !== 'large')
-  throw new Error('--fixture must be small or large');
+if (!['small', 'large', 'slow'].includes(FIXTURE))
+  throw new Error('--fixture must be small, large or slow');
 
-// agents-opt-nodigest is agents-opt with the shared briefing off, so the
-// briefing's own effect is measured rather than assumed.
+// Variants of agents-opt, each switching one thing so its effect is measured
+// rather than assumed:
+//   -nodigest      the shared briefing off
+//   -inherit       workers stay on the parent's model
+//   -proxy         through this checkout's proxy, keep-warm on; its pings,
+//                  which no transcript records, are read from the proxy's
+//                  accounting ledger and added to the run
+//   -proxynowarm   the same proxy with keep-warm off
+// forks-* fork the parent instead of starting fresh agents; -enforce runs the
+// plugin in enforce mode, the only mode in which the fork guard can change
+// the batch it is asked about (in assist it advises for the next one).
 const KNOWN_ARMS = new Set([
   'solo-plain',
   'agents-plain',
@@ -104,6 +113,11 @@ const KNOWN_ARMS = new Set([
   'agents-opt',
   'agents-opt-nodigest',
   'agents-opt-inherit',
+  'agents-opt-proxy',
+  'agents-opt-proxynowarm',
+  'forks-plain',
+  'forks-opt',
+  'forks-opt-enforce',
 ]);
 for (const arm of ARMS)
   if (!KNOWN_ARMS.has(arm)) throw new Error(`unknown arm ${arm}`);
@@ -174,11 +188,11 @@ const DOC_LINES = [
   'Changing the order of operations here changes results for some inputs.',
 ];
 
-function largeFixture() {
+function largeFixture(modules = LARGE_MODULES) {
   const files = {};
   const sources = [];
   const expected = {};
-  for (let i = 0; i < LARGE_MODULES; i++) {
+  for (let i = 0; i < modules; i++) {
     const path = `src/m${i}.js`;
     sources.push(path);
     const buggy = (i * 5) % LARGE_FUNCTIONS;
@@ -223,8 +237,25 @@ function largeFixture() {
   return { files, sources };
 }
 
+/**
+ * THE SLOW TASK, for keep-warm. Three of the large modules, and a check that
+ * takes ~6 minutes -- longer than the 5-minute cache tier every agent writes
+ * at -- so an agent that waits on it returns to an expired cache unless
+ * something held it warm. The check then runs the same test.
+ */
+const SLOW_CHECK_SECONDS = 330;
+function slowFixture() {
+  const { files, sources } = largeFixture(3);
+  files['check.js'] = [
+    '// The slow verification step: waits, then runs the test.',
+    `setTimeout(() => import('./test.js'), ${SLOW_CHECK_SECONDS * 1000});`,
+    '',
+  ].join('\n');
+  return { files, sources };
+}
+
 const { files: FIXTURE_FILES, sources: SOURCES } =
-  FIXTURE === 'large' ? largeFixture() : { files: FILES, sources: SMALL_SOURCES };
+  FIXTURE === 'large' ? largeFixture() : FIXTURE === 'slow' ? slowFixture() : { files: FILES, sources: SMALL_SOURCES };
 
 /**
  * A realistic instruction file: rules a delegated agent needs, buried in the
@@ -360,6 +391,8 @@ const TASK =
   'Fix the bug in each of src/sum.js, src/reverse.js, src/max.js and src/even.js so that `node test.js` passes. Do not edit test.js.';
 const LARGE_TASK =
   'Some functions under src/ have bugs. `node test.js` lists every failing function. Fix each bug so that `node test.js` passes. Do not edit test.js.';
+const SLOW_STEP =
+  ' After fixing its file, each agent must run `node check.js` with a Bash timeout of 600000 ms -- it takes about six minutes -- and confirm its function no longer fails.';
 const PROMPTS =
   FIXTURE === 'large'
     ? {
@@ -367,6 +400,14 @@ const PROMPTS =
         // The parent looks first, as a real one does before delegating; that
         // exploration is what the shared briefing passes on.
         agents: `${LARGE_TASK} First run \`node test.js\` and look at the repository yourself. Then start one general-purpose agent per failing source file, all in a single message so they run in parallel, each fixing only its own file. When they finish, run \`node test.js\` yourself and report the result.`,
+        // The parent reads every module before delegating, so its context is
+        // what a fork copies -- the case the fork guard exists for.
+        forks: `${LARGE_TASK} First run \`node test.js\` and read every source file under src/ yourself. Then fork yourself once per failing source file (Agent tool, subagent_type "fork"), all in a single message so they run in parallel, each fixing only its own file. When they finish, run \`node test.js\` yourself and report the result.`,
+      }
+    : FIXTURE === 'slow'
+    ? {
+        solo: `${LARGE_TASK} Do all of the work yourself; do not start any agents. When every file is fixed, run \`node check.js\` once with a Bash timeout of 600000 ms -- it takes about six minutes.`,
+        agents: `${LARGE_TASK} First run \`node test.js\` yourself. Then start one general-purpose agent per failing source file, all in a single message so they run in parallel, each fixing only its own file.${SLOW_STEP} When they finish, run \`node test.js\` yourself and report the result.`,
       }
     : {
         solo: `${TASK} Do all of the work yourself; do not start any agents.`,
@@ -441,7 +482,64 @@ function firstModel(path) {
 const weightOf = (t) =>
   t.input + 1.25 * t.write5m + 2 * t.write1h + 0.1 * t.cacheRead + 5 * t.output;
 
-function runArm(arm, rep, stamp) {
+/**
+ * This checkout's proxy, for the -proxy arms: started per run, so each run's
+ * keep-warm state and accounting ledger are its own. Resolves to its URL (the
+ * one line it prints on stdout) and a stop function.
+ */
+function startProxy({ ledger, keepWarm }) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, [join(repo, 'dist', 'proxy', 'cli.js'), '--port', '0', '--quiet'], {
+      env: {
+        ...process.env,
+        TOKEN_OPTIMIZER_PROXY_ACCOUNTING: ledger,
+        TOKEN_OPTIMIZER_PROXY_KEEPWARM: keepWarm ? '1' : 'off',
+      },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    let out = '';
+    const timer = setTimeout(() => reject(new Error('proxy did not print its URL in 30 s')), 30_000);
+    child.on('error', reject);
+    child.stdout.on('data', (chunk) => {
+      out += chunk;
+      const line = out.split('\n')[0].trim();
+      if (out.includes('\n') && /^https?:\/\//.test(line)) {
+        clearTimeout(timer);
+        resolve({ url: line, stop: () => child.kill() });
+      }
+    });
+  });
+}
+
+/** The keep-warm pings a proxy ledger recorded, as transcript-style totals. */
+function pingTotals(ledger) {
+  const totals = { pings: 0, input: 0, write5m: 0, write1h: 0, cacheRead: 0, output: 0 };
+  let text = '';
+  try {
+    text = readFileSync(ledger, 'utf8');
+  } catch {
+    return totals;
+  }
+  for (const line of text.split('\n')) {
+    if (!line.includes('"keepwarm"')) continue;
+    try {
+      const row = JSON.parse(line);
+      if (row.path !== 'keepwarm') continue;
+      const u = row.usage || {};
+      totals.pings += 1;
+      totals.input += Number(u.input_tokens) || 0;
+      totals.cacheRead += Number(u.cache_read_input_tokens) || 0;
+      // A ping that had to write found the entry gone; priced at the agents' 5m tier.
+      totals.write5m += Number(u.cache_creation_input_tokens) || 0;
+      totals.output += Number(u.output_tokens) || 0;
+    } catch {
+      /* a torn last line */
+    }
+  }
+  return totals;
+}
+
+async function runArm(arm, rep, stamp) {
   const [shape, flavour, variant] = arm.split('-');
   const dir = join(ROOT, stamp, `${arm}-${rep}`);
   makeFixture(dir);
@@ -476,10 +574,13 @@ function runArm(arm, rep, stamp) {
     '--settings',
     settingsFile(dir),
     '--allowedTools',
-    'Read,Edit,Write,Glob,Grep,Agent,Task,Bash(node test.js)',
+    'Read,Edit,Write,Glob,Grep,Agent,Task,Bash(node test.js),Bash(node check.js)',
     ...(shape === 'solo' ? ['--disallowedTools', 'Agent,Task'] : []),
     ...(flavour === 'opt' ? ['--plugin-dir', pluginDir] : []),
   ];
+  const proxied = variant === 'proxy' || variant === 'proxynowarm';
+  const ledger = join(dir, '..', `${arm}-${rep}.proxy.jsonl`);
+  const proxy = proxied ? await startProxy({ ledger, keepWarm: variant === 'proxy' }) : null;
   const started = Date.now();
   const result = spawnSync('claude', cli, {
     cwd: dir,
@@ -494,8 +595,12 @@ function runArm(arm, rep, stamp) {
       ...(variant === 'nodigest' ? { TOKEN_OPTIMIZER_AGENT_DIGEST: 'off' } : {}),
       // agents-opt-inherit keeps every worker on the parent's model.
       ...(variant === 'inherit' ? { TOKEN_OPTIMIZER_WORKER_MODEL: 'inherit' } : {}),
+      ...(variant === 'enforce' ? { TOKEN_OPTIMIZER_MODE: 'enforce' } : {}),
+      ...(proxy ? { ANTHROPIC_BASE_URL: proxy.url } : {}),
     },
   });
+  // Pings outlive the run by design; whatever fired before the stop is counted.
+  proxy?.stop();
   const seconds = Math.round((Date.now() - started) / 1000);
   let json = null;
   try {
@@ -517,10 +622,11 @@ function runArm(arm, rep, stamp) {
   const parent = files ? tally(files.main) : zero;
   const agents = files ? files.agents.map(tally) : [];
   const sum = (key) => parent[key] + agents.reduce((n, a) => n + a[key], 0);
+  const pings = proxied ? pingTotals(ledger) : null;
   const totals = Object.fromEntries(
     ['turns', 'input', 'write5m', 'write1h', 'cacheRead', 'output'].map((k) => [
       k,
-      sum(k),
+      sum(k) + (pings && k !== 'turns' ? pings[k] : 0),
     ])
   );
   const check = verify(dir);
@@ -538,6 +644,7 @@ function runArm(arm, rep, stamp) {
     agentStartContext: agents.map((a) => a.baseContext),
     parentWeighted: Math.round(weightOf(parent)),
     agentsWeighted: Math.round(agents.reduce((n, a) => n + weightOf(a), 0)),
+    ...(pings ? { pings: pings.pings, pingsWeighted: Math.round(weightOf(pings)) } : {}),
     weighted: Math.round(weightOf(totals)),
     totals,
     ...check,
@@ -553,7 +660,7 @@ const median = (xs) => {
   return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
 };
 
-function main() {
+async function main() {
   mkdirSync(ROOT, { recursive: true });
   mkdirSync(OUT, { recursive: true });
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
@@ -598,7 +705,7 @@ function main() {
     // Rotate the order each rep, so no arm always runs first or last.
     const order = ARMS.map((_, i) => ARMS[(i + rep - 1) % ARMS.length]);
     for (const arm of order) {
-      const row = runArm(arm, rep, stamp);
+      const row = await runArm(arm, rep, stamp);
       rows.push(row);
       appendFileSync(out, `${JSON.stringify({ kind: 'run', ...row })}\n`);
       console.log(
