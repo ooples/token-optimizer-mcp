@@ -9,12 +9,21 @@ import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { BUDGET_MARKER, parentState, planSpawn, withReportBudget } from '../../src/hooks-core/agent-spawn.mjs';
+import {
+  BUDGET_MARKER,
+  DIGEST_MARKER,
+  DIGEST_MAX_PATHS,
+  parentFindings,
+  parentState,
+  planSpawn,
+  withReportBudget,
+  withSharedBriefing,
+} from '../../src/hooks-core/agent-spawn.mjs';
 
 const repo = join(fileURLToPath(import.meta.url), '..', '..', '..');
 
 /** A parent transcript whose last request carried `context` tokens and spawned `ids`. */
-function parent({ context = 150_000, ids = ['t1'], streamed = false } = {}) {
+function parent({ context = 150_000, ids = ['t1'], streamed = false, before = [] } = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'spawn-'));
   const path = join(dir, 'parent.jsonl');
   const usage = { input_tokens: 10, cache_read_input_tokens: context - 1_010, cache_creation_input_tokens: 1_000 };
@@ -24,19 +33,19 @@ function parent({ context = 150_000, ids = ['t1'], streamed = false } = {}) {
     : [{ type: 'assistant', message: { id: 'msg_1', usage, content: blocks } }];
   writeFileSync(
     path,
-    [{ type: 'user', message: { content: 'go' } }, ...entries].map((e) => JSON.stringify(e)).join('\n') + '\n'
+    [{ type: 'user', message: { content: 'go' } }, ...before, ...entries].map((e) => JSON.stringify(e)).join('\n') + '\n'
   );
   return path;
 }
 
 describe('parentState', () => {
   test('reads the context and the batch, also when the message is streamed per block', () => {
-    expect(parentState(parent({ ids: ['a', 'b', 'c'] }), 'b')).toEqual({ contextTokens: 150_000, batch: 3, first: false });
-    expect(parentState(parent({ ids: ['a', 'b', 'c'], streamed: true }), 'a')).toEqual({ contextTokens: 150_000, batch: 3, first: true });
+    expect(parentState(parent({ ids: ['a', 'b', 'c'] }), 'b')).toEqual({ contextTokens: 150_000, batch: 3, first: false, found: [] });
+    expect(parentState(parent({ ids: ['a', 'b', 'c'], streamed: true }), 'a')).toEqual({ contextTokens: 150_000, batch: 3, first: true, found: [] });
   });
 
   test('a missing transcript is an empty state, not an error', () => {
-    expect(parentState(join(tmpdir(), 'nope.jsonl'), 'x')).toEqual({ contextTokens: 0, batch: 1, first: true });
+    expect(parentState(join(tmpdir(), 'nope.jsonl'), 'x')).toEqual({ contextTokens: 0, batch: 1, first: true, found: [] });
   });
 });
 
@@ -53,6 +62,78 @@ describe('the report budget', () => {
 
   test('is off when asked', () => {
     expect(withReportBudget({ prompt: 'x' }, { TOKEN_OPTIMIZER_AGENT_REPORT_BUDGET: 'off' })).toBeNull();
+  });
+});
+
+/** The parent read a file, ran a files-mode Grep, a content-mode Grep and a Glob. */
+const EXPLORED = [
+  {
+    type: 'assistant',
+    message: {
+      id: 'm0',
+      content: [
+        { type: 'tool_use', id: 'r1', name: 'Read', input: { file_path: 'C:\\work\\src\\parser.js' } },
+        { type: 'tool_use', id: 'g1', name: 'Grep', input: { pattern: 'tokenize' } },
+        { type: 'tool_use', id: 'g2', name: 'Grep', input: { pattern: 'x', output_mode: 'content' } },
+        { type: 'tool_use', id: 'l1', name: 'Glob', input: { pattern: '**/*.test.js' } },
+        { type: 'tool_use', id: 'l2', name: 'Glob', input: { pattern: 'missing/**' } },
+      ],
+    },
+  },
+  {
+    type: 'user',
+    message: {
+      content: [
+        { type: 'tool_result', tool_use_id: 'r1', content: 'const a = 1;' },
+        {
+          type: 'tool_result',
+          tool_use_id: 'g1',
+          content: 'Found 2 files\nC:\\work\\src\\lexer.js\nC:\\work\\src\\parser.js\nShowing 2 of 2, narrow with a path/glob\nTruncated: use a narrower path/glob',
+        },
+        // content mode, with line numbers and without
+        { type: 'tool_result', tool_use_id: 'g2', content: 'C:\\work\\src\\noise.js:12:const x = 1;\nimport x from lib/noise.js' },
+        { type: 'tool_result', tool_use_id: 'l1', content: [{ type: 'text', text: 'C:\\work\\test\\parser.test.js' }] },
+        { type: 'tool_result', tool_use_id: 'l2', is_error: true, content: 'C:\\work\\missing\\gone.js' },
+      ],
+    },
+  },
+];
+
+describe('the shared briefing', () => {
+  test('collects what the parent read and listed, most recent first, without content-mode matches', () => {
+    expect(parentFindings(EXPLORED)).toEqual([
+      'C:\\work\\test\\parser.test.js',
+      'C:\\work\\src\\parser.js',
+      'C:\\work\\src\\lexer.js',
+    ]);
+    expect(parentState(parent({ before: EXPLORED }), 't1').found).toHaveLength(3);
+  });
+
+  test('is relative to the project, skips what the prompt names, and is appended once', () => {
+    const found = parentFindings(EXPLORED);
+    const input = { prompt: 'Fix src/parser.js.', subagent_type: 'general-purpose' };
+    const once = withSharedBriefing(input, found, { cwd: 'C:\\work', env: {} });
+    expect(once.prompt).toContain(DIGEST_MARKER);
+    expect(once.prompt).toContain('test/parser.test.js, src/lexer.js.');
+    expect(once.prompt.split('src/parser.js')).toHaveLength(2);
+    expect(withSharedBriefing(once, [...found, 'C:\\work\\new.js'], { cwd: 'C:\\work', env: {} })).toBeNull();
+  });
+
+  test('never for a fork, never with nothing new, off when asked, and bounded', () => {
+    const found = parentFindings(EXPLORED);
+    expect(withSharedBriefing({ prompt: 'continue', subagent_type: 'fork' }, found, { env: {} })).toBeNull();
+    expect(withSharedBriefing({ prompt: 'x' }, [], { env: {} })).toBeNull();
+    expect(withSharedBriefing({ prompt: 'x' }, found, { env: { TOKEN_OPTIMIZER_AGENT_DIGEST: 'off' } })).toBeNull();
+    const many = Array.from({ length: 50 }, (_, i) => `/w/f${i}.js`);
+    const bounded = withSharedBriefing({ prompt: 'x' }, many, { cwd: '/w', env: {} });
+    expect(bounded.prompt.match(/f\d+\.js/g)).toHaveLength(DIGEST_MAX_PATHS);
+  });
+
+  test('planSpawn adds it on top of the report budget', () => {
+    const plan = planSpawn({ input: { prompt: 'Audit.' }, found: ['/w/a.js'], cwd: '/w', env: {} });
+    expect(plan.updatedInput.prompt).toContain(BUDGET_MARKER);
+    expect(plan.updatedInput.prompt).toContain(`${DIGEST_MARKER} Files`);
+    expect(plan.updatedInput.prompt).toContain(': a.js.');
   });
 });
 
@@ -123,5 +204,14 @@ describe('the hook, end to end', () => {
   test('with the budget off, a plain spawn is left completely alone', () => {
     const { out } = run({ tool_name: 'Agent', tool_input: { prompt: 'x' } }, { TOKEN_OPTIMIZER_AGENT_REPORT_BUDGET: 'off' });
     expect(out).toBeNull();
+  });
+
+  test('passes on where the parent already looked; both switches off leave it alone', () => {
+    const transcript = parent({ before: EXPLORED });
+    const payload = { tool_name: 'Agent', tool_use_id: 't1', transcript_path: transcript, cwd: 'C:\\work', tool_input: { prompt: 'Fix it.' } };
+    expect(run(payload).out.hookSpecificOutput.updatedInput.prompt).toContain('src/lexer.js');
+    expect(
+      run(payload, { TOKEN_OPTIMIZER_AGENT_REPORT_BUDGET: 'off', TOKEN_OPTIMIZER_AGENT_DIGEST: 'off' }).out
+    ).toBeNull();
   });
 });

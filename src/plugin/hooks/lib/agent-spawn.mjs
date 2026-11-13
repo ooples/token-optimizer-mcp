@@ -73,9 +73,99 @@ function lines(text) {
   return out;
 }
 
+/** At most this many paths go into the shared briefing. */
+export const DIGEST_MAX_PATHS = 20;
+/** The marker that keeps the shared briefing from being appended twice. */
+export const DIGEST_MARKER = '[token-optimizer shared briefing]';
+
+const PATH_TOOLS = new Set(['Read', 'Edit', 'Write', 'MultiEdit', 'NotebookEdit']);
+const LISTING_TOOLS = new Set(['Glob', 'Grep']);
+
+function resultText(content) {
+  if (typeof content === 'string') return content;
+  if (!Array.isArray(content)) return '';
+  return content.map((b) => (b?.type === 'text' && typeof b.text === 'string' ? b.text : '')).join('\n');
+}
+
+/** A line of Glob or Grep (files mode) output that names one file, or null. */
+function listedPath(line) {
+  const s = line.trim();
+  if (!s || s.length > 300 || /^(found|no files|showing|\.\.\.|\[)/i.test(s)) return null;
+  // A drive letter is the only colon a path may carry; anything else is a
+  // content-mode match ("path:12:text") or prose.
+  if (s.replace(/^[A-Za-z]:/, '').includes(':')) return null;
+  return /[\\/]/.test(s) || /\.[A-Za-z0-9]{1,8}$/.test(s) ? s : null;
+}
+
 /**
- * The parent's context as of its latest request, and how many Agent/Task calls
- * the assistant message carrying `toolUseId` makes -- the batch being spawned.
+ * The files the parent has already found relevant -- read, edited, or listed
+ * by its Glob and Grep calls -- most recent first. What an agent most often
+ * spends its first turns re-deriving is WHERE to look: the same searches the
+ * parent already ran. Contents are not passed on, only the locations.
+ */
+export function parentFindings(entries) {
+  const listing = new Set();
+  const found = [];
+  for (const entry of entries) {
+    const content = Array.isArray(entry?.message?.content) ? entry.message.content : [];
+    for (const b of content) {
+      if (entry.type === 'assistant' && b?.type === 'tool_use') {
+        if (PATH_TOOLS.has(b.name)) {
+          const p = b.input?.file_path ?? b.input?.notebook_path;
+          if (typeof p === 'string' && p) found.push(p);
+        } else if (LISTING_TOOLS.has(b.name) && (b.name === 'Glob' || !b.input?.output_mode || b.input.output_mode === 'files_with_matches')) {
+          listing.add(b.id);
+        }
+      } else if (entry.type === 'user' && b?.type === 'tool_result' && listing.has(b.tool_use_id) && !b.is_error) {
+        for (const line of resultText(b.content).split('\n')) {
+          const p = listedPath(line);
+          if (p) found.push(p);
+        }
+      }
+    }
+  }
+  const seen = new Set();
+  const out = [];
+  for (let i = found.length - 1; i >= 0; i--) {
+    const key = found[i].replace(/\\/g, '/').toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(found[i]);
+  }
+  return out;
+}
+
+/**
+ * The shared briefing, appended to the agent's prompt once: where the parent
+ * already looked, minus what the prompt names already. Paths under `cwd` are
+ * given relative to it. Off with TOKEN_OPTIMIZER_AGENT_DIGEST=off; never for a
+ * fork, which has the parent's whole conversation.
+ */
+export function withSharedBriefing(input, found, { cwd = process.cwd(), env = process.env } = {}) {
+  if (/^(off|0|false|no)$/i.test(String(env.TOKEN_OPTIMIZER_AGENT_DIGEST || '').trim())) return null;
+  if (!input || typeof input.prompt !== 'string' || !input.prompt.trim()) return null;
+  if (input.subagent_type === 'fork' || input.prompt.includes(DIGEST_MARKER)) return null;
+  const root = String(cwd).replace(/\\/g, '/').replace(/\/+$/, '');
+  const prompt = input.prompt.replace(/\\/g, '/').toLowerCase();
+  const paths = [];
+  for (const p of found || []) {
+    const norm = p.replace(/\\/g, '/');
+    const short = root && norm.toLowerCase().startsWith(`${root.toLowerCase()}/`) ? norm.slice(root.length + 1) : norm;
+    if (prompt.includes(short.toLowerCase())) continue;
+    paths.push(short);
+    if (paths.length >= DIGEST_MAX_PATHS) break;
+  }
+  if (!paths.length) return null;
+  const briefing =
+    `\n\n${DIGEST_MARKER} Files the agent that started you has already found relevant (it read, edited or listed them), ` +
+    `most recent first: ${paths.join(', ')}. Their contents are not in your context; start from these rather than searching the tree again.`;
+  return { ...input, prompt: `${input.prompt}${briefing}` };
+}
+
+/**
+ * The parent's context as of its latest request, how many Agent/Task calls
+ * the assistant message carrying `toolUseId` makes -- the batch being spawned --
+ * and the files it has already found relevant.
  */
 export function parentState(transcriptPath, toolUseId) {
   const entries = lines(tail(transcriptPath));
@@ -108,7 +198,7 @@ export function parentState(transcriptPath, toolUseId) {
       first = !calls.length || calls[0] === toolUseId;
     }
   }
-  return { contextTokens, batch, first };
+  return { contextTokens, batch, first, found: parentFindings(entries) };
 }
 
 const k = (n) => `${Math.round(n / 1000)}k`;
@@ -145,12 +235,13 @@ export function withReportBudget(input, env = process.env) {
  * @param {number} args.sessionStart when the session started (ms), so only agents it loaded are named
  * @returns {{ updatedInput: object|null, context: string|null, deny: string|null }}
  */
-export function planSpawn({ input, contextTokens = 0, batch = 1, first = true, agentBase = DEFAULT_AGENT_BASE, mode = 'assist', env = process.env, cwd = process.cwd(), sessionStart = null }) {
+export function planSpawn({ input, contextTokens = 0, batch = 1, first = true, found = [], agentBase = DEFAULT_AGENT_BASE, mode = 'assist', env = process.env, cwd = process.cwd(), sessionStart = null }) {
   // A general-purpose agent goes to the lean worker with the user's approved
   // brief when there is one (agent-brief.mjs); the worker's own prompt asks for
   // the short report, so the budget is not appended to it as well.
   const routed = routeToWorker(input, { cwd, env, sessionStart });
-  const updatedInput = routed ?? withReportBudget(input, env);
+  const shaped = routed ?? withReportBudget(input, env);
+  const updatedInput = withSharedBriefing(shaped ?? input, found, { cwd, env }) ?? shaped;
   const notes = [];
   let deny = null;
   // The parent must know what its agent was told: measured live, a parent that

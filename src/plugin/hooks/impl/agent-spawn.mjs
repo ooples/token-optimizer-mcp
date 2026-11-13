@@ -7,8 +7,8 @@
  * beside a permission decision. `allow` is used because the Agent tool needs no
  * permission in Claude Code's default rules, so the decision changes nothing but
  * the prompt. Users who gate Agent behind a rule, or want the prompt untouched,
- * set TOKEN_OPTIMIZER_AGENT_REPORT_BUDGET=off; the hook then rewrites nothing and
- * only ever adds context. A fork is refused only in enforce mode.
+ * set TOKEN_OPTIMIZER_AGENT_REPORT_BUDGET=off and TOKEN_OPTIMIZER_AGENT_DIGEST=off
+ * (the shared briefing); the hook then rewrites nothing and only ever adds context. A fork is refused only in enforce mode.
  *
  * Fail open: any error prints nothing, and the agent starts exactly as asked.
  */
@@ -27,7 +27,7 @@ try {
     const input = payload.tool_input ?? payload.toolInput;
     if ((tool === 'Agent' || tool === 'Task') && input && typeof input === 'object') {
       const transcript = payload.transcript_path ?? payload.transcriptPath;
-      const { contextTokens, batch, first } = parentState(
+      const { contextTokens, batch, first, found } = parentState(
         transcript,
         payload.tool_use_id ?? payload.toolUseId
       );
@@ -37,6 +37,7 @@ try {
         contextTokens,
         batch,
         first,
+        found,
         agentBase: measured > 0 ? measured : DEFAULT_AGENT_BASE,
         mode: current,
         sessionStart: sessionStartedAt(transcript),

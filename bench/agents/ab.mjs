@@ -45,7 +45,8 @@
  *
  * Usage:
  *   node bench/agents/ab.mjs --root C:/bench-agents [--reps 3] [--model claude-haiku-5-5]
- *        [--arms solo-plain,agents-plain,solo-opt,agents-opt] [--instructions-kb 30] [--gate]
+ *        [--arms solo-plain,agents-plain,solo-opt,agents-opt[,agents-opt-nodigest]]
+ *        [--fixture small|large] [--instructions-kb 30] [--gate]
  *
  * Spends real API usage: 4 arms x 3 reps = 12 sessions by default.
  */
@@ -90,11 +91,18 @@ const GATE = args.includes('--gate');
 const OUT = option('--out', join(here, 'results'));
 const TIMEOUT_MS = Number(option('--timeout-min', '15')) * 60_000;
 
+const FIXTURE = option('--fixture', 'small');
+if (FIXTURE !== 'small' && FIXTURE !== 'large')
+  throw new Error('--fixture must be small or large');
+
+// agents-opt-nodigest is agents-opt with the shared briefing off, so the
+// briefing's own effect is measured rather than assumed.
 const KNOWN_ARMS = new Set([
   'solo-plain',
   'agents-plain',
   'solo-opt',
   'agents-opt',
+  'agents-opt-nodigest',
 ]);
 for (const arm of ARMS)
   if (!KNOWN_ARMS.has(arm)) throw new Error(`unknown arm ${arm}`);
@@ -129,7 +137,93 @@ const FILES = {
   'package.json':
     '{ "name": "agents-ab-fixture", "private": true, "type": "module" }\n',
 };
-const SOURCES = ['src/sum.js', 'src/reverse.js', 'src/max.js', 'src/even.js'];
+const SMALL_SOURCES = ['src/sum.js', 'src/reverse.js', 'src/max.js', 'src/even.js'];
+
+/**
+ * THE LARGE TASK. Solo's cost grows with the task -- every file it reads stays
+ * in its context and is re-read on every later turn -- while each agent pays a
+ * fixed start and reads one file. Four one-line bugs cannot show where that
+ * crosses over; this can: twelve modules of twenty documented functions
+ * (~8 KB each), one seeded bug in each module, and a test that lists every
+ * failing function. Deterministic, and every bug is checked to be caught.
+ */
+const LARGE_MODULES = 12;
+const LARGE_FUNCTIONS = 20;
+const LARGE_INPUTS = [0, 1, 2, 5, 9];
+const TEMPLATES = [
+  // [correct body, the same body with the seeded bug]
+  (a, b) => [
+    `let total = 0;\n  for (let k = 0; k <= x; k++) total += k * ${a};\n  return total + ${b};`,
+    `let total = 0;\n  for (let k = 0; k < x; k++) total += k * ${a};\n  return total + ${b};`,
+  ],
+  (a, b) => [
+    `const parts = [];\n  for (let k = 0; k < ${a}; k++) parts.push((x + k) % ${b + 2});\n  return parts.reduce((sum, v) => sum + v, 0);`,
+    `const parts = [];\n  for (let k = 1; k < ${a}; k++) parts.push((x + k) % ${b + 2});\n  return parts.reduce((sum, v) => sum + v, 0);`,
+  ],
+  (a, b) => [
+    `if (x < ${a}) return x * ${b};\n  return x * ${b} - ${a};`,
+    `if (x < ${a}) return x * ${b};\n  return x * ${b} + ${a};`,
+  ],
+];
+const DOC_LINES = [
+  'Kept separate from its neighbours because callers depend on its exact rounding.',
+  'The constants come from the original specification and must not be tuned.',
+  'Profiling showed no benefit from caching here, so it recomputes on every call.',
+  'Inputs are small non-negative integers; larger values are never passed in practice.',
+  'Changing the order of operations here changes results for some inputs.',
+];
+
+function largeFixture() {
+  const files = {};
+  const sources = [];
+  const expected = {};
+  for (let i = 0; i < LARGE_MODULES; i++) {
+    const path = `src/m${i}.js`;
+    sources.push(path);
+    const buggy = (i * 5) % LARGE_FUNCTIONS;
+    const parts = [`/** Module ${i}: numeric helpers used by the reporting pipeline. */`, ''];
+    expected[`m${i}`] = {};
+    for (let j = 0; j < LARGE_FUNCTIONS; j++) {
+      const a = 2 + ((i * 7 + j * 3) % 5);
+      const b = 1 + ((i * 5 + j * 11) % 7);
+      const [good, bad] = TEMPLATES[(i + j) % TEMPLATES.length](a, b);
+      const fn = (body) => new Function('x', body);
+      const want = LARGE_INPUTS.map((x) => fn(good)(x));
+      if (j === buggy && LARGE_INPUTS.every((x, n) => fn(bad)(x) === want[n]))
+        throw new Error(`seeded bug in m${i}_f${j} is not caught by the test`);
+      expected[`m${i}`][`f${j}`] = want;
+      parts.push('/**', ` * Helper ${j} of module ${i}.`);
+      for (let d = 0; d < 3; d++) parts.push(` * ${DOC_LINES[(i + j + d) % DOC_LINES.length]}`);
+      parts.push(' */', `export function m${i}_f${j}(x) {`, `  ${j === buggy ? bad : good}`, '}', '');
+    }
+    files[path] = parts.join('\n');
+  }
+  files['test.js'] = [
+    ...sources.map((p, i) => `import * as m${i} from './${p}';`),
+    `const modules = { ${sources.map((_, i) => `m${i}`).join(', ')} };`,
+    `const inputs = ${JSON.stringify(LARGE_INPUTS)};`,
+    ...Object.entries(expected).map(([m, fns]) => `const expected_${m} = ${JSON.stringify(fns)};`),
+    `const expected = { ${sources.map((_, i) => `m${i}: expected_m${i}`).join(', ')} };`,
+    'let failures = 0;',
+    'for (const [m, fns] of Object.entries(expected)) {',
+    '  for (const [f, want] of Object.entries(fns)) {',
+    '    const got = inputs.map((x) => modules[m][`${m}_${f}`](x));',
+    '    if (JSON.stringify(got) !== JSON.stringify(want)) {',
+    '      failures++;',
+    '      console.log(`FAIL src/${m}.js ${m}_${f}: inputs ${JSON.stringify(inputs)} expected ${JSON.stringify(want)} got ${JSON.stringify(got)}`);',
+    '    }',
+    '  }',
+    '}',
+    "console.log(failures ? `${failures} failing function(s)` : 'all tests pass');",
+    'process.exitCode = failures ? 1 : 0;',
+    '',
+  ].join('\n');
+  files['package.json'] = FILES['package.json'];
+  return { files, sources };
+}
+
+const { files: FIXTURE_FILES, sources: SOURCES } =
+  FIXTURE === 'large' ? largeFixture() : { files: FILES, sources: SMALL_SOURCES };
 
 /**
  * A realistic instruction file: rules a delegated agent needs, buried in the
@@ -234,7 +328,7 @@ function instructions(targetBytes) {
 
 function makeFixture(dir) {
   mkdirSync(join(dir, 'src'), { recursive: true });
-  for (const [path, text] of Object.entries(FILES))
+  for (const [path, text] of Object.entries(FIXTURE_FILES))
     writeFileSync(join(dir, path), text);
   writeFileSync(join(dir, 'CLAUDE.md'), instructions(INSTRUCTIONS_KB * 1024));
   spawnSync('git', ['init', '-q'], { cwd: dir });
@@ -249,7 +343,7 @@ function verify(dir) {
     /\/\/ fixed:/.test(readFileSync(join(dir, f), 'utf8'))
   );
   const testUnchanged =
-    readFileSync(join(dir, 'test.js'), 'utf8') === FILES['test.js'];
+    readFileSync(join(dir, 'test.js'), 'utf8') === FIXTURE_FILES['test.js'];
   return {
     testsPass: test.status === 0,
     ruleKept: ruleKept.length,
@@ -263,10 +357,20 @@ function verify(dir) {
 
 const TASK =
   'Fix the bug in each of src/sum.js, src/reverse.js, src/max.js and src/even.js so that `node test.js` passes. Do not edit test.js.';
-const PROMPTS = {
-  solo: `${TASK} Do all of the work yourself; do not start any agents.`,
-  agents: `${TASK} Start one general-purpose agent per source file, all four in a single message so they run in parallel, each fixing only its own file. When they finish, run \`node test.js\` yourself and report the result.`,
-};
+const LARGE_TASK =
+  'Some functions under src/ have bugs. `node test.js` lists every failing function. Fix each bug so that `node test.js` passes. Do not edit test.js.';
+const PROMPTS =
+  FIXTURE === 'large'
+    ? {
+        solo: `${LARGE_TASK} Do all of the work yourself; do not start any agents.`,
+        // The parent looks first, as a real one does before delegating; that
+        // exploration is what the shared briefing passes on.
+        agents: `${LARGE_TASK} First run \`node test.js\` and look at the repository yourself. Then start one general-purpose agent per failing source file, all in a single message so they run in parallel, each fixing only its own file. When they finish, run \`node test.js\` yourself and report the result.`,
+      }
+    : {
+        solo: `${TASK} Do all of the work yourself; do not start any agents.`,
+        agents: `${TASK} Start one general-purpose agent per source file, all four in a single message so they run in parallel, each fixing only its own file. When they finish, run \`node test.js\` yourself and report the result.`,
+      };
 
 function settingsFile(dir) {
   // The installed token-optimizer plugin is off in every arm; the opt arms load
@@ -323,7 +427,7 @@ const weightOf = (t) =>
   t.input + 1.25 * t.write5m + 2 * t.write1h + 0.1 * t.cacheRead + 5 * t.output;
 
 function runArm(arm, rep, stamp) {
-  const [shape, flavour] = arm.split('-');
+  const [shape, flavour, variant] = arm.split('-');
   const dir = join(ROOT, stamp, `${arm}-${rep}`);
   makeFixture(dir);
   const home = join(dir, '..', `${arm}-${rep}.home`);
@@ -372,6 +476,7 @@ function runArm(arm, rep, stamp) {
       // The bench never writes the user's settings; the worker's 1h tier comes
       // from its own frontmatter.
       TOKEN_OPTIMIZER_SUBAGENT_CACHE_TTL: 'off',
+      ...(variant === 'nodigest' ? { TOKEN_OPTIMIZER_AGENT_DIGEST: 'off' } : {}),
     },
   });
   const seconds = Math.round((Date.now() - started) / 1000);
@@ -447,6 +552,7 @@ function main() {
     stamp,
     claudeVersion: version,
     model: MODEL,
+    fixture: FIXTURE,
     reps: REPS,
     arms: ARMS,
     instructionsBytes: instructions(INSTRUCTIONS_KB * 1024).length,
@@ -456,7 +562,7 @@ function main() {
       encoding: 'utf8',
     }).stdout.trim(),
     fixtureHash: createHash('sha256')
-      .update(JSON.stringify(FILES))
+      .update(JSON.stringify(FIXTURE_FILES))
       .digest('hex')
       .slice(0, 16),
   };
@@ -478,7 +584,7 @@ function main() {
       rows.push(row);
       appendFileSync(out, `${JSON.stringify({ kind: 'run', ...row })}\n`);
       console.log(
-        `${arm.padEnd(13)} rep ${rep}: ${row.correct ? 'correct' : 'WRONG  '} weighted ${String(row.weighted).padStart(8)}` +
+        `${arm.padEnd(20)} rep ${rep}: ${row.correct ? 'correct' : 'WRONG  '} weighted ${String(row.weighted).padStart(8)}` +
           ` (parent ${row.parentWeighted}, ${row.agents} agent(s) ${row.agentsWeighted})` +
           ` $${row.costUsd ?? '?'} ${row.seconds}s${row.agentTypes.length ? ` [${[...new Set(row.agentTypes)].join(', ')}]` : ''}`
       );
@@ -508,12 +614,13 @@ function main() {
     agentsPlainOverSoloPlain: ratio('agents-plain', 'solo-plain'),
     agentsOptOverAgentsPlain: ratio('agents-opt', 'agents-plain'),
     agentsOptOverSoloOpt: ratio('agents-opt', 'solo-opt'),
+    agentsOptOverNoDigest: ratio('agents-opt', 'agents-opt-nodigest'),
   };
   appendFileSync(out, `${JSON.stringify(verdict)}\n`);
   console.log('');
   for (const [arm, s] of Object.entries(summary)) {
     console.log(
-      `${arm.padEnd(13)} ${s.correct}/${s.runs} correct, median weighted ${s.medianWeighted}, median $${s.medianCostUsd}, median agent start ${s.medianAgentStart ?? '-'}`
+      `${arm.padEnd(20)} ${s.correct}/${s.runs} correct, median weighted ${s.medianWeighted}, median $${s.medianCostUsd}, median agent start ${s.medianAgentStart ?? '-'}`
     );
   }
   const fmt = (x) => (x === null ? 'n/a' : x.toFixed(3));
@@ -526,6 +633,10 @@ function main() {
   console.log(
     `agents-opt / solo-opt     ${fmt(verdict.agentsOptOverSoloOpt)}  (target: <= 1)`
   );
+  if (verdict.agentsOptOverNoDigest !== null)
+    console.log(
+      `agents-opt / no digest    ${fmt(verdict.agentsOptOverNoDigest)}  (the shared briefing stays only if < 1)`
+    );
   if (GATE) {
     const allCorrect = rows.every((r) => r.correct);
     const pass =
@@ -539,4 +650,13 @@ function main() {
   }
 }
 
-main();
+// --fixture-only <dir>: write the fixture and report what verify() says of it,
+// without starting a session -- the check that a fixture is sound before any
+// usage is spent on it.
+const fixtureOnly = option('--fixture-only', null);
+if (fixtureOnly) {
+  makeFixture(fixtureOnly);
+  console.log(JSON.stringify({ fixture: FIXTURE, dir: fixtureOnly, ...verify(fixtureOnly) }));
+} else {
+  main();
+}
