@@ -14,6 +14,7 @@
  */
 import { readFileSync } from 'node:fs';
 import { DEFAULT_AGENT_BASE, parentState, planSpawn } from '../lib/agent-spawn.mjs';
+import { sessionStartedAt } from '../lib/agent-brief.mjs';
 import { agentOverhead, readLedger } from '../lib/agent-ledger.mjs';
 import { mode } from '../lib/policy.mjs';
 
@@ -25,8 +26,9 @@ try {
     const tool = payload.tool_name ?? payload.toolName;
     const input = payload.tool_input ?? payload.toolInput;
     if ((tool === 'Agent' || tool === 'Task') && input && typeof input === 'object') {
+      const transcript = payload.transcript_path ?? payload.transcriptPath;
       const { contextTokens, batch, first } = parentState(
-        payload.transcript_path ?? payload.transcriptPath,
+        transcript,
         payload.tool_use_id ?? payload.toolUseId
       );
       const measured = agentOverhead(readLedger()).medianBase;
@@ -37,6 +39,7 @@ try {
         first,
         agentBase: measured > 0 ? measured : DEFAULT_AGENT_BASE,
         mode: current,
+        sessionStart: sessionStartedAt(transcript),
         ...(typeof payload.cwd === 'string' && payload.cwd ? { cwd: payload.cwd } : {}),
       });
       const out = { hookEventName: 'PreToolUse' };

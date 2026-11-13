@@ -27,7 +27,7 @@
  */
 
 import { closeSync, openSync, readSync, statSync } from 'node:fs';
-import { WORKER_AGENT, routeToWorker } from './agent-brief.mjs';
+import { isWorkerType, routeToWorker } from './agent-brief.mjs';
 
 /** A fork larger than this is worth a sentence before it is copied. */
 export const FORK_ADVISE_TOKENS = 60_000;
@@ -120,7 +120,7 @@ const k = (n) => `${Math.round(n / 1000)}k`;
 export function withReportBudget(input, env = process.env) {
   if (/^(off|0|false|no)$/i.test(String(env.TOKEN_OPTIMIZER_AGENT_REPORT_BUDGET || '').trim())) return null;
   if (!input || typeof input.prompt !== 'string' || !input.prompt.trim()) return null;
-  if (input.subagent_type === 'fork' || input.subagent_type === WORKER_AGENT) return null;
+  if (input.subagent_type === 'fork' || isWorkerType(input.subagent_type)) return null;
   if (input.prompt.includes(BUDGET_MARKER)) return null;
   const budget =
     `\n\n${BUDGET_MARKER} Your final reply is read by the agent that started you on every one of its later turns, ` +
@@ -140,13 +140,14 @@ export function withReportBudget(input, env = process.env) {
  * @param {number} args.agentBase    median starting context of this machine's agents
  * @param {string} args.mode         assist | advise | enforce
  * @param {string} args.cwd          the session's directory, for the project's agent brief
+ * @param {number} args.sessionStart when the session started (ms), so only agents it loaded are named
  * @returns {{ updatedInput: object|null, context: string|null, deny: string|null }}
  */
-export function planSpawn({ input, contextTokens = 0, batch = 1, first = true, agentBase = DEFAULT_AGENT_BASE, mode = 'assist', env = process.env, cwd = process.cwd() }) {
+export function planSpawn({ input, contextTokens = 0, batch = 1, first = true, agentBase = DEFAULT_AGENT_BASE, mode = 'assist', env = process.env, cwd = process.cwd(), sessionStart = null }) {
   // A general-purpose agent goes to the lean worker with the user's approved
   // brief when there is one (agent-brief.mjs); the worker's own prompt asks for
   // the short report, so the budget is not appended to it as well.
-  const routed = routeToWorker(input, { cwd, env });
+  const routed = routeToWorker(input, { cwd, env, sessionStart });
   const updatedInput = routed ?? withReportBudget(input, env);
   const notes = [];
   let deny = null;
@@ -154,7 +155,7 @@ export function planSpawn({ input, contextTokens = 0, batch = 1, first = true, a
   // was not told read the brief's effect on the reply as the agent disobeying.
   if (routed && first) {
     notes.push(
-      `${batch > 1 ? 'These general-purpose agents run' : 'This general-purpose agent runs'} as ${WORKER_AGENT} ` +
+      `${batch > 1 ? 'These general-purpose agents run' : 'This general-purpose agent runs'} as ${routed.subagent_type} ` +
         "with the user's approved agent brief (rules from their instruction files) in front of the task, " +
         'instead of the full instruction files.'
     );

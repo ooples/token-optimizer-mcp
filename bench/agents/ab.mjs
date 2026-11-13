@@ -65,6 +65,8 @@ import { fileURLToPath } from 'node:url';
 import {
   draftBrief,
   instructionFiles,
+  renderWorkerAgent,
+  workerAgentPath,
 } from '../../src/hooks-core/agent-brief.mjs';
 import { tallyFile } from '../../src/hooks-core/subagents.mjs';
 
@@ -332,6 +334,18 @@ function runArm(arm, rep, stamp) {
       text: readFileSync(path, 'utf8'),
     }));
     writeFileSync(join(home, 'agent-brief.md'), draftBrief(files));
+    // What `approve --project` generates: the worker with the always-sent rules
+    // in its system prompt. In the fixture, so the user's own ~/.claude/agents
+    // is never touched; written before the session starts, so the hook uses it.
+    const agent = workerAgentPath('project', { cwd: dir });
+    mkdirSync(dirname(agent), { recursive: true });
+    writeFileSync(
+      agent,
+      renderWorkerAgent('project', {
+        cwd: dir,
+        env: { ...process.env, TOKEN_OPTIMIZER_HOME: home },
+      })
+    );
   }
   const cli = [
     '-p',

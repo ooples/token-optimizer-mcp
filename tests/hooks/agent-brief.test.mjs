@@ -9,18 +9,25 @@
 
 import { describe, expect, test } from '@jest/globals';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   BRIEF_MARKER,
+  PROJECT_WORKER,
+  USER_WORKER,
   WORKER_AGENT,
+  WORKER_BODY,
   briefFor,
   draftBrief,
+  generatedWorker,
   instructionFiles,
   parseBrief,
+  renderWorkerAgent,
   routeToWorker,
+  sessionStartedAt,
+  workerAgentPath,
 } from '../../src/hooks-core/agent-brief.mjs';
 import { BUDGET_MARKER, planSpawn } from '../../src/hooks-core/agent-spawn.mjs';
 
@@ -219,5 +226,157 @@ describe('the worker agent and the CLI', () => {
     expect(out.updatedInput.subagent_type).toBe(WORKER_AGENT);
     expect(out.updatedInput.prompt).toContain('Never push to main.');
     expect(out.additionalContext).toContain('token-optimizer:worker');
+  });
+});
+
+describe('the generated worker agents', () => {
+  const BRIEF = [
+    '## CRITICAL: Safety',
+    '- Never push to main.',
+    '',
+    '## Database Migrations',
+    '<!-- when: database, migration -->',
+    '- Every migration must be reversible.',
+    '',
+  ].join('\n');
+
+  function approved() {
+    const s = sandbox();
+    writeFileSync(join(s.env.TOKEN_OPTIMIZER_HOME, 'agent-brief.md'), BRIEF);
+    return s;
+  }
+
+  function generate(s, scope, mtimeMs) {
+    const path = workerAgentPath(scope, { cwd: s.project, env: s.env });
+    mkdirSync(join(path, '..'), { recursive: true });
+    writeFileSync(path, renderWorkerAgent(scope, { cwd: s.project, env: s.env }));
+    utimesSync(path, mtimeMs / 1000, mtimeMs / 1000);
+    return path;
+  }
+
+  test('carries the worker prompt and only the always-sent rules', () => {
+    const s = approved();
+    const agent = renderWorkerAgent('user', { cwd: s.project, env: s.env });
+    expect(agent.startsWith(`---\nname: ${USER_WORKER}\n`)).toBe(true);
+    expect(agent).toMatch(/^omitClaudeMd: true$/m);
+    expect(agent).toMatch(/^disallowedTools: Skill$/m);
+    expect(agent).toContain(WORKER_BODY);
+    expect(agent).toContain('- Never push to main.');
+    expect(agent).not.toContain('reversible');
+  });
+
+  test('the plugin worker and the generated ones share one prompt', () => {
+    const plugin = readFileSync(join(pluginRoot, 'agents', 'worker.md'), 'utf8').replace(/\r\n/g, '\n');
+    expect(plugin.split('\n---\n')[1].trim()).toBe(WORKER_BODY);
+  });
+
+  test('only an agent that existed when the session started is used; the project one first', () => {
+    const s = approved();
+    const start = Date.now();
+    expect(generatedWorker({ cwd: s.project, env: s.env, sessionStart: start })).toBeNull();
+    generate(s, 'user', start - 60_000);
+    expect(generatedWorker({ cwd: s.project, env: s.env, sessionStart: start })).toEqual({ name: USER_WORKER, scope: 'user' });
+    expect(generatedWorker({ cwd: s.project, env: s.env, sessionStart: null })).toBeNull();
+    generate(s, 'project', start + 60_000);
+    expect(generatedWorker({ cwd: s.project, env: s.env, sessionStart: start }).name).toBe(USER_WORKER);
+    generate(s, 'project', start - 60_000);
+    expect(generatedWorker({ cwd: s.project, env: s.env, sessionStart: start })).toEqual({ name: PROJECT_WORKER, scope: 'project' });
+  });
+
+  test('routes to it with only the scoped rules a task names, without needing the plugin', () => {
+    const s = approved();
+    const start = Date.now();
+    generate(s, 'user', start - 60_000);
+    const opts = { cwd: s.project, env: s.env, sessionStart: start };
+    const plain = routeToWorker({ prompt: 'Fix the login bug.' }, opts);
+    expect(plain).toEqual({ prompt: 'Fix the login bug.', subagent_type: USER_WORKER });
+    const db = routeToWorker({ prompt: 'Add a database index.', subagent_type: 'general-purpose' }, opts);
+    expect(db.subagent_type).toBe(USER_WORKER);
+    expect(db.prompt).toContain('Every migration must be reversible.');
+    expect(db.prompt).not.toContain('Never push to main.');
+    // the brief withdrawn: no route, even with the generated agent still on disk
+    const withdrawn = sandbox();
+    expect(routeToWorker({ prompt: 'x' }, { ...opts, env: { ...withdrawn.env, CLAUDE_CONFIG_DIR: s.env.CLAUDE_CONFIG_DIR } })).toBeNull();
+  });
+
+  test('planSpawn names the agent it routed to', () => {
+    const s = approved();
+    const start = Date.now();
+    generate(s, 'user', start - 60_000);
+    const plan = planSpawn({ input: { prompt: 'Fix it.' }, cwd: s.project, env: s.env, sessionStart: start });
+    expect(plan.updatedInput.subagent_type).toBe(USER_WORKER);
+    expect(plan.updatedInput.prompt).not.toContain(BUDGET_MARKER);
+    expect(plan.context).toContain(`runs as ${USER_WORKER}`);
+  });
+
+  test('a session starts at its first timestamped entry', () => {
+    const { root } = sandbox();
+    const path = join(root, 't.jsonl');
+    writeFileSync(
+      path,
+      '{"type":"summary"}\n{"type":"user","timestamp":"2026-11-13T01:02:03.000Z"}\n{"timestamp":"2026-11-13T09:00:00.000Z"}\n'
+    );
+    expect(sessionStartedAt(path)).toBe(Date.parse('2026-11-13T01:02:03.000Z'));
+    expect(sessionStartedAt(join(root, 'none.jsonl'))).toBeNull();
+    expect(sessionStartedAt('')).toBeNull();
+  });
+
+  test('approve generates the agent and remove takes it away', () => {
+    const s = sandbox();
+    writeFileSync(join(s.project, 'CLAUDE.md'), INSTRUCTIONS);
+    const cli = (...a) =>
+      spawnSync(process.execPath, [join(repo, 'src', 'scripts', 'agent-brief.mjs'), ...a, '--cwd', s.project], {
+        encoding: 'utf8',
+        env: { ...process.env, ...s.env },
+      });
+    expect(cli('draft', '--project').status).toBe(0);
+    expect(cli('approve', '--project').status).toBe(0);
+    const agent = workerAgentPath('project', { cwd: s.project, env: s.env });
+    expect(readFileSync(agent, 'utf8')).toContain(`name: ${PROJECT_WORKER}`);
+    expect(readFileSync(agent, 'utf8')).toContain('Always stash before');
+    expect(cli('remove', '--project').status).toBe(0);
+    expect(existsSync(agent)).toBe(false);
+  });
+
+  test('a rule repeated in another section is drafted once', () => {
+    const draft = draftBrief([
+      {
+        path: 'a',
+        text: '## CRITICAL: One\n- Never push to main.\n\n## CRITICAL: Two\n- never push to main.\n- Always run the tests.\n',
+      },
+    ]);
+    expect(draft.match(/push to main/gi)).toHaveLength(1);
+    expect(draft).toContain('- Always run the tests.');
+  });
+
+  test('the hook routes to the generated worker end to end, with no plugin root', () => {
+    const s = approved();
+    const transcript = join(s.root, 'parent.jsonl');
+    generate(s, 'user', Date.now() - 120_000);
+    writeFileSync(
+      transcript,
+      `${JSON.stringify({ type: 'user', timestamp: new Date(Date.now() - 60_000).toISOString(), message: { content: 'go' } })}\n`
+    );
+    const result = spawnSync(process.execPath, [join(pluginRoot, 'hooks', 'agent-spawn.mjs')], {
+      input: JSON.stringify({
+        hook_event_name: 'PreToolUse',
+        tool_name: 'Agent',
+        cwd: s.project,
+        transcript_path: transcript,
+        tool_input: { prompt: 'Fix it.', subagent_type: 'general-purpose' },
+      }),
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        ...s.env,
+        CLAUDE_PLUGIN_ROOT: '',
+        TOKEN_OPTIMIZER_STATE_DIR: join(s.root, 'st'),
+        TOKEN_OPTIMIZER_MODE: '',
+      },
+      timeout: 30_000,
+    });
+    expect(result.status).toBe(0);
+    const out = JSON.parse(result.stdout).hookSpecificOutput;
+    expect(out.updatedInput).toEqual({ prompt: 'Fix it.', subagent_type: USER_WORKER });
   });
 });

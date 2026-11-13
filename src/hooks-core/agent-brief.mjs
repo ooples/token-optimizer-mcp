@@ -21,7 +21,7 @@
  * only ever used as the user left it.
  */
 
-import { existsSync, readFileSync } from 'node:fs';
+import { closeSync, existsSync, openSync, readFileSync, readSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join, parse } from 'node:path';
 
@@ -163,6 +163,8 @@ export function draftBrief(files) {
     '-->',
     '',
   ];
+  // A rule repeated in another section, or another file, is sent once.
+  const emitted = new Set();
   for (const file of files) {
     // A subsection belongs to the headings above it: under a CRITICAL heading it
     // is sent always, and its scope words include its parents'.
@@ -174,7 +176,12 @@ export function draftBrief(files) {
       const ancestors = stack.filter((s) => s.level > 1);
       if (section.level > 0) stack.push(section);
       if (/^\W*why\b/i.test(plainHeading(section.heading))) continue;
-      const rules = ruleLines(section.body);
+      const rules = ruleLines(section.body).filter((r) => {
+        const key = r.toLowerCase();
+        if (emitted.has(key)) return false;
+        emitted.add(key);
+        return true;
+      });
       if (!rules.length) continue;
       const path = [...ancestors, section].map((s) => plainHeading(s.heading)).filter(Boolean);
       parts.push(`## ${path.join(' > ') || 'General'}`);
@@ -237,26 +244,162 @@ export function workerAvailable(env = process.env) {
   return Boolean(root) && existsSync(join(root, 'agents', 'worker.md'));
 }
 
+// ------------------------------------------------- the generated worker agents
+//
+// THE ALWAYS-SENT RULES BELONG IN A SYSTEM PROMPT, NOT IN EACH TASK. In the
+// task message they were written to cache once per agent (measured: ~4.1k of
+// each worker's ~4.1k uncached first-request tokens, while the system prompt
+// before them was read from a sibling's cache). Approving a brief therefore
+// also writes an agent of the user's own -- the worker's prompt plus the
+// always-sent rules -- whose system prompt every later spawn reads from cache.
+// Only the sections a task names still travel in its prompt. And a user agent
+// needs no plugin: settings-installed hooks route to it too.
+
+/** The user's generated worker, with the user's always-sent rules. */
+export const USER_WORKER = 'token-optimizer-worker';
+/** The project's generated worker: the user's rules and the project's. A distinct name, so no precedence rule decides which one runs. */
+export const PROJECT_WORKER = 'token-optimizer-project-worker';
+
+/** The worker's own instructions, shared by the plugin agent and the generated ones. */
+export const WORKER_BODY = [
+  'You are an agent working on one task delegated by another agent. Use the tools available to complete it fully, then stop.',
+  '',
+  '- The prompt you were given is your whole brief: it states the goal, the constraints and anything already ruled out. Follow its constraints exactly; when it is silent, follow the conventions of the code around you.',
+  '- Investigate before changing anything, verify what you claim with the tools rather than from memory, and report a failure or anything left undone plainly.',
+  '- Do not create files beyond what the task needs, and never commit, push or publish unless the prompt says to.',
+  '',
+  'Your final reply is read by the agent that started you on every one of its later turns, so keep it short: the outcome, the files you changed with paths, and anything unresolved. If the detail runs longer than about 300 words, write it to a file and give the path.',
+].join('\n');
+
+function configDir(env) {
+  return env.CLAUDE_CONFIG_DIR || join(env.USERPROFILE || env.HOME || homedir(), '.claude');
+}
+
+/** Where the generated worker for a scope lives. */
+export function workerAgentPath(scope, { cwd = process.cwd(), env = process.env } = {}) {
+  return scope === 'project'
+    ? join(cwd, '.claude', 'agents', `${PROJECT_WORKER}.md`)
+    : join(configDir(env), 'agents', `${USER_WORKER}.md`);
+}
+
+function readSections(path) {
+  try {
+    return parseBrief(readFileSync(path, 'utf8'));
+  } catch {
+    return [];
+  }
+}
+
+const render = (list) => list.map((s) => (s.heading ? `## ${s.heading}\n${s.text}` : s.text)).join('\n\n');
+
+/**
+ * The generated worker agent for a scope, from the approved briefs: the
+ * user's always-sent sections, then the project's for the project worker.
+ * Null when there is nothing always-sent to carry.
+ */
+export function renderWorkerAgent(scope, { cwd = process.cwd(), env = process.env } = {}) {
+  const { global, project } = briefPaths({ cwd, env });
+  const sources = scope === 'project' ? [global, project] : [global];
+  const always = sources.flatMap((p) => (p ? readSections(p) : [])).filter((s) => !s.when);
+  const name = scope === 'project' ? PROJECT_WORKER : USER_WORKER;
+  return [
+    '---',
+    `name: ${name}`,
+    "description: A general-purpose agent that starts lean, carrying the user's approved agent brief instead of their instruction files. Generated by token-optimizer-agent-brief approve; regenerated on every approve.",
+    'model: inherit',
+    'omitClaudeMd: true',
+    'disallowedTools: Skill',
+    '---',
+    '',
+    WORKER_BODY,
+    ...(always.length ? ['', `# Rules from the user's instructions`, '', render(always)] : []),
+    '',
+  ].join('\n');
+}
+
+/** When the session in `transcriptPath` started, from its first timestamped entry; null when unknown. */
+export function sessionStartedAt(transcriptPath) {
+  if (!transcriptPath) return null;
+  try {
+    const handle = openSync(transcriptPath, 'r');
+    try {
+      const buffer = Buffer.allocUnsafe(64 * 1024);
+      const got = readSync(handle, buffer, 0, buffer.length, 0);
+      for (const line of buffer.toString('utf8', 0, got).split('\n')) {
+        const at = /"timestamp":"([^"]+)"/.exec(line);
+        if (at && Number.isFinite(Date.parse(at[1]))) return Date.parse(at[1]);
+      }
+    } finally {
+      closeSync(handle);
+    }
+  } catch {
+    /* unknown */
+  }
+  return null;
+}
+
+/**
+ * The generated worker this session can run, or null.
+ *
+ * ONLY ONE THAT EXISTED WHEN THE SESSION STARTED. Claude Code reads agent
+ * definitions at startup; a spawn naming an agent written after that would
+ * fail, so an agent file newer than the session -- or a session whose start is
+ * unknown -- is not used.
+ */
+export function generatedWorker({ cwd = process.cwd(), env = process.env, sessionStart = null } = {}) {
+  if (!Number.isFinite(sessionStart)) return null;
+  for (const [scope, name] of [['project', PROJECT_WORKER], ['user', USER_WORKER]]) {
+    const path = workerAgentPath(scope, { cwd, env });
+    try {
+      if (statSync(path).mtimeMs <= sessionStart) return { name, scope };
+    } catch {
+      /* not generated */
+    }
+  }
+  return null;
+}
+
+/** The approved brief's scoped sections that `task` names, or null. */
+export function scopedBriefFor(task, { cwd = process.cwd(), env = process.env, scope = 'project' } = {}) {
+  const { global, project } = briefPaths({ cwd, env });
+  const sources = scope === 'project' ? [global, project] : [global];
+  const picked = sources
+    .flatMap((p) => (p ? readSections(p) : []))
+    .filter((s) => s.when && s.when.some((w) => mentions(String(task || ''), w)));
+  return picked.length ? render(picked) : null;
+}
+
+const withRules = (rules, prompt) =>
+  `${BRIEF_MARKER} Rules from the user's instructions that apply to this task:\n\n${rules}\n\n---\n\n${prompt}`;
+
 /**
  * The routed input for one general-purpose spawn, or null to leave it alone.
  *
- * Routed only when: routing is not off, the worker agent is loaded, the spawn
- * is general-purpose (or names no type, which means general-purpose), and an
- * approved brief exists. A user's own agent types, built-ins and forks are
- * never touched.
+ * Routed only when routing is not off, the spawn is general-purpose (or names
+ * no type, which means general-purpose), and an approved brief exists -- to the
+ * generated worker when this session can run it, with only the scoped sections
+ * the task names in its prompt; otherwise to the plugin's worker, when the
+ * plugin is loaded, with the whole applicable brief in its prompt. A user's own
+ * agent types, built-ins and forks are never touched.
  */
-export function routeToWorker(input, { cwd = process.cwd(), env = process.env } = {}) {
+export function routeToWorker(input, { cwd = process.cwd(), env = process.env, sessionStart = null } = {}) {
   if (/^(off|0|false|no)$/i.test(String(env.TOKEN_OPTIMIZER_AGENT_ROUTE || '').trim())) return null;
   if (!input || typeof input.prompt !== 'string' || !input.prompt.trim()) return null;
   const type = input.subagent_type;
   if (type !== undefined && type !== null && type !== '' && type !== 'general-purpose') return null;
   if (input.prompt.includes(BRIEF_MARKER)) return null;
+  const { global, project } = briefPaths({ cwd, env });
+  if (!(existsSync(global) || (project && existsSync(project)))) return null;
+  const generated = generatedWorker({ cwd, env, sessionStart });
+  if (generated) {
+    const scoped = scopedBriefFor(input.prompt, { cwd, env, scope: generated.scope });
+    return { ...input, subagent_type: generated.name, prompt: scoped ? withRules(scoped, input.prompt) : input.prompt };
+  }
   if (!workerAvailable(env)) return null;
   const brief = briefFor(input.prompt, { cwd, env });
   if (!brief) return null;
-  return {
-    ...input,
-    subagent_type: WORKER_AGENT,
-    prompt: `${BRIEF_MARKER} Rules from the user's instructions that apply to this task:\n\n${brief}\n\n---\n\n${input.prompt}`,
-  };
+  return { ...input, subagent_type: WORKER_AGENT, prompt: withRules(brief, input.prompt) };
 }
+
+/** Is `type` one of the workers this package routes to? */
+export const isWorkerType = (type) => type === WORKER_AGENT || type === USER_WORKER || type === PROJECT_WORKER;

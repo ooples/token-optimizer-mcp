@@ -13,7 +13,15 @@
  */
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
-import { briefFor, briefPaths, draftBrief, instructionFiles, parseBrief } from '../hooks-core/agent-brief.mjs';
+import {
+  briefFor,
+  briefPaths,
+  draftBrief,
+  instructionFiles,
+  parseBrief,
+  renderWorkerAgent,
+  workerAgentPath,
+} from '../hooks-core/agent-brief.mjs';
 
 const args = process.argv.slice(2);
 const command = args[0];
@@ -60,8 +68,14 @@ if (command === 'draft') {
   if (existsSync(target)) renameSync(target, `${target}.${Date.now()}.bak`);
   renameSync(draftPath, target);
   console.log(`Approved: ${target} (${summary(readFileSync(target, 'utf8'))}).`);
-  console.log('General-purpose agents now start as token-optimizer:worker with this brief in front of their task,');
-  console.log('without CLAUDE.md, auto-memory or the skill list. TOKEN_OPTIMIZER_AGENT_ROUTE=off turns that off.');
+  // The always-sent rules go into an agent's system prompt, cached across spawns.
+  const agentPath = workerAgentPath(scope === 'project' ? 'project' : 'user', { cwd });
+  mkdirSync(dirname(agentPath), { recursive: true });
+  writeFileSync(agentPath, renderWorkerAgent(scope === 'project' ? 'project' : 'user', { cwd }));
+  console.log(`Generated the worker agent ${agentPath}.`);
+  console.log('From the next session on, general-purpose agents start as that worker -- without CLAUDE.md,');
+  console.log('auto-memory or the skill list, with these rules instead. TOKEN_OPTIMIZER_AGENT_ROUTE=off turns that off.');
+  if (scope === 'global') console.log('A project brief, if approved, needs approve --project again to pick these rules up.');
 } else if (command === 'show') {
   const task = option('--task');
   if (task !== null) {
@@ -79,7 +93,9 @@ if (command === 'draft') {
     console.log(`No approved brief at ${target}.`);
   } else {
     renameSync(target, `${target}.${Date.now()}.removed`);
-    console.log(`Removed ${target}; agents start as asked again.`);
+    const agentPath = workerAgentPath(scope === 'project' ? 'project' : 'user', { cwd });
+    if (existsSync(agentPath)) renameSync(agentPath, `${agentPath}.${Date.now()}.removed`);
+    console.log(`Removed ${target} and its worker agent; agents start as asked again.`);
   }
 } else {
   console.log('usage: token-optimizer-agent-brief draft|approve|show|remove [--project] [--cwd DIR] [--task TEXT]');
