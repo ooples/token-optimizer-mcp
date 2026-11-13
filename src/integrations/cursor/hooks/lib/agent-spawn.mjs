@@ -292,8 +292,19 @@ export function parentState(transcriptPath, toolUseId) {
   let batch = 1;
   let first = true;
   let model = null;
+  // The last recorded usage is the context of the PREVIOUS request: what was
+  // added since -- that request's output and the tool results that came back --
+  // is in the request carrying this spawn but in no usage yet. Measured: a
+  // parent read 12 files and forked 12 times; every hook saw ~31k of a real
+  // ~76k, so the fork guard's 60k threshold let 11 of the 12 forks through.
+  let usageId = null;
+  let pending = 0;
   for (const entry of entries) {
     const message = entry?.message;
+    if (entry?.type === 'user' && message) {
+      pending += estimateTokens(typeof message.content === 'string' ? message.content : JSON.stringify(message.content ?? ''));
+      continue;
+    }
     if (entry?.type !== 'assistant' || !message) continue;
     // `<synthetic>` marks harness-made messages, not the parent's model.
     if (typeof message.model === 'string' && message.model && !message.model.startsWith('<')) model = message.model;
@@ -302,7 +313,12 @@ export function parentState(transcriptPath, toolUseId) {
       contextTokens =
         (Number(usage.input_tokens) || 0) +
         (Number(usage.cache_read_input_tokens) || 0) +
-        (Number(usage.cache_creation_input_tokens) || 0);
+        (Number(usage.cache_creation_input_tokens) || 0) +
+        (Number(usage.output_tokens) || 0);
+      // A message streamed as several entries repeats its usage on each; the
+      // results interleaved between them still count.
+      if (message.id !== usageId || !message.id) pending = 0;
+      usageId = message.id ?? null;
     }
     const content = Array.isArray(message.content) ? message.content : [];
     if (toolUseId && content.some((b) => b?.type === 'tool_use' && b.id === toolUseId)) {
@@ -320,8 +336,19 @@ export function parentState(transcriptPath, toolUseId) {
       first = !calls.length || calls[0] === toolUseId;
     }
   }
-  return { contextTokens, batch, first, found: parentFindings(entries), model };
+  return { contextTokens: contextTokens + pending, batch, first, found: parentFindings(entries), model };
 }
+
+/**
+ * Characters per token for what comes back into the parent: mostly tool
+ * results, mostly code. Measured on a parent's 12 file reads: ~111k chars were
+ * 42.8k tokens (2.6 chars/token), so the prose rule of 4 under-counted by 1.5x
+ * and the guard saw 61k of a real 76k. 3 errs toward the real size without
+ * fitting that one sample.
+ */
+export const RESULT_CHARS_PER_TOKEN = 3;
+
+const estimateTokens = (text) => Math.ceil(String(text || '').length / RESULT_CHARS_PER_TOKEN);
 
 const k = (n) => `${Math.round(n / 1000)}k`;
 

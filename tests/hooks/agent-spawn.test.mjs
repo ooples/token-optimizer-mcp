@@ -59,6 +59,33 @@ describe('parentState', () => {
     expect(parentState(path, 'x').model).toBe('claude-sonnet-5-5');
   });
 
+  test('counts what came back since the last usage: the spawn request carries it', () => {
+    // Claude Code runs the hook before it writes the spawning call, so the last
+    // usage is the request BEFORE the one that spawns. The reads it made since
+    // (180k chars, 60k tokens at 3 chars a token) and its output are in the spawning request.
+    const dir = mkdtempSync(join(tmpdir(), 'spawn-pending-'));
+    const path = join(dir, 'p.jsonl');
+    const usage = { input_tokens: 10, cache_read_input_tokens: 30_000, cache_creation_input_tokens: 990, output_tokens: 1_000 };
+    const read = (id) => ({ type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: id, content: 'x'.repeat(60_000) }] } });
+    const lines = [
+      { type: 'user', message: { content: 'go' } },
+      { type: 'assistant', message: { id: 'm1', usage, content: [{ type: 'tool_use', id: 'r1', name: 'Read', input: {} }] } },
+      read('r1'),
+      { type: 'assistant', message: { id: 'm1', usage, content: [{ type: 'tool_use', id: 'r2', name: 'Read', input: {} }] } },
+      read('r2'),
+      { type: 'assistant', message: { id: 'm1', usage, content: [{ type: 'tool_use', id: 'r3', name: 'Read', input: {} }] } },
+      read('r3'),
+    ];
+    writeFileSync(path, lines.map((e) => JSON.stringify(e)).join('\n') + '\n');
+    const { contextTokens } = parentState(path, 'fork-1');
+    expect(contextTokens).toBeGreaterThanOrEqual(32_000 + 60_000);
+    expect(contextTokens).toBeLessThan(32_000 + 61_000);
+    // A later request's usage already includes those reads: they are not counted twice.
+    const next = { type: 'assistant', message: { id: 'm2', usage: { ...usage, cache_read_input_tokens: 75_000 }, content: [] } };
+    writeFileSync(path, [...lines, next].map((e) => JSON.stringify(e)).join('\n') + '\n');
+    expect(parentState(path, 'fork-1').contextTokens).toBe(77_000);
+  });
+
   test('a missing transcript is an empty state, not an error', () => {
     expect(parentState(join(tmpdir(), 'nope.jsonl'), 'x')).toEqual({ contextTokens: 0, batch: 1, first: true, found: [], model: null });
   });
