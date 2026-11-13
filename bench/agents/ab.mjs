@@ -103,8 +103,10 @@ if (!['small', 'large', 'slow'].includes(FIXTURE))
 //   -noroute       no routing to the brief's worker (so no Haiku either)
 //   -nobudget      no report budget on the agent's prompt
 //   -nonotice      no short-prompts line at session start
-//   -ttl5m         subagents write the 5m cache tier, Claude Code's default
-//                  (agents-opt's worker writes 1h, from its own frontmatter)
+//   -ttl1h         subagents write the 1h cache tier, as the setting
+//                  token-optimizer writes does (agents-opt runs at Claude
+//                  Code's 5m default: the worker's own frontmatter 1h was
+//                  measured as ignored, 0 1h writes in 3 runs)
 //   -proxy         through this checkout's proxy, keep-warm on; its pings,
 //                  which no transcript records, are read from the proxy's
 //                  accounting ledger and added to the run
@@ -123,7 +125,7 @@ const KNOWN_ARMS = new Set([
   'agents-opt-noroute',
   'agents-opt-nobudget',
   'agents-opt-nonotice',
-  'agents-opt-ttl5m',
+  'agents-opt-ttl1h',
   'agents-opt-proxy',
   'agents-opt-proxynowarm',
   'forks-plain',
@@ -600,8 +602,7 @@ async function runArm(arm, rep, stamp) {
     env: {
       ...process.env,
       TOKEN_OPTIMIZER_HOME: home,
-      // The bench never writes the user's settings; the worker's 1h tier comes
-      // from its own frontmatter.
+      // The bench never writes the user's settings.
       TOKEN_OPTIMIZER_SUBAGENT_CACHE_TTL: 'off',
       TOKEN_OPTIMIZER_MAIN_CACHE_TTL: 'off',
       ...(variant === 'nodigest' ? { TOKEN_OPTIMIZER_AGENT_DIGEST: 'off' } : {}),
@@ -612,8 +613,8 @@ async function runArm(arm, rep, stamp) {
       ...(variant === 'noroute' ? { TOKEN_OPTIMIZER_AGENT_ROUTE: 'off' } : {}),
       ...(variant === 'nobudget' ? { TOKEN_OPTIMIZER_AGENT_REPORT_BUDGET: 'off' } : {}),
       ...(variant === 'nonotice' ? { TOKEN_OPTIMIZER_AGENT_BRIEF_NOTICE: 'off' } : {}),
-      // The env form outranks the worker's frontmatter, and never touches the user's settings.
-      ...(variant === 'ttl5m' ? { CLAUDE_CODE_SUBAGENT_PROMPT_CACHE_TTL: '5m' } : {}),
+      // The env form of subagentPromptCacheTtl; the user's settings are never touched.
+      ...(variant === 'ttl1h' ? { CLAUDE_CODE_SUBAGENT_PROMPT_CACHE_TTL: '1h' } : {}),
       ...(variant === 'enforce' ? { TOKEN_OPTIMIZER_MODE: 'enforce' } : {}),
       ...(proxy ? { ANTHROPIC_BASE_URL: proxy.url } : {}),
     },
