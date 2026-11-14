@@ -210,10 +210,7 @@ export const DEFAULT_TUNING: Tuning = Object.freeze({
 });
 
 export type PresetName =
-  | 'balanced'
-  | 'aggressive'
-  | 'conservative'
-  | 'lossless';
+  'balanced' | 'aggressive' | 'conservative' | 'lossless';
 
 /**
  * Named starting points.

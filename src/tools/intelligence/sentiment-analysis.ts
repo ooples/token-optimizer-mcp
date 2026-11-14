@@ -654,11 +654,7 @@ export class SentimentAnalysisTool {
         const normalizedScore = Math.min((score / words.length) * 10, 1.0);
         emotions.push({
           emotion: emotionName as
-            | 'joy'
-            | 'anger'
-            | 'sadness'
-            | 'fear'
-            | 'neutral',
+            'joy' | 'anger' | 'sadness' | 'fear' | 'neutral',
           score: normalizedScore,
           confidence: Math.min(triggers.length / pattern.keywords.length, 1.0),
           triggers: triggers.slice(0, 5), // Top 5 triggers

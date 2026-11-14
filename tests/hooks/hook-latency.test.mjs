@@ -264,7 +264,7 @@ describe.each([
 
   test('leaves the cause to the Node floor notice when Node is below the floor', () => {
     const out = sessionStart(entry, logs({ runs: slowRuns() }), '22.2.0');
-    expect(out).toContain('below the supported');
+    expect(out).toContain('outside the supported');
     expect(out).not.toContain('have been slow');
   });
 });

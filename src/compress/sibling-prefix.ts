@@ -45,9 +45,7 @@ export interface SiblingPrefixResult {
 
 const markerOf = (block: unknown): Marker | null => {
   const cc = (block as Block | null)?.cache_control as
-    | Marker
-    | null
-    | undefined;
+    Marker | null | undefined;
   return cc && typeof cc === 'object' ? cc : null;
 };
 

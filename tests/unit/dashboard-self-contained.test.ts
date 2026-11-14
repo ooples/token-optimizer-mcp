@@ -72,8 +72,16 @@ describe('the dashboard is self-contained', () => {
     );
 
     // Pinned exactly: a caret range would let the dependency change under us,
-    // which is the supply-chain half of what was wrong with the CDN.
-    expect(pkg.dependencies['chart.js']).toBe('4.4.0');
+    // which is the supply-chain half of what was wrong with the CDN. The pin is
+    // the invariant, not one version: a reviewed bump (4.4.0 -> 4.6.1, the
+    // 2026-11-14 dependency batch) moves the exact version and stays pinned,
+    // and the lockfile must resolve to that same version.
+    const pinned = pkg.dependencies['chart.js'];
+    expect(pinned).toMatch(/^\d+\.\d+\.\d+$/);
+    const lock = JSON.parse(
+      readFileSync(join(process.cwd(), 'package-lock.json'), 'utf8')
+    );
+    expect(lock.packages['node_modules/chart.js'].version).toBe(pinned);
 
     // The vendoring step moved out of an inline `node -e` in copy:assets and
     // into src/scripts/copy-assets.mjs, so that a missing chart.js could fail with a

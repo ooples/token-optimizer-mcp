@@ -18,12 +18,7 @@
  */
 
 export type FrameworkId =
-  | 'jest'
-  | 'vitest'
-  | 'mocha'
-  | 'node'
-  | 'ava'
-  | 'unknown';
+  'jest' | 'vitest' | 'mocha' | 'node' | 'ava' | 'unknown';
 
 export interface NormalisedTestResult {
   numTotalTests: number;

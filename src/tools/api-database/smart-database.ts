@@ -56,20 +56,10 @@ export type DatabaseAction =
   | 'batch';
 
 export type DatabaseEngine =
-  | 'postgresql'
-  | 'mysql'
-  | 'sqlite'
-  | 'mongodb'
-  | 'redis'
-  | 'generic';
+  'postgresql' | 'mysql' | 'sqlite' | 'mongodb' | 'redis' | 'generic';
 
 export type QueryType =
-  | 'SELECT'
-  | 'INSERT'
-  | 'UPDATE'
-  | 'DELETE'
-  | 'DDL'
-  | 'UNKNOWN';
+  'SELECT' | 'INSERT' | 'UPDATE' | 'DELETE' | 'DDL' | 'UNKNOWN';
 
 export interface SmartDatabaseOptions {
   // Action to perform
@@ -183,13 +173,7 @@ export interface MissingIndex {
 
 export interface Optimization {
   type:
-    | 'index'
-    | 'rewrite'
-    | 'join'
-    | 'subquery'
-    | 'limit'
-    | 'cache'
-    | 'partition';
+    'index' | 'rewrite' | 'join' | 'subquery' | 'limit' | 'cache' | 'partition';
   priority: 'low' | 'medium' | 'high' | 'critical';
   description: string;
   suggestedQuery?: string;

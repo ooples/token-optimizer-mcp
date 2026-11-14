@@ -1118,7 +1118,7 @@ function legacyMarkers(
 ): { out: string; counts: number[] } {
   let out = '';
   const counts: number[] = [];
-  for (let i = 0; i < run.length; ) {
+  for (let i = 0; i < run.length;) {
     let end = i + 1;
     while (end < run.length && run[end].shape === run[i].shape) end++;
     const group = run.slice(i, end),
@@ -1155,7 +1155,7 @@ function compressRecords(
   const label = noun === 'entries' ? 'object map' : 'array records';
   let result = '',
     cursor = 0;
-  for (let i = 0; i < found.length; ) {
+  for (let i = 0; i < found.length;) {
     // ADJACENCY BOUNDS THE RUN; SHAPE PARTITIONS IT TWO WAYS, AND THE SHORTER
     // ONE WINS.
     //

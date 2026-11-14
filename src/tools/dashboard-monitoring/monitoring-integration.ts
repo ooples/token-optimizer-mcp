@@ -42,12 +42,7 @@ export interface MonitoringIntegrationOptions {
 
   connection?: {
     platform:
-      | 'prometheus'
-      | 'grafana'
-      | 'datadog'
-      | 'newrelic'
-      | 'splunk'
-      | 'elastic';
+      'prometheus' | 'grafana' | 'datadog' | 'newrelic' | 'splunk' | 'elastic';
     url: string;
     apiKey?: string;
     username?: string;

@@ -319,7 +319,7 @@ export function expandSearchHunks(text: string, stamp: Stamp = null): string {
   // encoder failing.
   type Line = { raw: string; eol: string };
   const lines: Line[] = [];
-  for (let i = 0; i < text.length; ) {
+  for (let i = 0; i < text.length;) {
     let stop = i;
     while (stop < text.length && text[stop] !== '\n' && text[stop] !== '\r')
       stop += 1;

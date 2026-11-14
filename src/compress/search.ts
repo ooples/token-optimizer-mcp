@@ -237,7 +237,7 @@ export function compressSearchResults(
   // straddling the change fall back to their original prefixes.
   type Line = { raw: string; eol: string };
   const lines: Line[] = [];
-  for (let i = 0; i < text.length; ) {
+  for (let i = 0; i < text.length;) {
     let end = i;
     while (end < text.length && text[end] !== '\n' && text[end] !== '\r') end++;
     const raw = text.slice(i, end);

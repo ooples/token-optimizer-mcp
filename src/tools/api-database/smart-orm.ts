@@ -17,11 +17,7 @@ import type { MetricsCollector } from '../../core/metrics.js';
 import { createHash } from 'crypto';
 
 export type ORMType =
-  | 'prisma'
-  | 'sequelize'
-  | 'typeorm'
-  | 'mongoose'
-  | 'generic';
+  'prisma' | 'sequelize' | 'typeorm' | 'mongoose' | 'generic';
 
 export interface SmartORMOptions {
   // Query code
@@ -817,9 +813,8 @@ export function getSmartOrm(
 export async function runSmartORM(options: SmartORMOptions): Promise<string> {
   const { homedir } = await import('os');
   const { join } = await import('path');
-  const { CacheEngine: CacheEngineClass } = await import(
-    '../../core/cache-engine.js'
-  );
+  const { CacheEngine: CacheEngineClass } =
+    await import('../../core/cache-engine.js');
   const { TokenCounter } = await import('../../core/token-counter.js');
   const { MetricsCollector } = await import('../../core/metrics.js');
 

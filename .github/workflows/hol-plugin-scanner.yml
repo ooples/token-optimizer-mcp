@@ -21,9 +21,9 @@ jobs:
     # Skip on release-please PRs (they only bump version/changelog).
     if: ${{ !startsWith(github.head_ref, 'release-please') }}
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: HOL Plugin Scanner
-        uses: hashgraph-online/ai-plugin-scanner-action@8f0a503ca2a70c1968a9a883e11fdff5737b7909 # v1 (v1.2.514)
+        uses: hashgraph-online/ai-plugin-scanner-action@9b169fc65d09b24726b66d70b3563ab563158b58 # v1 (v1.2.514)
         with:
           plugin_dir: "src/integrations/codex/plugin"
           mode: scan

@@ -43,11 +43,7 @@ export type ConsistencyModel = 'eventual' | 'strong' | 'causal';
  * Conflict resolution strategies
  */
 export type ConflictResolution =
-  | 'last-write-wins'
-  | 'first-write-wins'
-  | 'merge'
-  | 'custom'
-  | 'vector-clock';
+  'last-write-wins' | 'first-write-wins' | 'merge' | 'custom' | 'vector-clock';
 
 /**
  * Node health status

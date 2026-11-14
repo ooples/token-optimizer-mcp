@@ -45,11 +45,7 @@ import {
 import type { Elision, Stamp } from './types.js';
 
 export type StrategyName =
-  | 'v1-frontier'
-  | 'v2-speculative'
-  | 'v3-history'
-  | 'v4-substitute'
-  | 'ccr';
+  'v1-frontier' | 'v2-speculative' | 'v3-history' | 'v4-substitute' | 'ccr';
 
 export interface StrategyOptions {
   /**

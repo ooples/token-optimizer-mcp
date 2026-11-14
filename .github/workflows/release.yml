@@ -51,7 +51,7 @@ jobs:
     steps:
       - name: Run release-please
         id: release
-        uses: googleapis/release-please-action@v4
+        uses: googleapis/release-please-action@v5
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           # Both live under .github/ to keep the repository root short.
@@ -90,7 +90,7 @@ jobs:
         os: [ubuntu-latest, windows-2022]
     steps:
       - name: Checkout the released tag
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ needs.release-please.outputs.tag_name }}
           persist-credentials: false
@@ -140,7 +140,7 @@ jobs:
       id-token: write # required for OIDC trusted publishing + provenance
     steps:
       - name: Checkout the released tag
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ needs.release-please.outputs.tag_name }}
 
@@ -267,7 +267,7 @@ jobs:
       id-token: write # the OIDC token IS the credential here
     steps:
       - name: Checkout the released tag
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ needs.release-please.outputs.tag_name }}
           persist-credentials: false
@@ -368,7 +368,7 @@ jobs:
         os: [ubuntu-latest, windows-2022]
     steps:
       - name: Checkout the released tag
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ needs.release-please.outputs.tag_name }}
           # This job runs package scripts from the released tag; without this, checkout leaves a
@@ -432,7 +432,7 @@ jobs:
       - name: Email release notification (if configured)
         if: vars.RELEASE_EMAIL_TO != ''
         continue-on-error: true
-        uses: dawidd6/action-send-mail@v3
+        uses: dawidd6/action-send-mail@v24
         with:
           server_address: ${{ secrets.SMTP_HOST }}
           server_port: ${{ secrets.SMTP_PORT }}

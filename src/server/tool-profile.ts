@@ -55,12 +55,7 @@ export const CONTINUITY_TOOL_NAMES = [
 export const ATTESTATION_TOOL_NAMES = ['context_receipt_verify'] as const;
 
 export type ToolProfile =
-  | 'attestation'
-  | 'continuity'
-  | 'cognitive'
-  | 'core'
-  | 'files'
-  | 'full';
+  'attestation' | 'continuity' | 'cognitive' | 'core' | 'files' | 'full';
 export type ExperimentArm = 'baseline' | 'optimizer' | 'retrieval' | 'full';
 
 export function resolveExperimentArm(

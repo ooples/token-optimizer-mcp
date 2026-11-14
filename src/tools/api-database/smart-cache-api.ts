@@ -39,18 +39,9 @@ export interface CachedResponse {
 }
 
 export type CachingStrategy =
-  | 'ttl'
-  | 'etag'
-  | 'event'
-  | 'lru'
-  | 'size-based'
-  | 'hybrid';
+  'ttl' | 'etag' | 'event' | 'lru' | 'size-based' | 'hybrid';
 export type InvalidationPattern =
-  | 'time'
-  | 'pattern'
-  | 'tag'
-  | 'manual'
-  | 'event';
+  'time' | 'pattern' | 'tag' | 'manual' | 'event';
 
 export interface SmartCacheAPIOptions {
   action: 'get' | 'set' | 'invalidate' | 'analyze' | 'warm';
@@ -873,9 +864,8 @@ export async function runSmartCacheApi(
 ): Promise<string> {
   const { homedir } = await import('os');
   const { join } = await import('path');
-  const { CacheEngine: CacheEngineClass } = await import(
-    '../../core/cache-engine.js'
-  );
+  const { CacheEngine: CacheEngineClass } =
+    await import('../../core/cache-engine.js');
   const { TokenCounter } = await import('../../core/token-counter.js');
   const { MetricsCollector } = await import('../../core/metrics.js');
 

@@ -28,7 +28,7 @@ jobs:
         # moving Windows image currently carries unsupported VS 18.
         os: [ubuntu-latest, windows-2022]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
       - uses: actions/setup-node@v4
@@ -108,7 +108,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -136,7 +136,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -163,7 +163,7 @@ jobs:
           echo "Build artifacts verified successfully"
 
       - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: dist-${{ github.sha }}
           path: dist/
@@ -177,12 +177,14 @@ jobs:
 
     strategy:
       matrix:
-        node-version: ['22', '24', '25', '26']
+        # 22.18.0 is the lowest release engines.node allows (^22.18.0 || >=24.11.0):
+        # '22' resolves to the newest 22.x, so without it the floor is never run.
+        node-version: ['22.18.0', '22', '24', '25', '26']
       fail-fast: false
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@v4
@@ -242,7 +244,7 @@ jobs:
 
       - name: Upload coverage artifacts
         if: matrix.node-version == '22' && always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: coverage-report-${{ github.sha }}
           path: coverage/
@@ -259,7 +261,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -314,7 +316,7 @@ jobs:
 
       - name: Upload benchmark results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: benchmark-results-${{ github.sha }}
           path: benchmark-results.txt
@@ -355,7 +357,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -405,7 +407,7 @@ jobs:
 
       - name: Upload integration test logs
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: integration-test-logs-${{ github.sha }}
           path: |
@@ -421,7 +423,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Node.js
         uses: actions/setup-node@v4

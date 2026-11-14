@@ -89,10 +89,7 @@ import { join } from 'path';
 // ===========================
 
 export type PrettyOperation =
-  | 'highlight-code'
-  | 'format-code'
-  | 'detect-language'
-  | 'apply-theme';
+  'highlight-code' | 'format-code' | 'detect-language' | 'apply-theme';
 
 export type OutputMode = 'ansi' | 'html' | 'plain';
 

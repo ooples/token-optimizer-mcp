@@ -40,11 +40,7 @@ export type AnalyticsOperation =
 export type TimeGranularity = 'second' | 'minute' | 'hour' | 'day';
 
 export type MetricType =
-  | 'performance'
-  | 'usage'
-  | 'efficiency'
-  | 'cost'
-  | 'health';
+  'performance' | 'usage' | 'efficiency' | 'cost' | 'health';
 
 export type AggregationType = 'sum' | 'avg' | 'min' | 'max' | 'p95' | 'p99';
 

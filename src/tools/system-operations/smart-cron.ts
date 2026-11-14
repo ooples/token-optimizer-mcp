@@ -50,11 +50,7 @@ export type CronOperation =
   | 'validate';
 export type SchedulerType = 'cron' | 'windows-task' | 'auto';
 export type TaskStatus =
-  | 'enabled'
-  | 'disabled'
-  | 'running'
-  | 'failed'
-  | 'completed';
+  'enabled' | 'disabled' | 'running' | 'failed' | 'completed';
 export type TriggerType = 'daily' | 'weekly' | 'monthly' | 'once' | 'custom';
 
 export interface SmartCronOptions {

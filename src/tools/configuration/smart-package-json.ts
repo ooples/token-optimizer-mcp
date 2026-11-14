@@ -38,10 +38,7 @@ interface PackageMetadata {
   name: string;
   version: string;
   type:
-    | 'dependency'
-    | 'devDependency'
-    | 'peerDependency'
-    | 'optionalDependency';
+    'dependency' | 'devDependency' | 'peerDependency' | 'optionalDependency';
   latest?: string;
   outdated?: boolean;
   vulnerabilities?: number;

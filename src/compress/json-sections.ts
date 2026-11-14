@@ -17,7 +17,7 @@ export function looksLikeJsonSections(text: string): boolean {
 
 function* jsonSections(text: string) {
   const start = /^[\[{][ \t]*\r?$/gm;
-  for (let match; (match = start.exec(text)); ) {
+  for (let match; (match = start.exec(text));) {
     const stack: string[] = [];
     let quoted = false,
       escaped = false,

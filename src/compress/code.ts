@@ -250,7 +250,9 @@ function babelBodies(text: string): Array<[number, number]> | null {
       // They are still in `ast.comments`; they are just not copied onto the
       // tree for a pass that skips them.
       attachComment: false,
-      plugins: ['typescript', 'jsx', 'decorators-legacy', 'classProperties'],
+      // Class properties are standard syntax in Babel 8, which removed the
+      // `classProperties` plugin name; listing it is a type error there.
+      plugins: ['typescript', 'jsx', 'decorators-legacy'],
     });
   } catch {
     return null;

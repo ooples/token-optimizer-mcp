@@ -110,12 +110,7 @@ export interface ACLEntry {
 export interface SecurityIssue {
   severity: 'critical' | 'high' | 'medium' | 'low' | 'info';
   category:
-    | 'permission'
-    | 'sudo'
-    | 'password'
-    | 'group'
-    | 'file'
-    | 'configuration';
+    'permission' | 'sudo' | 'password' | 'group' | 'file' | 'configuration';
   description: string;
   recommendation: string;
   affectedEntity: string;

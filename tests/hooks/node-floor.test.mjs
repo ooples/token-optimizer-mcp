@@ -21,7 +21,9 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { checklist } from '../../src/hooks-core/doctor.mjs';
 import {
-  NODE_FLOOR,
+  NODE_ENGINES,
+  NODE_FLOORS,
+  NODE_SUPPORTED,
   nodeBelowFloor,
   nodeFloorNotice,
 } from '../../src/hooks-core/node-floor.mjs';
@@ -35,7 +37,17 @@ describe('the floor', () => {
   test('is the one package.json declares', () => {
     const engines = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'))
       .engines.node;
-    expect(engines).toBe(`>=${NODE_FLOOR}`);
+    expect(engines).toBe(NODE_ENGINES);
+    expect(NODE_ENGINES).toBe('^22.18.0 || >=24.11.0');
+  });
+
+  test('holds the floor of every runtime dependency that declares one', () => {
+    // @babel/parser 8 is loaded at runtime (src/compress/code.ts); a package
+    // cannot support a Node its own runtime dependencies refuse.
+    const babel = JSON.parse(
+      readFileSync(join(ROOT, 'node_modules', '@babel', 'parser', 'package.json'), 'utf8')
+    ).engines.node;
+    expect(babel).toBe(NODE_ENGINES);
   });
 
   test.each([
@@ -43,9 +55,17 @@ describe('the floor', () => {
     ['v22.2.0', true],
     ['22.13.9', true],
     ['20.18.0', true],
-    ['22.14.0', false],
+    ['22.14.0', true],
+    ['22.17.9', true],
+    ['22.18.0', false],
+    ['v22.18.0', false],
     ['22.23.4', false],
-    ['24.1.0', false],
+    ['23.11.0', true],
+    ['24.1.0', true],
+    ['24.10.9', true],
+    ['24.11.0', false],
+    ['25.1.0', false],
+    ['26.0.0', false],
     ['not-a-version', false],
   ])('%s below the floor: %s', (version, below) => {
     expect(nodeBelowFloor(version)).toBe(below);
@@ -53,10 +73,23 @@ describe('the floor', () => {
 
   test('the notice names the version and the floor, and is silent at or above it', () => {
     expect(nodeFloorNotice('22.2.0')).toContain(
-      'Node 22.2.0, below the supported 22.14.0'
+      'Node 22.2.0, outside the supported 22.18.0+ or 24.11.0+'
     );
-    expect(nodeFloorNotice(NODE_FLOOR)).toBeNull();
+    expect(nodeFloorNotice(NODE_FLOORS[0])).toBeNull();
     expect(nodeFloorNotice('22.23.4')).toBeNull();
+    expect(nodeFloorNotice('24.11.0')).toBeNull();
+  });
+
+  test('claims slow hooks only where they were measured', () => {
+    // The minutes-per-call evidence is from Node 22.2.0. A release unsupported
+    // only because a dependency declares it must not be told it was slow.
+    expect(nodeFloorNotice('22.2.0')).toContain('hook calls have taken minutes');
+    for (const node of ['22.16.0', '23.11.0', '24.1.0']) {
+      const notice = nodeFloorNotice(node);
+      expect(notice).toContain(`Node ${node}, outside the supported`);
+      expect(notice).not.toContain('minutes');
+      expect(notice).toContain('runtime dependencies do not support');
+    }
   });
 
   test('the crash notice prescribes an upgrade for any Node below the floor', () => {
@@ -70,7 +103,7 @@ describe('the floor', () => {
         JSON.stringify({ node, exit: '0xC0000005' })
       );
       expect(serverCrashNotice(env, node)).toContain(
-        `Node ${NODE_FLOOR} or newer`
+        `outside the supported ${NODE_SUPPORTED}`
       );
     }
   });
@@ -120,7 +153,7 @@ describe.each([
 ])('%s', (entry) => {
   test('tells the session when Node is below the floor', () => {
     expect(sessionStart(entry, '22.2.0')).toContain(
-      'below the supported 22.14.0'
+      `outside the supported ${NODE_SUPPORTED}`
     );
   });
 
@@ -128,7 +161,7 @@ describe.each([
     const out = sessionStart(entry, '22.23.4');
     // The session context is still delivered, just without the notice.
     expect(out).toContain('Token optimization is active');
-    expect(out).not.toContain('below the supported');
+    expect(out).not.toContain('outside the supported');
   });
 });
 

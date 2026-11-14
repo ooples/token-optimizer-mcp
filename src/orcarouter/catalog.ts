@@ -51,11 +51,7 @@ export const NON_TEXT_ENDPOINT_TYPES = [
 ] as const;
 
 export type CatalogCapability =
-  | 'chat'
-  | 'embedding'
-  | 'image'
-  | 'video'
-  | 'rerank';
+  'chat' | 'embedding' | 'image' | 'video' | 'rerank';
 
 export type InputModality = 'text' | 'image' | 'audio' | 'video';
 

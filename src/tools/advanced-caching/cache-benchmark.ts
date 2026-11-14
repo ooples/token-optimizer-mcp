@@ -30,11 +30,7 @@ import { MetricsCollector } from '../../core/metrics.js';
 
 export type CacheStrategy = 'LRU' | 'LFU' | 'FIFO' | 'TTL' | 'size' | 'hybrid';
 export type WorkloadType =
-  | 'read-heavy'
-  | 'write-heavy'
-  | 'mixed'
-  | 'custom'
-  | 'realistic';
+  'read-heavy' | 'write-heavy' | 'mixed' | 'custom' | 'realistic';
 export type ReportFormat = 'markdown' | 'html' | 'json' | 'pdf';
 
 export interface CacheConfig {

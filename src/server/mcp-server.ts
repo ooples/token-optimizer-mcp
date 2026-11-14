@@ -2197,8 +2197,7 @@ async function runCleanupOperations(
 }
 
 let routingMaintenance:
-  | import('../proxy/routing-maintenance.js').RoutingMaintenance
-  | undefined;
+  import('../proxy/routing-maintenance.js').RoutingMaintenance | undefined;
 let shuttingDown = false;
 
 // Shared cleanup function to avoid duplication between signal handlers
