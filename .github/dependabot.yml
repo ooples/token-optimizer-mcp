@@ -50,10 +50,11 @@ updates:
     versioning-strategy: "increase"
 
     # Ignore specific dependencies (if needed)
-    ignore:
-      # Ignore major version updates for critical dependencies
-      # - dependency-name: "typescript"
-      #   update-types: ["version-update:semver-major"]
+    # An ignore list must hold at least one entry: an empty `ignore:` is null,
+    # which Dependabot rejects for the whole file. To hold a dependency back:
+    # ignore:
+    #   - dependency-name: "typescript"
+    #     update-types: ["version-update:semver-major"]
 
     # Allow dependencies to be updated
     allow:
