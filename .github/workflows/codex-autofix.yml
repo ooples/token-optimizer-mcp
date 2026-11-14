@@ -31,7 +31,7 @@ jobs:
         run: echo "OPENAI_API_KEY secret not set; skipping auto-fix."
       - name: Checkout Failing Ref
         if: ${{ env.OPENAI_API_KEY != '' }}
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ env.FAILED_HEAD_SHA }}
           fetch-depth: 0
