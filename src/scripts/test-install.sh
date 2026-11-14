@@ -92,7 +92,7 @@ if [ ! -f "node_modules/token-optimizer-mcp/dist/server/index.d.ts" ]; then
 fi
 
 # Check for required files
-for file in README.md LICENSE CHANGELOG.md; do
+for file in README.md LICENSE docs/CHANGELOG.md; do
     if [ ! -f "node_modules/token-optimizer-mcp/$file" ]; then
         echo -e "${YELLOW}⚠ $file not found in package${NC}"
     fi

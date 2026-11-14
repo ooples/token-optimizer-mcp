@@ -246,66 +246,29 @@ if (provenance.length) {
 const C_START = 'ALT-A-CORPUS:START';
 const C_END = '<!-- ALT-A-CORPUS:END -->';
 
-const corpusBlocks = [];
-for (
-  let at = readme.indexOf(C_START);
-  at !== -1;
-  at = readme.indexOf(C_START, at + 1)
-) {
-  const open = readme.indexOf('-->', at);
-  const close = readme.indexOf(C_END, open);
-  if (open === -1 || close === -1) {
-    console.error(
-      'readme-alt-a.check: a ALT-A-CORPUS:START at offset ' +
-        at +
-        ' has no matching CORPUS:END. Markers are what makes this checkable.'
-    );
-    process.exit(1);
-  }
-  // AN UNPAIRED MARKER MUST NOT QUIETLY WIDEN A BLOCK. With one CORPUS:END
-  // deleted the scan ran on to the NEXT one and swallowed everything between,
-  // which still fails but attributes the figures to the wrong sentence. A block
-  // that contains another START is a broken pair, not a bigger block.
-  if (readme.slice(open + 3, close).includes(C_START)) {
-    console.error(
-      'readme-alt-a.check: a ALT-A-CORPUS block contains another ' +
-        'CORPUS:START, so a CORPUS:END is missing between them.'
-    );
-    process.exit(1);
-  }
-  corpusBlocks.push([open + 3, close]);
-  at = close;
-}
-
-// A CHECK OVER AN EMPTY SET IS A VACUOUS PASS, and these markers live in a file
-// that is edited by hand, so their absence has to be the loud case.
-if (!corpusBlocks.length) {
-  console.error(
-    'readme-alt-a.check: no ALT-A-CORPUS markers in docs/COMPARISON.md. The corpus\n' +
-      'headlines were unchecked for a long time and that is what these markers\n' +
-      'fixed -- restore them around the corpus sentences, do not drop the rule.'
-  );
-  process.exit(1);
-}
-
-const corpusFigures = [];
-for (const [from_, to_] of corpusBlocks)
-  for (const figure of readme.slice(from_, to_).match(FIGURE) ?? [])
-    corpusFigures.push(figure);
-
-if (!corpusFigures.length) {
-  console.error(
-    'readme-alt-a.check: the ALT-A-CORPUS blocks hold no figures. ' +
-      'Refusing to pass vacuously.'
-  );
-  process.exit(1);
-}
-
 const corpusKnown = flatten(record.totals, new Set());
-const corpusMissing = corpusFigures.filter(
-  (figure) =>
-    !corpusKnown.has(figure) && !corpusKnown.has(figure.replace(/,/g, ''))
+
+// COUNTS THE PROSE QUOTES THAT `totals` DOES NOT CARRY, derived from the rows so
+// they cannot drift from them. "Our compressor alone removes fewer tokens than
+// theirs on N of the 18 workloads" was hand-written as 8 for a month while the
+// rows said 9: eight are workloads where their best setting differs from their
+// comparable one (it moves content out of the request), and one is a plain
+// compression loss.
+const pct = (value) => Number.parseFloat(String(value));
+const compressorLosses = record.workloads.filter(
+  (w) => pct(w.tokens.ours) < pct(w.tokens.theirs)
 );
+const offloadLosses = compressorLosses.filter(
+  (w) => pct(w.tokens.theirs) !== pct(w.tokens.theirsComparable)
+);
+corpusKnown.add(String(compressorLosses.length));
+corpusKnown.add(String(offloadLosses.length));
+corpusKnown.add(String(compressorLosses.length - offloadLosses.length));
+corpusKnown.add(String(record.workloads.length));
+for (const w of compressorLosses.filter((x) => !offloadLosses.includes(x))) {
+  corpusKnown.add(w.tokens.ours);
+  corpusKnown.add(w.tokens.theirs);
+}
 
 // MARKERS ARE ONLY WORTH ANYTHING IF THEY ARE NOT OPTIONAL. Nothing stops the
 // next corpus claim from being written outside a pair, which is exactly how the
@@ -316,42 +279,213 @@ const corpusMissing = corpusFigures.filter(
 // vocabulary such a sentence uses, so a claim phrased some other way is missed.
 // It is not the guarantee, it is the trip-wire -- and it is why the figures rule
 // above is scoped to `totals` rather than trusted to a keyword.
+//
+// A SUMMARY TABLE ROW CANNOT SIT INSIDE A BLOCK: an HTML comment between two rows
+// ends the Markdown table. So a corpus-scoped line outside every block is held to
+// the same record, figure by figure, instead of failing on sight -- a wrong figure
+// still fails, which is all the markers were for. "Headroom's own benchmark" is how the
+// summary tables name this corpus.
+//
+// A CLAIM WRAPS ACROSS LINES, so the scan is by paragraph: "removes fewer tokens
+// than Headroom on 8 of the 18 workloads" sat on a line with no scope word and
+// was never read. Table rows stay one per line. "N of (the) 18 workloads" names
+// this corpus too.
 const CORPUS_SCOPE =
-  /corpus|retention unit|identifiers|of the characters|of the tokens/i;
-const covered = new Set();
-for (const [from_, to_] of corpusBlocks) {
-  const first = readme.slice(0, from_).split(/\r?\n/).length;
-  const last = readme.slice(0, to_).split(/\r?\n/).length;
-  for (let line = first; line <= last; line += 1) covered.add(line);
-}
-const unmarked = readme
-  .split(/\r?\n/)
-  .map((text, index) => ({ line: index + 1, text }))
-  .filter(({ line, text }) => !covered.has(line))
-  .filter(({ text }) => CORPUS_SCOPE.test(text) && FIGURE.test(text));
+  /corpus|retention unit|identifiers|of the characters|of the tokens|(?:Headroom's|their|its) own benchmark|\bof (?:the )?18 workloads/i;
 
-console.log(
-  `readme-alt-a.check: ${corpusFigures.length} corpus figures across ` +
-    `${corpusBlocks.length} marked block(s), against the record's totals.`
-);
+/**
+ * Checks one file's ALT-A-CORPUS blocks against the record's totals, and fails
+ * any corpus-scoped figure written outside a block.
+ *
+ * docs/COMPARISON.md must carry blocks; the README may carry none, because its
+ * summary need not quote the corpus at all -- but where it does, the figures are
+ * held to the same record. The README summary was unguarded before: it said the
+ * proxy "removes more of the payload on 15 of 18 workloads" and nothing checked it.
+ */
+function checkCorpus(text, label, { required }) {
+  const corpusBlocks = [];
+  for (
+    let at = text.indexOf(C_START);
+    at !== -1;
+    at = text.indexOf(C_START, at + 1)
+  ) {
+    const open = text.indexOf('-->', at);
+    const close = text.indexOf(C_END, open);
+    if (open === -1 || close === -1) {
+      console.error(
+        `readme-alt-a.check: a ALT-A-CORPUS:START in ${label} at offset ` +
+          at +
+          ' has no matching CORPUS:END. Markers are what makes this checkable.'
+      );
+      process.exit(1);
+    }
+    // AN UNPAIRED MARKER MUST NOT QUIETLY WIDEN A BLOCK. With one CORPUS:END
+    // deleted the scan ran on to the NEXT one and swallowed everything between,
+    // which still fails but attributes the figures to the wrong sentence. A block
+    // that contains another START is a broken pair, not a bigger block.
+    if (text.slice(open + 3, close).includes(C_START)) {
+      console.error(
+        `readme-alt-a.check: a ALT-A-CORPUS block in ${label} contains another ` +
+          'CORPUS:START, so a CORPUS:END is missing between them.'
+      );
+      process.exit(1);
+    }
+    corpusBlocks.push([open + 3, close]);
+    at = close;
+  }
 
-if (corpusMissing.length) {
-  console.error(
-    '\nreadme-alt-a.check FAILED. Not found in the record totals:'
+  // A CHECK OVER AN EMPTY SET IS A VACUOUS PASS, and these markers live in a file
+  // that is edited by hand, so their absence has to be the loud case.
+  if (required && !corpusBlocks.length) {
+    console.error(
+      `readme-alt-a.check: no ALT-A-CORPUS markers in ${label}. The corpus\n` +
+        'headlines were unchecked for a long time and that is what these markers\n' +
+        'fixed -- restore them around the corpus sentences, do not drop the rule.'
+    );
+    process.exit(1);
+  }
+
+  const corpusFigures = [];
+  for (const [from_, to_] of corpusBlocks)
+    for (const figure of text.slice(from_, to_).match(FIGURE) ?? [])
+      corpusFigures.push(figure);
+
+  if (corpusBlocks.length && !corpusFigures.length) {
+    console.error(
+      `readme-alt-a.check: the ALT-A-CORPUS blocks in ${label} hold no figures. ` +
+        'Refusing to pass vacuously.'
+    );
+    process.exit(1);
+  }
+
+  const corpusMissing = corpusFigures.filter(
+    (figure) =>
+      !corpusKnown.has(figure) && !corpusKnown.has(figure.replace(/,/g, ''))
   );
-  for (const figure of corpusMissing) console.error(`  corpus: ${figure}`);
+
+  const covered = new Set();
+  for (const [from_, to_] of corpusBlocks) {
+    const first = text.slice(0, from_).split(/\r?\n/).length;
+    const last = text.slice(0, to_).split(/\r?\n/).length;
+    for (let line = first; line <= last; line += 1) covered.add(line);
+  }
+  const units = [];
+  let paragraph = null;
+  text.split(/\r?\n/).forEach((content, index) => {
+    const line = index + 1;
+    const isRow = content.trimStart().startsWith('|');
+    if (covered.has(line) || !content.trim() || isRow) {
+      paragraph = null;
+      if (!covered.has(line) && isRow) units.push({ line, text: content });
+      return;
+    }
+    // A list item starts a new unit, so one bullet's figures are not judged by
+    // the scope words of the bullet before it.
+    if (!paragraph || /^\s*[-*] /.test(content)) {
+      paragraph = { line, text: content };
+      units.push(paragraph);
+    } else paragraph.text += ` ${content.trim()}`;
+  });
+  const unmarked = units
+    // No FIGURE.test here: FIGURE is global, so .test() carries lastIndex from
+    // one line to the next and skips figures. .match() below resets it.
+    .filter(({ text: line }) => CORPUS_SCOPE.test(line))
+    .map((entry) => ({
+      ...entry,
+      wrong: (entry.text.match(FIGURE) ?? []).filter(
+        (figure) =>
+          !corpusKnown.has(figure) && !corpusKnown.has(figure.replace(/,/g, ''))
+      ),
+    }))
+    .filter(({ wrong }) => wrong.length);
+
+  console.log(
+    `readme-alt-a.check: ${label}: ${corpusFigures.length} corpus figures across ` +
+      `${corpusBlocks.length} marked block(s), against the record's totals.`
+  );
+
+  let bad = false;
+  if (corpusMissing.length) {
+    console.error(
+      `\nreadme-alt-a.check FAILED. ${label}: not found in the record totals:`
+    );
+    for (const figure of corpusMissing) console.error(`  corpus: ${figure}`);
+    bad = true;
+  }
+
+  if (unmarked.length) {
+    console.error(
+      `\nreadme-alt-a.check FAILED. ${label}: corpus-scoped lines outside every\n` +
+        'ALT-A-CORPUS block carry figures the record totals do not hold:'
+    );
+    for (const { line, text: content, wrong } of unmarked)
+      console.error(
+        `  ${label}:${line}: [${wrong.join(', ')}] ${content.trim().slice(0, 96)}`
+      );
+    bad = true;
+  }
+  return bad;
+}
+
+// A NAMED COUNT IS HELD TO ITS OWN VALUE, NOT TO THE SHARED SET (#564 review).
+// `corpusKnown` holds both the compressor-loss count (9) and the offload count
+// (8), so "fewer tokens than Headroom on 8 of the 18 workloads" -- the very
+// error the derived counts were added to catch -- still passed. Each phrase
+// below is matched on whitespace-collapsed text, so a claim that wraps across
+// lines is read, and must state the count derived for it.
+const NAMED_COUNTS = [
+  {
+    name: 'compressor losses',
+    pattern: /removes fewer tokens than Headroom on (\d+) of (?:the )?(\d+) workloads/gi,
+    expect: [compressorLosses.length, record.workloads.length],
+  },
+  {
+    name: 'offload losses',
+    pattern: /On (\d+) of them Headroom moves content out of the request/gi,
+    expect: [offloadLosses.length],
+  },
+];
+
+/** Every named count claim in `text` checked against its own value; returns the names of the claims found. */
+function checkNamedCounts(text, label) {
+  const flat = text.replace(/\s+/g, ' ');
+  const found = new Set();
+  for (const { name, pattern, expect } of NAMED_COUNTS) {
+    for (const match of flat.matchAll(pattern)) {
+      found.add(name);
+      const stated = match.slice(1).map(Number);
+      if (stated.some((n, i) => n !== expect[i])) {
+        console.error(
+          `\nreadme-alt-a.check FAILED. ${label}: "${match[0]}" states ${stated.join(' of ')}; ` +
+            `the rows give ${name} = ${expect.join(' of ')}.`
+        );
+        failed = true;
+      }
+    }
+  }
+  return found;
+}
+
+// COMPARISON.md states every count; one not found means its wording moved away
+// from the pattern, and that claim would pass unchecked.
+const comparisonClaims = checkNamedCounts(readme, 'docs/COMPARISON.md');
+for (const { name } of NAMED_COUNTS.filter((c) => !comparisonClaims.has(c.name))) {
+  console.error(
+    `\nreadme-alt-a.check FAILED. docs/COMPARISON.md: the ${name} claim was not found. ` +
+      'Update NAMED_COUNTS with the new wording; do not drop the check.'
+  );
   failed = true;
 }
+const readmeText = readFileSync(join(repo, 'README.md'), 'utf8');
+checkNamedCounts(readmeText, 'README.md');
 
-if (unmarked.length) {
-  console.error(
-    '\nreadme-alt-a.check FAILED. Corpus-scoped lines with figures that sit\n' +
-      'outside every ALT-A-CORPUS block, so nothing compares them to anything:'
-  );
-  for (const { line, text } of unmarked)
-    console.error(`  docs/COMPARISON.md:${line}: ${text.trim().slice(0, 96)}`);
+if (checkCorpus(readme, 'docs/COMPARISON.md', { required: true })) failed = true;
+if (
+  checkCorpus(readmeText, 'README.md', {
+    required: false,
+  })
+)
   failed = true;
-}
 
 if (failed) process.exit(1);
 

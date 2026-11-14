@@ -25,7 +25,7 @@
   <a href="docs/COMPARISON.md">Benchmarks</a> ·
   <a href="docs/INSTALLATION.md">All 16 clients</a> ·
   <a href="docs/REFERENCE.md">Reference</a> ·
-  <a href="CHANGELOG.md">Changelog</a>
+  <a href="docs/CHANGELOG.md">Changelog</a>
 </p>
 
 On SWE-bench Verified, Claude Code with the plugin in its default mode solved the
@@ -107,10 +107,88 @@ directions with intervals, not guarantees. The full method, every run including
 the ones where it lost, and the per-instance data are in
 [PR #559](https://github.com/ooples/token-optimizer-mcp/pull/559).
 
-**On compression alone**, against Alternative A's real implementation on its own
-fixtures, the proxy removes more of the payload on 15 of 18 workloads. Those
-tables are regenerated and checked by CI: see
-[docs/COMPARISON.md](docs/COMPARISON.md).
+## How it compares
+
+**Short answer: it saves more than every competitor we tested, in like-for-like
+runs, except one small Claude Code task against Headroom, which is a tie.** The
+fairness notes and every loss are below the table.
+
+| Competitor                 | How it was tested                                                  | Them                         | Token Optimizer                 | Result                                 |
+| -------------------------- | ------------------------------------------------------------------ | ---------------------------- | ------------------------------- | -------------------------------------- |
+| **Headroom**               | Tokens removed on Headroom's own benchmark, 18 workloads           | 61.4%                        | 91.5%                           | ✅ **Win**                             |
+| **Headroom**               | Installed proxy vs ours, 120 Codex task pairs                      | $30.43 est. cost, 120/120 passed | $22.26 est. cost, 119/120 passed | ✅ **26.9% cheaper**, 30.1% faster on average |
+| **Headroom**               | Installed proxy vs ours, one small Claude Code task, 4/4 tests     | 48,626 weighted input        | 49,053 weighted input           | ➖ **Tie** (0.9% more)                 |
+| **tokenjuice**             | Product installed, same coding tasks for every arm                 | 13.6% cheaper                | **33.6% cheaper**               | ✅ **Win**                             |
+| **Tokenade**               | Its rules text vs our rules text; its full product not yet run    | 22.9% cheaper                | **32.0% cheaper**               | ✅ **Win**                             |
+| **claude-token-optimizer** | Product installed, its hooks fixed so they fire on Claude Code     | 2.7% cheaper, within noise   | **33.6% cheaper**               | ✅ **Win**                             |
+
+How each row was kept fair, and what it does not show:
+
+- **claude-token-optimizer as shipped does nothing on Claude Code 2.1.251.** Its
+  hooks read a `CLAUDE_TOOL_NAME` variable that Claude Code does not set, so they
+  exit before checking anything. Scoring that would not be a fair comparison, so the row
+  uses their product with that one line changed to read the hook input Claude Code
+  actually sends. We confirmed the patched hooks fired and blocked oversized reads.
+  Its CLAUDE.md ships as an unfilled template, which understates it.
+- **Tokenade was run as its rules text only.** That campaign recorded its CLI as
+  needing an account; it was later found to install without one, but the full
+  product has not been re-run. So it is compared with our rules text alone, not
+  our full product, and if its hooks save more, this row understates it.
+- **Headroom, first row:** the 91.5% is our proxy. Like Headroom, it moves some
+  content out of the request for the agent to fetch back if needed. Our
+  compressor alone removes fewer tokens than Headroom on 9 of the 18 workloads.
+- **Headroom, Claude Code task:** "weighted input" is input + 1.25 × cache
+  writes + 0.1 × cache reads, the way they are billed. It excludes output tokens.
+- **Headroom, 120 pairs:** we wrote the 12 task families, including ones built to
+  make our proxy fail, and froze the plan before any run. Headroom's mode setting
+  is not recorded in that study. Our proxy crashed once (unknown usage) where
+  Headroom passed every task, and ours cost more on 30 of the 120 pairs. It is
+  cheaper on average, not on every task. Costs are over the 119 pairs where both
+  finished.
+- **The tokenjuice, Tokenade and claude-token-optimizer rows are one campaign:**
+  1,050 runs on 2026-09-03, Claude Code 2.1.251, cost per finished task against
+  plain Claude Code. Any of these products may have changed since. The campaign
+  had no bias-control task, so a task set that happens to favour us cannot be
+  ruled out.
+
+Beyond the table:
+
+- ✅ **Subscription plans go further.** It detects a subscription and optimizes
+  for finished work per unit of quota, not per dollar. It spends leftover 5-hour
+  capacity only while your week is on pace. Limit monitors show your usage; this
+  acts on it.
+- ✅ **Tasks still get done.** The same SWE-bench tasks were resolved with and
+  without it (7 of 7), at 0.71× the cost.
+
+<!-- ALT-A-CORPUS:START -- every figure between this marker and the next
+     CORPUS:END must appear in `totals` of
+     `bench/compression/alt-a/results/head-to-head.json`. Guarded by
+     `node bench/compression/readme-alt-a.check.mjs`; do not hand-edit. -->
+
+**On Headroom's own benchmark**, its fixtures and its harness, the proxy removes
+**91.5%** of the tokens. Their best setting removes 61.4%. The proxy costs less
+on **18 of 18** workloads when nothing it moved out is read back, and on 17 of 18
+when all of it is.
+
+<!-- ALT-A-CORPUS:END -->
+
+**Where it loses:**
+
+- Without the proxy, the compressor removes fewer tokens than Headroom on 9
+  of 18 workloads. On 8 of them Headroom moves content out of the request rather
+  than shrink it; on agentic-conversation it simply compresses better, 33.4%
+  against our 30.8%.
+- Against Headroom, ours cost more on 30 of 120 task pairs and crashed once;
+  on one small Claude Code task Headroom used 0.9% fewer tokens.
+- On one 342 KB-file task in the 2026-09-03 campaign, our hooks took about 6
+  minutes per run against 0.3 for plain Claude Code. It cost no more in tokens,
+  but it was slower.
+- In the four-product run, most of the saving came from its rules file. The hooks
+  added no measurable cost saving on top.
+
+Raw data: [competitor campaign](bench/ledger/RESULTS-COMPETITORS.md),
+[Headroom 120-pair study](bench/live/evidence/joint-confirmation-2026-09-16/README.md), and the Headroom
+benchmark tables in [the comparison](docs/COMPARISON.md).
 
 ## What it does
 
@@ -265,7 +343,7 @@ what it wrote, and names anything you have edited since. Step by step:
 | Page                                           | What is in it                                                         |
 | ---------------------------------------------- | --------------------------------------------------------------------- |
 | [How it works](docs/HOW_IT_WORKS.md)           | The mechanisms, subagents, the knowledge graph, trust and attribution |
-| [Benchmarks and comparison](docs/COMPARISON.md) | Head-to-head against Alternative A, what it does differently, where it loses |
+| [Benchmarks and comparison](docs/COMPARISON.md) | Head-to-head against Headroom, tokenjuice, Tokenade and claude-token-optimizer, what it does differently, where it loses |
 | [Installation](docs/INSTALLATION.md)           | All sixteen clients, requirements, verification and removal           |
 | [Reference](docs/REFERENCE.md)                 | Tools, compression statistics and the full technical reference        |
 | [Dashboard](docs/DASHBOARD.md)                 | What the local dashboard shows                                        |

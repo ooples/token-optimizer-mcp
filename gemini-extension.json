@@ -25,5 +25,5 @@
       "sensitive": false
     }
   ],
-  "contextFileName": "GEMINI.md"
+  "contextFileName": "src/integrations/gemini/GEMINI.md"
 }

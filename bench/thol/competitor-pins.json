@@ -1,0 +1,56 @@
+{
+  "$comment": "Latest published version of every THOL competitor that can run in this image, applied over THOL_REV by apply-competitor-pins.py. Upstream THOL pins the versions it last ran (2026-06/07); a board that measures stale competitors is not a fair board. Bumping any entry starts a new campaign, exactly as bumping THOL_REV does. Only the competitors THOL marks verified (plus claude-context and claude-mem, which install by version) are listed: the unverified entries track `main` and are not run. Each `replace` pair is [old, new], applied in order with word boundaries; `count` is how many replacements the file must take, so an upstream change that moves a pin fails the build instead of leaving a stale version in place.",
+  "checked": "2026-11-11",
+  "script": {
+    "path": "setup/install_competitors.sh",
+    "replace": [
+      ["0.9.9", "1.6.2", 2],
+      ["3.8.4", "3.12.3", 2],
+      ["v0.42.3", "v1.2.0", 2],
+      ["1.22.1", "1.48.18", 2],
+      ["0.8.49", "0.9.106", 2],
+      ["0.27.0", "0.44.0", 2],
+      ["2.3.6", "2.4.0", 2],
+      ["v0.2.13", "v0.16.5", 2],
+      ["v1.9.0", "v4.1.0", 1],
+      ["0.1.14", "0.1.15", 1],
+      ["13.5.4", "15.17.1", 1],
+      ["b32fa8b", "0d30a6d", 1]
+    ]
+  },
+  "competitors": {
+    "codegraph": { "replace": [["0.9.9", "1.6.2", 2]] },
+    "lean-ctx": { "replace": [["3.8.4", "3.12.3", 2]] },
+    "rtk": { "replace": [["v0.42.3", "v1.2.0", 2]] },
+    "squeez": { "replace": [["1.22.1", "1.48.18", 1]] },
+    "graphify": { "replace": [["0.8.49", "0.9.106", 1]] },
+    "headroom": { "replace": [["0.27.0", "0.44.0", 1]] },
+    "code-review-graph": { "replace": [["2.3.6", "2.4.0", 2]] },
+    "edgee": { "replace": [["v0.2.13", "v0.16.5", 1]] },
+    "caveman": { "replace": [["v1.9.0", "v4.1.0", 4]] },
+    "claude-context": { "replace": [["0.1.14", "0.1.15", 2]] },
+    "claude-mem": { "replace": [["13.5.4", "15.17.1", 2]] },
+    "claude-token-efficient": {
+      "replace": [
+        ["b32fa8b71f818e14458a6e9909039c5f429aef99", "0d30a6db75af983b8ababf585f28faefdfc87895", 1],
+        ["2026-04-22", "2026-06-16", 1],
+        ["b32fa8b", "0d30a6d", 1]
+      ],
+      "fetch": {
+        "url": "https://raw.githubusercontent.com/drona23/claude-token-efficient/0d30a6db75af983b8ababf585f28faefdfc87895/CLAUDE.md",
+        "sha256": "6656125f2b4f777d9cb4149b2acc3b0281aab4e8d8ebdd4ddcdb1ae9274e8253",
+        "to": "files/CLAUDE.md"
+      }
+    },
+    "ponytail": {
+      "replace": [
+        [
+          "git clone --depth 1 https://github.com/DietrichGebert/ponytail \\\"$CLAUDE_CONFIG_DIR/ponytail\\\"",
+          "git clone --quiet https://github.com/DietrichGebert/ponytail \\\"$CLAUDE_CONFIG_DIR/ponytail\\\" && git -C \\\"$CLAUDE_CONFIG_DIR/ponytail\\\" checkout --quiet 96608e078b2d5ea607c5c3b8b5a54d1c1fba6846",
+          1
+        ],
+        ["\"version_pin\": \"main\"", "\"version_pin\": \"96608e0\"", 1]
+      ]
+    }
+  }
+}

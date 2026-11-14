@@ -1,5 +1,5 @@
 /**
- * Regenerate the README's Alternative A table from the recorded head-to-head run.
+ * Regenerate the README's Headroom table from the recorded head-to-head run.
  *
  *   node bench/compression/readme-alt-a.render.mjs
  *
@@ -60,8 +60,8 @@ const block = [
   '',
   `Recorded ${record.recordedAt} at \`${record.commit.slice(0, 8)}\`, by the command in the`,
   // Its version stays in the record (capture.theirsProvenance), not in prose.
-  "record's `regenerate` field, over Alternative A's own fixtures and harness. That arm runs",
-  'Alternative A itself, so CI does not re-derive it -- it checks these figures and',
+  "record's `regenerate` field, over Headroom's own fixtures and harness. That arm runs",
+  'Headroom itself, so CI does not re-derive it -- it checks these figures and',
   'this provenance against the record instead.',
   '',
   END,

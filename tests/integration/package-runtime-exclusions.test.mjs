@@ -56,7 +56,7 @@ it('excludes runtime data from broad npm allowlists while keeping client assets'
     'dist/server/index.js',
     'hooks/hooks.json',
     'gemini-extension.json',
-    'GEMINI.md',
+    'src/integrations/gemini/GEMINI.md',
     'src/integrations/gemini/hooks/session-start.mjs',
   ];
   const excluded = [

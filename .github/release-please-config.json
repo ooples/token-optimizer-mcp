@@ -3,7 +3,7 @@
   "packages": {
     ".": {
       "release-type": "node",
-      "changelog-path": "CHANGELOG.md",
+      "changelog-path": "docs/CHANGELOG.md",
       "include-v-in-tag": true,
       "include-component-in-tag": false,
       "bump-minor-pre-major": false,
@@ -29,11 +29,6 @@
           "type": "json",
           "path": "server.json",
           "jsonpath": "$.packages[0].version"
-        },
-        {
-          "type": "json",
-          "path": "mcp.json",
-          "jsonpath": "$.version"
         },
         {
           "type": "json",

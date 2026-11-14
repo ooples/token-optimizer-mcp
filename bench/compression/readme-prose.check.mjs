@@ -51,7 +51,7 @@ export const Source = Object.freeze({
  */
 const SECTIONS = [
   {
-    from: '## How it compares to Alternative A',
+    from: '## How it compares to Headroom',
     to: '## What it does that other optimizers do not',
   },
 ];
@@ -131,7 +131,7 @@ export const DECLARED = [
     // OTHER_HARNESS, not RETRACTED: this is what the elide-after-N strategy
     // scored on proof.mjs's needle fixture, a different harness from either
     // table. Filed as retracted, it read as "a figure the tree moved past", and
-    // the 18-row Alternative A table now holds an unrelated 95.7% (log-entries,
+    // the 18-row Headroom table now holds an unrelated 95.7% (log-entries,
     // proxy tokens), which the resurrection rule then took for a contradiction.
     kind: Source.OTHER_HARNESS,
     from: 'what the elide-after-N strategy scored on the proof.mjs needle fixture while losing the needles',
