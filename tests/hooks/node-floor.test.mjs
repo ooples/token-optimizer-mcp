@@ -26,6 +26,7 @@ import {
   NODE_SUPPORTED,
   nodeBelowFloor,
   nodeFloorNotice,
+  nodeHooksMeasuredSlow,
 } from '../../src/hooks-core/node-floor.mjs';
 import { serverCrashNotice } from '../../src/hooks-core/server-crash.mjs';
 
@@ -73,7 +74,7 @@ describe('the floor', () => {
 
   test('the notice names the version and the floor, and is silent at or above it', () => {
     expect(nodeFloorNotice('22.2.0')).toContain(
-      'Node 22.2.0, outside the supported 22.18.0+ or 24.11.0+'
+      'Node 22.2.0, outside the supported range (22.x from 22.18.0, or 24.11.0 or newer)'
     );
     expect(nodeFloorNotice(NODE_FLOORS[0])).toBeNull();
     expect(nodeFloorNotice('22.23.4')).toBeNull();
@@ -86,10 +87,18 @@ describe('the floor', () => {
     expect(nodeFloorNotice('22.2.0')).toContain('hook calls have taken minutes');
     for (const node of ['22.16.0', '23.11.0', '24.1.0']) {
       const notice = nodeFloorNotice(node);
-      expect(notice).toContain(`Node ${node}, outside the supported`);
+      expect(notice).toContain(`Node ${node}, outside the supported range`);
       expect(notice).not.toContain('minutes');
       expect(notice).toContain('runtime dependencies do not support');
+      expect(nodeHooksMeasuredSlow(node)).toBe(false);
     }
+    expect(nodeHooksMeasuredSlow('22.2.0')).toBe(true);
+    expect(nodeHooksMeasuredSlow('22.23.4')).toBe(false);
+  });
+
+  test('names the major of every floor but the last', () => {
+    // "22.18.0+" would read as admitting Node 23 and 24.0-24.10.
+    expect(NODE_SUPPORTED).toBe('22.x from 22.18.0, or 24.11.0 or newer');
   });
 
   test('the crash notice prescribes an upgrade for any Node below the floor', () => {
@@ -103,7 +112,7 @@ describe('the floor', () => {
         JSON.stringify({ node, exit: '0xC0000005' })
       );
       expect(serverCrashNotice(env, node)).toContain(
-        `outside the supported ${NODE_SUPPORTED}`
+        `outside the supported range (${NODE_SUPPORTED})`
       );
     }
   });
@@ -153,7 +162,7 @@ describe.each([
 ])('%s', (entry) => {
   test('tells the session when Node is below the floor', () => {
     expect(sessionStart(entry, '22.2.0')).toContain(
-      `outside the supported ${NODE_SUPPORTED}`
+      `outside the supported range (${NODE_SUPPORTED})`
     );
   });
 

@@ -30,8 +30,16 @@ export const NODE_ENGINES = NODE_FLOORS.map((f, i) =>
   i < NODE_FLOORS.length - 1 ? `^${f}` : `>=${f}`
 ).join(' || ');
 
-/** How the floors read in a message: "22.18.0+ or 24.11.0+". */
-export const NODE_SUPPORTED = NODE_FLOORS.map((f) => `${f}+`).join(' or ');
+/**
+ * How the floors read in a message: "22.x from 22.18.0, or 24.11.0 or newer".
+ * Each floor but the last names its major, so "22.18.0+" cannot be read as
+ * admitting Node 23 or 24.0-24.10.
+ */
+export const NODE_SUPPORTED = NODE_FLOORS.map((f, i) =>
+  i < NODE_FLOORS.length - 1
+    ? `${f.split('.')[0]}.x from ${f}`
+    : `${f} or newer`
+).join(', or ');
 
 const parse = (v) =>
   /^v?(\d+)\.(\d+)\.(\d+)/.exec(String(v))?.slice(1).map(Number);
@@ -60,6 +68,15 @@ export function nodeBelowFloor(version, floors = NODE_FLOORS) {
 const SLOW_HOOKS_BELOW = '22.14.0';
 
 /**
+ * True when `node` is old enough that slow hooks were measured on it. The
+ * floor notice then names the cause of slow hooks itself; above it, the notice
+ * is about dependency support only and the slow-hook notice must still be told.
+ */
+export function nodeHooksMeasuredSlow(node = process.versions.node) {
+  return nodeBelowFloor(node, [SLOW_HOOKS_BELOW]);
+}
+
+/**
  * Why `node` is unsupported, in one sentence; null when it is supported.
  *
  * The slow-hook evidence is from Node 22.2.0, below the old 22.14.0 floor. A
@@ -69,7 +86,7 @@ const SLOW_HOOKS_BELOW = '22.14.0';
  */
 export function nodeUnsupportedReason(node = process.versions.node) {
   if (!nodeBelowFloor(node)) return null;
-  return nodeBelowFloor(node, [SLOW_HOOKS_BELOW])
+  return nodeHooksMeasuredSlow(node)
     ? 'Under such a Node, hook calls have taken minutes each, stalling the tool call they guard ' +
         "up to the host's 600 s timeout."
     : "Its runtime dependencies do not support this Node, so the MCP server's tools may fail.";
@@ -80,7 +97,7 @@ export function nodeFloorNotice(node = process.versions.node) {
   const why = nodeUnsupportedReason(node);
   if (!why) return null;
   return (
-    `token-optimizer's hooks run under Node ${node}, outside the supported ${NODE_SUPPORTED}. ` +
-    `${why} Tell the user once: upgrade Node to ${NODE_SUPPORTED} and restart the client.`
+    `token-optimizer's hooks run under Node ${node}, outside the supported range (${NODE_SUPPORTED}). ` +
+    `${why} Tell the user once: upgrade Node to a supported release and restart the client.`
   );
 }

@@ -45,7 +45,7 @@ export function serverCrashNotice(
   // out-of-memory abort, a different binding -- and telling the user to
   // upgrade a Node that is already new enough would send them the wrong way.
   const remedy = nodeBelowFloor(node)
-    ? `This Node is outside the supported ${NODE_SUPPORTED}. Tell the user once: upgrading Node is the remedy.`
+    ? `This Node is outside the supported range (${NODE_SUPPORTED}). Tell the user once: upgrading Node is the remedy.`
     : 'Tell the user once; the launcher logged the details to the MCP server log.';
   return (
     `The token-optimizer MCP server crashed in native code (${exit}) under Node ${node}, ` +

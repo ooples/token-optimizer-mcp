@@ -1306,8 +1306,8 @@ export function checklist({ root, settingsPath, install }) {
     nodeBelowFloor(node)
       ? bad(
           'Node meets the supported floor',
-          `Node ${node} is outside the supported ${NODE_SUPPORTED}. ${nodeUnsupportedReason(node)}`,
-          `install Node ${NODE_SUPPORTED}, then restart the client`
+          `Node ${node} is outside the supported range (${NODE_SUPPORTED}). ${nodeUnsupportedReason(node)}`,
+          `install a supported Node (${NODE_SUPPORTED}), then restart the client`
         )
       : ok('Node meets the supported floor', `Node ${node} (supported: ${NODE_ENGINES})`)
   );
@@ -1329,7 +1329,7 @@ export function checklist({ root, settingsPath, install }) {
         ? warn(
             'tool-call hooks are fast',
             detail,
-            `upgrade Node if it is outside ${NODE_SUPPORTED}; otherwise attach the output of \`npx token-optimizer-diagnostics\` to an issue`
+            `upgrade Node if it is outside the supported range (${NODE_SUPPORTED}); otherwise attach the output of \`npx token-optimizer-diagnostics\` to an issue`
           )
         : ok('tool-call hooks are fast', detail)
     );

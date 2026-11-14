@@ -121,7 +121,7 @@ import { claudeSettingsPath } from './install-health.mjs';
 import { applyQuietEnv } from './quiet-env.mjs';
 import { resumeIfDue } from './migrate.mjs';
 import { takeSlowHookNotice } from './hook-latency.mjs';
-import { nodeFloorNotice } from './node-floor.mjs';
+import { nodeFloorNotice, nodeHooksMeasuredSlow } from './node-floor.mjs';
 import { serverCrashNotice } from './server-crash.mjs';
 import { CHECK_EVERY_CALLS, overWindowNotice } from './context-window.mjs';
 import { compactToolResponse, outputCompactEnabled } from './output-compact.mjs';
@@ -1431,8 +1431,10 @@ async function runHook(clientName, event, invocation) {
     if (crashed) blocks.push({ id: 'server-crash', volatility: 0, text: crashed });
     const oldNode = nodeFloorNotice();
     if (oldNode) blocks.push({ id: 'node-floor', volatility: 0, text: oldNode });
-    // The floor notice already names the likeliest cause of slow hooks.
-    const slowHooks = oldNode ? null : takeSlowHookNotice();
+    // Below 22.14.0 the floor notice already names the likeliest cause of
+    // slow hooks. Above it, the floor notice is about dependency support only,
+    // so measured slow or killed hook calls must still be reported.
+    const slowHooks = oldNode && nodeHooksMeasuredSlow() ? null : takeSlowHookNotice();
     if (slowHooks) blocks.push({ id: 'hook-latency', volatility: 4, text: slowHooks });
     // Reduce at the source before anything runs: quiet defaults for the tools
     // the agent will call, through the env file Claude Code sources for every
