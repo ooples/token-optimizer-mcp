@@ -76,10 +76,12 @@ updates:
       - "github-actions"
       - "automated"
 
-    # Every action bump in one PR; a pinned-SHA change does not need its own run.
+    # Every minor and patch action bump in one PR; a pinned-SHA change does not
+    # need its own run. Majors stay separate, so one held back holds nothing else.
     groups:
       github-actions:
         patterns: ["*"]
+        update-types: ["minor", "patch"]
       github-actions-security:
         applies-to: security-updates
         patterns: ["*"]
