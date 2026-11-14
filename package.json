@@ -255,7 +255,7 @@
     "ts-jest": "^29.4.5"
   },
   "dependencies": {
-    "@babel/parser": "^7.29.8",
+    "@babel/parser": "^8.1.0",
     "@iarna/toml": "^2.2.5",
     "@modelcontextprotocol/sdk": "^1.26.0",
     "@typescript-eslint/typescript-estree": "^8.65.0",
