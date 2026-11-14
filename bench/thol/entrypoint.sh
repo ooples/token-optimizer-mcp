@@ -72,10 +72,33 @@ prepare() {
   for manifest in /home/bench/manifests/*/manifest.json; do
     arm="$(basename "$(dirname "$manifest")")"
 
+    # A VERSION PIN THAT IS NOT THE SEEDED BUILD MEASURES SOMETHING ELSE.
+    # launch.mjs serves TOKEN_OPTIMIZER_VERSION exactly, installing it from npm
+    # when the runtime does not hold it -- so a stale pin quietly benchmarks an
+    # old release instead of the packaged tree (the mcp arm pinned 7.1.0 long
+    # after releases reached 7.10.0). And an MCP command naming a path the
+    # package no longer ships starts no server at all.
+    seeded="$(cat "$TOKEN_OPTIMIZER_RUNTIME/current" 2>/dev/null || true)"
+    pins="$(node -e "
+      const m=require('$manifest');
+      const v=new Set([m.settings?.env?.TOKEN_OPTIMIZER_VERSION,
+        ...Object.values(m.mcp?.mcpServers||{}).map(s=>s.env?.TOKEN_OPTIMIZER_VERSION)].filter(Boolean));
+      process.stdout.write([...v].join(' '));")"
+    for pin in $pins; do
+      [ "$pin" = "$seeded" ] || die "arm $arm pins TOKEN_OPTIMIZER_VERSION=$pin but the runtime is seeded with '$seeded'. launch.mjs would install $pin from npm and the arm would measure that release, not the packaged tree. Pin $seeded, or build with --build-arg OPTIMIZER_VERSION=$pin."
+    done
+    for path in $(node -e "
+      const m=require('$manifest');
+      const a=Object.values(m.mcp?.mcpServers||{}).flatMap(s=>s.args||[]).filter(x=>x.startsWith('/'));
+      process.stdout.write(a.join(' '));"); do
+      [ -f "$path" ] || die "arm $arm starts its MCP server from $path, which the packaged build does not ship. That arm would run with no server."
+    done
+    [ -z "$pins" ] || echo "   $arm: version pin $pins is the seeded build"
+
     want="$(node -e "const m=require('$manifest');process.stdout.write(m.settings?.env?.TOKEN_OPTIMIZER_MODE||'')")"
     if [ -n "$want" ]; then
       got="$(TOKEN_OPTIMIZER_MODE="$want" node --input-type=module -e "
-        const p = await import('file://$PKG/hooks-core/policy.mjs');
+        const p = await import('file://$PKG/src/hooks-core/policy.mjs');
         process.stdout.write(p.mode());
       ")"
       [ "$got" = "$want" ] || die "arm $arm declares TOKEN_OPTIMIZER_MODE=$want but the packaged build resolves it to '$got'. That arm would silently measure '$got'. Build from a tree that supports '$want'."
@@ -92,7 +115,7 @@ prepare() {
         import { join } from 'node:path';
         import { tmpdir } from 'node:os';
         const dir = mkdtempSync(join(tmpdir(), 'nograph-'));
-        const w = await import('file://$PKG/hooks-core/wiki.mjs');
+        const w = await import('file://$PKG/src/hooks-core/wiki.mjs');
         w.putNode(dir, { kind: 'file', key: '/tmp/a.ts', hash: 'x', bytes: 1 });
         w.putEdge(dir, 'a', 'related', 'b');
         process.stdout.write(String(readdirSync(dir).length));
@@ -196,7 +219,10 @@ prepare() {
   for d in /home/bench/manifests/*/; do
     name="$(basename "$d")"
     mkdir -p "$THOL_HOME/competitors/$name"
-    cp "$d/manifest.json" "$THOL_HOME/competitors/$name/manifest.json"
+    # The WHOLE directory, not just manifest.json: an arm may ship files its
+    # setup_commands install (cto-patched carries its patched hooks), and
+    # runner.py resolves config_files/claude_md_file against this directory.
+    cp -R "$d." "$THOL_HOME/competitors/$name/"
     echo "   + $name"
   done
 

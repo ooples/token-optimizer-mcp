@@ -30,7 +30,7 @@ RIG_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # Matches what `npm run bench:build` tags. A version-pinned default here
 # silently used a stale image after the build script was added.
 IMAGE="${IMAGE:-thol-rig:local}"
-CAMPAIGN="${THOL_CAMPAIGN:-2.1.251 (Claude Code)}"
+CAMPAIGN="${THOL_CAMPAIGN:-2.1.325 (Claude Code)}"
 REPS="${REPS:-3}"
 ARMS="${ARMS:-control,token-optimizer-mcp,token-optimizer-mcp-off}"
 : "${ARM_ORDER_FILE:?set ARM_ORDER_FILE to a precommitted per-repetition order plan}"

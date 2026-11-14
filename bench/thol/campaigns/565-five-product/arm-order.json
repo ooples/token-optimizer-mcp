@@ -1,0 +1,44 @@
+{
+  "arms": [
+    "control",
+    "token-optimizer-mcp",
+    "headroom-cache",
+    "headroom-token",
+    "tokenade-product",
+    "tokenjuice",
+    "cto",
+    "cto-patched"
+  ],
+  "orders": [
+    [
+      "control",
+      "token-optimizer-mcp",
+      "headroom-cache",
+      "headroom-token",
+      "tokenade-product",
+      "tokenjuice",
+      "cto",
+      "cto-patched"
+    ],
+    [
+      "token-optimizer-mcp",
+      "headroom-cache",
+      "headroom-token",
+      "tokenade-product",
+      "tokenjuice",
+      "cto",
+      "cto-patched",
+      "control"
+    ],
+    [
+      "headroom-cache",
+      "headroom-token",
+      "tokenade-product",
+      "tokenjuice",
+      "cto",
+      "cto-patched",
+      "control",
+      "token-optimizer-mcp"
+    ]
+  ]
+}

@@ -1,0 +1,23 @@
+{
+ "name": "headroom-token",
+ "display_name": "Headroom 0.44.0, compression-first mode (token)",
+ "upstream": "https://github.com/headroomlabs-ai/headroom",
+ "version_pin": "0.44.0",
+ "version_checked": "2026-11-14",
+ "verified": true,
+ "install_doc": "As headroom-cache, with HEADROOM_MODE=token. `headroom wrap claude` forwards HEADROOM_MODE to the proxy it starts, and an explicit HEADROOM_MODE wins over the default.",
+ "notes": "Headroom's documented compression-first mode: 'token -- prioritize compression; prior turns may be rewritten for max savings'. It is identical to headroom-cache except for the mode, so the pair isolates the mode setting. The earlier 120-pair study never recorded which mode it ran. See headroom-cache for why this replaces THOL's own headroom entry and why the retrieve MCP server is declared.",
+ "requires": ["headroom"],
+ "env": {
+  "HEADROOM_MODE": "token",
+  "HEADROOM_PROXY_URL": "http://127.0.0.1:${PORT}"
+ },
+ "claude_wrap": ["headroom", "wrap", "claude", "--port", "${PORT}", "--"],
+ "mcp": {
+  "mcpServers": {
+   "headroom": {"type": "stdio", "command": "headroom", "args": ["mcp", "serve"]}
+  }
+ },
+ "tool_prefixes": ["mcp__headroom__"],
+ "bash_command_markers": ["headroom "]
+}

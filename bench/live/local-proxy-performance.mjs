@@ -8,6 +8,7 @@ import { join, resolve } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { setTimeout as delay } from 'node:timers/promises';
 import { heldoutFixture } from './heldout-cases.mjs';
+import { altACliModule } from './alt-a-module.mjs';
 
 if (process.platform !== 'win32')
   throw Error(
@@ -96,7 +97,7 @@ try {
         arm === 'altA'
           ? [
               '-m',
-              'alternative_a.cli',
+              altACliModule(),
               'proxy',
               '--port',
               String(port),

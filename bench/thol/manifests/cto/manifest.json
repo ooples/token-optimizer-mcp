@@ -1,0 +1,16 @@
+{
+ "name": "cto",
+ "display_name": "claude-token-optimizer 2.3.20, as shipped",
+ "upstream": "https://www.npmjs.com/package/claude-token-optimizer",
+ "version_pin": "2.3.20",
+ "version_checked": "2026-11-14",
+ "verified": true,
+ "install_doc": "`npm install -g claude-token-optimizer`, then `cto init` in the project. The hooks step is `cto hooks install --all` (here `cto init --yes --hooks`, its documented non-interactive form), then pasting the block `cto hooks settings` prints into the project's .claude/settings.json. The second setup command is that paste. `cto init --yes` writes CLAUDE.md, .claude/{COMMON_MISTAKES,QUICK_START,ARCHITECTURE_MAP}.md, docs/INDEX.md and .claudeignore.",
+ "notes": "AS SHIPPED, THE GUARD HOOKS DO NOTHING. They read the tool name from $CLAUDE_TOOL_NAME, and Claude Code 2.1.325 never sets it (no occurrence in the binary, checked 2026-11-14), so each guard exits before acting. This arm measures that state, because that is what a user installs; cto-patched measures the hooks working. CLAUDE.md is the template `cto init --yes` generates. cto ships no command that fills it, and writing project facts into it ourselves would be our content rather than theirs.",
+ "requires": ["cto", "python3"],
+ "setup_commands": [
+  "cto init --yes --hooks",
+  "cto hooks settings > .claude/settings.json"
+ ],
+ "bash_command_markers": ["cto "]
+}
