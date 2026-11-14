@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.11.0](https://github.com/ooples/token-optimizer-mcp/compare/v7.10.0...v7.11.0) (2026-11-14)
+
+
+### Features
+
+* make agents cheap - cache ttl, agent overhead, spawn costs ([#567](https://github.com/ooples/token-optimizer-mcp/issues/567)) ([#568](https://github.com/ooples/token-optimizer-mcp/issues/568)) ([6a7b75e](https://github.com/ooples/token-optimizer-mcp/commit/6a7b75e72d06b9be6ea3c9f76fd0821948ec4b73))
+
+
+### Documentation
+
+* shorten the readme and tidy the repository root ([#562](https://github.com/ooples/token-optimizer-mcp/issues/562)) ([e7e29ad](https://github.com/ooples/token-optimizer-mcp/commit/e7e29ad83d9fff2494cbfe190958bf24bc79df26))
+* tidy the root, compare competitors like for like, pin thol competitors to latest ([#564](https://github.com/ooples/token-optimizer-mcp/issues/564)) ([e108cdd](https://github.com/ooples/token-optimizer-mcp/commit/e108cddce963387d1bac653ea5c633c31a96d2cb))
+
+
+### Build System
+
+* **deps:** require Node 22.18.0+ on Node 22, or 24.11.0+ (was &gt;=22.14.0), because @babel/parser 8 is a runtime dependency that declares that range; Node 23 and 24.0-24.10 are no longer supported ([892be15](https://github.com/ooples/token-optimizer-mcp/commit/892be1545b2781458b7c002e05b99263b305176e))
+* **deps:** update all open Dependabot PRs at once: actions/checkout and actions/upload-artifact v7, release-please-action v5, @babel/parser 8, @commitlint/config-conventional 21, @semantic-release/changelog 7 and every minor and patch update ([892be15](https://github.com/ooples/token-optimizer-mcp/commit/892be1545b2781458b7c002e05b99263b305176e))
+
+
+### CI/CD
+
+* group dependabot updates into one pr per kind ([#570](https://github.com/ooples/token-optimizer-mcp/issues/570)) ([51b8f2c](https://github.com/ooples/token-optimizer-mcp/commit/51b8f2cbc1206d6ad5c42bb1a21c21ceadaf63f1))
+* stop dependabot version-bumping transitive packages one by one ([#586](https://github.com/ooples/token-optimizer-mcp/issues/586)) ([d8a9496](https://github.com/ooples/token-optimizer-mcp/commit/d8a9496113d843d7826a24f9245d467da07ec585))
+
 ## [7.10.0](https://github.com/ooples/token-optimizer-mcp/compare/v7.9.0...v7.10.0) (2026-11-11)
 
 
