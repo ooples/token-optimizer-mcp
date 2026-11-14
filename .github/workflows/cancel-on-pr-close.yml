@@ -34,30 +34,35 @@ jobs:
   # their side effect -- their bodies are deliberately no-ops.
   #
   # The group keys must mirror each heavy workflow's own `concurrency.group`
-  # exactly, as evaluated in a pull_request context. Both use
-  # `${{ github.workflow }}-${{ github.ref }}`, and on a PR event `github.ref`
-  # is `refs/pull/<n>/merge` here just as it was there -- so the only part that
-  # must be substituted by hand is the workflow NAME, since `github.workflow`
-  # would otherwise evaluate to THIS workflow's name.
+  # exactly, as it was evaluated for the PR's runs. Both use
+  # `${{ github.workflow }}-${{ github.ref }}`, which on an open PR's
+  # pull_request event is `<name>-refs/pull/<n>/merge`.
+  #
+  # BOTH PARTS ARE SPELLED OUT BY HAND HERE. `github.workflow` would be THIS
+  # workflow's name. And `github.ref` on a CLOSED pull_request event is the BASE
+  # branch, `refs/heads/master` -- the merge ref is gone -- so `${{ github.ref }}`
+  # put these jobs in master's own groups and cancelled master's push CI for
+  # every merge (#586 and #588 merges, 2026-11-14: "Canceling since a higher
+  # priority waiting request for CI-refs/heads/master exists").
   evict-ci-group:
     name: Evict CI concurrency group
     runs-on: ubuntu-latest
     timeout-minutes: 2
     concurrency:
-      group: CI-${{ github.ref }}
+      group: CI-refs/pull/${{ github.event.pull_request.number }}/merge
       cancel-in-progress: true
     steps:
-      - run: echo "Evicted concurrency group CI-${{ github.ref }} (cancelled server-side at queue time)."
+      - run: echo "Evicted concurrency group CI-refs/pull/${{ github.event.pull_request.number }}/merge (cancelled server-side at queue time)."
 
   evict-quality-gates-group:
     name: Evict Quality Gates concurrency group
     runs-on: ubuntu-latest
     timeout-minutes: 2
     concurrency:
-      group: Quality Gates-${{ github.ref }}
+      group: Quality Gates-refs/pull/${{ github.event.pull_request.number }}/merge
       cancel-in-progress: true
     steps:
-      - run: echo "Evicted concurrency group 'Quality Gates-${{ github.ref }}'."
+      - run: echo "Evicted concurrency group 'Quality Gates-refs/pull/${{ github.event.pull_request.number }}/merge'."
 
   # -- API sweep (defence in depth) -------------------------------------------
   #
