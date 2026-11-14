@@ -525,7 +525,7 @@ await analyze_project_tokens({
 
 ### Technology Stack
 
-- **Runtime**: Node.js 22.14.0+
+- **Runtime**: Node.js 22.18.0+ or 24.11.0+
 - **Language**: TypeScript
 - **Database**: SQLite (better-sqlite3)
 - **Token Counting**: tiktoken (GPT-4 tokenizer)

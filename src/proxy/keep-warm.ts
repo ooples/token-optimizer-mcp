@@ -71,8 +71,7 @@ export function warmConversationKey(
   baseKey: string
 ): string {
   const first = (request.messages ?? [])[0] as
-    | { content?: unknown }
-    | undefined;
+    { content?: unknown } | undefined;
   const content = first?.content;
   const text =
     typeof content === 'string'
@@ -148,8 +147,7 @@ export function pingBody(body: Buffer): Buffer | null {
     const parsed = JSON.parse(body.toString('utf8')) as Record<string, unknown>;
     if (!Array.isArray(parsed.messages)) return null;
     const thinking = parsed.thinking as
-      | { type?: string; budget_tokens?: number }
-      | undefined;
+      { type?: string; budget_tokens?: number } | undefined;
     if (thinking?.type === 'enabled') return null;
     // The other shapes `max_tokens: 0` rejects.
     if ((parsed.output_config as { format?: unknown } | undefined)?.format)

@@ -14,13 +14,7 @@ export interface ChunkMetadata {
   endLine: number;
   size: number;
   type:
-    | 'code'
-    | 'comment'
-    | 'import'
-    | 'export'
-    | 'function'
-    | 'class'
-    | 'other';
+    'code' | 'comment' | 'import' | 'export' | 'function' | 'class' | 'other';
 }
 
 export interface TruncationResult {

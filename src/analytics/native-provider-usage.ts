@@ -533,19 +533,17 @@ export function summarizeProviderUsage(
     records.map((record) => [record.measurementId, record])
   );
   const views = [...unique.values()]
-    .map(
-      (record): ProviderUsageView => ({
-        ...record,
-        pricing: priceTokenUsage({
-          client: record.client,
-          provider: record.provider,
-          route: record.pricingRoute,
-          model: record.model,
-          timestamp: record.timestamp,
-          usage: record.usage,
-        }),
-      })
-    )
+    .map((record): ProviderUsageView => ({
+      ...record,
+      pricing: priceTokenUsage({
+        client: record.client,
+        provider: record.provider,
+        route: record.pricingRoute,
+        model: record.model,
+        timestamp: record.timestamp,
+        usage: record.usage,
+      }),
+    }))
     .sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp));
   const usage = views.reduce(
     (sum, row) => addUsage(sum, row.usage),

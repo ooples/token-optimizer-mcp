@@ -7,12 +7,7 @@ import { LRUCache } from 'lru-cache';
 import { EventEmitter } from 'events';
 
 export type EvictionStrategy =
-  | 'LRU'
-  | 'LFU'
-  | 'FIFO'
-  | 'TTL'
-  | 'SIZE'
-  | 'HYBRID';
+  'LRU' | 'LFU' | 'FIFO' | 'TTL' | 'SIZE' | 'HYBRID';
 export type WriteMode = 'write-through' | 'write-back';
 export type CacheTier = 'L1' | 'L2' | 'L3';
 

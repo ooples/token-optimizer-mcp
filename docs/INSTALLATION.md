@@ -16,7 +16,7 @@ what enforces; adding the server alone just gives the model tools it can ignore.
 That is the entire installation. [All sixteen clients →](#installation)
 
 **Requirements:**
-- **Node.js 22.14.0 or later**, for the plugin's hooks and its MCP server. `node` must be on the PATH of the Claude
+- **Node.js 22.18.0+ on Node 22, or 24.11.0+**, for the plugin's hooks and its MCP server. `node` must be on the PATH of the Claude
   Code process.
 - **Claude Code 2.1.139 or later.** The hooks use the exec form (`"command": "node", "args": [...]`), which Claude
   Code added in 2.1.139. An older Claude Code ignores `args`, so the hooks do nothing and nothing says so;
@@ -406,7 +406,7 @@ Additional ready-made integration files are available for [Claude Desktop](../be
 
 ## Requirements and data
 
-- Node.js 22.14.0 or newer
+- Node.js 22.18.0+ on Node 22, or 24.11.0+ (Node 23 is not supported)
 - npm 9 or newer
 - An MCP client with stdio transport support
 

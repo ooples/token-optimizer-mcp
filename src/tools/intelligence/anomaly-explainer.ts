@@ -185,10 +185,7 @@ export interface Correlation {
   correlation: number;
   lag: number;
   causalDirection?:
-    | 'event1->event2'
-    | 'event2->event1'
-    | 'bidirectional'
-    | 'none';
+    'event1->event2' | 'event2->event1' | 'bidirectional' | 'none';
   confidence: number;
 }
 

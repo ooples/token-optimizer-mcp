@@ -46,12 +46,7 @@ const brotliDecompressAsync = promisify(brotliDecompress);
  * Compression algorithm types
  */
 export type CompressionAlgorithm =
-  | 'gzip'
-  | 'brotli'
-  | 'lz4'
-  | 'zstd'
-  | 'snappy'
-  | 'custom';
+  'gzip' | 'brotli' | 'lz4' | 'zstd' | 'snappy' | 'custom';
 
 /**
  * Compression level (0-9, where 9 is maximum compression)
@@ -62,12 +57,7 @@ export type CompressionLevel = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
  * Data type hints for adaptive compression
  */
 export type DataType =
-  | 'json'
-  | 'text'
-  | 'binary'
-  | 'time-series'
-  | 'structured'
-  | 'auto';
+  'json' | 'text' | 'binary' | 'time-series' | 'structured' | 'auto';
 
 /**
  * Compression operation types

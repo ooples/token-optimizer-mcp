@@ -39,12 +39,7 @@ const DEFAULT_CACHE_TTL_SECONDS = 3600;
 // ============================================================================
 
 export type MigrationAction =
-  | 'list'
-  | 'status'
-  | 'pending'
-  | 'history'
-  | 'rollback'
-  | 'generate';
+  'list' | 'status' | 'pending' | 'history' | 'rollback' | 'generate';
 export type MigrationStatus = 'pending' | 'applied' | 'failed';
 export type MigrationDirection = 'up' | 'down';
 

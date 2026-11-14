@@ -16,7 +16,7 @@
   <a href="https://www.npmjs.com/package/@ooples/token-optimizer-mcp"><img src="https://img.shields.io/npm/dm/%40ooples%2Ftoken-optimizer-mcp" alt="npm downloads"></a>
   <a href="https://github.com/ooples/token-optimizer-mcp/actions/workflows/ci.yml"><img src="https://github.com/ooples/token-optimizer-mcp/actions/workflows/ci.yml/badge.svg?branch=master" alt="CI"></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT license"></a>
-  <a href="https://nodejs.org/"><img src="https://img.shields.io/badge/node-%3E%3D22.14-339933?logo=node.js&logoColor=white" alt="Node.js 22.14+"></a>
+  <a href="https://nodejs.org/"><img src="https://img.shields.io/badge/node-22.18%2B%20%7C%2024.11%2B-339933?logo=node.js&logoColor=white" alt="Node.js 22.18+ or 24.11+"></a>
 </p>
 
 <p align="center">
@@ -53,7 +53,7 @@ hooks do the saving, while the server alone only offers tools the model can igno
 /reload-plugins
 ```
 
-You need Node.js 22.14 or later on Claude Code's PATH, and Claude Code 2.1.139 or
+You need Node.js 22.18+ (or 24.11+) on Claude Code's PATH, and Claude Code 2.1.139 or
 later. Then check it works:
 
 ```bash
@@ -71,7 +71,7 @@ for each one is in [`src/integrations/`](./src/integrations), and
 <details>
 <summary><strong>Requirements and what happens without them</strong></summary>
 
-- **Node.js 22.14.0 or later**, for the hooks and the MCP server. `node` must be on
+- **Node.js 22.18.0+ on Node 22, or 24.11.0+**, for the hooks and the MCP server. `node` must be on
   the PATH of the client process. If you just installed Node.js or Git, start the
   client again from a new terminal so it picks up the new PATH.
 - **Claude Code 2.1.139 or later.** The hooks use the exec form

@@ -261,19 +261,17 @@ export const MODEL_PRICE_CATALOG: readonly ModelPriceContract[] = [
       { model: 'gpt-5.6-terra', input: 2, cached: 0.2, output: 12 },
       { model: 'gpt-5.6-luna', input: 0.2, cached: 0.02, output: 1.2 },
     ] satisfies readonly OpenAiRow[]
-  ).map(
-    (row): ModelPriceContract => ({
-      provider: 'openai',
-      route: 'openai-api',
-      model: row.model,
-      aliases: [],
-      currency: 'USD',
-      verifiedAt: VERIFIED_AT,
-      sourceUrl: OPENAI_MODEL_SOURCE + row.model,
-      sourceLabel: 'OpenAI API price',
-      tiers: openAiTier(row.input, row.cached, row.output),
-    })
-  ),
+  ).map((row): ModelPriceContract => ({
+    provider: 'openai',
+    route: 'openai-api',
+    model: row.model,
+    aliases: [],
+    currency: 'USD',
+    verifiedAt: VERIFIED_AT,
+    sourceUrl: OPENAI_MODEL_SOURCE + row.model,
+    sourceLabel: 'OpenAI API price',
+    tiers: openAiTier(row.input, row.cached, row.output),
+  })),
   ...(
     [
       { model: 'claude-fable-5-1', input: 10, output: 50, cacheRead: 0.025 },
@@ -302,37 +300,33 @@ export const MODEL_PRICE_CATALOG: readonly ModelPriceContract[] = [
       { model: 'claude-sonnet-4', input: 3, output: 15 },
       { model: 'claude-haiku-3-5', input: 0.8, output: 4 },
     ] satisfies readonly AnthropicRow[]
-  ).map(
-    (row): ModelPriceContract => ({
-      provider: 'anthropic',
-      route: 'anthropic-api',
-      model: row.model,
-      aliases: [],
-      currency: 'USD',
-      verifiedAt: VERIFIED_AT,
-      sourceUrl: ANTHROPIC_SOURCE,
-      sourceLabel: 'Anthropic API price',
-      tiers: anthropicTier(row.input, row.output, row.cacheRead),
-    })
-  ),
+  ).map((row): ModelPriceContract => ({
+    provider: 'anthropic',
+    route: 'anthropic-api',
+    model: row.model,
+    aliases: [],
+    currency: 'USD',
+    verifiedAt: VERIFIED_AT,
+    sourceUrl: ANTHROPIC_SOURCE,
+    sourceLabel: 'Anthropic API price',
+    tiers: anthropicTier(row.input, row.output, row.cacheRead),
+  })),
   ...[
     { model: 'gemini-3.5-flash', input: 1.5, cached: 0.15, output: 9 },
     { model: 'gemini-3.5-flash-lite', input: 0.3, cached: 0.03, output: 2.5 },
     { model: 'gemini-2.5-flash', input: 0.3, cached: 0.03, output: 2.5 },
     { model: 'gemini-2.5-flash-lite', input: 0.1, cached: 0.01, output: 0.4 },
-  ].map(
-    (row): ModelPriceContract => ({
-      provider: 'google',
-      route: 'gemini-api',
-      model: row.model,
-      aliases: [],
-      currency: 'USD',
-      verifiedAt: VERIFIED_AT,
-      sourceUrl: GEMINI_SOURCE,
-      sourceLabel: 'Gemini Developer API standard price',
-      tiers: geminiTier(row.input, row.cached, row.output),
-    })
-  ),
+  ].map((row): ModelPriceContract => ({
+    provider: 'google',
+    route: 'gemini-api',
+    model: row.model,
+    aliases: [],
+    currency: 'USD',
+    verifiedAt: VERIFIED_AT,
+    sourceUrl: GEMINI_SOURCE,
+    sourceLabel: 'Gemini Developer API standard price',
+    tiers: geminiTier(row.input, row.cached, row.output),
+  })),
   ...['gemini-3.8-flash', 'gemini-3.7-flash', 'gemini-3.6-flash'].flatMap(
     (model): readonly ModelPriceContract[] => {
       const shared = {
@@ -426,22 +420,20 @@ export const MODEL_PRICE_CATALOG: readonly ModelPriceContract[] = [
       { model: 'gpt-6-sol', input: 2, cached: 0.2, output: 10 },
       { model: 'gpt-6.1-sol', input: 2, cached: 0.1, output: 10 },
     ] satisfies readonly OpenAiRow[]
-  ).map(
-    (row): ModelPriceContract => ({
-      provider: 'github',
-      route: 'github-copilot',
-      model: row.model,
-      aliases: [],
-      currency: 'USD',
-      verifiedAt: VERIFIED_AT,
-      sourceUrl: COPILOT_SOURCE,
-      sourceLabel: 'GitHub Copilot AI-credit token price',
-      tiers: openAiTier(row.input, row.cached, row.output, {
-        maxInputTokens: row.maxInputTokens,
-        cacheWrites: row.cacheWrites,
-      }),
-    })
-  ),
+  ).map((row): ModelPriceContract => ({
+    provider: 'github',
+    route: 'github-copilot',
+    model: row.model,
+    aliases: [],
+    currency: 'USD',
+    verifiedAt: VERIFIED_AT,
+    sourceUrl: COPILOT_SOURCE,
+    sourceLabel: 'GitHub Copilot AI-credit token price',
+    tiers: openAiTier(row.input, row.cached, row.output, {
+      maxInputTokens: row.maxInputTokens,
+      cacheWrites: row.cacheWrites,
+    }),
+  })),
   ...[
     // Resold Claude capacity. The previous entry here priced claude-sonnet-5
     // only until 2026-09-01 and called it promotional, which left the model
@@ -458,37 +450,33 @@ export const MODEL_PRICE_CATALOG: readonly ModelPriceContract[] = [
     { model: 'claude-sonnet-4-6', input: 3, cacheRead: 0.3, output: 15 },
     { model: 'claude-sonnet-4', input: 3, cacheRead: 0.3, output: 15 },
     { model: 'claude-haiku-4-5', input: 1, cacheRead: 0.1, output: 5 },
-  ].map(
-    (row): ModelPriceContract => ({
-      provider: 'github',
-      route: 'github-copilot',
-      model: row.model,
-      aliases: [],
-      currency: 'USD',
-      verifiedAt: VERIFIED_AT,
-      sourceUrl: COPILOT_SOURCE,
-      sourceLabel: 'GitHub Copilot AI-credit token price',
-      tiers: copilotClaudeTier(row.input, row.cacheRead, row.output),
-    })
-  ),
+  ].map((row): ModelPriceContract => ({
+    provider: 'github',
+    route: 'github-copilot',
+    model: row.model,
+    aliases: [],
+    currency: 'USD',
+    verifiedAt: VERIFIED_AT,
+    sourceUrl: COPILOT_SOURCE,
+    sourceLabel: 'GitHub Copilot AI-credit token price',
+    tiers: copilotClaudeTier(row.input, row.cacheRead, row.output),
+  })),
   ...[
     { model: 'gemini-3.8-flash', input: 0.75, cached: 0.075, output: 3.75 },
     { model: 'gemini-3.7-flash', input: 0.75, cached: 0.075, output: 3.75 },
     { model: 'gemini-3.6-flash', input: 0.75, cached: 0.075, output: 3.75 },
     { model: 'gemini-3.5-flash', input: 1.5, cached: 0.15, output: 9 },
-  ].map(
-    (row): ModelPriceContract => ({
-      provider: 'github',
-      route: 'github-copilot',
-      model: row.model,
-      aliases: [],
-      currency: 'USD',
-      verifiedAt: VERIFIED_AT,
-      sourceUrl: COPILOT_SOURCE,
-      sourceLabel: 'GitHub Copilot AI-credit token price',
-      tiers: resoldGeminiTier(row.input, row.cached, row.output),
-    })
-  ),
+  ].map((row): ModelPriceContract => ({
+    provider: 'github',
+    route: 'github-copilot',
+    model: row.model,
+    aliases: [],
+    currency: 'USD',
+    verifiedAt: VERIFIED_AT,
+    sourceUrl: COPILOT_SOURCE,
+    sourceLabel: 'GitHub Copilot AI-credit token price',
+    tiers: resoldGeminiTier(row.input, row.cached, row.output),
+  })),
   // NOT LISTED HERE, deliberately: the Grok, Kimi and MAI models the same page
   // prices. Their rates are published, but the identifier a client would send
   // for them is not, and a catalog keyed on a guessed id prices nothing while

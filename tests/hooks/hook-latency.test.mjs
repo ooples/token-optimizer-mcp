@@ -264,8 +264,17 @@ describe.each([
 
   test('leaves the cause to the Node floor notice when Node is below the floor', () => {
     const out = sessionStart(entry, logs({ runs: slowRuns() }), '22.2.0');
-    expect(out).toContain('below the supported');
+    expect(out).toContain('outside the supported');
     expect(out).not.toContain('have been slow');
+  });
+
+  test('still reports slow hooks when Node is unsupported only by a dependency', () => {
+    // 22.16 is below the floor because @babel/parser 8 declares it, not because
+    // hooks were measured slow there; the floor notice says nothing about
+    // latency, so suppressing the slow-hook notice would hide the evidence.
+    const out = sessionStart(entry, logs({ runs: slowRuns() }), '22.16.0');
+    expect(out).toContain('outside the supported');
+    expect(out).toContain('have been slow');
   });
 });
 

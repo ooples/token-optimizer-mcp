@@ -15,6 +15,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { serverCrashNotice } from '../../src/hooks-core/server-crash.mjs';
+import { NODE_SUPPORTED } from '../../src/hooks-core/node-floor.mjs';
 
 const ROOT = process.cwd();
 const LAUNCH = join(ROOT, 'src', 'plugin', 'launch.mjs');
@@ -100,18 +101,18 @@ describe('isNativeCrash', () => {
 });
 
 describe('the remedy is named only where it applies', () => {
-  test('Node 22 below 22.14 is told to upgrade', () => {
+  test('Node 22 below the floor is told to upgrade', () => {
     const notice = serverCrashNotice({ TOKEN_OPTIMIZER_RUNTIME: runtime }, '22.2.0');
     expect(notice).toBeNull(); // no record yet
     writeFileSync(crashFile(), JSON.stringify({ node: '22.2.0', exit: '0xC0000005' }));
-    expect(serverCrashNotice({ TOKEN_OPTIMIZER_RUNTIME: runtime }, '22.2.0')).toContain('22.14.0');
+    expect(serverCrashNotice({ TOKEN_OPTIMIZER_RUNTIME: runtime }, '22.2.0')).toContain(NODE_SUPPORTED);
   });
 
   test('a crash on a Node that is already new enough names no upgrade', () => {
     writeFileSync(crashFile(), JSON.stringify({ node: '22.23.4', exit: '0xC0000409' }));
     const notice = serverCrashNotice({ TOKEN_OPTIMIZER_RUNTIME: runtime }, '22.23.4');
     expect(notice).toContain('0xC0000409');
-    expect(notice).not.toContain('22.14.0');
+    expect(notice).not.toContain(NODE_SUPPORTED);
   });
 });
 

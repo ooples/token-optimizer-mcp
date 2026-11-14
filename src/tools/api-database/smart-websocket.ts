@@ -66,11 +66,7 @@ export interface SmartWebSocketResult {
   connection: {
     url: string;
     state:
-      | 'connecting'
-      | 'connected'
-      | 'disconnecting'
-      | 'disconnected'
-      | 'error';
+      'connecting' | 'connected' | 'disconnecting' | 'disconnected' | 'error';
     protocol?: string;
     uptime?: number; // milliseconds
     reconnectAttempts?: number;
@@ -116,11 +112,7 @@ export interface SmartWebSocketResult {
 interface ConnectionState {
   url: string;
   state:
-    | 'connecting'
-    | 'connected'
-    | 'disconnecting'
-    | 'disconnected'
-    | 'error';
+    'connecting' | 'connected' | 'disconnecting' | 'disconnected' | 'error';
   protocol?: string;
   connectedAt?: number;
   disconnectedAt?: number;

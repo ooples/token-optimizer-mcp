@@ -768,9 +768,8 @@ export function getSmartRest(
 export async function runSmartREST(options: SmartRESTOptions): Promise<string> {
   const { homedir } = await import('os');
   const { join } = await import('path');
-  const { CacheEngine: CacheEngineClass } = await import(
-    '../../core/cache-engine.js'
-  );
+  const { CacheEngine: CacheEngineClass } =
+    await import('../../core/cache-engine.js');
   const { TokenCounter } = await import('../../core/token-counter.js');
   const { MetricsCollector } = await import('../../core/metrics.js');
 

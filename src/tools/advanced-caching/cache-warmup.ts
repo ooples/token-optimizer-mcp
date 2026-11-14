@@ -27,18 +27,10 @@ import { MetricsCollector } from '../../core/metrics.js';
 import { EventEmitter } from 'events';
 
 export type WarmupStrategy =
-  | 'immediate'
-  | 'progressive'
-  | 'dependency'
-  | 'pattern';
+  'immediate' | 'progressive' | 'dependency' | 'pattern';
 export type WarmupPriority = 'high' | 'normal' | 'low';
 export type WarmupStatus =
-  | 'idle'
-  | 'warming'
-  | 'paused'
-  | 'completed'
-  | 'failed'
-  | 'cancelled';
+  'idle' | 'warming' | 'paused' | 'completed' | 'failed' | 'cancelled';
 
 export interface CacheWarmupOptions {
   operation:

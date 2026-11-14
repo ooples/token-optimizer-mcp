@@ -42,16 +42,7 @@ export interface SmartAstGrepOptions {
   // Pattern options
   pattern: string;
   language?:
-    | 'ts'
-    | 'tsx'
-    | 'js'
-    | 'jsx'
-    | 'py'
-    | 'go'
-    | 'rs'
-    | 'java'
-    | 'c'
-    | 'cpp';
+    'ts' | 'tsx' | 'js' | 'jsx' | 'py' | 'go' | 'rs' | 'java' | 'c' | 'cpp';
 
   // Search scope
   projectPath: string;

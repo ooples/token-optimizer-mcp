@@ -54,7 +54,12 @@ import {
   manifestSize,
 } from './manifest.mjs';
 import { mcpClientsSeen } from './metrics.mjs';
-import { NODE_FLOOR, nodeBelowFloor } from './node-floor.mjs';
+import {
+  NODE_ENGINES,
+  NODE_SUPPORTED,
+  nodeBelowFloor,
+  nodeUnsupportedReason,
+} from './node-floor.mjs';
 import { SLOW_P90_MS, recentToolHookLatency } from './hook-latency.mjs';
 
 /**
@@ -1301,10 +1306,10 @@ export function checklist({ root, settingsPath, install }) {
     nodeBelowFloor(node)
       ? bad(
           'Node meets the supported floor',
-          `Node ${node} is below ${NODE_FLOOR}: hook calls can stall tool calls for minutes`,
-          `install Node ${NODE_FLOOR} or newer, then restart the client`
+          `Node ${node} is outside the supported range (${NODE_SUPPORTED}). ${nodeUnsupportedReason(node)}`,
+          `install a supported Node (${NODE_SUPPORTED}), then restart the client`
         )
-      : ok('Node meets the supported floor', `Node ${node} (floor ${NODE_FLOOR})`)
+      : ok('Node meets the supported floor', `Node ${node} (supported: ${NODE_ENGINES})`)
   );
 
   // A HOOK THAT ENDS LATE STILL ENDS IN SUCCESS, so the lifecycle summary
@@ -1324,7 +1329,7 @@ export function checklist({ root, settingsPath, install }) {
         ? warn(
             'tool-call hooks are fast',
             detail,
-            `upgrade Node if it is below ${NODE_FLOOR}; otherwise attach the output of \`npx token-optimizer-diagnostics\` to an issue`
+            `upgrade Node if it is outside the supported range (${NODE_SUPPORTED}); otherwise attach the output of \`npx token-optimizer-diagnostics\` to an issue`
           )
         : ok('tool-call hooks are fast', detail)
     );

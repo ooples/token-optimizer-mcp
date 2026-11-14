@@ -142,7 +142,7 @@ jobs:
         version: ${{ fromJSON(needs.resolve.outputs.versions) }}
     steps:
       - name: Checkout the tag being verified
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: v${{ matrix.version }}
           # This job runs package scripts from a released tag; without this,

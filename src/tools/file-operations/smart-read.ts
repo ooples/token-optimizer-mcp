@@ -264,8 +264,7 @@ export class SmartReadTool {
     let chunkCount = 0;
     let chunkIndex = 0;
     let diffData:
-      | { added: string[]; removed: string[]; unchanged: number }
-      | undefined;
+      { added: string[]; removed: string[]; unchanged: number } | undefined;
 
     // If we have cached data and diff mode is enabled.
     //

@@ -526,7 +526,12 @@ export function registerWikiRoutes(app: Express): void {
     if (!mods) return res.status(503).json({ error: 'graph unavailable' });
 
     try {
-      const qualified = splitQualifiedId(req.params.id);
+      // Express 5.3's types widen every route parameter to string | string[]
+      // (the array is a wildcard's segments); `:id` is one segment, but a
+      // joined array keeps a wildcard-shaped value usable too.
+      const rawId = req.params.id;
+      const id = Array.isArray(rawId) ? rawId.join('/') : rawId;
+      const qualified = splitQualifiedId(id);
       let source: GraphSource | null;
       let nodeId: string;
       if (qualified) {
@@ -534,7 +539,7 @@ export function registerWikiRoutes(app: Express): void {
         nodeId = qualified.nodeId;
       } else {
         source = sourcesFor(req, mods)[0] || null;
-        nodeId = req.params.id;
+        nodeId = id;
       }
       if (!source) return res.status(404).json({ error: 'no such project' });
       const graph = loadGraph(source.dir, mods.wiki);

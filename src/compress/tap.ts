@@ -28,7 +28,7 @@ export function compressTap(text: string, stamp?: Stamp): CompressionResult {
   const elisions: Elision[] = [];
   let result = '',
     cursor = 0;
-  for (let i = 0; i < matches.length; ) {
+  for (let i = 0; i < matches.length;) {
     const first = matches[i];
     let end = i + 1;
     while (

@@ -31,11 +31,7 @@ import { hashFile, generateCacheKey } from '../shared/hash-utils.js';
 import { compress } from '../shared/compression-utils.js';
 
 export type WorkflowFormat =
-  | 'github'
-  | 'gitlab'
-  | 'circleci'
-  | 'azure'
-  | 'auto';
+  'github' | 'gitlab' | 'circleci' | 'azure' | 'auto';
 
 export interface SmartWorkflowOptions {
   enableCache?: boolean;
