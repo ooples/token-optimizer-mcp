@@ -23,7 +23,8 @@
     "token-optimizer-run": "./src/scripts/run-client.mjs",
     "token-optimizer-route": "./src/scripts/route-client.mjs",
     "token-optimizer-learned": "./src/scripts/learned.mjs",
-    "token-optimizer-statusline": "./src/scripts/statusline-tap.mjs"
+    "token-optimizer-statusline": "./src/scripts/statusline-tap.mjs",
+    "token-optimizer-agent-brief": "./src/scripts/agent-brief.mjs"
   },
   "files": [
     "dist/**/*",
@@ -152,6 +153,7 @@
     "bench:screen": "bash bench/thol/run-campaign.sh",
     "bench:confirm": "REPS=3 bash bench/thol/run-campaign.sh",
     "bench:debug-loop": "node bench/debug-loop/run.mjs",
+    "bench:agents": "node bench/agents/ab.mjs",
     "bench:field": "node bench/field/report.mjs",
     "bench:pack": "node src/scripts/bench-pack.mjs",
     "verify:onnx": "node src/scripts/verify-onnx-adapter.mjs",

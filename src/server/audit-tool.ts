@@ -32,6 +32,7 @@ interface AuditModules {
   standing: any;
   wiki: any;
   subagents: any;
+  skillDiet: any;
 }
 
 let cached: AuditModules | null = null;
@@ -39,7 +40,7 @@ let cached: AuditModules | null = null;
 async function modules(): Promise<AuditModules | null> {
   if (cached) return cached;
   try {
-    const [audit, waste, cache, routing, standing, wiki, subagents] =
+    const [audit, waste, cache, routing, standing, wiki, subagents, skillDiet] =
       await Promise.all([
         import(coreUrl('audit.mjs')),
         import(coreUrl('waste.mjs')),
@@ -48,8 +49,18 @@ async function modules(): Promise<AuditModules | null> {
         import(coreUrl('standing.mjs')),
         import(coreUrl('wiki.mjs')),
         import(coreUrl('subagents.mjs')),
+        import(coreUrl('skill-diet.mjs')),
       ]);
-    cached = { audit, waste, cache, routing, standing, wiki, subagents };
+    cached = {
+      audit,
+      waste,
+      cache,
+      routing,
+      standing,
+      wiki,
+      subagents,
+      skillDiet,
+    };
     return cached;
   } catch {
     return null;
@@ -190,9 +201,25 @@ export async function tokenAudit(input: {
     const agents = mods.subagents.subagentTally(mods.cache.transcriptFor(cwd));
     const finding = mods.subagents.fixedContextFinding(agents);
     if (finding) findings.push(finding);
+    // The larger lever, measured 2026-11-12: subagents write their cache at the
+    // 5-minute tier, and an agent waiting on a build loses all of it. 90% of the
+    // cache writes of 37 agents were that re-write.
+    const ttl = mods.subagents.cacheTtlFinding(agents);
+    if (ttl) findings.push(ttl);
     tally = mods.subagents.renderTally(agents);
   } catch {
     /* subagent accounting is a bonus; never fail the audit over it */
+  }
+
+  // Skills described at the start of every session -- and of every agent with
+  // the Skill tool -- and never invoked here (src/hooks-core/skill-diet.mjs).
+  try {
+    const diet = mods.skillDiet.skillDietFinding(
+      mods.skillDiet.measureSkillDiet()
+    );
+    if (diet) findings.push(diet);
+  } catch {
+    /* the skill diet is a bonus; never fail the audit over it */
   }
 
   const out = mods.audit.renderAudit(dir, findings, {

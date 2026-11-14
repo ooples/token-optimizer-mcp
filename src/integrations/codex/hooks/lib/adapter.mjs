@@ -116,6 +116,8 @@ import { evaluateUcrGuards } from './ucr-guard.mjs';
 import { beginHookInvocation, noteHookOutput } from './observability.mjs';
 import { registerProject, registeredProjects } from './projects.mjs';
 import { runStopHarvest } from './stop-harvest.mjs';
+import { applyMainTtl } from './main-cache-ttl.mjs';
+import { claudeSettingsPath } from './install-health.mjs';
 import { applyQuietEnv } from './quiet-env.mjs';
 import { resumeIfDue } from './migrate.mjs';
 import { takeSlowHookNotice } from './hook-latency.mjs';
@@ -129,6 +131,7 @@ import { recordOnBoard, recordReadOnBoard } from './blackboard.mjs';
 import { nextPacedContinuation, recordWindowActivity, pacerEnabled } from './quota-pacer.mjs';
 import { artifactPath, capture } from './expand.mjs';
 import { applyHoldout } from './injection-holdout.mjs';
+import { isWorkerType } from './agent-brief.mjs';
 import { hasLiveRestorable, learnedLocation, restoreForPrompt, scheduleFold, takeNotice } from './toolprune.mjs';
 import { scheduleCodexFold, takeCodexNotice } from './codexprune.mjs';
 import { onToolFailure, recordTurnEnd } from './loopguard.mjs';
@@ -1541,6 +1544,16 @@ async function runHook(clientName, event, invocation) {
     } catch {
       // A turn that cannot be measured is simply not learned from.
     }
+    if (clientName === 'claude-code') {
+      try {
+        // The main cache tier from this user's own sessions, at most once a day
+        // and written at most once (main-cache-ttl.mjs). Between turns, so it
+        // never changes a request already in flight.
+        applyMainTtl(claudeSettingsPath());
+      } catch {
+        // Evidence for a setting; never a reason to fail a Stop.
+      }
+    }
     // THE LIVE RESTORE (toolprune.mjs, LIVE_RESTORE). A pruned Agent cannot be
     // reached for, so a person who asks for agents would be told there are
     // none. Claude Code only: the turn's prompt is read from its transcript, and
@@ -2194,9 +2207,14 @@ async function runHook(clientName, event, invocation) {
   // client whose context style is silent (Windsurf) cannot deliver any context,
   // so it must not spend the once-only flag on a message nobody receives.
   const canDeliverToolContext = contextOutput(client, eventName, 'x') !== null;
+  // NEVER TO OUR OWN WORKER. Its prompt says not to record notes, and the
+  // guidance overrode it: measured on #567's bench, 2 of 12 workers spent a
+  // ToolSearch and a wiki_write turn on it. Every Claude Code hook payload
+  // carries `agent_type`, so the worker is known exactly.
   const guided =
     event === 'post-tool' &&
     !state.recordingGuided &&
+    !isWorkerType(raw?.agent_type ?? raw?.agentType) &&
     features.harvest &&
     client.contextStyle !== 'silent' &&
     toolEvidence.names.has('wiki_write') &&

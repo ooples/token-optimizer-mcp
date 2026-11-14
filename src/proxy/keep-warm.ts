@@ -23,13 +23,71 @@
  */
 import { request as httpsRequest } from 'node:https';
 import { request as httpRequest } from 'node:http';
+import { createHash } from 'node:crypto';
 
-/** Below this many bytes sent, a rewrite is too small to be worth holding warm. */
+/**
+ * Below this many bytes sent, a rewrite is too small to be worth holding warm.
+ *
+ * 200 KB, about 50k tokens. Lowering it to 100 KB so agent-sized contexts
+ * qualify was measured in #567 and lost: on a task with 330 s waits (Haiku,
+ * 3 reps each) agents cost $0.0210 with pings against $0.0193 without. A
+ * small prefix is cheap to re-write, so the pings cost more than they save.
+ */
 export const MIN_PREFIX_BYTES = 200_000;
 /** Pings after the last real turn: at the one-hour tier, three hours covered. */
 export const DEFAULT_MAX_PINGS = 3;
-/** Fire this long before the entry would expire. */
+/** Fire at most this long before the entry would expire. */
 export const MARGIN_MS = 4 * 60 * 1000;
+
+/**
+ * How long after a warm moment the next ping fires.
+ *
+ * THE MARGIN SCALES WITH THE TTL. A fixed 4-minute margin suits the one-hour
+ * tier, but on the 5-minute tier -- every subagent's, by default -- it fired one
+ * minute after each turn: three pings in the first three minutes, while the
+ * entry was still warm, and nothing held past minute eight. A tenth of the TTL
+ * (30 seconds at 5 minutes, capped at 4 minutes) spends the same pings on
+ * covering the gap: 4.5, 9 and 13.5 minutes, warm to about 18.
+ */
+export function pingDelay(ttlMs: number, marginMs?: number): number {
+  const margin = marginMs ?? Math.min(MARGIN_MS, ttlMs / 10);
+  return Math.max(1000, ttlMs - margin);
+}
+
+/**
+ * The key a conversation is held warm under.
+ *
+ * NOT THE ANCHOR'S CONVERSATION KEY ALONE. That is the system prompt plus the
+ * first text block, which in Claude Code is an injected reminder identical
+ * across every agent of a fan-out -- and across two sessions in one repository.
+ * Keyed on it, each sibling's turn replaced the last one's entry, so only the
+ * most recently active agent was ever held warm, and the cold-turn check read
+ * one agent's idle time for all of them. The whole first message carries the
+ * agent's own task and is fixed for the life of the conversation, so it is
+ * added here.
+ */
+export function warmConversationKey(
+  request: { messages?: unknown[] },
+  baseKey: string
+): string {
+  const first = (request.messages ?? [])[0] as
+    | { content?: unknown }
+    | undefined;
+  const content = first?.content;
+  const text =
+    typeof content === 'string'
+      ? content
+      : Array.isArray(content)
+        ? content
+            .map((b) => (b as { text?: unknown })?.text)
+            .filter((t): t is string => typeof t === 'string')
+            .join('\u0000')
+        : '';
+  return createHash('sha256')
+    .update(`${baseKey}\u0000${text}`)
+    .digest('hex')
+    .slice(0, 32);
+}
 /**
  * Output a ping may produce: none. `max_tokens: 0` runs prefill only -- the
  * cache read that renews the entry -- and returns `content: []` with zero output
@@ -240,10 +298,7 @@ export class KeepWarm {
   }
 
   private arm(key: string, entry: Entry): void {
-    const delay = Math.max(
-      1000,
-      entry.target.ttlMs - (this.opts.marginMs ?? MARGIN_MS)
-    );
+    const delay = pingDelay(entry.target.ttlMs, this.opts.marginMs);
     entry.timer = setTimeout(() => void this.fire(key, entry), delay);
     entry.timer.unref?.();
   }

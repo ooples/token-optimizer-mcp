@@ -62,6 +62,16 @@ describe('the deferred recording guidance', () => {
     expect(saved.some((s) => s.recordingGuided === true)).toBe(true);
   });
 
+  test("never reaches token-optimizer's own worker, whose prompt says not to record; other agents still get it", () => {
+    for (const agentType of ['token-optimizer-worker', 'token-optimizer-project-worker', 'token-optimizer:worker']) {
+      const { stdout, saved } = hook(CLAUDE_POST, { ...claudeEdit(`worker-${agentType}`), agent_id: 'a1', agent_type: agentType });
+      expect(stdout).not.toContain('Record what you work out');
+      expect(saved.some((s) => s.recordingGuided === true)).toBe(false);
+    }
+    const other = hook(CLAUDE_POST, { ...claudeEdit('explore-agent'), agent_id: 'a2', agent_type: 'general-purpose' });
+    expect(other.stdout).toContain('Record what you work out');
+  });
+
   test('never arrives in an arm with harvest off, and the flag stays unspent', () => {
     for (const arm of ['optimizer', 'retrieval', 'baseline']) {
       const { stdout, saved } = hook(CLAUDE_POST, claudeEdit(`arm-${arm}`), {

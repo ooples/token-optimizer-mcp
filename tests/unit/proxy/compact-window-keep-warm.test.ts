@@ -21,6 +21,9 @@ import {
   pingBody,
   ttlOf,
   PING_MAX_TOKENS,
+  MIN_PREFIX_BYTES,
+  pingDelay,
+  warmConversationKey,
 } from '../../../src/proxy/keep-warm.js';
 
 let home: string;
@@ -275,5 +278,111 @@ describe('review fixes on #523', () => {
       'removed'
     );
     expect(read().autoCompactWindow).toBeUndefined();
+  });
+});
+
+describe('keep-warm for subagents (#567)', () => {
+  it('spends the pings covering a 5-minute gap, not its first three minutes', () => {
+    expect(pingDelay(5 * 60 * 1000)).toBe(270_000);
+    expect(pingDelay(60 * 60 * 1000)).toBe(56 * 60 * 1000);
+    expect(pingDelay(5 * 60 * 1000, 0)).toBe(300_000);
+    expect(pingDelay(500, 0)).toBe(1000);
+  });
+
+  // Pinging a ~35k-token agent context measured as a loss (1.09x, #567), so a
+  // typical agent prefix is left to expire and only a large one is held.
+  it('leaves a typical subagent context to expire', () => {
+    const body = Buffer.from(
+      JSON.stringify({
+        messages: [{ role: 'user', content: 'x'.repeat(140_000) }],
+      })
+    );
+    expect(body.length).toBeLessThan(MIN_PREFIX_BYTES);
+    const warm = new KeepWarm({
+      sender: async () => ({ status: 200, json: {} }),
+    });
+    warm.seen('k', {
+      upstream: 'https://example.invalid',
+      path: '/v1/messages',
+      headers: {},
+      body,
+      ttlMs: 300_000,
+    });
+    expect(warm.size()).toBe(0);
+    warm.stop();
+  });
+
+  it('keys siblings of a fan-out apart, and one conversation the same on every turn', () => {
+    const reminder = {
+      type: 'text',
+      text: '<system-reminder>CLAUDE.md</system-reminder>',
+    };
+    const agent = (task: string, more: unknown[] = []) => ({
+      messages: [
+        {
+          role: 'user',
+          content: [
+            reminder,
+            { type: 'text', text: task, cache_control: { type: 'ephemeral' } },
+          ],
+        },
+        ...more,
+      ],
+    });
+    const a = warmConversationKey(agent('audit the parser'), 'base');
+    const b = warmConversationKey(agent('audit the lexer'), 'base');
+    expect(a).not.toBe(b);
+    const later = agent('audit the parser', [
+      { role: 'assistant', content: [{ type: 'text', text: 'ok' }] },
+      { role: 'user', content: 'next' },
+    ]);
+    // a moved cache marker is not part of the key
+    (
+      later.messages[0].content[1] as { cache_control?: unknown }
+    ).cache_control = undefined;
+    expect(warmConversationKey(later, 'base')).toBe(a);
+    expect(warmConversationKey(agent('audit the parser'), 'other')).not.toBe(a);
+    expect(
+      warmConversationKey(
+        { messages: [{ role: 'user', content: 'plain' }] },
+        'base'
+      )
+    ).not.toBe(
+      warmConversationKey(
+        { messages: [{ role: 'user', content: 'other' }] },
+        'base'
+      )
+    );
+    expect(typeof warmConversationKey({}, 'base')).toBe('string');
+  });
+
+  it('holds each sibling warm on its own', () => {
+    const warm = new KeepWarm({
+      minPrefixBytes: 10,
+      sender: async () => ({ status: 200, json: {} }),
+    });
+    const t = {
+      upstream: 'https://example.invalid',
+      path: '/v1/messages',
+      headers: {},
+      body: Buffer.from('x'.repeat(100)),
+      ttlMs: 300_000,
+    };
+    warm.seen(
+      warmConversationKey(
+        { messages: [{ role: 'user', content: 'one' }] },
+        'base'
+      ),
+      t
+    );
+    warm.seen(
+      warmConversationKey(
+        { messages: [{ role: 'user', content: 'two' }] },
+        'base'
+      ),
+      t
+    );
+    expect(warm.size()).toBe(2);
+    warm.stop();
   });
 });

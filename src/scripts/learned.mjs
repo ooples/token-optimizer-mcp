@@ -12,9 +12,12 @@
  *   token-optimizer-learned statusline install  record quota usage from Claude Code's status line
  *                                               (wraps an existing status line; prints a quota line otherwise)
  *   token-optimizer-learned statusline uninstall  put the previous status line back
+ *   token-optimizer-learned skilldiet           skills described in every session and never invoked
+ *   token-optimizer-learned skilldiet apply     list them by name only (skillOverrides: name-only)
+ *   token-optimizer-learned skilldiet restore [skill ...]  give their descriptions back
  *
  * Options: --cwd <dir> (default: the current directory), --json.
- * Read-only except `restore` and `fold`. From a terminal this costs no model
+ * Read-only except `restore`, `fold` and `skilldiet apply`. From a terminal this costs no model
  * turn and no tokens.
  */
 
@@ -23,6 +26,7 @@ import { homedir } from 'node:os';
 import { dirname, join, resolve as resolvePath } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { writeAtomically } from '../hooks-core/policy.mjs';
+import { applySkillDiet, measureSkillDiet, restoreSkillDiet } from '../hooks-core/skill-diet.mjs';
 import { paceDecision, subscriptionPolicy } from '../hooks-core/quota-policy.mjs';
 import { billingMode, describeBilling } from '../hooks-core/billing.mjs';
 import { analyze, holdoutSettings, injectedTotals, loadPolicy } from '../hooks-core/injection-holdout.mjs';
@@ -264,6 +268,41 @@ async function main(argv) {
   if (command === 'toolprune' && action === 'fold') {
     const summary = runFold({ dir, root, transcriptDir: claudeProjectDir(root), currentSession: null });
     console.log(JSON.stringify(summary, null, 2));
+    return 0;
+  }
+  if (command === 'skilldiet') {
+    // Skills described in every session's listing and never invoked
+    // (src/hooks-core/skill-diet.mjs). Measured from this machine's transcripts;
+    // written to the user's settings only on `apply`.
+    const plan = measureSkillDiet();
+    if (action === 'apply') {
+      const result = applySkillDiet(plan);
+      console.log(result.written.length ? `listed by name only: ${result.written.join(', ')}` : `nothing written: ${result.reason}`);
+      return 0;
+    }
+    if (action === 'restore') {
+      const result = restoreSkillDiet({ names });
+      console.log(result.restored.length ? `descriptions restored: ${result.restored.join(', ')}` : `nothing restored: ${result.reason}`);
+      return 0;
+    }
+    if (args.json) {
+      console.log(JSON.stringify(plan, null, 2));
+      return 0;
+    }
+    console.log(`${plan.sessions} recent session(s) measured.`);
+    if (!plan.skills.length) console.log('No skill was listed in enough sessions without ever being invoked.');
+    for (const s of plan.skills) {
+      console.log(`  ${s.name.padEnd(32)} listed in ${s.sessions}, invoked in 0, ~${Math.round(s.savedChars / 4)} tokens a session`);
+    }
+    if (plan.skills.length) {
+      console.log(`apply: token-optimizer-learned skilldiet apply  (~${Math.round(plan.savedChars / 4)} tokens a session; restore undoes it)`);
+    }
+    if (plan.plugins.length) {
+      console.log('Plugins whose skills were never invoked (only you can tell whether their hooks and tools are used):');
+      for (const p of plan.plugins) {
+        console.log(`  ${p.plugin.padEnd(32)} ${p.skills} skill(s), ~${Math.round(p.chars / 4)} tokens a session`);
+      }
+    }
     return 0;
   }
   if (command !== 'status' && command !== 'toolprune' && command !== 'statusline') {
