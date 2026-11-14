@@ -20,10 +20,15 @@
 
 FROM node:22-bookworm
 
-ARG CLAUDE_VERSION=2.1.251
-# 6.0.2 is npm dist-tag `latest` as of 2026-08-29 -- what a user installing
-# today actually receives, which is what the benchmark should measure.
-ARG OPTIMIZER_VERSION=6.0.2
+ARG CLAUDE_VERSION=2.1.325
+# The runtime label the working-tree tarball is seeded under. An arm that pins
+# TOKEN_OPTIMIZER_VERSION must name THIS value, or launch.mjs installs that
+# version from npm and the arm silently measures a different build. The
+# token-optimizer-mcp arm kept pinning 7.1.0 from 2026-09-18 while releases moved
+# to 7.10.0, so any run would have measured 7.1.0. entrypoint.sh refuses a
+# mismatch. 7.11.0 is the release this rig
+# was brought up to date for (2026-11-14), alongside Claude Code 2.1.325.
+ARG OPTIMIZER_VERSION=7.11.0
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -289,13 +294,23 @@ RUN set -eu; \
       ln -sf "$f" "/usr/local/bin/$(basename "$f")"; \
     done
 
+# Tokenade as a product (#565), not THOL's rules-text replica: the arm's
+# setup_commands run its own `tokenade install --only claude-code --yes`, whose
+# hooks call this binary. No account is needed. TOKENADE_ALLOW_ROOT is only for
+# this root-owned global install; TOKENADE_NO_AUTO_UPDATE stops the CLI moving
+# off the pin mid-campaign (the arm sets it again for the sandbox user). It sits
+# here, below the toolchain layers, so a tokenade bump does not rebuild cargo and
+# uv underneath it.
+RUN TOKENADE_ALLOW_ROOT=1 TOKENADE_NO_AUTO_UPDATE=1 npm install -g @tokenade/cli@2.0.9 \
+ && tokenade --version | grep -qx 'tokenade 2.0.9'
+
 USER bench
 # ASSERTED UNDER A LOGIN SHELL, deliberately the harsher case. An earlier version
 # of this check ran in the build's default shell, passed, and a probe with
 # `bash -lc` then found cargo, rustc, rtk and squeez missing -- the assertion had
 # been testing the easy path.
 RUN bash -lc 'set -eu; \
-    for t in cargo rustc uv uvx rtk squeez edgee altA; do \
+    for t in cargo rustc uv uvx rtk squeez edgee headroom tokenade tokenjuice cto; do \
       command -v "$t" >/dev/null 2>&1 || { echo "FATAL: $t not on PATH for $(id -un) under a login shell"; exit 1; }; \
     done; \
     echo "competitor toolchain reachable as $(id -un), login shell included"'

@@ -10,6 +10,7 @@ import { join } from 'node:path';
 import { get_encoding } from 'tiktoken';
 import { startProxy } from '../../dist/proxy/server.js';
 import { auditChatProbe } from './chat-route-audit.mjs';
+import { altACliModule } from './alt-a-module.mjs';
 
 const raw = await mkdtemp(join(tmpdir(), 'chat-route-comparison-'));
 let received;
@@ -32,7 +33,7 @@ const competitor = spawn(
   python,
   [
     '-m',
-    'alternative_a.cli',
+    altACliModule(),
     'proxy',
     '--port',
     String(port),

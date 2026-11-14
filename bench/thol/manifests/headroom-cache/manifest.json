@@ -1,0 +1,23 @@
+{
+ "name": "headroom-cache",
+ "display_name": "Headroom 0.44.0, default mode (cache)",
+ "upstream": "https://github.com/headroomlabs-ai/headroom",
+ "version_pin": "0.44.0",
+ "version_checked": "2026-11-14",
+ "verified": true,
+ "install_doc": "README: `pip install \"headroom-ai[all]\"`, then `headroom wrap claude`. The image installs the pinned PyPI build. `headroom wrap claude` starts the proxy, points ANTHROPIC_BASE_URL at it and registers the retrieve MCP server.",
+ "notes": "Replaces THOL's own `headroom` entry for this campaign. That entry passes `-p ${PORT}` to `headroom wrap claude`, which on 0.44.0 is not a port flag: wrap forwards unknown flags to claude, so the proxy binds its default 8787 and claude receives `-p <port> -p <prompt>`. Measured on 2026-11-14 with a capturing upstream: the only user text claude sent was the port number. The agent never saw the task. This arm uses `--port`, which 0.44.0 does document. MODE: cache is 0.44.0's documented default (`headroom proxy --help`: 'Optimization mode (default: cache)'); it is set explicitly only so the results record it. RETRIEVE TOOL: wrap registers `headroom mcp serve` with Claude Code, but THOL always passes --strict-mcp-config, which drops that registration and leaves Headroom's compression markers with nothing to expand them. Leaving it out is not how the product ships. The same server is therefore declared here, and HEADROOM_PROXY_URL points it at this run's proxy.",
+ "requires": ["headroom"],
+ "env": {
+  "HEADROOM_MODE": "cache",
+  "HEADROOM_PROXY_URL": "http://127.0.0.1:${PORT}"
+ },
+ "claude_wrap": ["headroom", "wrap", "claude", "--port", "${PORT}", "--"],
+ "mcp": {
+  "mcpServers": {
+   "headroom": {"type": "stdio", "command": "headroom", "args": ["mcp", "serve"]}
+  }
+ },
+ "tool_prefixes": ["mcp__headroom__"],
+ "bash_command_markers": ["headroom "]
+}

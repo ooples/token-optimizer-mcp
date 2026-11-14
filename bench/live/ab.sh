@@ -132,7 +132,8 @@ run_arm() { # arm rep
   # nothing at all.
   local upstream=""
   if [ "$arm" = "altA" ]; then
-    python -m alternative_a.cli proxy --port "$ALT_A_PORT" \
+    # `python -m` cannot see bench/alt_a_alias.py, so the real module is named.
+    python -m "${ALT_A_MODULE:?set ALT_A_MODULE to the top-level module of the compared package}.cli" proxy --port "$ALT_A_PORT" \
       >/dev/null 2>"$OUT/$arm-$rep.alt-a.err" &
     hrpid=$!
     local hrup=1

@@ -223,7 +223,9 @@ def main() -> int:
         def emit(self, record: logging.LogRecord) -> None:
             degradations.append(record.getMessage())
 
-    competitor_log = logging.getLogger("altA")
+    # Their real logger hierarchy: records are logged under the module's own
+    # name, never under the neutral alias, so a handler on "altA" caught nothing.
+    competitor_log = logging.getLogger(alt_a_alias.real_module())
     capture = _Capture(level=logging.WARNING)
     competitor_log.addHandler(capture)
     previous_level = competitor_log.level

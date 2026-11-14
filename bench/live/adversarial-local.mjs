@@ -8,6 +8,7 @@ import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { setTimeout as delay } from 'node:timers/promises';
 import { adversarialFixture } from './adversarial-cases.mjs';
+import { altACliModule } from './alt-a-module.mjs';
 
 const raw = await mkdtemp(join(tmpdir(), 'adversarial-local-'));
 const records = [];
@@ -63,7 +64,7 @@ try {
         arm === 'altA'
           ? [
               '-m',
-              'alternative_a.cli',
+              altACliModule(),
               'proxy',
               '--port',
               String(p),

@@ -1,0 +1,14 @@
+{
+ "name": "tokenade-product",
+ "display_name": "Tokenade 2.0.9, installed as a product",
+ "upstream": "https://tokenade.net",
+ "version_pin": "2.0.9",
+ "version_checked": "2026-11-14",
+ "verified": true,
+ "install_doc": "`npm install -g @tokenade/cli`, then `tokenade install`. The image installs the pinned CLI. Each run executes the vendor's own non-interactive installer, restricted to the agent being measured, in the run's sandboxed HOME and workspace. Measured 2026-11-14: no account is needed. It writes settings.json hooks (PreToolUse, PostToolUse, PreCompact, SessionStart, SubagentStop, UserPromptSubmit), a statusLine, its auto-compact window, a global CLAUDE.md, and the workspace's AGENTS.md and .gitignore entries.",
+ "notes": "Tokenade as shipped, not THOL's `tokenade` entry. That entry is a hand-written replica of what 0.8.13 installed, and the earlier ledger campaign ran only Tokenade's rules text. TOKENADE_NO_AUTO_UPDATE keeps the CLI on the pin for the whole campaign; it changes no compaction behaviour.",
+ "requires": ["tokenade"],
+ "env": {"TOKENADE_NO_AUTO_UPDATE": "1"},
+ "setup_commands": ["tokenade install --only claude-code --yes"],
+ "bash_command_markers": ["tokenade "]
+}
