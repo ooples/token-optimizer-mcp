@@ -163,7 +163,7 @@ jobs:
           echo "Build artifacts verified successfully"
 
       - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: dist-${{ github.sha }}
           path: dist/
@@ -242,7 +242,7 @@ jobs:
 
       - name: Upload coverage artifacts
         if: matrix.node-version == '22' && always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: coverage-report-${{ github.sha }}
           path: coverage/
@@ -314,7 +314,7 @@ jobs:
 
       - name: Upload benchmark results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: benchmark-results-${{ github.sha }}
           path: benchmark-results.txt
@@ -405,7 +405,7 @@ jobs:
 
       - name: Upload integration test logs
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: integration-test-logs-${{ github.sha }}
           path: |
