@@ -28,10 +28,11 @@ updates:
         applies-to: security-updates
         patterns: ["*"]
 
-    # Customize commit messages
+    # include: "scope" adds "(deps)" or "(deps-dev)" itself, so the prefix is
+    # the bare type; a scoped prefix gave "chore(deps)(deps): bump ...".
     commit-message:
-      prefix: "chore(deps)"
-      prefix-development: "chore(deps-dev)"
+      prefix: "chore"
+      prefix-development: "chore"
       include: "scope"
 
     # Automatically approve and merge patch updates (optional)
@@ -56,9 +57,14 @@ updates:
     #   - dependency-name: "typescript"
     #     update-types: ["version-update:semver-major"]
 
-    # Allow dependencies to be updated
-    allow:
-      - dependency-type: "all"
+    # No allow list: the defaults are what is wanted. Version updates cover
+    # explicitly defined dependencies, and security updates cover every
+    # dependency in the lock file. An "allow: dependency-type: all" also
+    # opened a version update for each transitive package (@babel/types,
+    # conventional-changelog-writer, ...), outside the group: on 2026-11-14
+    # five patch bumps arrived as separate PRs beside the grouped one. allow
+    # applies to security updates too, so narrowing it to "direct" instead
+    # could have dropped security fixes for transitive packages.
 
   # Enable version updates for GitHub Actions
   - package-ecosystem: "github-actions"
