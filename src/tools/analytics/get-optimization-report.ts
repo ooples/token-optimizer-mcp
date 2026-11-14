@@ -354,7 +354,9 @@ async function agentSection(args: {
     const since = args.startDate ? Date.parse(args.startDate) : 0;
     const until = args.endDate ? Date.parse(args.endDate) : Infinity;
     const rows: Array<{ sessionId?: string | null }> = ledger.readLedger();
-    const scoped = args.sessionId ? rows.filter((r) => r.sessionId === args.sessionId) : rows;
+    const scoped = args.sessionId
+      ? rows.filter((r) => r.sessionId === args.sessionId)
+      : rows;
     const overhead: AgentOverhead = ledger.agentOverhead(scoped, {
       since: Number.isFinite(since) ? since : 0,
       until: Number.isFinite(until) ? until : Infinity,
