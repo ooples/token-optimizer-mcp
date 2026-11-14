@@ -53,10 +53,17 @@ effect was visible:
 | Headroom | proxied the request; its retrieve tool was present |
 | cto-patched | its guards blocked a 92 KB Read and `find /` (exit 2), where the shipped hooks exited 0 |
 
-**Defect found and fixed by this check.** THOL's own `headroom` entry passes
-`-p ${PORT}` to `headroom wrap claude`. On 0.44.0 that is not a port flag, so
-Claude Code received the port number as its prompt. The agent never saw the task.
-The `headroom-*` arms here use `--port`.
+**Defect found and fixed by this check.** Our own pin bump broke THOL's
+`headroom` entry. That entry passes `-p ${PORT}` to `headroom wrap claude`.
+`-p` is `--port` on THOL's pinned 0.27.0, but 0.44.0 dropped the short form. So,
+with our pins applied, Claude Code received the port number as its prompt and the
+agent never saw the task. `competitor-pins.json` now rewrites the flag along with
+the version, and the `headroom-*` arms here use `--port`.
+
+**Results-volume defect, found at launch.** The first launch stopped before any
+run because `/results` was root-owned. The image had no `/results`, so a fresh
+named volume could not inherit bench ownership. The image now creates it. No run
+was recorded and no spend occurred.
 
 ## Tasks
 

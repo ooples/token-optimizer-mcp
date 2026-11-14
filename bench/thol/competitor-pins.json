@@ -24,7 +24,10 @@
     "rtk": { "replace": [["v0.42.3", "v1.2.0", 2]] },
     "squeez": { "replace": [["1.22.1", "1.48.18", 1]] },
     "graphify": { "replace": [["0.8.49", "0.9.106", 1]] },
-    "headroom": { "replace": [["0.27.0", "0.44.0", 1]] },
+    "headroom": {
+      "$comment": "headroom 0.44.0 dropped the -p short form of --port. Left alone, `headroom wrap claude -p ${PORT} --` forwards -p to claude, which then takes the port number as its prompt: the agent never sees the task (captured 2026-11-14). So the flag is rewritten along with the version.",
+      "replace": [["0.27.0", "0.44.0", 1], ["\"-p\",", "\"--port\",", 1]]
+    },
     "code-review-graph": { "replace": [["2.3.6", "2.4.0", 2]] },
     "edgee": { "replace": [["v0.2.13", "v0.16.5", 1]] },
     "caveman": { "replace": [["v1.9.0", "v4.1.0", 4]] },

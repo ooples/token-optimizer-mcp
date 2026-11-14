@@ -338,6 +338,14 @@ RUN mkdir -p ${TOKEN_OPTIMIZER_RUNTIME}/versions/${OPTIMIZER_VERSION} \
     && node -e "require('fs').writeFileSync(process.env.TOKEN_OPTIMIZER_RUNTIME + '/.last-refresh', String(Date.now()))" \
     && chown -R bench:bench ${TOKEN_OPTIMIZER_RUNTIME}
 
+# THE RESULTS MOUNT POINT EXISTS IN THE IMAGE, OWNED BY THE USER THAT WRITES IT.
+# Docker seeds an empty named volume from the image's directory at the mount
+# path, ownership included -- but only if that directory exists. Without it, a
+# fresh volume came up root:root 755, and the entrypoint (rightly) refused to run
+# a campaign whose results it could not keep. Only volumes first initialised by
+# some earlier image happened to be writable.
+RUN mkdir -p /results && chown bench:bench /results
+
 USER bench
 
 # Pin the optimizer's warm-launch shim to the installed copy. launch.mjs
