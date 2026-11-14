@@ -427,9 +427,61 @@ function checkCorpus(text, label, { required }) {
   return bad;
 }
 
+// A NAMED COUNT IS HELD TO ITS OWN VALUE, NOT TO THE SHARED SET (#564 review).
+// `corpusKnown` holds both the compressor-loss count (9) and the offload count
+// (8), so "fewer tokens than Headroom on 8 of the 18 workloads" -- the very
+// error the derived counts were added to catch -- still passed. Each phrase
+// below is matched on whitespace-collapsed text, so a claim that wraps across
+// lines is read, and must state the count derived for it.
+const NAMED_COUNTS = [
+  {
+    name: 'compressor losses',
+    pattern: /removes fewer tokens than Headroom on (\d+) of (?:the )?(\d+) workloads/gi,
+    expect: [compressorLosses.length, record.workloads.length],
+  },
+  {
+    name: 'offload losses',
+    pattern: /On (\d+) of them Headroom moves content out of the request/gi,
+    expect: [offloadLosses.length],
+  },
+];
+
+/** Every named count claim in `text` checked against its own value; returns the names of the claims found. */
+function checkNamedCounts(text, label) {
+  const flat = text.replace(/\s+/g, ' ');
+  const found = new Set();
+  for (const { name, pattern, expect } of NAMED_COUNTS) {
+    for (const match of flat.matchAll(pattern)) {
+      found.add(name);
+      const stated = match.slice(1).map(Number);
+      if (stated.some((n, i) => n !== expect[i])) {
+        console.error(
+          `\nreadme-alt-a.check FAILED. ${label}: "${match[0]}" states ${stated.join(' of ')}; ` +
+            `the rows give ${name} = ${expect.join(' of ')}.`
+        );
+        failed = true;
+      }
+    }
+  }
+  return found;
+}
+
+// COMPARISON.md states every count; one not found means its wording moved away
+// from the pattern, and that claim would pass unchecked.
+const comparisonClaims = checkNamedCounts(readme, 'docs/COMPARISON.md');
+for (const { name } of NAMED_COUNTS.filter((c) => !comparisonClaims.has(c.name))) {
+  console.error(
+    `\nreadme-alt-a.check FAILED. docs/COMPARISON.md: the ${name} claim was not found. ` +
+      'Update NAMED_COUNTS with the new wording; do not drop the check.'
+  );
+  failed = true;
+}
+const readmeText = readFileSync(join(repo, 'README.md'), 'utf8');
+checkNamedCounts(readmeText, 'README.md');
+
 if (checkCorpus(readme, 'docs/COMPARISON.md', { required: true })) failed = true;
 if (
-  checkCorpus(readFileSync(join(repo, 'README.md'), 'utf8'), 'README.md', {
+  checkCorpus(readmeText, 'README.md', {
     required: false,
   })
 )
