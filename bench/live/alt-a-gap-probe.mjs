@@ -5,6 +5,7 @@ import { createWriteStream } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { compressResponses } from '../../dist/proxy/responses.js';
+import { altACliModule } from './alt-a-module.mjs';
 const raw = await mkdtemp(join(tmpdir(), 'alt-a-gap-probe-'));
 const rows = Array.from({ length: 80 }, (_, i) => ({
   id: i,
@@ -107,7 +108,7 @@ const child = spawn(
   'python',
   [
     '-m',
-    'alternative_a.cli',
+    altACliModule(),
     'proxy',
     '--port',
     String(port),

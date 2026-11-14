@@ -1,0 +1,13 @@
+{
+ "name": "tokenjuice",
+ "display_name": "tokenjuice 0.11.0",
+ "upstream": "https://www.npmjs.com/package/tokenjuice",
+ "version_pin": "0.11.0",
+ "version_checked": "2026-11-14",
+ "verified": true,
+ "install_doc": "`npm install -g tokenjuice`, then `tokenjuice install claude-code`. The image installs the pinned package. Each run executes the vendor's installer in the sandboxed HOME, which writes one PreToolUse Bash hook (`tokenjuice claude-code-pre-tool-use --wrap-launcher ...`) into settings.json.",
+ "notes": "Bash output compaction through a PreToolUse wrapper. The 2026-09-03 ledger campaign measured 0.8.1.",
+ "requires": ["tokenjuice"],
+ "setup_commands": ["tokenjuice install claude-code"],
+ "bash_command_markers": ["tokenjuice "]
+}

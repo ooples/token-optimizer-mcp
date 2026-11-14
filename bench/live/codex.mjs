@@ -30,6 +30,7 @@ import { adversarialFixture, adversarialTasks } from './adversarial-cases.mjs';
 import { provenance } from './codex-provenance.mjs';
 import { mcpRefreshEvidence } from './codex-mcp-evidence.mjs';
 import { monitorHostMemory, memoryPolicy } from './host-memory.mjs';
+import { altACliModule } from './alt-a-module.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const repeatReads = Number(process.env.REPEAT_READS || 1);
@@ -301,7 +302,7 @@ try {
               process.env.PYTHON || 'python',
               [
                 '-m',
-                'alternative_a.cli',
+                altACliModule(),
                 'proxy',
                 '--port',
                 String(altAPort),

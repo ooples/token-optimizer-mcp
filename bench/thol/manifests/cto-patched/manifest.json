@@ -1,0 +1,17 @@
+{
+ "name": "cto-patched",
+ "display_name": "claude-token-optimizer 2.3.20, hooks patched to fire",
+ "upstream": "https://www.npmjs.com/package/claude-token-optimizer",
+ "version_pin": "2.3.20",
+ "version_checked": "2026-11-14",
+ "verified": true,
+ "install_doc": "Exactly the cto arm's installation, then three of the twelve hooks are replaced with the copies in hooks/: pre-tool-read-guard.sh, pre-tool-bash-guard.sh and post-write-token-diff.sh.",
+ "notes": "PATCHED BY THE BENCHMARK, NOT SHIPPED BY THE VENDOR. The only change is where tool_name comes from: the stdin JSON Claude Code actually sends, falling back to nothing when it is absent, instead of $CLAUDE_TOOL_NAME, which Claude Code does not set. Thresholds and blocking logic are untouched. These are the same three files the 2026-09-03 ledger campaign used (bench/ledger/competitors/cto-patched); a fresh `cto hooks install --all` at 2.3.20 is byte-identical to that campaign's unpatched scaffold, so the patch still applies to the current release. Reported alongside the as-shipped arm, so the gap between the two is the cost of the vendor bug.",
+ "requires": ["cto", "python3"],
+ "setup_commands": [
+  "cto init --yes --hooks",
+  "cto hooks settings > .claude/settings.json",
+  "cp /home/bench/thol/competitors/cto-patched/hooks/*.sh .claude/hooks/"
+ ],
+ "bash_command_markers": ["cto "]
+}
