@@ -338,16 +338,24 @@ interface AgentOverhead {
  * fixed context and lost its cache whenever it waited on a build. This section
  * puts that cost beside the saving, in the same uncached-input-equivalent unit,
  * so the two can be compared. Fails open like graphSection.
+ *
+ * SCOPED LIKE EVERY OTHER SECTION (#498, #568 review). A session report counts
+ * only the agents that session started -- the ledger records each agent's
+ * parent session -- so a session that spawned none shows no agent section
+ * rather than another session's agents.
  */
 async function agentSection(args: {
   startDate?: string;
   endDate?: string;
+  sessionId?: string;
 }): Promise<{ overhead: AgentOverhead; ttl: unknown; lines: string[] } | null> {
   try {
     const ledger = await import(coreUrl('agent-ledger.mjs'));
     const since = args.startDate ? Date.parse(args.startDate) : 0;
     const until = args.endDate ? Date.parse(args.endDate) : Infinity;
-    const overhead: AgentOverhead = ledger.agentOverhead(ledger.readLedger(), {
+    const rows: Array<{ sessionId?: string | null }> = ledger.readLedger();
+    const scoped = args.sessionId ? rows.filter((r) => r.sessionId === args.sessionId) : rows;
+    const overhead: AgentOverhead = ledger.agentOverhead(scoped, {
       since: Number.isFinite(since) ? since : 0,
       until: Number.isFinite(until) ? until : Infinity,
     });

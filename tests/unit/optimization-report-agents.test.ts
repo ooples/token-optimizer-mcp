@@ -51,10 +51,10 @@ const manager = () =>
   }) as unknown as AnalyticsManager;
 
 /** An agent of 10 turns on a 40k base that lost its cache 9 times at 5m. */
-function row(at: number) {
+function row(at: number, sessionId = 's') {
   return {
     at,
-    sessionId: 's',
+    sessionId,
     agentId: `a${at}`,
     turns: 10,
     baseContext: 40_000,
@@ -79,7 +79,7 @@ function seed(rows: object[], ttl?: object) {
   if (ttl) writeFileSync(join(home, 'subagent-cache-ttl.json'), JSON.stringify(ttl));
 }
 
-async function report(args: { startDate?: string; endDate?: string } = {}) {
+async function report(args: { startDate?: string; endDate?: string; sessionId?: string } = {}) {
   return JSON.parse(await getOptimizationReportTool(manager())(args));
 }
 
@@ -111,6 +111,15 @@ describe('agent overhead in the savings report', () => {
     seed([row(Date.now())]);
     const out = await report({ startDate: '2026-01-01', endDate: new Date(old + 1000).toISOString() });
     expect(out.agents).toBeNull();
+  });
+
+  it('a session report counts only the agents that session started (#568 review)', async () => {
+    const now = Date.now();
+    seed([row(now - 3000, 'one'), row(now - 2000, 'one'), row(now - 1000, 'two'), { ...row(now), sessionId: null }]);
+    expect((await report({ sessionId: 'one' })).agents.agents).toBe(2);
+    expect((await report({ sessionId: 'two' })).agents.agents).toBe(1);
+    expect((await report({ sessionId: 'none' })).agents).toBeNull();
+    expect((await report()).agents.agents).toBe(4);
   });
 
   it('has no section, and no error, without a ledger', async () => {

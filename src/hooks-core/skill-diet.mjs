@@ -23,9 +23,10 @@
  * Bounded: at most `maxFiles` recent transcripts, each read up to `maxBytes`.
  */
 
-import { closeSync, existsSync, mkdirSync, openSync, readFileSync, readSync, readdirSync, renameSync, statSync, writeFileSync } from 'node:fs';
+import { closeSync, existsSync, mkdirSync, openSync, readFileSync, readSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
+import { editSettings } from './settings-edit.mjs';
 
 export const OVERRIDE = 'name-only';
 const RECORD = 'skill-diet.json';
@@ -221,43 +222,29 @@ function readJson(path) {
   }
 }
 
-function writeJsonAtomic(path, value, now) {
-  const tmp = `${path}.token-optimizer-tmp-${now}`;
-  writeFileSync(tmp, `${JSON.stringify(value, null, 2)}\n`);
-  renameSync(tmp, path);
-}
-
 /**
  * Write "name-only" for each planned skill the user has no override for.
  * Never on a settings file that does not parse; a byte-exact backup first.
  */
 export function applySkillDiet(plan, { env = process.env, now = Date.now() } = {}) {
   const path = settingsPath(env);
-  let raw = null;
-  let settings = {};
-  if (existsSync(path)) {
-    raw = readFileSync(path, 'utf8');
-    try {
-      settings = JSON.parse(raw);
-    } catch {
-      return { written: [], reason: 'settings not parseable; never rewritten' };
-    }
-    if (!settings || typeof settings !== 'object' || Array.isArray(settings)) {
-      return { written: [], reason: 'settings not an object' };
-    }
-  }
-  const overrides = settings.skillOverrides && typeof settings.skillOverrides === 'object' ? settings.skillOverrides : {};
-  const written = plan.skills.map((s) => s.name).filter((name) => !Object.prototype.hasOwnProperty.call(overrides, name));
-  if (!written.length) return { written, reason: 'nothing to write' };
-  mkdirSync(configDir(env), { recursive: true });
-  let backup = null;
-  if (raw !== null) {
-    backup = `${path}.token-optimizer-backup-${now}`;
-    writeFileSync(backup, raw);
-  }
-  const next = { ...settings, skillOverrides: { ...overrides } };
-  for (const name of written) next.skillOverrides[name] = OVERRIDE;
-  writeJsonAtomic(path, next, now);
+  // Under the lock every settings writer shares (settings-edit.mjs): the
+  // overrides are merged into what the file holds now, not into an older read.
+  const edit = editSettings(
+    path,
+    (settings) => {
+      const overrides = settings.skillOverrides && typeof settings.skillOverrides === 'object' ? settings.skillOverrides : {};
+      const names = plan.skills.map((s) => s.name).filter((name) => !Object.prototype.hasOwnProperty.call(overrides, name));
+      if (!names.length) return { skip: 'nothing to write' };
+      const next = { ...settings, skillOverrides: { ...overrides } };
+      for (const name of names) next.skillOverrides[name] = OVERRIDE;
+      return { next, names };
+    },
+    { now, backupTag: 'token-optimizer-backup' }
+  );
+  if (edit.status !== 'written') return { written: [], reason: edit.reason };
+  const written = edit.names;
+  const backup = edit.backup;
   const record = readJson(recordPath(env)) || { written: [] };
   record.written = [...new Set([...(record.written || []), ...written])];
   record.at = now;
@@ -272,16 +259,24 @@ export function restoreSkillDiet({ env = process.env, now = Date.now(), names = 
   const record = readJson(recordPath(env));
   if (!record?.written?.length) return { restored: [], reason: 'nothing was written by token-optimizer' };
   const path = settingsPath(env);
-  const settings = readJson(path);
-  if (!settings || typeof settings !== 'object') return { restored: [], reason: 'settings not parseable; never rewritten' };
-  const overrides = { ...(settings.skillOverrides || {}) };
+  if (!existsSync(path)) return { restored: [], reason: 'settings not parseable; never rewritten' };
   const wanted = names && names.length ? record.written.filter((n) => names.includes(n)) : record.written;
-  const restored = wanted.filter((n) => overrides[n] === OVERRIDE);
-  for (const n of restored) delete overrides[n];
-  const next = { ...settings };
-  if (Object.keys(overrides).length) next.skillOverrides = overrides;
-  else delete next.skillOverrides;
-  if (restored.length) writeJsonAtomic(path, next, now);
+  const edit = editSettings(
+    path,
+    (settings) => {
+      const overrides = { ...(settings.skillOverrides || {}) };
+      const ours = wanted.filter((n) => overrides[n] === OVERRIDE);
+      if (!ours.length) return { skip: 'already changed by the user' };
+      for (const n of ours) delete overrides[n];
+      const next = { ...settings };
+      if (Object.keys(overrides).length) next.skillOverrides = overrides;
+      else delete next.skillOverrides;
+      return { next, ours };
+    },
+    { now }
+  );
+  if (edit.status !== 'written' && edit.status !== 'skipped') return { restored: [], reason: edit.reason };
+  const restored = edit.status === 'written' ? edit.ours : [];
   // Whatever was asked for leaves the record: restored, or since changed by the user and theirs now.
   record.written = record.written.filter((n) => !wanted.includes(n));
   writeFileSync(recordPath(env), `${JSON.stringify(record, null, 2)}\n`);

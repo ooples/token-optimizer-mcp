@@ -23,10 +23,11 @@
  * Opt out with TOKEN_OPTIMIZER_MAIN_CACHE_TTL=off.
  */
 
-import { existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { homeDir } from './agent-ledger.mjs';
 import { recentTranscripts } from './skill-diet.mjs';
+import { editSettings } from './settings-edit.mjs';
 import { replayTtl, tallyFile } from './subagents.mjs';
 
 export const mainTtlRecordPath = (env = process.env) => join(homeDir(env), 'main-cache-ttl.json');
@@ -41,9 +42,14 @@ const optedOut = (env) => /^(off|0|false|no)$/i.test(String(env.TOKEN_OPTIMIZER_
  * cache from request timing and size, so it does not matter which tier a
  * session was recorded at. Needs several sessions and a material saving, so a
  * few odd sessions cannot flip a setting that covers every session.
+ *
+ * EVERY SESSION WITH A REQUEST COUNTS, single-request ones included: the
+ * setting covers `-p` and SDK runs too, and a lone request is exactly where 1h
+ * costs more (a 2x write against 1.25x, with no later read to repay it).
+ * Leaving them out priced only the sessions 1h helps (#568 review).
  */
 export function mainTtlDecision(tallies, { minSessions = 5, minSaving = 200_000, minShare = 0.05 } = {}) {
-  const sessions = (tallies || []).filter((t) => t && Array.isArray(t.requests) && t.requests.length > 1);
+  const sessions = (tallies || []).filter((t) => t && Array.isArray(t.requests) && t.requests.length > 0);
   const at5m = sessions.reduce((sum, t) => sum + replayTtl(t.requests, '5m'), 0);
   const at1h = sessions.reduce((sum, t) => sum + replayTtl(t.requests, '1h'), 0);
   const saving = at5m - at1h;
@@ -78,21 +84,23 @@ export function applyMainTtl(settingsPath, { env = process.env, now = Date.now()
   } catch {
     /* never measured */
   }
-  let raw = '{}';
-  let settings = {};
+  // A first look, so a setting that is not ours costs no transcript scan. It is
+  // checked again on a fresh read under the lock before anything is written.
   if (existsSync(settingsPath)) {
+    let settings;
     try {
-      raw = readFileSync(settingsPath, 'utf8');
-      settings = JSON.parse(raw);
+      settings = JSON.parse(readFileSync(settingsPath, 'utf8'));
     } catch {
       return { written: false, reason: 'settings not parseable; never rewritten' };
     }
     if (!settings || typeof settings !== 'object' || Array.isArray(settings)) {
       return { written: false, reason: 'settings not an object' };
     }
+    const owner = mainTtlOwner(settings, env);
+    if (owner) return { written: false, reason: `already set in ${owner}` };
+  } else if (mainTtlOwner({}, env)) {
+    return { written: false, reason: `already set in ${mainTtlOwner({}, env)}` };
   }
-  const owner = mainTtlOwner(settings, env);
-  if (owner) return { written: false, reason: `already set in ${owner}` };
 
   const measured = tallies ?? recentTranscripts({ env, maxFiles: 30 }).map((path) => tallyFile(path));
   const decision = mainTtlDecision(measured);
@@ -104,27 +112,30 @@ export function applyMainTtl(settingsPath, { env = process.env, now = Date.now()
   }
   if (!decision.recommend) return { written: false, reason: 'evidence does not favour 1h', decision };
 
+  const edit = editSettings(
+    settingsPath,
+    (settings) => {
+      const owner = mainTtlOwner(settings, env);
+      return owner ? { skip: `already set in ${owner}` } : { next: { ...settings, promptCacheTtl: decision.recommend } };
+    },
+    { now, backupTag: 'token-optimizer-main-ttl' }
+  );
+  if (edit.status !== 'written') return { written: false, reason: edit.reason, decision };
   try {
-    mkdirSync(dirname(settingsPath), { recursive: true });
-    const existed = existsSync(settingsPath);
-    const backup = existed ? `${settingsPath}.token-optimizer-main-ttl-${now}.bak` : null;
-    if (backup) writeFileSync(backup, raw);
-    const tmp = `${settingsPath}.token-optimizer-tmp-${now}`;
-    writeFileSync(tmp, `${JSON.stringify({ ...settings, promptCacheTtl: decision.recommend }, null, 2)}\n`);
-    renameSync(tmp, settingsPath);
     const record = {
       at: now,
       settingsPath,
       value: decision.recommend,
-      backup,
-      existed,
+      backup: edit.backup,
+      existed: edit.existed,
       evidence: { sessions: decision.sessions, at5m: decision.at5m, at1h: decision.at1h, share: Number(decision.share.toFixed(4)) },
     };
+    mkdirSync(homeDir(env), { recursive: true });
     writeFileSync(mainTtlRecordPath(env), `${JSON.stringify(record, null, 2)}\n`);
-    return { written: true, reason: 'evidence favours 1h', backup, decision };
-  } catch (error) {
-    return { written: false, reason: `write failed: ${error?.message || error}` };
+  } catch {
+    /* the setting is written; without a record, uninstall cannot undo it, which doctor shows */
   }
+  return { written: true, reason: 'evidence favours 1h', backup: edit.backup, decision };
 }
 
 /** Remove the setting we wrote, if it is still the value we wrote. */
@@ -136,20 +147,18 @@ export function undoMainTtl({ env = process.env, now = Date.now() } = {}) {
     return { undone: false, reason: 'nothing was written by token-optimizer' };
   }
   if (record.undoneAt) return { undone: false, reason: 'already removed' };
-  let settings;
-  try {
-    settings = JSON.parse(readFileSync(record.settingsPath, 'utf8'));
-  } catch {
-    return { undone: false, reason: 'settings not parseable; never rewritten' };
-  }
-  if (!settings || settings.promptCacheTtl !== record.value) {
-    return { undone: false, reason: 'the value was changed since; it is yours now' };
-  }
-  const next = { ...settings };
-  delete next.promptCacheTtl;
-  const tmp = `${record.settingsPath}.token-optimizer-tmp-${now}`;
-  writeFileSync(tmp, `${JSON.stringify(next, null, 2)}\n`);
-  renameSync(tmp, record.settingsPath);
+  if (!existsSync(record.settingsPath)) return { undone: false, reason: 'settings not parseable; never rewritten' };
+  const edit = editSettings(
+    record.settingsPath,
+    (settings) => {
+      if (settings.promptCacheTtl !== record.value) return { skip: 'the value was changed since; it is yours now' };
+      const next = { ...settings };
+      delete next.promptCacheTtl;
+      return { next };
+    },
+    { now }
+  );
+  if (edit.status !== 'written') return { undone: false, reason: edit.reason };
   writeFileSync(mainTtlRecordPath(env), `${JSON.stringify({ ...record, undoneAt: now }, null, 2)}\n`);
   return { undone: true, reason: 'removed' };
 }

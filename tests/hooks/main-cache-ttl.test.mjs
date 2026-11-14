@@ -20,7 +20,10 @@ const MIN = 60_000;
 /** A session of `turns` requests of a growing 50k+ prompt, `gapMin` minutes apart. */
 function session(turns, gapMin) {
   const requests = [];
-  for (let i = 0; i < turns; i++) requests.push({ at: i * gapMin * MIN, cached: 50_000 + i * 2_000, read: 0, input: 10 });
+  // read: what a warm cache returns, the previous prompt (replayTtl prices a
+  // lower read within 5 minutes as a prefix that changed).
+  for (let i = 0; i < turns; i++)
+    requests.push({ at: i * gapMin * MIN, cached: 50_000 + i * 2_000, read: i ? 50_000 + (i - 1) * 2_000 : 0, input: 10 });
   return { requests };
 }
 const paused = () => Array.from({ length: 6 }, () => session(20, 8)); // every gap past 5m
@@ -60,8 +63,22 @@ describe('mainTtlDecision', () => {
 
   test('too few sessions, or single-request ones, never flip it', () => {
     expect(mainTtlDecision(paused().slice(0, 4)).recommend).toBeNull();
-    expect(mainTtlDecision([...Array.from({ length: 6 }, () => session(1, 8))]).sessions).toBe(0);
-    expect(mainTtlDecision([null, undefined, {}]).recommend).toBeNull();
+    const singles = mainTtlDecision(Array.from({ length: 6 }, () => session(1, 8)));
+    expect(singles.sessions).toBe(6);
+    expect(singles.at1h).toBeGreaterThan(singles.at5m);
+    expect(singles.recommend).toBeNull();
+    expect(mainTtlDecision([null, undefined, {}, { requests: [] }]).sessions).toBe(0);
+  });
+
+  test('single-request runs are priced too, and can outweigh the pauses (#568 review)', () => {
+    const flat = (turns) => ({
+      requests: Array.from({ length: turns }, (_, i) => ({ at: i * 10 * MIN, cached: 100_000, read: 0, input: 0 })),
+    });
+    const pausedOnly = Array.from({ length: 5 }, () => flat(3));
+    const alone = mainTtlDecision(pausedOnly);
+    expect([alone.at5m, alone.at1h, alone.recommend]).toEqual([1_875_000, 1_100_000, '1h']);
+    const withRuns = mainTtlDecision([...pausedOnly, ...Array.from({ length: 25 }, () => flat(1))]);
+    expect([withRuns.at5m, withRuns.at1h, withRuns.recommend]).toEqual([5_000_000, 6_100_000, null]);
   });
 });
 

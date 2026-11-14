@@ -21,6 +21,7 @@ import {
   WORKER_BODY,
   briefFor,
   draftBrief,
+  draftSources,
   generatedWorker,
   instructionFiles,
   parseBrief,
@@ -132,6 +133,35 @@ describe('instructionFiles', () => {
     const found = instructionFiles({ cwd: project, env, ceiling: root });
     expect(found.global).toEqual([join(env.CLAUDE_CONFIG_DIR, 'CLAUDE.md')]);
     expect(found.project).toEqual([join(root, 'CLAUDE.md'), join(project, 'CLAUDE.md'), join(project, '.claude', 'CLAUDE.md')]);
+  });
+
+  test("the global draft takes home-level files, never a repository's (#568 review)", () => {
+    const { root, env } = sandbox();
+    const home = join(root, 'userhome');
+    const repoDir = join(home, 'src', 'repo');
+    mkdirSync(join(repoDir, '.claude'), { recursive: true });
+    mkdirSync(join(home, '.claude'), { recursive: true });
+    mkdirSync(env.CLAUDE_CONFIG_DIR, { recursive: true });
+    const files = {
+      config: join(env.CLAUDE_CONFIG_DIR, 'CLAUDE.md'),
+      homeFile: join(home, 'CLAUDE.md'),
+      homeDot: join(home, '.claude', 'CLAUDE.md'),
+      repoFile: join(repoDir, 'CLAUDE.md'),
+      repoDot: join(repoDir, '.claude', 'CLAUDE.md'),
+      between: join(home, 'src', 'CLAUDE.md'),
+    };
+    for (const path of Object.values(files)) writeFileSync(path, '- a rule');
+    const opts = { cwd: repoDir, env: { ...env, USERPROFILE: home, HOME: home } };
+    const global = draftSources('global', opts);
+    const project = draftSources('project', opts);
+    for (const p of [files.config, files.homeFile, files.homeDot]) {
+      expect(global).toContain(p);
+      expect(project).not.toContain(p);
+    }
+    for (const p of [files.repoFile, files.repoDot, files.between]) {
+      expect(project).toContain(p);
+      expect(global).not.toContain(p);
+    }
   });
 });
 
@@ -345,6 +375,44 @@ describe('the generated worker agents', () => {
     // the brief withdrawn: no route, even with the generated agent still on disk
     const withdrawn = sandbox();
     expect(routeToWorker({ prompt: 'x' }, { ...opts, env: { ...withdrawn.env, CLAUDE_CONFIG_DIR: s.env.CLAUDE_CONFIG_DIR } })).toBeNull();
+  });
+
+  test('a worker rendered from an older brief is not used (#568 review)', () => {
+    const s = approved();
+    const start = Date.now();
+    generate(s, 'project', start - 60_000);
+    generate(s, 'user', start - 60_000);
+    expect(generatedWorker({ cwd: s.project, env: s.env, sessionStart: start }).name).toBe(PROJECT_WORKER);
+    // a new global brief approved elsewhere: both workers now carry old rules
+    writeFileSync(join(s.env.TOKEN_OPTIMIZER_HOME, 'agent-brief.md'), `${BRIEF}\n## Added\n- Always run the linter.\n`);
+    expect(generatedWorker({ cwd: s.project, env: s.env, sessionStart: start })).toBeNull();
+    // the user worker regenerated before this session: it is current again, the project one is not
+    generate(s, 'user', start - 30_000);
+    expect(generatedWorker({ cwd: s.project, env: s.env, sessionStart: start })).toEqual({ name: USER_WORKER, scope: 'user' });
+    // a CRLF checkout of a current worker still counts as current
+    const path = workerAgentPath('user', { cwd: s.project, env: s.env });
+    writeFileSync(path, readFileSync(path, 'utf8').replace(/\n/g, '\r\n'));
+    utimesSync(path, (start - 30_000) / 1000, (start - 30_000) / 1000);
+    expect(generatedWorker({ cwd: s.project, env: s.env, sessionStart: start })).toEqual({ name: USER_WORKER, scope: 'user' });
+  });
+
+  test("a user worker in a project is sent the project's always-sent rules (#568 review)", () => {
+    const s = approved();
+    mkdirSync(join(s.project, '.token-optimizer'), { recursive: true });
+    writeFileSync(join(s.project, '.token-optimizer', 'agent-brief.md'), '## Project\n- Use pnpm, never npm.\n');
+    const start = Date.now();
+    generate(s, 'user', start - 60_000);
+    const opts = { cwd: s.project, env: s.env, sessionStart: start };
+    const routed = routeToWorker({ prompt: 'Fix the login bug.' }, opts);
+    expect(routed.subagent_type).toBe(USER_WORKER);
+    expect(routed.prompt).toContain('- Use pnpm, never npm.');
+    // the user's own always-sent rules are in its system prompt, not repeated
+    expect(routed.prompt).not.toContain('Never push to main.');
+    // named directly, the same
+    expect(routeToWorker({ prompt: 'Fix it.', subagent_type: USER_WORKER }, opts).prompt).toContain('- Use pnpm, never npm.');
+    // the project worker carries the project rules itself
+    generate(s, 'project', start - 60_000);
+    expect(routeToWorker({ prompt: 'Fix the login bug.' }, opts)).toEqual({ prompt: 'Fix the login bug.', subagent_type: PROJECT_WORKER });
   });
 
   test('planSpawn names the agent it routed to', () => {

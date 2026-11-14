@@ -197,6 +197,20 @@ describe('cache TTL tiers', () => {
     expect(replayTtl(fast, '5m')).toBeLessThan(replayTtl(fast, '1h'));
   });
 
+  test('a prefix rewritten within the TTL is a write at both tiers (#568 review)', () => {
+    // minute 4 re-wrote the whole prefix though nothing had expired; minute 10 is a real gap
+    const requests = [0, 4, 10].map((m) => ({ at: m * 60_000, cached: 100_000, read: 0, input: 0 }));
+    expect(replayTtl(requests, '5m')).toBe(375_000);
+    expect(replayTtl(requests, '1h')).toBe(410_000);
+    // the same requests reading the prefix as expected: the model's prices
+    const kept = requests.map((r, i) => ({ ...r, read: i === 1 ? 100_000 : 0 }));
+    expect(replayTtl(kept, '5m')).toBe(260_000);
+    expect(replayTtl(kept, '1h')).toBe(220_000);
+    // a partial change: only the part past the common prefix is written
+    const partial = requests.slice(0, 2).map((r, i) => ({ ...r, read: i ? 40_000 : 0 }));
+    expect(replayTtl(partial, '5m')).toBe(125_000 + 75_000 + 4_000);
+  });
+
   test('the 5m replay reproduces what the transcript recorded', () => {
     const t = timedAgent({ gapSeconds: 600 });
     const recorded = 1.25 * t.cacheWrite + 0.1 * t.cacheRead + t.input;

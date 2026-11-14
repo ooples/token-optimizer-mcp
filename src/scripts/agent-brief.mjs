@@ -17,7 +17,7 @@ import {
   briefFor,
   briefPaths,
   draftBrief,
-  instructionFiles,
+  draftSources,
   parseBrief,
   renderWorkerAgent,
   workerAgentPath,
@@ -44,11 +44,17 @@ function summary(text) {
 }
 
 if (command === 'draft') {
-  const found = instructionFiles({ cwd });
-  const paths = scope === 'global' ? [...found.global, ...found.project] : found.project;
+  const paths = draftSources(scope, { cwd });
   const files = paths.map((path) => ({ path, text: readFileSync(path, 'utf8') }));
+  const projectOnly = scope === 'global' ? draftSources('project', { cwd }) : [];
+  const projectHint = () => {
+    if (!projectOnly.length) return;
+    console.log(`This project's own instruction files (${projectOnly.length}) are not in the global brief, which applies in every project.`);
+    console.log('Compile them into this project\'s brief with: token-optimizer-agent-brief draft --project');
+  };
   if (!files.length) {
     console.log('No instruction files (CLAUDE.md, .claude/CLAUDE.md, CLAUDE.local.md) found to compile.');
+    projectHint();
     process.exit(1);
   }
   const draft = draftBrief(files);
@@ -60,6 +66,7 @@ if (command === 'draft') {
   console.log(`Draft: ${draftPath} (${kb(draft.length)}; ${summary(draft)}).`);
   console.log('Review it -- delete what a delegated agent does not need, add what it does -- then run:');
   console.log(`  token-optimizer-agent-brief approve${scope === 'project' ? ' --project' : ''}`);
+  projectHint();
 } else if (command === 'approve') {
   if (!existsSync(draftPath)) {
     console.log(`No draft at ${draftPath}. Run: token-optimizer-agent-brief draft${scope === 'project' ? ' --project' : ''}`);

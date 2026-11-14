@@ -23,7 +23,7 @@
 
 import { closeSync, existsSync, openSync, readFileSync, readSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { dirname, join, parse } from 'node:path';
+import { dirname, isAbsolute, join, parse, relative, sep } from 'node:path';
 
 /** The marker that says a prompt already carries the brief. */
 export const BRIEF_MARKER = '[token-optimizer agent brief]';
@@ -107,6 +107,29 @@ export function instructionFiles({ cwd = process.cwd(), env = process.env, ceili
     global: global.filter((p) => existsSync(p)),
     project: project.filter((p) => existsSync(p) && !global.includes(p) && !seen.has(p) && seen.add(p)),
   };
+}
+
+/**
+ * The instruction files a draft of `scope` compiles.
+ *
+ * NOT A REPOSITORY'S FILES INTO THE GLOBAL BRIEF. The global brief applies in
+ * every project, so a repository's build commands drafted into it would become
+ * rules for unrelated repositories (#568 review). It takes the user's own file
+ * and those in the home directory or above it -- `~/CLAUDE.md` loads in every
+ * project beneath home -- and the project draft takes the rest.
+ */
+export function draftSources(scope, { cwd = process.cwd(), env = process.env } = {}) {
+  const found = instructionFiles({ cwd, env });
+  const home = env.USERPROFILE || env.HOME || homedir();
+  const shared = (file) => {
+    const dir = dirname(file);
+    const base = dir.endsWith(`${sep}.claude`) || dir.endsWith('/.claude') ? dirname(dir) : dir;
+    const up = relative(base, home);
+    return !isAbsolute(up) && !up.startsWith('..');
+  };
+  return scope === 'project'
+    ? found.project.filter((p) => !shared(p))
+    : [...found.global, ...found.project.filter(shared)];
 }
 
 /** Markdown split at headings: [{ heading, level, body: string[] }]. Code fences stay whole. */
@@ -384,13 +407,22 @@ export function sessionStartedAt(transcriptPath) {
  * definitions at startup; a spawn naming an agent written after that would
  * fail, so an agent file newer than the session -- or a session whose start is
  * unknown -- is not used.
+ *
+ * AND ONLY ONE THAT IS STILL CURRENT. A worker carries the always-sent rules
+ * of the briefs it was rendered from. Approving a new global brief rewrites
+ * only the user worker for the directory it ran in, so a project worker
+ * elsewhere keeps the old rules; it is skipped until it matches what the
+ * approved briefs render now, and the spawn falls back to a worker that is
+ * sent the current brief.
  */
 export function generatedWorker({ cwd = process.cwd(), env = process.env, sessionStart = null } = {}) {
   if (!Number.isFinite(sessionStart)) return null;
   for (const [scope, name] of [['project', PROJECT_WORKER], ['user', USER_WORKER]]) {
     const path = workerAgentPath(scope, { cwd, env });
     try {
-      if (statSync(path).mtimeMs <= sessionStart) return { name, scope };
+      if (statSync(path).mtimeMs > sessionStart) continue;
+      const current = readFileSync(path, 'utf8').replace(/\r\n/g, '\n') === renderWorkerAgent(scope, { cwd, env });
+      if (current) return { name, scope };
     } catch {
       /* not generated */
     }
@@ -398,13 +430,24 @@ export function generatedWorker({ cwd = process.cwd(), env = process.env, sessio
   return null;
 }
 
-/** The approved brief's scoped sections that `task` names, or null. */
-export function scopedBriefFor(task, { cwd = process.cwd(), env = process.env, scope = 'project' } = {}) {
+/**
+ * The rules a generated worker must still be sent in its prompt, or null: the
+ * scoped sections `task` names, from every brief that applies here, plus the
+ * always-sent sections of any applicable brief its system prompt does not
+ * carry. A user worker running in a project with an approved brief carries
+ * only the user's rules and starts without CLAUDE.md, so the project's
+ * always-sent rules travel in the prompt instead of being lost.
+ */
+export function workerRulesFor(task, workerScope, { cwd = process.cwd(), env = process.env } = {}) {
   const { global, project } = briefPaths({ cwd, env });
-  const sources = scope === 'project' ? [global, project] : [global];
-  const picked = sources
-    .flatMap((p) => (p ? readSections(p) : []))
-    .filter((s) => s.when && s.when.some((w) => mentions(String(task || ''), w)));
+  const carried = workerScope === 'project' ? [global, project] : [global];
+  const picked = [global, project]
+    .filter(Boolean)
+    .flatMap((p) => readSections(p).map((section) => ({ section, inSystemPrompt: carried.includes(p) })))
+    .filter(({ section, inSystemPrompt }) =>
+      section.when ? section.when.some((w) => mentions(String(task || ''), w)) : !inSystemPrompt
+    )
+    .map(({ section }) => section);
   return picked.length ? render(picked) : null;
 }
 
@@ -434,8 +477,8 @@ export function routeToWorker(input, { cwd = process.cwd(), env = process.env, s
   // lost the model routing and, for the plugin's worker, the brief: its parent
   // then wrote the rules into every prompt. The type it named is kept.
   if (type === USER_WORKER || type === PROJECT_WORKER) {
-    const scoped = scopedBriefFor(input.prompt, { cwd, env, scope: type === PROJECT_WORKER ? 'project' : 'user' });
-    return { ...input, prompt: scoped ? withRules(scoped, input.prompt) : input.prompt };
+    const rules = workerRulesFor(input.prompt, type === PROJECT_WORKER ? 'project' : 'user', { cwd, env });
+    return { ...input, prompt: rules ? withRules(rules, input.prompt) : input.prompt };
   }
   if (type === WORKER_AGENT) {
     const brief = briefFor(input.prompt, { cwd, env });
@@ -444,8 +487,8 @@ export function routeToWorker(input, { cwd = process.cwd(), env = process.env, s
   if (type !== undefined && type !== null && type !== '' && type !== 'general-purpose') return null;
   const generated = generatedWorker({ cwd, env, sessionStart });
   if (generated) {
-    const scoped = scopedBriefFor(input.prompt, { cwd, env, scope: generated.scope });
-    return { ...input, subagent_type: generated.name, prompt: scoped ? withRules(scoped, input.prompt) : input.prompt };
+    const rules = workerRulesFor(input.prompt, generated.scope, { cwd, env });
+    return { ...input, subagent_type: generated.name, prompt: rules ? withRules(rules, input.prompt) : input.prompt };
   }
   if (!workerAvailable(env)) return null;
   const brief = briefFor(input.prompt, { cwd, env });

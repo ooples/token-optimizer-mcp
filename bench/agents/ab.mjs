@@ -496,6 +496,33 @@ const weightOf = (t) =>
   t.input + 1.25 * t.write5m + 2 * t.write1h + 0.1 * t.cacheRead + 5 * t.output;
 
 /**
+ * The highest dollars per weighted token among the session's models, from
+ * Claude Code's own `modelUsage` (list cost and tokens per model), or null.
+ *
+ * Keep-warm pings are not in Claude Code's cost, and the ping ledger does not
+ * say which model a ping renewed, so they are priced at the dearest model the
+ * session used: an upper bound, never an understatement.
+ */
+function maxUsdPerWeighted(modelUsage) {
+  let best = null;
+  for (const u of Object.values(modelUsage || {})) {
+    if (!u || !Number.isFinite(u.costUSD)) continue;
+    const w5 = Number(u.cacheCreationEphemeral5mInputTokens) || 0;
+    const w1 = Number(u.cacheCreationEphemeral1hInputTokens) || 0;
+    const split = w5 + w1 > 0;
+    const w = weightOf({
+      input: Number(u.inputTokens) || 0,
+      write5m: split ? w5 : Number(u.cacheCreationInputTokens) || 0,
+      write1h: split ? w1 : 0,
+      cacheRead: Number(u.cacheReadInputTokens) || 0,
+      output: Number(u.outputTokens) || 0,
+    });
+    if (w > 0) best = Math.max(best ?? 0, u.costUSD / w);
+  }
+  return best;
+}
+
+/**
  * This checkout's proxy, for the -proxy arms: started per run, so each run's
  * keep-warm state and accounting ledger are its own. Resolves to its URL (the
  * one line it prints on stdout) and a stop function.
@@ -638,9 +665,14 @@ async function runArm(arm, rep, stamp) {
     output: 0,
     baseContext: 0,
   };
-  const tally = (path) => ({ ...zero, ...(tallyFile(path) || {}) });
-  const parent = files ? tally(files.main) : zero;
-  const agents = files ? files.agents.map(tally) : [];
+  // A transcript that cannot be read is not zero usage: the run is marked
+  // unmeasured, left out of every median, and fails --gate.
+  const parentTally = files ? tallyFile(files.main) : null;
+  const agentTallies = files ? files.agents.map((path) => tallyFile(path)) : [];
+  const measured =
+    parentTally !== null && agentTallies.every((t) => t !== null);
+  const parent = { ...zero, ...(parentTally || {}) };
+  const agents = agentTallies.map((t) => ({ ...zero, ...(t || {}) }));
   const sum = (key) => parent[key] + agents.reduce((n, a) => n + a[key], 0);
   const pings = proxied ? pingTotals(ledger) : null;
   const totals = Object.fromEntries(
@@ -650,6 +682,14 @@ async function runArm(arm, rep, stamp) {
     ])
   );
   const check = verify(dir);
+  const sessionCostUsd =
+    typeof json?.total_cost_usd === 'number' ? json.total_cost_usd : null;
+  const pingRate = maxUsdPerWeighted(json?.modelUsage);
+  const pingsUsd = !pings?.pings
+    ? 0
+    : pingRate === null
+      ? null
+      : weightOf(pings) * pingRate;
   return {
     arm,
     rep,
@@ -657,7 +697,15 @@ async function runArm(arm, rep, stamp) {
     seconds,
     exit: result.status,
     sessionId: json?.session_id ?? null,
-    costUsd: json?.total_cost_usd ?? null,
+    measured,
+    sessionCostUsd,
+    pingsUsd,
+    // Claude Code's cost plus the keep-warm pings it never saw; null when
+    // either part is unknown, so an incomplete figure is never compared.
+    costUsd:
+      sessionCostUsd !== null && pingsUsd !== null
+        ? sessionCostUsd + pingsUsd
+        : null,
     agents: agents.length,
     agentTypes: files ? agentTypes(files.agents) : [],
     agentModels: files ? files.agents.map(firstModel) : [],
@@ -739,14 +787,16 @@ async function main() {
   const summary = {};
   for (const arm of ARMS) {
     const mine = rows.filter((r) => r.arm === arm);
+    const valid = mine.filter((r) => r.measured);
+    const priced = valid.filter((r) => typeof r.costUsd === 'number');
     summary[arm] = {
       runs: mine.length,
       correct: mine.filter((r) => r.correct).length,
-      medianWeighted: median(mine.map((r) => r.weighted)),
-      medianCostUsd: median(
-        mine.map((r) => r.costUsd).filter((c) => typeof c === 'number')
-      ),
-      medianAgentStart: median(mine.flatMap((r) => r.agentStartContext)),
+      unmeasured: mine.length - valid.length,
+      unpriced: valid.length - priced.length,
+      medianWeighted: median(valid.map((r) => r.weighted)),
+      medianCostUsd: median(priced.map((r) => r.costUsd)),
+      medianAgentStart: median(valid.flatMap((r) => r.agentStartContext)),
     };
   }
   const ratio = (a, b) =>
@@ -766,6 +816,7 @@ async function main() {
     agentsOptOverNoDigest: ratio('agents-opt', 'agents-opt-nodigest'),
     // Weighted tokens do not compare across models; once workers run on a
     // cheaper model than the parent (agent-spawn.mjs workerModel), dollars do.
+    agentsOptOverAgentsPlainUsd: usdRatio('agents-opt', 'agents-plain'),
     agentsOptOverSoloOptUsd: usdRatio('agents-opt', 'solo-opt'),
     agentsOptOverInheritUsd: usdRatio('agents-opt', 'agents-opt-inherit'),
     agentsOptOverBackgroundUsd: usdRatio('agents-opt', 'agents-opt-bg'),
@@ -775,7 +826,7 @@ async function main() {
   console.log('');
   for (const [arm, s] of Object.entries(summary)) {
     console.log(
-      `${arm.padEnd(20)} ${s.correct}/${s.runs} correct, median weighted ${s.medianWeighted}, median $${s.medianCostUsd}, median agent start ${s.medianAgentStart ?? '-'}`
+      `${arm.padEnd(20)} ${s.correct}/${s.runs} correct${s.unmeasured ? `, ${s.unmeasured} unmeasured (excluded)` : ''}${s.unpriced ? `, ${s.unpriced} unpriced` : ''}, median weighted ${s.medianWeighted}, median $${s.medianCostUsd}, median agent start ${s.medianAgentStart ?? '-'}`
     );
   }
   const fmt = (x) => (x === null ? 'n/a' : x.toFixed(3));
@@ -783,7 +834,10 @@ async function main() {
     `agents-plain / solo-plain ${fmt(verdict.agentsPlainOverSoloPlain)}`
   );
   console.log(
-    `agents-opt / agents-plain ${fmt(verdict.agentsOptOverAgentsPlain)}  (gate: < 1, every run correct)`
+    `agents-opt / agents-plain ${fmt(verdict.agentsOptOverAgentsPlain)}  (weighted tokens; diagnostic once workers run on another model)`
+  );
+  console.log(
+    `agents-opt / agents-plain $ ${fmt(verdict.agentsOptOverAgentsPlainUsd)}  (gate: < 1, every run correct, measured and priced)`
   );
   console.log(
     `agents-opt / solo-opt     ${fmt(verdict.agentsOptOverSoloOpt)}  (target: <= 1)`
@@ -808,14 +862,23 @@ async function main() {
       `agents-opt-bg / solo-opt $   ${fmt(verdict.agentsBackgroundOverSoloOptUsd)}  (agents in the background, in dollars)`
     );
   if (GATE) {
+    // Dollars, not weighted tokens: workers may run on a cheaper model than
+    // the parent, and weighted tokens do not compare across models.
     const allCorrect = rows.every((r) => r.correct);
+    const gated = rows.filter((r) => ['agents-opt', 'agents-plain'].includes(r.arm));
+    const complete =
+      rows.every((r) => r.measured) &&
+      gated.every((r) => typeof r.costUsd === 'number');
     const pass =
       allCorrect &&
-      verdict.agentsOptOverAgentsPlain !== null &&
-      verdict.agentsOptOverAgentsPlain < 1;
-    console.log(
-      `GATE ${pass ? 'PASS' : 'FAIL'}${allCorrect ? '' : ' (a run was not correct)'}`
-    );
+      complete &&
+      verdict.agentsOptOverAgentsPlainUsd !== null &&
+      verdict.agentsOptOverAgentsPlainUsd < 1;
+    const why = [
+      allCorrect ? '' : 'a run was not correct',
+      complete ? '' : 'a run was unmeasured or unpriced',
+    ].filter(Boolean);
+    console.log(`GATE ${pass ? 'PASS' : 'FAIL'}${why.length ? ` (${why.join('; ')})` : ''}`);
     process.exitCode = pass ? 0 : 1;
   }
 }

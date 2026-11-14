@@ -262,14 +262,27 @@ export function fixedContextFinding(agents, { minTokens = 50_000 } = {}) {
  */
 export function replayTtl(requests, tier) {
   const ttl = TTL_SECONDS[tier] * 1000;
+  // No tier expires this soon, so a request this close to the previous one
+  // was read or written for a reason that holds at every tier.
+  const observed = TTL_SECONDS['5m'] * 1000;
   const writePrice = tier === '1h' ? CACHE_PRICE.write1h : CACHE_PRICE.write5m;
   let cost = 0;
   let prev = null;
   for (const request of requests || []) {
-    const expired = !prev || request.at - prev.at > ttl || request.cached < prev.cached;
-    cost += expired
-      ? writePrice * request.cached
-      : writePrice * (request.cached - prev.cached) + CACHE_PRICE.read * prev.cached;
+    const gap = prev ? request.at - prev.at : Infinity;
+    const expired = !prev || gap > ttl || request.cached < prev.cached;
+    if (expired) {
+      cost += writePrice * request.cached;
+    } else if (gap <= observed && Number.isFinite(request.read)) {
+      // WHAT THE PROVIDER DID, NOT THE MODEL. A prefix changed within the TTL
+      // (a tool list or system reminder that moved) shows as a read below the
+      // previous prompt. Pricing it as a read made both tiers look cheaper than
+      // they were, and 1h's dearer write the most (#568 review).
+      // `cached` is read + write (tallyFile), so 0 <= read <= cached.
+      cost += writePrice * (request.cached - request.read) + CACHE_PRICE.read * request.read;
+    } else {
+      cost += writePrice * (request.cached - prev.cached) + CACHE_PRICE.read * prev.cached;
+    }
     cost += request.input;
     prev = request;
   }

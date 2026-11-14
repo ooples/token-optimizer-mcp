@@ -24,9 +24,10 @@
  * is recorded with a backup so `undoSubagentTtl` can put it back exactly.
  */
 
-import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
+import { editSettings } from './settings-edit.mjs';
 import { expiryRewrites, replayTtl } from './subagents.mjs';
 
 /** Machine-wide state, as the other user-global records resolve it. */
@@ -150,39 +151,30 @@ export function applySubagentTtl(settingsPath, { env = process.env, rows = readL
   if (existsSync(ttlRecordPath(env))) {
     return { written: false, reason: 'written once before; a removal is the user declining it' };
   }
-  let raw = '{}';
-  let settings = {};
-  if (existsSync(settingsPath)) {
-    try {
-      raw = readFileSync(settingsPath, 'utf8');
-      settings = JSON.parse(raw);
-    } catch {
-      return { written: false, reason: 'settings not parseable; never rewritten' };
-    }
-    if (!settings || typeof settings !== 'object' || Array.isArray(settings)) {
-      return { written: false, reason: 'settings not an object' };
-    }
-  }
-  const owner = ttlOwner(settings, env);
-  if (owner) return { written: false, reason: `already set in ${owner}` };
   const decision = ttlDecision(rows);
-  if (!decision.recommend) return { written: false, reason: 'evidence does not favour 1h', decision };
-
+  // Read, ownership check, merge and write under the lock every settings writer
+  // shares (settings-edit.mjs), so a concurrent write is never replaced.
+  const edit = editSettings(
+    settingsPath,
+    (settings) => {
+      const owner = ttlOwner(settings, env);
+      if (owner) return { skip: `already set in ${owner}` };
+      if (!decision.recommend) return { skip: 'evidence does not favour 1h' };
+      return { next: { ...settings, subagentPromptCacheTtl: decision.recommend } };
+    },
+    { now, backupTag: 'token-optimizer-ttl' }
+  );
+  if (edit.status !== 'written') {
+    return { written: false, reason: edit.reason, ...(edit.status === 'skipped' && !decision.recommend ? { decision } : {}) };
+  }
+  const backup = edit.backup;
   try {
-    mkdirSync(dirname(settingsPath), { recursive: true });
-    const existed = existsSync(settingsPath);
-    const backup = existed ? `${settingsPath}.token-optimizer-ttl-${now}.bak` : null;
-    if (backup) writeFileSync(backup, raw);
-    const next = { ...settings, subagentPromptCacheTtl: decision.recommend };
-    const tmp = `${settingsPath}.token-optimizer-tmp-${now}`;
-    writeFileSync(tmp, `${JSON.stringify(next, null, 2)}\n`);
-    renameSync(tmp, settingsPath);
     const record = {
       at: now,
       settingsPath,
       value: decision.recommend,
       backup,
-      existed,
+      existed: edit.existed,
       evidence: {
         agents: decision.agents,
         at5m: decision.at5m,
@@ -210,22 +202,18 @@ export function undoSubagentTtl({ env = process.env, now = Date.now() } = {}) {
   } catch {
     return { undone: false, reason: 'nothing was written by token-optimizer' };
   }
-  let settings;
-  let raw;
-  try {
-    raw = readFileSync(record.settingsPath, 'utf8');
-    settings = JSON.parse(raw);
-  } catch {
-    return { undone: false, reason: 'settings not parseable; never rewritten' };
-  }
-  if (settings.subagentPromptCacheTtl !== record.value) {
-    return { undone: false, reason: 'the value was changed since; it is yours now' };
-  }
-  const next = { ...settings };
-  delete next.subagentPromptCacheTtl;
-  const tmp = `${record.settingsPath}.token-optimizer-tmp-${now}`;
-  writeFileSync(tmp, `${JSON.stringify(next, null, 2)}\n`);
-  renameSync(tmp, record.settingsPath);
+  if (!existsSync(record.settingsPath)) return { undone: false, reason: 'settings not parseable; never rewritten' };
+  const edit = editSettings(
+    record.settingsPath,
+    (settings) => {
+      if (settings.subagentPromptCacheTtl !== record.value) return { skip: 'the value was changed since; it is yours now' };
+      const next = { ...settings };
+      delete next.subagentPromptCacheTtl;
+      return { next };
+    },
+    { now }
+  );
+  if (edit.status !== 'written') return { undone: false, reason: edit.reason };
   writeFileSync(ttlRecordPath(env), `${JSON.stringify({ ...record, undoneAt: now }, null, 2)}\n`);
   return { undone: true, reason: 'removed' };
 }
