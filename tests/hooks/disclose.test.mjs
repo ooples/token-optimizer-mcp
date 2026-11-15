@@ -252,6 +252,29 @@ describe('the preview names every cut', () => {
     expect(out.kept.length).toBeGreaterThan(0);
   });
 
+  test('an envelope field does not stand in for the content it wraps', () => {
+    // smart_read of a 524 KB release log (THOL log-needle-zh, #565): the short
+    // `metadata` field outranked a body of routine log lines, was admitted
+    // first, and the floor that keeps the front of the best section stopped
+    // applying. Every content line was withheld behind a 33-character field.
+    const log = [];
+    for (let i = 0; i < 150; i++)
+      log.push(
+        `2026-06-09T14:00:${String(i % 60).padStart(2, '0')}.000Z DEBUG [orchestrator] heartbeat ok queue=${i % 4} node=node-${i % 5}`
+      );
+    log.unshift(
+      '2026-06-09T14:00:00.000Z INFO  [pipeline] === release #8757 commit 66616ec ==='
+    );
+    const body = JSON.stringify({
+      content: log.join('\n'),
+      metadata: { size: 524745, truncated: true },
+    });
+    const out = disclose(dir, body, { ...remainderStore() });
+    expect(out.mode).toBe('preview');
+    expect(out.kept.some((k) => k.kind !== 'field')).toBe(true);
+    expect(out.text).toContain('commit 66616ec');
+  });
+
   test('the preview stays inside the earned budget', () => {
     const out = disclose(dir, bigTestReport(), { ...remainderStore() });
     expect(out.tokens).toBeLessThanOrEqual(3000);
@@ -543,7 +566,8 @@ describe('expand serves what it claims to serve', () => {
     // The artifact store is never pruned while metrics is a bounded tail, so artifacts routinely
     // outlive their capture records. Staleness is then unanswerable -- and unanswerable rendered
     // as fresh, which the module header calls worse than serving nothing.
-    const { capture, resolve } = await import('../../src/hooks-core/expand.mjs');
+    const { capture, resolve } =
+      await import('../../src/hooks-core/expand.mjs');
     const dir = mkdtempSync(join(tmpdir(), 'exp-unver-'));
     try {
       // Capture writes the artifact AND a metrics record; delete the metrics so only the

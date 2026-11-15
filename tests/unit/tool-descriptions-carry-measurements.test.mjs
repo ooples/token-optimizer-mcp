@@ -134,7 +134,10 @@ describe('tool descriptions carry the measured figure', () => {
         if (/\d+%/.test(match[3])) withFigures += 1;
       }
     }
-    expect(withFigures).toBeGreaterThanOrEqual(52);
+    // 51 since #565: smart_grep's description dropped its unmeasured "80%"
+    // figure for a statement of its output shape. Removing a figure lowers
+    // this count; it never hides an undeclared one, which the case above catches.
+    expect(withFigures).toBeGreaterThanOrEqual(51);
   });
 
   // THE ARMS THAT MUST FAIL. A lookup that answered for anything would pass

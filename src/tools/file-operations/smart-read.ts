@@ -118,6 +118,10 @@ export interface SmartReadMetadata {
   chunked?: boolean;
   /** Present only when the content was cut short. */
   truncated?: boolean;
+  /** The file's full line count; present only when truncated. */
+  totalLines?: number;
+  /** What was cut and the cheap way on; present only when truncated. */
+  note?: string;
   /** How many chunks the file was split into; present only when chunked. */
   chunkCount?: number;
   /** Which chunk this response carries; present only when chunked. */
@@ -260,6 +264,8 @@ export class SmartReadTool {
     let finalContent = rawContent;
     let isDiff = false;
     let truncated = false;
+    // Which cut was made, so the note describes what the caller actually holds.
+    let keptEnds: 'start' | 'start and end' = 'start and end';
     let chunked = false;
     let chunkCount = 0;
     let chunkIndex = 0;
@@ -352,6 +358,7 @@ export class SmartReadTool {
         finalContent =
           prefixWithinBytes(rawContent, actualMaxSize) + truncationMsg;
         truncated = true;
+        keptEnds = 'start';
       } else {
         // If file is larger than maxSize, truncate it
         const truncateResult = truncateContent(rawContent, maxSize, {
@@ -477,7 +484,32 @@ export class SmartReadTool {
 
     if (fromCache) header.fromCache = true;
     if (isDiff) header.isDiff = true;
-    if (truncated) header.truncated = true;
+    if (truncated) {
+      header.truncated = true;
+      // WHAT WAS CUT AND WHERE TO GO NEXT. A bare `truncated: true` on a
+      // 524 KB log (THOL log-needle-zh, #565) left the model to discover by an
+      // expand round trip that it held 153 of 5,315 lines, and it searched
+      // with grep afterwards anyway. Searching is the cheap route into a large
+      // file, so the note says so before the first wasted turn.
+      // A final newline ends the last line rather than starting another.
+      header.totalLines =
+        rawContent.split('\n').length - (rawContent.endsWith('\n') ? 1 : 0);
+      const lineCount =
+        `${header.totalLines.toLocaleString('en-US')} ` +
+        `${header.totalLines === 1 ? 'line' : 'lines'}`;
+      // A DIFF IS CUT AS A DIFF. When the changes since the last read exceed
+      // maxSize, it is the diff that was cut, not the file, and calling it the
+      // file's start and end would misdescribe what the caller holds.
+      // chunkIndex bypasses the diff, so it reaches the file itself.
+      header.note = isDiff
+        ? `Cut to fit maxSize=${maxSize}: this shows the start and end of the ` +
+          `changes since your last read, not the file (now ${lineCount}). ` +
+          `To read the file itself, pass chunkIndex; to find something in ` +
+          `it, search (Grep or smart_grep).`
+        : `Cut to fit maxSize=${maxSize}: this shows the ${keptEnds} of ` +
+          `${lineCount}. To find something in it, search (Grep or ` +
+          `smart_grep); to page through it, pass chunkIndex.`;
+    }
     if (chunked) {
       header.chunked = true;
       // Navigation, not content. Attaching every chunk here defeated the

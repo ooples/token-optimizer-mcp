@@ -45,6 +45,87 @@ import { resolveSearchScope } from '../../utils/search-scope.js';
 const MAX_RESPONSE_TOKENS = 8_000;
 
 /**
+ * More distinct matched texts than this and the set is not an aggregate.
+ * The summary exists to answer "which X are there" in one call; past a few
+ * hundred values it is a second copy of the match list, not a summary of it.
+ */
+const MAX_DISTINCT_MATCHES = 500;
+
+/** The distinct summary's own share of the response. */
+const MAX_DISTINCT_TOKENS = 4_000;
+
+/** One hit on the wire: [line number, line text], plus anything optional. */
+export type CompactHit = [number, string] | [number, string, HitExtra];
+
+/** What a hit carries beyond its line, only when present. */
+type HitExtra = {
+  columns?: number[];
+  before?: string[];
+  after?: string[];
+  contextOmitted?: number;
+};
+
+/**
+ * THE SHAPE A MATCH LIST CROSSES THE WIRE IN: one key per file, each hit a
+ * `[line, text]` pair.
+ *
+ * Measured on the THOL `code-settings-inventory-django` task (#565): a record
+ * per hit, `{"file":...,"lineNumber":...,"line":...,"match":...}`, spent most of
+ * every response repeating its own keys and the file path. It also ran the
+ * 8,000-token budget out at ~225 of 577 hits. The model paged three times and
+ * cost 2.27x a plain `grep -oh | sort -u`. Here the path is written once per
+ * file. `match` is dropped because it is a substring of the line already sent,
+ * and the distinct summary carries every matched text.
+ */
+export function compactGrepMatches(
+  matches: GrepMatch[]
+): Record<string, CompactHit[]> {
+  // A Map, not an object literal: a file named `__proto__` assigned onto `{}`
+  // sets the object's prototype instead of adding a key, and its hits vanish
+  // from the JSON. Object.fromEntries defines every key as an own property.
+  const byFile = new Map<string, CompactHit[]>();
+  for (const m of matches) {
+    const extra: HitExtra = {};
+    const columns =
+      m.columns ?? (m.column !== undefined ? [m.column] : undefined);
+    if (columns) extra.columns = columns;
+    if (m.before?.length) extra.before = m.before;
+    if (m.after?.length) extra.after = m.after;
+    if (m.contextOmitted) extra.contextOmitted = m.contextOmitted;
+    const hit: CompactHit = Object.keys(extra).length
+      ? [m.lineNumber, m.line, extra]
+      : [m.lineNumber, m.line];
+    const list = byFile.get(m.file);
+    if (list) list.push(hit);
+    else byFile.set(m.file, [hit]);
+  }
+  return Object.fromEntries(byFile);
+}
+
+/**
+ * Every distinct matched text as `[text, occurrences, first "file:line"]`,
+ * sorted by text, or null when it would not summarise anything.
+ *
+ * Null when there is nothing to aggregate: a single distinct text (a literal
+ * search, where every match IS the pattern), a set too varied to be an aggregate, or one no smaller than
+ * the hits it summarises.
+ */
+export function distinctMatchSummary(
+  distinct: Map<string, { count: number; at: string }>,
+  totalMatches: number
+): Array<[string, number, string]> | null {
+  // One distinct text is no aggregate: it is the pattern's own text (a
+  // literal search), and metadata.occurrences already counts it. Counting
+  // every occurrence, rather than skipping those equal to the pattern, keeps
+  // the counts true when case-insensitive matching finds foo and FOO.
+  if (distinct.size <= 1 || distinct.size > MAX_DISTINCT_MATCHES) return null;
+  if (distinct.size >= totalMatches) return null;
+  return [...distinct.entries()]
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    .map(([text, { count, at }]) => [text, count, at]);
+}
+
+/**
  * Ceilings that hold even when the caller sets no limit at all.
  *
  * Every match record carries its whole LINE, so a dense file multiplies two
@@ -509,6 +590,8 @@ export interface GrepMatch {
   match?: string; // The matched text, when it differs from the pattern
   before?: string[]; // Context lines before match
   after?: string[]; // Context lines after match
+  /** Context lines dropped so a lone hit fits the response budget. */
+  contextOmitted?: number;
 }
 
 export interface SmartGrepOptions {
@@ -613,6 +696,12 @@ export interface SmartGrepResult {
     savingsReason?: string;
   };
   matches?: GrepMatch[]; // Matches (if not filesWithMatches or count mode)
+  /**
+   * Every distinct matched text, `[text, occurrences, first "file:line"]`, when
+   * this page does not show every hit and the texts aggregate (see
+   * distinctMatchSummary). It answers "which X are there" without paging.
+   */
+  distinct?: Array<[string, number, string]>;
   files?: string[]; // Files with matches (if filesWithMatches mode)
   /**
    * Match counts per file, when `count` is set.
@@ -875,6 +964,10 @@ export class SmartGrepTool {
       const matchCounts = new Map<string, number>();
       // Occurrences across all files; totalMatches counts matching LINES.
       let occurrences = 0;
+      // Each distinct matched text, its occurrence count and where it first
+      // appeared. Stops growing past MAX_DISTINCT_MATCHES, which marks the
+      // set as too varied to be an aggregate.
+      const distinctTexts = new Map<string, { count: number; at: string }>();
 
       // Would this pattern have matched as a regex? One test per FILE, not per
       // line, and abandoned the moment it answers yes -- the question is
@@ -981,6 +1074,18 @@ export class SmartGrepTool {
               if (matches.length === 0) continue;
               if (fileMatches.length >= opts.maxMatchesPerFile) break;
               fileOccurrences += matches.length;
+              // Every occurrence, not just the line's first: on
+              // `settings.A or settings.B` the record keeps only A, and an
+              // aggregate built from records would silently miss B.
+              for (const m of matches) {
+                const seen = distinctTexts.get(m[0]);
+                if (seen) seen.count += 1;
+                else if (distinctTexts.size <= MAX_DISTINCT_MATCHES)
+                  distinctTexts.set(m[0], {
+                    count: 1,
+                    at: `${relative(opts.cwd, file)}:${i + 1}`,
+                  });
+              }
 
               // ONE RECORD PER LINE, as grep prints one. A record per
               // occurrence sent a line holding the pattern twice back twice,
@@ -1071,25 +1176,103 @@ export class SmartGrepTool {
       // caller pays for, and whatever is dropped is reported rather than
       // silently discarded.
       let budgetTruncated = false;
-      while (paginatedMatches.length > 1) {
-        const size = this.tokenCounter.count(
-          JSON.stringify({ matches: paginatedMatches })
-        ).tokens;
-        if (size <= MAX_RESPONSE_TOKENS) break;
-        // Drop the tail proportionally rather than one at a time, so a huge
-        // result set converges in a few passes instead of thousands.
-        const keep = Math.max(
-          1,
-          Math.floor(
-            paginatedMatches.length * Math.min(0.9, MAX_RESPONSE_TOKENS / size)
-          )
-        );
-        paginatedMatches = paginatedMatches.slice(0, keep);
-        budgetTruncated = true;
+      const trimTo = (budget: number, alongside: object = {}) => {
+        while (paginatedMatches.length > 1) {
+          // Measured on the shape the caller actually receives over MCP.
+          // Sizing the verbose record form trimmed the page to a fraction of
+          // what the budget allows on the wire.
+          const size = this.tokenCounter.count(
+            JSON.stringify({
+              hits: compactGrepMatches(paginatedMatches),
+              ...alongside,
+            })
+          ).tokens;
+          if (size <= budget) break;
+          // Drop the tail proportionally rather than one at a time, so a huge
+          // result set converges in a few passes instead of thousands.
+          const keep = Math.max(
+            1,
+            Math.floor(paginatedMatches.length * Math.min(0.9, budget / size))
+          );
+          paginatedMatches = paginatedMatches.slice(0, keep);
+          budgetTruncated = true;
+        }
+      };
+      trimTo(MAX_RESPONSE_TOKENS);
+
+      // A LONE HIT IS BOUND TOO. trimTo never drops the last hit, so one match
+      // with a large requested context returned all of it, past the budget,
+      // with truncated still false. Its context is cut from the far ends
+      // inward, the lines nearest the match kept, and the count of lines
+      // dropped is reported on the hit.
+      if (paginatedMatches.length === 1) {
+        const only = paginatedMatches[0];
+        const sizeOf = (m: GrepMatch) =>
+          this.tokenCounter.count(
+            JSON.stringify({ hits: compactGrepMatches([m]) })
+          ).tokens;
+        const before = only.before ?? [];
+        const after = only.after ?? [];
+        const total = before.length + after.length;
+        let size = sizeOf(only);
+        if (size > MAX_RESPONSE_TOKENS && total > 0) {
+          let keep = total;
+          let fitted: GrepMatch = only;
+          while (size > MAX_RESPONSE_TOKENS && keep > 0) {
+            keep = Math.floor(keep * Math.min(0.9, MAX_RESPONSE_TOKENS / size));
+            // Nearest lines first: the end of `before`, the start of `after`,
+            // split in proportion to what was asked on each side.
+            const keepBefore = Math.min(
+              before.length,
+              Math.round((keep * before.length) / total)
+            );
+            const keepAfter = Math.min(after.length, keep - keepBefore);
+            fitted = {
+              ...only,
+              before: before.slice(before.length - keepBefore),
+              after: after.slice(0, keepAfter),
+              contextOmitted: total - keepBefore - keepAfter,
+            };
+            size = sizeOf(fitted);
+          }
+          paginatedMatches = [fitted];
+          budgetTruncated = true;
+        }
       }
 
       const truncated =
         budgetTruncated || totalMatches > paginatedMatches.length + opts.offset;
+
+      // The aggregate, when the page could not show every hit. It shares the
+      // response budget rather than adding to it: the page is re-trimmed with
+      // the summary measured alongside it, so the two together stay within
+      // MAX_RESPONSE_TOKENS.
+      let distinct: Array<[string, number, string]> | null = null;
+      if (truncated && !opts.count && !opts.filesWithMatches) {
+        distinct = distinctMatchSummary(distinctTexts, totalMatches);
+        const distinctTokens = distinct
+          ? this.tokenCounter.count(JSON.stringify(distinct)).tokens
+          : 0;
+        if (distinctTokens > MAX_DISTINCT_TOKENS) distinct = null;
+        else if (distinct) {
+          const pageWithoutSummary = paginatedMatches;
+          trimTo(MAX_RESPONSE_TOKENS, { distinct });
+          // trimTo never drops the last hit. If that one hit (with requested
+          // context) plus the summary still exceeds the budget, the summary
+          // goes and the page it displaced comes back: the hits are what was
+          // asked for.
+          const combined = this.tokenCounter.count(
+            JSON.stringify({
+              hits: compactGrepMatches(paginatedMatches),
+              distinct,
+            })
+          ).tokens;
+          if (combined > MAX_RESPONSE_TOKENS) {
+            distinct = null;
+            paginatedMatches = pageWithoutSummary;
+          }
+        }
+      }
 
       // Build result based on mode
       let resultData: any;
@@ -1108,10 +1291,14 @@ export class SmartGrepTool {
           JSON.stringify(resultData)
         ).tokens;
       } else {
-        // Normal mode: return matches
+        // Normal mode: return matches, counted in their wire shape.
         resultData = { matches: paginatedMatches };
+        // The summary is part of what the caller receives, so it is counted.
         resultTokens = this.tokenCounter.count(
-          JSON.stringify(resultData)
+          JSON.stringify({
+            hits: compactGrepMatches(paginatedMatches),
+            ...(distinct ? { distinct } : {}),
+          })
         ).tokens;
       }
 
@@ -1194,6 +1381,7 @@ export class SmartGrepTool {
         ...(!opts.count && !opts.filesWithMatches
           ? { matches: paginatedMatches }
           : {}),
+        ...(distinct ? { distinct } : {}),
         // A zero that would not have been a zero. See SmartGrepResult.hint:
         // this fires only when the search was literal, found nothing, and the
         // pattern matches as a regex -- so it never contradicts a real result
@@ -1425,7 +1613,7 @@ export async function runSmartGrep(
 export const SMART_GREP_TOOL_DEFINITION = {
   name: 'smart_grep',
   description:
-    'Search file contents with an unmeasured design target of 80% token reduction through match-only output and smart filtering',
+    'Search file contents. Hits come back grouped by file as [line, text] pairs. When a page cannot show every hit, `distinct` lists each distinct matched text once, as [text, occurrences, first file:line]; use it to answer "which X exist" instead of paging with offset.',
   annotations: {
     title: 'Search file contents efficiently',
     readOnlyHint: true,
