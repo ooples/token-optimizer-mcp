@@ -276,6 +276,12 @@ Search file contents with match-only output and smart filtering.
 - `contextAfter` (number, optional) - Lines of context after match (default: 0)
 - `limit` (number, optional) - Maximum matches to return
 
+**Output:** hits grouped by file, each a `[line, text]` pair, within an
+8,000-token response. When a page cannot show every hit, `distinct` lists each
+distinct matched text once as `[text, occurrences, first file:line]`. It answers
+"which X exist" in one call, without paging through `offset`, and it shares the
+same 8,000 tokens.
+
 **Token Reduction:** 80% through match-only output
 
 ---
