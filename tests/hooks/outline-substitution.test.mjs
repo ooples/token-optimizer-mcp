@@ -22,7 +22,7 @@ import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
-import { substitutionFor, floorBytes } from '../../src/hooks-core/substitute.mjs';
+import { substitutionFor, floorBytes, VIEW_FLOOR_BYTES, VIEW_CEILING_BYTES } from '../../src/hooks-core/substitute.mjs';
 import { putNode, putEdge, nodeId } from '../../src/hooks-core/wiki.mjs';
 import { indexFile } from '../../src/hooks-core/staleness.mjs';
 import { canonicalPath } from '../../src/hooks-core/paths.mjs';
@@ -353,8 +353,8 @@ describe('a refused read is answered, not just refused', () => {
     expect(result.updatedInput).toBeNull();
   });
 
-  /** A release log: numbered, timestamped, ~120 KB, the needle in the middle. */
-  const writeLog = (name = 'release.log', count = 1500) => {
+  /** A release log: numbered, timestamped, ~82 KB (inside the view band), the needle in the middle. */
+  const writeLog = (name = 'release.log', count = 1100) => {
     const file = join(workspace, name);
     const lines = [];
     for (let i = 1; i <= count; i++)
@@ -377,12 +377,14 @@ describe('a refused read is answered, not just refused', () => {
     const view = readFileSync(result.updatedInput.file_path, 'utf8');
     // The path is spelled as the router normalised it, which on Windows is not
     // the test's own spelling, so only the form and the count are pinned.
-    expect(view).toMatch(/^view of .*release\.log \(1501 lines, \d+KB\)/);
+    expect(statSync(log).size).toBeGreaterThan(VIEW_FLOOR_BYTES);
+    expect(statSync(log).size).toBeLessThan(VIEW_CEILING_BYTES);
+    expect(view).toMatch(/^view of .*release\.log \(1101 lines, \d+KB\)/);
     // Its opening and closing lines, with their numbers, and not the middle.
     expect(view).toContain('     1  2026-06-09T14:00:01.000Z INFO  [pipeline] step 1 ok');
-    expect(view).toContain('  1500  2026-06-09T14:00:00.000Z INFO  [pipeline] step 1500 ok');
+    expect(view).toContain('  1100  2026-06-09T14:00:20.000Z INFO  [pipeline] step 1100 ok');
     expect(view).not.toContain('the needle');
-    expect(view).toContain('[lines 61-1460 not shown: 1400 lines]');
+    expect(view).toContain('[lines 61-1060 not shown: 1000 lines]');
     expect(Buffer.byteLength(view)).toBeLessThan(statSync(log).size / 4);
     expect(result.context).toContain(`replaced this read with a view of ${log}`);
     expect(result.context).toContain('Grep it');
@@ -408,7 +410,15 @@ describe('a refused read is answered, not just refused', () => {
 
   test('a log under the view floor is read whole', () => {
     const log = writeLog('small.log', 300);
-    expect(statSync(log).size).toBeLessThan(64 * 1024);
+    expect(statSync(log).size).toBeLessThan(VIEW_FLOOR_BYTES);
+    expect(read('assist', { file: log }).updatedInput).toBeNull();
+  });
+
+  test('a log over the ceiling is left to the host, whose refusal is cheaper', () => {
+    // THOL #565 log-needle: Claude Code refused the 512 KB log in 479
+    // characters; a view of it cost 9,361.
+    const log = writeLog('huge.log', 7000);
+    expect(statSync(log).size).toBeGreaterThan(VIEW_CEILING_BYTES);
     expect(read('assist', { file: log }).updatedInput).toBeNull();
   });
 

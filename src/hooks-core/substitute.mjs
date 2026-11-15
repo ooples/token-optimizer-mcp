@@ -174,6 +174,7 @@ export function substitutionFor(filePath, { turnsSoFar = 0, alreadyRead = false 
   }
 
   if (bytes < (outlineable ? floorBytes(turnsSoFar) : VIEW_FLOOR_BYTES)) return null;
+  if (!outlineable && bytes > VIEW_CEILING_BYTES) return null;
 
   // ONE OUTLINE PER FILE PER SESSION. `alreadyRead` was accepted here, echoed
   // back in the result, and never passed by any caller nor consulted by any
@@ -243,6 +244,18 @@ const VIEWABLE = new Set([
  * read again. A chosen value, not a measured break-even.
  */
 export const VIEW_FLOOR_BYTES = 64 * 1024;
+
+/**
+ * Above this the host already refuses the read, and its refusal is cheaper
+ * than any view. Claude Code answers a whole Read over 256 KB, or over 25,000
+ * tokens, with a ~480-character error naming offset/limit and search. Replaying
+ * THOL #565's log-needle, a view of its 512 KB log added 9,361 characters where
+ * control's identical Read added 479, and the task went from 1.00x to 1.02x
+ * control. 88 KB is the 25,000-token cap at ~3.6 bytes a token, the density of
+ * ASCII logs. Denser text (CJK) can hit the host's cap below it, where a view
+ * still costs more than the refusal would have; that band is accepted.
+ */
+export const VIEW_CEILING_BYTES = 88 * 1024;
 
 const VIEW_HEAD_LINES = 60;
 const VIEW_TAIL_LINES = 40;

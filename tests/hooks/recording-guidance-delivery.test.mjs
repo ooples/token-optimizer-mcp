@@ -16,6 +16,7 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const CLAUDE_POST = join(ROOT, 'src', 'plugin', 'hooks', 'post-tool.mjs');
+const CLAUDE_PRE = join(ROOT, 'src', 'plugin', 'hooks', 'pretooluse-router.mjs');
 const WINDSURF_POST = join(ROOT, 'src', 'integrations', 'windsurf', 'hooks', 'post-tool.mjs');
 
 const scratch = mkdtempSync(join(tmpdir(), 'recording-delivery-'));
@@ -105,6 +106,16 @@ describe('the deferred recording guidance', () => {
     const second = hook(CLAUDE_POST, claudeEdit('guidance-first'), env);
     expect(second.stdout).not.toContain('edits this session');
     expect(second.saved.some((s) => s.edits === 2)).toBe(true);
+
+    // Claude Code's PreToolUse router carries its own copy of the nudge, and in
+    // the THOL replay that copy was the one that fired. Control: it fires on a
+    // fresh session; then it stays quiet once the guidance has been given.
+    const preEdit = (session) => ({ ...claudeEdit(session), hook_event_name: 'PreToolUse', tool_response: undefined });
+    const fresh = hook(CLAUDE_PRE, preEdit('router-fresh'), shared({ TOKEN_OPTIMIZER_NUDGE_AFTER: '1' }));
+    expect(fresh.stdout).toContain('edits this session');
+    const routed = hook(CLAUDE_PRE, preEdit('guidance-first'), env);
+    expect(routed.stdout).not.toContain('edits this session');
+    expect(routed.saved.some((s) => s.edits >= 2)).toBe(true);
   });
 
   test('is not marked delivered for a client that cannot carry context', () => {
