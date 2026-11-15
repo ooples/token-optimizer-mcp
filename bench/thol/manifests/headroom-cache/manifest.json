@@ -13,6 +13,8 @@
   "HEADROOM_PROXY_URL": "http://127.0.0.1:${PORT}"
  },
  "claude_wrap": ["headroom", "wrap", "claude", "--port", "${PORT}", "--"],
+ "teardown_commands": ["pkill -f -- 'headroom[.]cli proxy --port ${PORT} --workers' || true"],
+ "teardown_note": "headroom wrap starts its proxy detached (start_new_session) so other wrap sessions can share it, and never stops it. Each run left a ~0.9 GB proxy behind, which on the #565 campaign exhausted host memory. This stops only the proxy on this run's port; [.] keeps the pattern from matching the teardown's own sh -c command line.",
  "mcp": {
   "mcpServers": {
    "headroom": {"type": "stdio", "command": "headroom", "args": ["mcp", "serve"]}
