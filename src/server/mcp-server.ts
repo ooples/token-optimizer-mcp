@@ -158,7 +158,10 @@ import { runSmartRead } from '../tools/file-operations/smart-read.js';
 import { runSmartWrite } from '../tools/file-operations/smart-write.js';
 import { runSmartEdit } from '../tools/file-operations/smart-edit.js';
 import { runSmartGlob } from '../tools/file-operations/smart-glob.js';
-import { runSmartGrep } from '../tools/file-operations/smart-grep.js';
+import {
+  compactGrepMatches,
+  runSmartGrep,
+} from '../tools/file-operations/smart-grep.js';
 import {
   parseSessionLog,
   resolveSessionLogPath,
@@ -1838,7 +1841,15 @@ async function handleToolCall(request: {
       case 'smart_grep': {
         const { pattern, ...options } = args as any;
         const result = await memoizedSmartGrep(pattern, options);
-        return textResult(result, args, name);
+        // Hits cross the wire grouped by file as [line, text] pairs: the
+        // record-per-hit form spent most of each response on repeated keys
+        // and paths (see compactGrepMatches).
+        const { matches, ...rest } = result;
+        return textResult(
+          matches ? { ...rest, hits: compactGrepMatches(matches) } : rest,
+          args,
+          name
+        );
       }
 
       case 'optimization_storage': {
