@@ -12,7 +12,11 @@ import {
 } from './managed-clients.mjs';
 import { launcherEntry, runtimeDirectory } from './launch-entry.mjs';
 
-const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
+const packageRoot = resolve(
+  dirname(fileURLToPath(import.meta.url)),
+  '..',
+  '..'
+);
 const begin = '# >>> token-optimizer managed clients >>>';
 const end = '# <<< token-optimizer managed clients <<<';
 const quoteSh = (text) => `'${text.replaceAll("'", "'\\''")}'`;
@@ -26,21 +30,33 @@ export function bashLoginProfile(home) {
   );
 }
 
-export function shellProfiles(env = process.env) {
+const windowsDocuments = () =>
+  execFileSync(
+    'powershell',
+    ['-NoProfile', '-Command', "[Environment]::GetFolderPath('MyDocuments')"],
+    { encoding: 'utf8', windowsHide: true }
+  ).trim();
+
+export function shellProfiles(
+  env = process.env,
+  { platform = process.platform, documents = windowsDocuments } = {}
+) {
   if (env.TOKEN_OPTIMIZER_SHELL_PROFILES)
     return JSON.parse(env.TOKEN_OPTIMIZER_SHELL_PROFILES);
   // Isolated hook-install checks must not touch the operator's shell profiles.
   if (env.TOKEN_OPTIMIZER_SETTINGS) return [];
-  if (process.platform === 'win32') {
-    const documents = execFileSync(
-      'powershell',
-      ['-NoProfile', '-Command', "[Environment]::GetFolderPath('MyDocuments')"],
-      { encoding: 'utf8', windowsHide: true }
-    ).trim();
-    if (!documents)
-      throw new Error('Cannot locate the PowerShell profile directory.');
+  if (platform === 'win32') {
+    // NO DOCUMENTS FOLDER, NO PROFILE TO ACTIVATE. PowerShell derives $PROFILE
+    // from this same folder, so when it resolves to nothing (a service account,
+    // a profile without one) PowerShell loads no profile either. This used to
+    // throw. That came after the hooks were already wired, so the install
+    // stopped there: it skipped Windows command activation and routing and
+    // exited 1 with "installation failed". There is nothing here to activate,
+    // so there is nothing to fail.
+    const folder = documents();
+    if (!folder) return [];
     return ['PowerShell', 'WindowsPowerShell'].map((shell) =>
-      join(documents, shell, 'Microsoft.PowerShell_profile.ps1')
+      join(folder, shell, 'Microsoft.PowerShell_profile.ps1')
     );
   }
   // Bash reads only the first existing login profile. Creating .bash_profile
