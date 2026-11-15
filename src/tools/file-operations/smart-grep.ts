@@ -78,7 +78,10 @@ export type CompactHit =
 export function compactGrepMatches(
   matches: GrepMatch[]
 ): Record<string, CompactHit[]> {
-  const byFile: Record<string, CompactHit[]> = {};
+  // A Map, not an object literal: a file named `__proto__` assigned onto `{}`
+  // sets the object's prototype instead of adding a key, and its hits vanish
+  // from the JSON. Object.fromEntries defines every key as an own property.
+  const byFile = new Map<string, CompactHit[]>();
   for (const m of matches) {
     const extra: { columns?: number[]; before?: string[]; after?: string[] } =
       {};
@@ -90,24 +93,30 @@ export function compactGrepMatches(
     const hit: CompactHit = Object.keys(extra).length
       ? [m.lineNumber, m.line, extra]
       : [m.lineNumber, m.line];
-    (byFile[m.file] ??= []).push(hit);
+    const list = byFile.get(m.file);
+    if (list) list.push(hit);
+    else byFile.set(m.file, [hit]);
   }
-  return byFile;
+  return Object.fromEntries(byFile);
 }
 
 /**
  * Every distinct matched text as `[text, occurrences, first "file:line"]`,
  * sorted by text, or null when it would not summarise anything.
  *
- * Null when there is nothing to aggregate: a literal search (every match IS
- * the pattern), a set too varied to be an aggregate, or one no smaller than
+ * Null when there is nothing to aggregate: a single distinct text (a literal
+ * search, where every match IS the pattern), a set too varied to be an aggregate, or one no smaller than
  * the hits it summarises.
  */
 export function distinctMatchSummary(
   distinct: Map<string, { count: number; at: string }>,
   totalMatches: number
 ): Array<[string, number, string]> | null {
-  if (distinct.size === 0 || distinct.size > MAX_DISTINCT_MATCHES) return null;
+  // One distinct text is no aggregate: it is the pattern's own text (a
+  // literal search), and metadata.occurrences already counts it. Counting
+  // every occurrence, rather than skipping those equal to the pattern, keeps
+  // the counts true when case-insensitive matching finds foo and FOO.
+  if (distinct.size <= 1 || distinct.size > MAX_DISTINCT_MATCHES) return null;
   if (distinct.size >= totalMatches) return null;
   return [...distinct.entries()]
     .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
@@ -1065,7 +1074,6 @@ export class SmartGrepTool {
               // `settings.A or settings.B` the record keeps only A, and an
               // aggregate built from records would silently miss B.
               for (const m of matches) {
-                if (m[0] === pattern) continue;
                 const seen = distinctTexts.get(m[0]);
                 if (seen) seen.count += 1;
                 else if (distinctTexts.size <= MAX_DISTINCT_MATCHES)
@@ -1202,7 +1210,24 @@ export class SmartGrepTool {
           ? this.tokenCounter.count(JSON.stringify(distinct)).tokens
           : 0;
         if (distinctTokens > MAX_DISTINCT_TOKENS) distinct = null;
-        else if (distinct) trimTo(MAX_RESPONSE_TOKENS, { distinct });
+        else if (distinct) {
+          const pageWithoutSummary = paginatedMatches;
+          trimTo(MAX_RESPONSE_TOKENS, { distinct });
+          // trimTo never drops the last hit. If that one hit (with requested
+          // context) plus the summary still exceeds the budget, the summary
+          // goes and the page it displaced comes back: the hits are what was
+          // asked for.
+          const combined = this.tokenCounter.count(
+            JSON.stringify({
+              hits: compactGrepMatches(paginatedMatches),
+              distinct,
+            })
+          ).tokens;
+          if (combined > MAX_RESPONSE_TOKENS) {
+            distinct = null;
+            paginatedMatches = pageWithoutSummary;
+          }
+        }
       }
 
       // Build result based on mode
@@ -1224,8 +1249,12 @@ export class SmartGrepTool {
       } else {
         // Normal mode: return matches, counted in their wire shape.
         resultData = { matches: paginatedMatches };
+        // The summary is part of what the caller receives, so it is counted.
         resultTokens = this.tokenCounter.count(
-          JSON.stringify({ hits: compactGrepMatches(paginatedMatches) })
+          JSON.stringify({
+            hits: compactGrepMatches(paginatedMatches),
+            ...(distinct ? { distinct } : {}),
+          })
         ).tokens;
       }
 

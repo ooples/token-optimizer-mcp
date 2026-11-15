@@ -99,6 +99,74 @@ describe('smart_grep aggregation', () => {
     expect(sent).toBeLessThanOrEqual(8_000);
   });
 
+  it('counts the summary in the reported token count', async () => {
+    const result = await search('settings\\.[A-Z][A-Z0-9_]+');
+    expect(result.distinct).toBeDefined();
+    const sent = tokenCounter.count(
+      JSON.stringify({
+        hits: compactGrepMatches(result.matches ?? []),
+        distinct: result.distinct,
+      })
+    ).tokens;
+    expect(result.metadata.tokenCount).toBe(sent);
+  });
+
+  it('counts occurrences equal to the pattern, so case variants keep true counts', async () => {
+    const caseDir = mkdtempSync(join(tmpdir(), 'grep-case-'));
+    try {
+      const lines: string[] = [];
+      for (let i = 0; i < 400; i++) lines.push(i % 2 ? 'x = foo' : 'y = FOO');
+      writeFileSync(join(caseDir, 'a.txt'), lines.join('\n') + '\n');
+      const result = await tool.grep('foo', {
+        path: caseDir,
+        regex: true,
+        caseSensitive: false,
+        limit: 1,
+      });
+      expect(result.metadata.truncated).toBe(true);
+      expect(result.distinct).toEqual([
+        ['FOO', 200, 'a.txt:1'],
+        ['foo', 200, 'a.txt:2'],
+      ]);
+    } finally {
+      rmSync(caseDir, { recursive: true, force: true });
+    }
+  });
+
+  it('drops the summary when the one hit left cannot share the budget with it', async () => {
+    const bigDir = mkdtempSync(join(tmpdir(), 'grep-big-'));
+    try {
+      // The first hit carries 6 dense lines of context after it, each near the
+      // 2,000-character line cap: alone it takes most of the budget.
+      const lines = ['settings.HUGE = 1'];
+      for (let i = 0; i < 6; i++)
+        lines.push(
+          '# ' + Array.from({ length: 300 }, (_, k) => `w${i}x${k}`).join(' ')
+        );
+      for (let i = 0; i < 300; i++) lines.push(`settings.N${i % 150}`);
+      writeFileSync(join(bigDir, 'a.py'), lines.join('\n') + '\n');
+      const result = await tool.grep('settings\\.[A-Z][A-Z0-9_]+', {
+        path: bigDir,
+        regex: true,
+        limit: 3000,
+        includeContext: true,
+        contextAfter: 6,
+      });
+      const sent = tokenCounter.count(
+        JSON.stringify({
+          hits: compactGrepMatches(result.matches ?? []),
+          ...(result.distinct ? { distinct: result.distinct } : {}),
+        })
+      ).tokens;
+      expect(result.metadata.truncated).toBe(true);
+      expect(result.matches?.[0]?.line).toBe('settings.HUGE = 1');
+      expect(result.distinct).toBeUndefined();
+      expect(sent).toBeLessThanOrEqual(8_000);
+    } finally {
+      rmSync(bigDir, { recursive: true, force: true });
+    }
+  });
+
   it('adds no summary when every hit is already on the page', async () => {
     const result = await search('settings\\.NAME_7\\b');
     expect(result.metadata.truncated).toBe(false);
@@ -143,6 +211,18 @@ describe('smart_grep wire shape', () => {
     // carried: sized as records, the same hits are over the budget.
     expect(compact).toBeLessThanOrEqual(8_000);
     expect(records).toBeGreaterThan(8_000);
+  });
+
+  it('keeps the hits of a file whose name is an object-prototype key', () => {
+    const hits = compactGrepMatches([
+      { file: '__proto__', lineNumber: 1, line: 'a' },
+      { file: 'constructor', lineNumber: 2, line: 'b' },
+    ]);
+    // Computed key: a literal `__proto__:` would set the prototype here too.
+    const sent = JSON.parse(JSON.stringify(hits));
+    expect(Object.keys(sent)).toEqual(['__proto__', 'constructor']);
+    expect(sent['__proto__']).toEqual([[1, 'a']]);
+    expect(sent.constructor).toEqual([[2, 'b']]);
   });
 
   it('keeps requested columns and context', () => {
