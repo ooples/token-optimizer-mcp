@@ -719,7 +719,18 @@ export function disclose(dir, text, context = {}) {
     // worse than one that returns the front of the best section. An empty
     // preview forces the expansion it exists to avoid.
     const room = budget - spent;
-    if (room > 40 && (s.score >= 6 || kept.length === 0)) {
+    // ENVELOPE FIELDS DO NOT SATISFY THE FLOOR WHEN THERE IS CONTENT TO SHOW.
+    // A tool's own small JSON fields outrank a routine log, so on smart_read of
+    // a 524 KB release log (THOL log-needle-zh, #565) the 33-character
+    // `metadata` line was admitted first. That disarmed this floor, and all 153
+    // content lines were withheld behind it: a 121-character reply that cost
+    // an expand round trip and 1.47x control. So the first lifted-content
+    // section still gets the floor while no content has been kept. A payload
+    // that is fields all the way down has no envelope to see past, and keeps
+    // the original rule.
+    const contentFloor =
+      s.kind !== 'field' && !kept.some((k) => k.kind !== 'field');
+    if (room > 40 && (s.score >= 6 || kept.length === 0 || contentFloor)) {
       const slice = [];
       let used = 0;
       for (const line of s.lines) {

@@ -118,6 +118,10 @@ export interface SmartReadMetadata {
   chunked?: boolean;
   /** Present only when the content was cut short. */
   truncated?: boolean;
+  /** The file's full line count; present only when truncated. */
+  totalLines?: number;
+  /** What was cut and the cheap way on; present only when truncated. */
+  note?: string;
   /** How many chunks the file was split into; present only when chunked. */
   chunkCount?: number;
   /** Which chunk this response carries; present only when chunked. */
@@ -477,7 +481,21 @@ export class SmartReadTool {
 
     if (fromCache) header.fromCache = true;
     if (isDiff) header.isDiff = true;
-    if (truncated) header.truncated = true;
+    if (truncated) {
+      header.truncated = true;
+      // WHAT WAS CUT AND WHERE TO GO NEXT. A bare `truncated: true` on a
+      // 524 KB log (THOL log-needle-zh, #565) left the model to discover by an
+      // expand round trip that it held 153 of 5,315 lines, and it searched
+      // with grep afterwards anyway. Searching is the cheap route into a large
+      // file, so the note says so before the first wasted turn.
+      // A final newline ends the last line rather than starting another.
+      header.totalLines =
+        rawContent.split('\n').length - (rawContent.endsWith('\n') ? 1 : 0);
+      header.note =
+        `Cut to fit maxSize=${maxSize}: this shows the start and end of ` +
+        `${header.totalLines.toLocaleString('en-US')} lines. To find something ` +
+        `in it, search (Grep or smart_grep); to page through it, pass chunkIndex.`;
+    }
     if (chunked) {
       header.chunked = true;
       // Navigation, not content. Attaching every chunk here defeated the
