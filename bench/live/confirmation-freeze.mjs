@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { altAAttributeScript, altAModule } from './alt-a-module.mjs';
 
 export async function treeFiles(root, accept = () => true) {
   const files = [];
@@ -40,7 +41,7 @@ if (
   const altA = dirname(
     execFileSync(
       process.env.PYTHON || 'python',
-      ['-c', 'import importlib, os; print(importlib.import_module(os.environ["ALT_A_MODULE"]).__file__)'],
+      ['-c', altAAttributeScript('__file__'), altAModule()],
       { encoding: 'utf8', windowsHide: true }
     ).trim()
   );

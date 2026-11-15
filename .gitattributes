@@ -19,3 +19,9 @@ bench/compression/token-counts.json text eol=lf
 # The recall verifiers hash the fixture files to prove a session changed nothing,
 # so a file's bytes must be the same on every checkout.
 bench/recall/fixtures/** text eol=lf
+
+# The THOL entrypoint identifies a campaign's arm order by the sha256 of this
+# file's bytes. Checked out CRLF here, #565's order hashed 883c60c5... while the
+# committed LF blob hashes ad54734b..., so a pre-registration could not be
+# checked against the repository on another platform.
+bench/thol/campaigns/**/arm-order*.json text eol=lf

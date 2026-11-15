@@ -10,7 +10,7 @@ import { join } from 'node:path';
 import { get_encoding } from 'tiktoken';
 import { startProxy } from '../../dist/proxy/server.js';
 import { auditChatProbe } from './chat-route-audit.mjs';
-import { altACliModule } from './alt-a-module.mjs';
+import { altACliModule, altAAttributeScript, altAModule } from './alt-a-module.mjs';
 
 const raw = await mkdtemp(join(tmpdir(), 'chat-route-comparison-'));
 let received;
@@ -149,7 +149,7 @@ try {
     raw,
     altA: execFileSync(
       python,
-      ['-c', 'import importlib, os; print(importlib.import_module(os.environ["ALT_A_MODULE"]).__version__)'],
+      ['-c', altAAttributeScript('__version__'), altAModule()],
       { encoding: 'utf8', windowsHide: true }
     ).trim(),
     altAOverrides: ['--no-rate-limit'],

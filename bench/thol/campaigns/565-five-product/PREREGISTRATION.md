@@ -95,7 +95,12 @@ them.
 
 - n = 3 repetitions × 12 tasks × 8 arms = **288 runs**, serial.
 - Arm order per repetition is rotated and committed in `arm-order.json`
-  (sha256 `883c60c5…` as generated). The entrypoint refuses a changed order for
+  (sha256 `883c60c5…` as generated). *Note, 2026-11-15 (#590 review):* that
+  hash is of the Windows CRLF checkout the rig was given, and both campaign
+  volumes saved those bytes. The committed LF blob hashes `ad54734b…`. With CRLF
+  removed, the saved order is byte-identical to the committed file, so the order
+  run is the one registered. `.gitattributes` now pins these files to LF. The
+  entrypoint refuses a changed order for
   the same campaign label.
 - Segments are cheapest first, with credentials re-staged between segments:
   - `SEG_1` code-bugfix-py, code-refactor-split-py, log-needle-zh,

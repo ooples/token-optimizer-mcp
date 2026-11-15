@@ -21,7 +21,9 @@
 # failure this rig's provenance checks exist to prevent.
 FROM thol-rig:local
 
-ARG OPTIMIZER_VERSION=6.0.2
+# Must equal the base Dockerfile's OPTIMIZER_VERSION and the manifests' pins: the
+# entrypoint refuses a runtime `current` marker that differs from the pin.
+ARG OPTIMIZER_VERSION=7.11.0
 
 USER root
 

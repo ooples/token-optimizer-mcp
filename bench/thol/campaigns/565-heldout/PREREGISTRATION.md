@@ -70,3 +70,24 @@ changes host memory, not anything the model sees.
   transcript analysis as #565 before anything is changed.
 
 All results are published whichever way they fall.
+
+## Post-results notes, 2026-11-15 (#590 review)
+
+The text above is left as registered. These notes were added after the results
+and change no number in them.
+
+- **Reading.** The first bullet said an at-or-below-control result "means the
+  fixes did not overfit". It cannot. Neither fixed path fired on these tasks
+  (`RESULTS.md`), so the most this outcome supports is *no regression detected
+  on these held-out tasks*. A claim that the fixes generalise needs held-out
+  tasks that exercise them. `RESULTS.md` is worded to match.
+- **Arm-order checksum.** `883c60c5…` is the hash of the CRLF checkout the rig
+  read. The committed LF blob hashes `ad54734b…`. The two files are
+  byte-identical once CRLF is removed. See the note in the #565
+  pre-registration.
+- **Commit hashes.** #590's history was rebuilt so its commit messages pass
+  commitlint, and the bench commits were re-parented onto master without the
+  product commits they had sat on. `534ce0f4` (the measured head) and
+  `ac3ae488` (this file as registered) are therefore not on the rebuilt branch.
+  Both stay reachable from the signed tag `thol-565-heldout-as-run`. The
+  packed tree `152076f2` that the campaign ran is unaffected.

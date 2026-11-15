@@ -64,14 +64,15 @@ def input_price(model):
     return hits[0]
 
 
-def first_request_usage(run_id):
-    """Usage and model of the run's first model request, from its transcript."""
+def model_requests(run_id):
+    """(usage, model) of every model request in the run, in order."""
     path = os.path.join(os.path.dirname(os.path.abspath(DB)), "artifacts",
                         run_id, "transcript.jsonl")
     if not os.path.exists(path):
         # A results file copied without its artifacts still has a primary
         # endpoint; only this one is unavailable, and the table says so.
-        return None, None
+        return None
+    requests = []
     with open(path, encoding="utf-8") as f:
         for line in f:
             try:
@@ -80,21 +81,46 @@ def first_request_usage(run_id):
                 continue
             if entry.get("type") == "assistant":
                 msg = entry["message"]
-                return msg.get("usage") or {}, msg.get("model") or ""
-    raise SystemExit(f"run {run_id} has no model request in {path}")
+                requests.append((msg.get("usage") or {}, msg.get("model") or ""))
+    if not requests:
+        raise SystemExit(f"run {run_id} has no model request in {path}")
+    return requests
+
+
+def written_tiers(usage):
+    tiers = usage.get("cache_creation") or {}
+    return {name for name, key in (("1h", "ephemeral_1h_input_tokens"),
+                                   ("5m", "ephemeral_5m_input_tokens"))
+            if tiers.get(key, 0) > 0}
+
+
+WRITE_MULTIPLIER = {"5m": 1.25, "1h": 2.0}
 
 
 def cold_start_cost(run_id, total_cost):
-    usage, model = first_request_usage(run_id)
-    if usage is None:
+    requests = model_requests(run_id)
+    if requests is None:
         return None
+    usage, model = requests[0]
     read = usage.get("cache_read_input_tokens", 0)
-    tiers = usage.get("cache_creation") or {}
-    # The tier this request wrote at is the tier a cold prefix would be
-    # written at. A request that wrote nothing is taken at the 5m tier,
-    # the cheaper one, so the adjustment is never overstated.
-    write_multiplier = 2.0 if tiers.get("ephemeral_1h_input_tokens", 0) > 0 else 1.25
-    return total_cost + read * (write_multiplier - 0.1) * input_price(model) / 1e6
+    if read == 0:
+        return total_cost
+    # The transcript does not record the TTL a request asked for, only the
+    # tiers it wrote at. A creation counter of zero says nothing was new, not
+    # which TTL the cached prefix carries, so a fully warm first request
+    # cannot be priced from its own counters. Its TTL is taken from the tier
+    # it wrote at; failing that, from the one tier the run's other requests
+    # wrote at. With no write, or writes at both tiers and none on the first
+    # request, the TTL is unknown and the run's cold start is unavailable
+    # rather than guessed.
+    tiers = written_tiers(usage)
+    if not tiers:
+        for later, _ in requests[1:]:
+            tiers |= written_tiers(later)
+    if len(tiers) != 1:
+        return None
+    multiplier = WRITE_MULTIPLIER[tiers.pop()]
+    return total_cost + read * (multiplier - 0.1) * input_price(model) / 1e6
 
 
 con = sqlite3.connect(DB)

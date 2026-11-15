@@ -232,6 +232,16 @@ prepare() {
   # --rm run throws away everything it just paid for. runner.py resumes from
   # results.sqlite, so this is also what makes the campaign restartable after
   # a credential expiry or an interrupted segment.
+  #
+  # A CAMPAIGN NEEDS /results TO BE A MOUNT, NOT JUST A WRITABLE DIRECTORY. The
+  # image creates /results owned by bench so a fresh volume is seeded writable,
+  # which also means an unmounted /results passes the writability check below.
+  # A campaign launched with --rm and no volume would then record into the
+  # container's own filesystem and lose every paid run when it exited.
+  if [ "$MODE" = "campaign" ] \
+    && ! awk '$5 == "/results" { found = 1 } END { exit !found }' /proc/self/mountinfo; then
+    die "/results is not a mounted volume, so every run would be paid for and discarded when the container exits. Mount one: -v <volume>:/results."
+  fi
   if [ -d /results ] && [ -w /results ]; then
     log "Persisting results to the mounted volume"
     mkdir -p /results/runs

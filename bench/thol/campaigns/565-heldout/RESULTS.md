@@ -3,7 +3,8 @@
 The pre-registered design ran as written (`PREREGISTRATION.md`, ac3ae488): 4
 held-out tasks × 8 arms × 3 repetitions. **96/96 runs ok, $28.05.** Our arm ran
 the packed tree `152076f2` (head 534ce0f4), which carries the smart_grep and
-disclose fixes.
+disclose fixes. Both commits are kept by the tag `thol-565-heldout-as-run`
+(see the pre-registration's post-results notes).
 
 ## Failures
 
@@ -49,10 +50,13 @@ task, not to any arm.
 
 ## Reading
 
-Per the pre-registration: our arm came in under control with no quality loss.
-So the #565 fixes did not overfit the development set. That does not show the
-fixes helped. Neither smart_grep's large-result path nor the disclose envelope
-path fired on these tasks.
+Our arm came in under control with no quality loss, so no regression was
+detected on these held-out tasks. That is all this set shows about the #565
+fixes. Neither smart_grep's large-result path nor the disclose envelope path
+fired on these tasks, so these results say nothing about how the fixes behave
+on held-out inputs that do exercise them, whether they help there or overfit
+the development set. The pre-registration read this outcome as "the fixes did
+not overfit". That reading was too strong, and is corrected in its dated note.
 
 **The one loss is variance, not a mechanism.** We lost on code-debug-cascade-py
 (1.09×), and the whole gap is one repetition:
