@@ -145,6 +145,18 @@ describe('smart_grep wire shape', () => {
     expect(records).toBeGreaterThan(8_000);
   });
 
+  it('keeps the hits of a file whose name is an object-prototype key', () => {
+    const hits = compactGrepMatches([
+      { file: '__proto__', lineNumber: 1, line: 'a' },
+      { file: 'constructor', lineNumber: 2, line: 'b' },
+    ]);
+    // Computed key: a literal `__proto__:` would set the prototype here too.
+    const sent = JSON.parse(JSON.stringify(hits));
+    expect(Object.keys(sent)).toEqual(['__proto__', 'constructor']);
+    expect(sent['__proto__']).toEqual([[1, 'a']]);
+    expect(sent.constructor).toEqual([[2, 'b']]);
+  });
+
   it('keeps requested columns and context', () => {
     const hits = compactGrepMatches([
       {

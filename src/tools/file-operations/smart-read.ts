@@ -264,6 +264,8 @@ export class SmartReadTool {
     let finalContent = rawContent;
     let isDiff = false;
     let truncated = false;
+    // Which cut was made, so the note describes what the caller actually holds.
+    let keptEnds: 'start' | 'start and end' = 'start and end';
     let chunked = false;
     let chunkCount = 0;
     let chunkIndex = 0;
@@ -356,6 +358,7 @@ export class SmartReadTool {
         finalContent =
           prefixWithinBytes(rawContent, actualMaxSize) + truncationMsg;
         truncated = true;
+        keptEnds = 'start';
       } else {
         // If file is larger than maxSize, truncate it
         const truncateResult = truncateContent(rawContent, maxSize, {
@@ -492,8 +495,9 @@ export class SmartReadTool {
       header.totalLines =
         rawContent.split('\n').length - (rawContent.endsWith('\n') ? 1 : 0);
       header.note =
-        `Cut to fit maxSize=${maxSize}: this shows the start and end of ` +
-        `${header.totalLines.toLocaleString('en-US')} lines. To find something ` +
+        `Cut to fit maxSize=${maxSize}: this shows the ${keptEnds} of ` +
+        `${header.totalLines.toLocaleString('en-US')} ` +
+        `${header.totalLines === 1 ? 'line' : 'lines'}. To find something ` +
         `in it, search (Grep or smart_grep); to page through it, pass chunkIndex.`;
     }
     if (chunked) {
