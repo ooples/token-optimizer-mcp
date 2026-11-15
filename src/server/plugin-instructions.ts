@@ -1,3 +1,8 @@
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
+import { fileURLToPath, pathToFileURL } from 'url';
+
 // This reaches every conforming MCP client at initialization, including hosts
 // that expose no native lifecycle hook. It is deliberately capability-aware:
 // the model must route through optimizer schemas that tools/list actually
@@ -63,8 +68,76 @@ const CODE_MODE_DISCOVERY =
   'and print that entry only. To discover names, list names without descriptions ' +
   'first. Broad catalog dumps can exhaust the context budget.';
 
-export function instructionsFor(env: NodeJS.ProcessEnv = process.env): string {
-  return String(env.CLAUDE_PLUGIN_ROOT ?? '').trim()
+/**
+ * THE SHORT TEXT IS FOR ANY CLAUDE CODE SESSION OUR HOOKS RUN IN, not only a
+ * plugin install. CLAUDE_PLUGIN_ROOT alone missed the script install
+ * (install-cli -> wire-hooks), which wires the same hooks into settings.json
+ * and registers the server by hand: those sessions got the long text, told the
+ * model smart_* routing was mandatory, and paid for the ToolSearch loads it
+ * asked for. Measured on THOL #565, whose arm is that install: 0.64
+ * ToolSearch turns a run, ~$0.009 a run (3.9% of the arm's spend; 11% on
+ * log-needle-zh), plus 748 more characters of fixed context than the plugin.
+ *
+ * Claude Code marks the servers it launches with CLAUDECODE=1 (measured on
+ * 2.1.325, along with CLAUDE_PROJECT_DIR). Other clients never set it, so a
+ * machine with Claude Code hooks installed still gives Cursor or Codex the
+ * long text -- the short one claims hooks those clients do not run.
+ */
+export function instructionsFor(
+  env: NodeJS.ProcessEnv = process.env,
+  claudeCodeHooksWired = false
+): string {
+  const plugin = String(env.CLAUDE_PLUGIN_ROOT ?? '').trim() !== '';
+  const hookedClaudeCode = env.CLAUDECODE === '1' && claudeCodeHooksWired;
+  return plugin || hookedClaudeCode
     ? PLUGIN_INSTRUCTIONS
     : SERVER_INSTRUCTIONS + CODE_MODE_DISCOVERY;
+}
+
+/**
+ * Whether a settings file this Claude Code session loads wires our hooks: the
+ * user file ($CLAUDE_CONFIG_DIR or ~/.claude), and the project's shared and
+ * local files under CLAUDE_PROJECT_DIR. PreToolUse is required because the
+ * short text promises built-in Read and Grep are compacted, and PreToolUse is
+ * the hook that does it. Unreadable or malformed files count as not wired:
+ * the long text is the safe default, since it is correct without hooks.
+ */
+export async function claudeCodeHooksWired(
+  env: NodeJS.ProcessEnv = process.env
+): Promise<boolean> {
+  if (env.CLAUDECODE !== '1') return false;
+  const userDir = env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude');
+  const files = [path.join(userDir, 'settings.json')];
+  if (env.CLAUDE_PROJECT_DIR) {
+    for (const name of ['settings.json', 'settings.local.json'])
+      files.push(path.join(env.CLAUDE_PROJECT_DIR, '.claude', name));
+  }
+  let wiredEntries: (settings: unknown) => { event: string }[];
+  try {
+    ({ wiredEntries } = await import(
+      pathToFileURL(
+        path.join(
+          path.dirname(fileURLToPath(import.meta.url)),
+          '..',
+          '..',
+          'src',
+          'hooks-core',
+          'wire.mjs'
+        )
+      ).href
+    ));
+  } catch {
+    return false;
+  }
+  for (const file of files) {
+    let settings: unknown;
+    try {
+      settings = JSON.parse(await fs.promises.readFile(file, 'utf8'));
+    } catch {
+      continue;
+    }
+    if (wiredEntries(settings).some((entry) => entry.event === 'PreToolUse'))
+      return true;
+  }
+  return false;
 }

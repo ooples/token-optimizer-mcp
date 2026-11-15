@@ -1,6 +1,9 @@
 #!/usr/bin/env node
 
-import { instructionsFor } from './plugin-instructions.js';
+import {
+  claudeCodeHooksWired,
+  instructionsFor,
+} from './plugin-instructions.js';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { startManagedInstallRepair } from './install-repair.js';
@@ -368,7 +371,7 @@ const server = new Server(
     version: packageVersion,
   },
   {
-    instructions: instructionsFor(),
+    instructions: instructionsFor(process.env, await claudeCodeHooksWired()),
     capabilities: {
       tools: {},
     },
