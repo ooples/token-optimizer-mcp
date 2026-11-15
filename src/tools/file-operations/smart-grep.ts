@@ -78,7 +78,10 @@ export type CompactHit =
 export function compactGrepMatches(
   matches: GrepMatch[]
 ): Record<string, CompactHit[]> {
-  const byFile: Record<string, CompactHit[]> = {};
+  // A Map, not an object literal: a file named `__proto__` assigned onto `{}`
+  // sets the object's prototype instead of adding a key, and its hits vanish
+  // from the JSON. Object.fromEntries defines every key as an own property.
+  const byFile = new Map<string, CompactHit[]>();
   for (const m of matches) {
     const extra: { columns?: number[]; before?: string[]; after?: string[] } =
       {};
@@ -90,9 +93,11 @@ export function compactGrepMatches(
     const hit: CompactHit = Object.keys(extra).length
       ? [m.lineNumber, m.line, extra]
       : [m.lineNumber, m.line];
-    (byFile[m.file] ??= []).push(hit);
+    const list = byFile.get(m.file);
+    if (list) list.push(hit);
+    else byFile.set(m.file, [hit]);
   }
-  return byFile;
+  return Object.fromEntries(byFile);
 }
 
 /**
