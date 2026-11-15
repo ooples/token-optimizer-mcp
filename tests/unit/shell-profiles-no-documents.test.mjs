@@ -1,6 +1,9 @@
 import { describe, it, expect } from '@jest/globals';
 import { join } from 'node:path';
-import { shellProfiles } from '../../src/scripts/managed-shell.mjs';
+import {
+  shellProfiles,
+  windowsDocuments,
+} from '../../src/scripts/managed-shell.mjs';
 
 /**
  * A Windows profile with no Documents folder has no PowerShell profile to
@@ -36,5 +39,26 @@ describe('Windows shell profiles', () => {
         { platform: 'win32', documents: asked }
       )
     ).toEqual(['x.ps1']);
+  });
+});
+
+describe('the Documents lookup', () => {
+  it('falls back to pwsh when Windows PowerShell cannot run', () => {
+    const asked = [];
+    const docs = windowsDocuments((shell) => {
+      asked.push(shell);
+      if (shell === 'powershell') throw new Error('ENOENT');
+      return 'C:\Users\someone\Documents\r\n';
+    });
+    expect(asked).toEqual(['powershell', 'pwsh']);
+    expect(docs).toBe('C:\Users\someone\Documents');
+  });
+
+  it('reports no folder, rather than throwing, when no PowerShell runs', () => {
+    expect(
+      windowsDocuments(() => {
+        throw new Error('ENOENT');
+      })
+    ).toBe('');
   });
 });

@@ -30,12 +30,27 @@ export function bashLoginProfile(home) {
   );
 }
 
-const windowsDocuments = () =>
-  execFileSync(
-    'powershell',
-    ['-NoProfile', '-Command', "[Environment]::GetFolderPath('MyDocuments')"],
-    { encoding: 'utf8', windowsHide: true }
-  ).trim();
+// Windows PowerShell first, then PowerShell 7. Either one answering is enough,
+// because both derive $PROFILE from this folder. Neither running means no
+// PowerShell can load a profile, which is the same outcome as no folder. It
+// used to throw past the hooks and stop the install there.
+export function windowsDocuments(
+  run = (shell) =>
+    execFileSync(
+      shell,
+      ['-NoProfile', '-Command', "[Environment]::GetFolderPath('MyDocuments')"],
+      { encoding: 'utf8', windowsHide: true }
+    )
+) {
+  for (const shell of ['powershell', 'pwsh']) {
+    try {
+      return String(run(shell)).trim();
+    } catch {
+      // Not installed or not runnable; try the next one.
+    }
+  }
+  return '';
+}
 
 export function shellProfiles(
   env = process.env,
