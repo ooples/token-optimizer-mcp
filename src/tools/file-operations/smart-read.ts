@@ -494,11 +494,21 @@ export class SmartReadTool {
       // A final newline ends the last line rather than starting another.
       header.totalLines =
         rawContent.split('\n').length - (rawContent.endsWith('\n') ? 1 : 0);
-      header.note =
-        `Cut to fit maxSize=${maxSize}: this shows the ${keptEnds} of ` +
+      const lineCount =
         `${header.totalLines.toLocaleString('en-US')} ` +
-        `${header.totalLines === 1 ? 'line' : 'lines'}. To find something ` +
-        `in it, search (Grep or smart_grep); to page through it, pass chunkIndex.`;
+        `${header.totalLines === 1 ? 'line' : 'lines'}`;
+      // A DIFF IS CUT AS A DIFF. When the changes since the last read exceed
+      // maxSize, it is the diff that was cut, not the file, and calling it the
+      // file's start and end would misdescribe what the caller holds.
+      // chunkIndex bypasses the diff, so it reaches the file itself.
+      header.note = isDiff
+        ? `Cut to fit maxSize=${maxSize}: this shows the start and end of the ` +
+          `changes since your last read, not the file (now ${lineCount}). ` +
+          `To read the file itself, pass chunkIndex; to find something in ` +
+          `it, search (Grep or smart_grep).`
+        : `Cut to fit maxSize=${maxSize}: this shows the ${keptEnds} of ` +
+          `${lineCount}. To find something in it, search (Grep or ` +
+          `smart_grep); to page through it, pass chunkIndex.`;
     }
     if (chunked) {
       header.chunked = true;

@@ -6,6 +6,7 @@ import { CacheEngine } from '../../../src/core/cache-engine.js';
 import { MetricsCollector } from '../../../src/core/metrics.js';
 import { TokenCounter } from '../../../src/core/token-counter.js';
 import { SmartReadTool } from '../../../src/tools/file-operations/smart-read.js';
+import { SmartWriteTool } from '../../../src/tools/file-operations/smart-write.js';
 
 /**
  * A cut read says what it holds and the cheap way on (#565 log-needle-zh). The
@@ -25,9 +26,12 @@ function reader() {
   dirs.push(dir);
   const cache = new CacheEngine(join(dir, 'cache.db'));
   caches.push(cache);
+  const counter = new TokenCounter();
+  const metrics = new MetricsCollector();
   return {
     dir,
-    tool: new SmartReadTool(cache, new TokenCounter(), new MetricsCollector()),
+    tool: new SmartReadTool(cache, counter, metrics),
+    writer: new SmartWriteTool(cache, counter, metrics),
   };
 }
 
@@ -55,4 +59,28 @@ it('says only the start is kept when a minified file is cut', async () => {
   expect(metadata.totalLines).toBe(1);
   expect(metadata.note).toContain('the start of 1 line.');
   expect(metadata.note).not.toContain('end');
+});
+
+it('describes a cut diff as the changes, not the file', async () => {
+  const { dir, tool, writer } = reader();
+  const file = join(dir, 'module.py');
+  const original = Array.from(
+    { length: 1000 },
+    (_, i) => `value_${i} = compute(${i})  # an ordinary line of source`
+  );
+  // The write is the read base, as in read-diffs-against-the-write.
+  await writer.write(file, original.join('\n') + '\n', { autoFormat: false });
+  // 100 changed lines in one block: a diff well under half the file, and
+  // well over maxSize.
+  const changed = original.map((line, i) =>
+    i >= 100 && i < 200
+      ? `value_${i} = recompute(${i}, scale=2)  # changed`
+      : line
+  );
+  writeFileSync(file, changed.join('\n') + '\n');
+  const { metadata } = await tool.read(file, { maxSize: 4_000 });
+  expect(metadata.isDiff).toBe(true);
+  expect(metadata.truncated).toBe(true);
+  expect(metadata.note).toContain('changes since your last read, not the file');
+  expect(metadata.note).toContain('now 1,000 lines');
 });
