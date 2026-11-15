@@ -42,6 +42,23 @@ describe('compacting a run against its previous run', () => {
     );
   });
 
+  it('marks a cut where it makes one, so the router need not announce every bound', () => {
+    const text = runOutput({ failing: ['alpha'] });
+    for (const previous of ['', 'unrelated\nlines\n']) {
+      const out = compact(text, { previous, maxBytes: MAX });
+      const marked = out.match(/\[token-optimizer: (\d+) bytes omitted here; ending intact; redirect to a file for all\]/);
+      expect(marked).not.toBeNull();
+      // The count is what is missing: head + marker + ending accounts for all.
+      const [head, ending] = out.split(marked[0]);
+      const dropped = Buffer.byteLength(text) - Buffer.byteLength(head) - Buffer.byteLength(ending) + 2;
+      expect(Number(marked[1])).toBe(dropped);
+      expect(text.endsWith(ending.slice(1))).toBe(true);
+      expect(Buffer.byteLength(out, 'utf8')).toBeLessThanOrEqual(MAX);
+    }
+    // And output that fits carries no marker at all.
+    expect(compact('alpha\nbeta\n', { previous: '', maxBytes: MAX })).toBe('alpha\nbeta\n');
+  });
+
   it('never returns more than the budget', () => {
     const text = 'x'.repeat(50_000);
 

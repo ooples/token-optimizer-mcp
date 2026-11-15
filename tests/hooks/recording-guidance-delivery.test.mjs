@@ -22,7 +22,8 @@ const scratch = mkdtempSync(join(tmpdir(), 'recording-delivery-'));
 afterAll(() => rmSync(scratch, { recursive: true, force: true }));
 
 function hook(script, payload, env = {}) {
-  const state = mkdtempSync(join(scratch, 'state-'));
+  // A caller continuing one session across calls passes its own state dir.
+  const state = env.TOKEN_OPTIMIZER_STATE_DIR ?? mkdtempSync(join(scratch, 'state-'));
   const result = spawnSync(process.execPath, [script], {
     input: JSON.stringify(payload),
     encoding: 'utf8',
@@ -80,6 +81,30 @@ describe('the deferred recording guidance', () => {
       expect(stdout).not.toContain('Record what you work out');
       expect(saved.some((s) => s.recordingGuided === true)).toBe(false);
     }
+  });
+
+  test('a Claude Code session is asked to record once, by whichever ask comes first', () => {
+    const graph = mkdtempSync(join(scratch, 'graph-once-'));
+    const shared = (extra) => ({
+      TOKEN_OPTIMIZER_WIKI_DIR: graph,
+      TOKEN_OPTIMIZER_SHARED_DIR: graph,
+      TOKEN_OPTIMIZER_STATE_DIR: mkdtempSync(join(scratch, 'state-once-')),
+      ...extra,
+    });
+    // The nudge first: at a threshold of one edit it fires on the first edit,
+    // which is also the positive control that it can fire at all here. The
+    // generic guidance due on that same edit is then withheld.
+    const first = hook(CLAUDE_POST, claudeEdit('nudge-first'), shared({ TOKEN_OPTIMIZER_NUDGE_AFTER: '1' }));
+    expect(first.stdout).toContain('edits this session');
+    expect(first.stdout).not.toContain('Record what you work out');
+
+    // The guidance first: the nudge due on the second edit is withheld.
+    const env = shared({ TOKEN_OPTIMIZER_NUDGE_AFTER: '2' });
+    const opening = hook(CLAUDE_POST, claudeEdit('guidance-first'), env);
+    expect(opening.stdout).toContain('Record what you work out');
+    const second = hook(CLAUDE_POST, claudeEdit('guidance-first'), env);
+    expect(second.stdout).not.toContain('edits this session');
+    expect(second.saved.some((s) => s.edits === 2)).toBe(true);
   });
 
   test('is not marked delivered for a client that cannot carry context', () => {

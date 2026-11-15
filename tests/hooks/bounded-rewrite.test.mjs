@@ -499,10 +499,23 @@ describe('the shipped router bounds instead of refusing', () => {
   });
 
   it('tells the model what it did, so the rewrite is not silent', () => {
-    const r = router(SEARCH, { TOKEN_OPTIMIZER_MODE: 'enforce' });
+    // The shell head-and-tail cannot mark a cut from inside the pipe, so the
+    // policy is stated up front.
+    const r = router(SEARCH, { TOKEN_OPTIMIZER_MODE: 'enforce', TOKEN_OPTIMIZER_COMPACT: 'off' });
 
+    expect(r.updatedInput.command).not.toContain('compact-stage');
     expect(r.context).toMatch(/bounds this command/i);
     expect(r.context).toContain('TOKEN_OPTIMIZER_BOUND_BYTES');
+  });
+
+  it('says nothing up front when the compaction stage bounds it, which marks its own cuts', () => {
+    // Replaying THOL #565, the ~460-character notice rode on bounded runs whose
+    // output was a few hundred bytes. The stage marks a cut where it makes one
+    // (compact.test.mjs), so untouched output needs no word.
+    const r = router(SEARCH, { TOKEN_OPTIMIZER_MODE: 'enforce' });
+
+    expect(r.updatedInput.command).toContain('compact-stage');
+    expect(r.context ?? '').not.toMatch(/bounds this command/i);
   });
 
   it('leaves the command alone in assist, which was already letting it through', () => {
@@ -539,7 +552,13 @@ describe('the shipped router bounds instead of refusing', () => {
 
     expectBounded(r.updatedInput.command);
     expect(r.context).toContain('smart_grep');
-    expect(r.context).toContain('bounds this command');
+    // The bound's own notice joins it only where the bound cannot mark its cuts.
+    const shell = router(
+      { tool_name: 'Bash', tool_input: { command: 'grep -rn foo .' }, session_id: 's-shell' },
+      { TOKEN_OPTIMIZER_MODE: 'enforce', TOKEN_OPTIMIZER_COMPACT: 'off' }
+    );
+    expect(shell.context).toContain('smart_grep');
+    expect(shell.context).toContain('bounds this command');
   });
 
   it.each([['enforce'], ['assist']])(

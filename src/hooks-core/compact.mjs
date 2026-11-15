@@ -106,10 +106,7 @@ export function compact(text, { previous = '', maxBytes = 8000 } = {}) {
 
   const budget = maxBytes - Buffer.byteLength(ending, 'utf8');
 
-  if (!previous) {
-    const head = tailBytes(body, budget) === body ? body : headLines(body, budget);
-    return head + ending;
-  }
+  if (!previous) return headWithin(body, budget) + ending;
 
   const seen = new Set(splitLines(previous).map(comparisonKey));
   const bodyLines = splitLines(body);
@@ -126,10 +123,7 @@ export function compact(text, { previous = '', maxBytes = 8000 } = {}) {
     fresh.push(line);
   }
 
-  if (!omitted) {
-    const head = headLines(body, budget);
-    return head + ending;
-  }
+  if (!omitted) return headWithin(body, budget) + ending;
 
   // TERSE ON PURPOSE. The notice is metadata and the fresh lines are the point,
   // but they compete for the same budget -- and a wordy version lost that
@@ -139,6 +133,34 @@ export function compact(text, { previous = '', maxBytes = 8000 } = {}) {
   // catching at a small one.
   const notice = `[token-optimizer: ${omitted} repeated lines omitted; ending intact]\n`;
 
-  const head = headLines(fresh.join('\n'), budget - Buffer.byteLength(notice, 'utf8'));
+  const head = headWithin(fresh.join('\n'), budget - Buffer.byteLength(notice, 'utf8'));
   return notice + head + ending;
+}
+
+/** Where the head stops short of the ending, and by how much. */
+const cutMarker = (bytes) =>
+  `\n[token-optimizer: ${bytes} bytes omitted here; ending intact; redirect to a file for all]\n`;
+
+/**
+ * `text` whole if it fits in `budget`, else its leading lines and a marker
+ * saying how much was cut before the ending.
+ *
+ * THE CUT SAYS SO IN-BAND. It used to drop the lines silently, and the only
+ * word of it was the router's boundNotice, attached before the command ran to
+ * every bounded call because nothing before the run can know whether this one
+ * will be cut. Replaying THOL #565, that ~460-character notice rode on bounded
+ * runs whose output was a few hundred bytes. This stage reads the whole output,
+ * so it knows; the shell head-and-tail it replaces could not (rewrite.mjs).
+ *
+ * The marker is sized for the worst case before the head is cut, so the result
+ * stays within `budget`. A budget too small to hold the marker keeps the old
+ * silent cut rather than overflow the bound.
+ */
+function headWithin(text, budget) {
+  const bytes = Buffer.byteLength(text, 'utf8');
+  if (bytes <= budget) return text;
+  const room = budget - Buffer.byteLength(cutMarker(bytes), 'utf8');
+  if (room <= 0) return headLines(text, budget);
+  const head = headLines(text, room);
+  return head + cutMarker(bytes - Buffer.byteLength(head, 'utf8'));
 }

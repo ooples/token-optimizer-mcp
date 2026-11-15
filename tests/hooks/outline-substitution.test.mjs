@@ -204,16 +204,16 @@ describe('a refused read is answered, not just refused', () => {
   const INSTALLED = 'smart_read,smart_write,smart_edit,smart_glob,smart_grep';
 
   /** Runs the packaged entry with the server registered and returns the decision. */
-  const read = (mode, { file = big, capabilities = INSTALLED } = {}) => {
+  const read = (mode, { file = big, capabilities = INSTALLED, session, input = {} } = {}) => {
     const result = spawnSync(
       process.execPath,
       [join(ROOT, 'src/plugin/hooks/pretooluse-router.mjs')],
       {
         input: JSON.stringify({
-          session_id: `refused-${randomUUID()}`,
+          session_id: session ?? `refused-${randomUUID()}`,
           cwd: workspace,
           tool_name: 'Read',
-          tool_input: { file_path: file },
+          tool_input: { file_path: file, ...input },
         }),
         encoding: 'utf8',
         env: {
@@ -346,22 +346,82 @@ describe('a refused read is answered, not just refused', () => {
   test('under assist, a file with no outline to offer is still not refused', () => {
     // The gate that remains: assist never refuses. Ungating the outline must
     // not have made a refusal reachable there.
-    const opaque = join(workspace, 'notes.md');
+    const opaque = join(workspace, 'notes.dat');
     writeFileSync(opaque, '# Heading\n\nProse that is long enough to matter.\n\n'.repeat(4000));
     const result = read('assist', { file: opaque });
     expect(result.decision).not.toBe('deny');
     expect(result.updatedInput).toBeNull();
   });
 
+  /** A release log: numbered, timestamped, ~120 KB, the needle in the middle. */
+  const writeLog = (name = 'release.log', count = 1500) => {
+    const file = join(workspace, name);
+    const lines = [];
+    for (let i = 1; i <= count; i++)
+      lines.push(
+        i === 777
+          ? '2026-06-09T14:13:09.193Z ERROR [deploy] the needle: checkout rollback'
+          : `2026-06-09T14:00:${String(i % 60).padStart(2, '0')}.000Z INFO  [pipeline] step ${i} ok, queue depth ${i % 7}`
+      );
+    writeFileSync(file, `${lines.join('\n')}\n`);
+    return file;
+  };
+
+  test('under assist, a large log is answered with a numbered view, not dumped whole', () => {
+    // THOL #565 log-needle-zh, replayed through Claude Code: a 512 KB log read
+    // whole reached the model untouched in our arm, exactly as in control's.
+    const log = writeLog();
+    const result = read('assist', { file: log });
+    expect(result.decision).not.toBe('deny');
+    expect(result.updatedInput?.file_path).toMatch(/\.outline\.txt$/);
+    const view = readFileSync(result.updatedInput.file_path, 'utf8');
+    // The path is spelled as the router normalised it, which on Windows is not
+    // the test's own spelling, so only the form and the count are pinned.
+    expect(view).toMatch(/^view of .*release\.log \(1501 lines, \d+KB\)/);
+    // Its opening and closing lines, with their numbers, and not the middle.
+    expect(view).toContain('     1  2026-06-09T14:00:01.000Z INFO  [pipeline] step 1 ok');
+    expect(view).toContain('  1500  2026-06-09T14:00:00.000Z INFO  [pipeline] step 1500 ok');
+    expect(view).not.toContain('the needle');
+    expect(view).toContain('[lines 61-1460 not shown: 1400 lines]');
+    expect(Buffer.byteLength(view)).toBeLessThan(statSync(log).size / 4);
+    expect(result.context).toContain(`replaced this read with a view of ${log}`);
+    expect(result.context).toContain('Grep it');
+  });
+
+  test('a viewed file read whole a second time gets the file', () => {
+    const log = writeLog();
+    const session = `view-${randomUUID()}`;
+    expect(read('assist', { file: log, session }).updatedInput?.file_path).toMatch(/\.outline\.txt$/);
+    expect(read('assist', { file: log, session }).updatedInput).toBeNull();
+  });
+
+  test('a paged read after a view does not end outlining for the session', () => {
+    // After an OUTLINE, a paged read means the outline did not answer and the
+    // session stops getting outlines. After a VIEW, paging is what it says to
+    // do, so a code file read later in the same session is still outlined.
+    const log = writeLog();
+    const session = `view-${randomUUID()}`;
+    read('assist', { file: log, session });
+    expect(read('assist', { file: log, session, input: { offset: 700, limit: 100 } }).updatedInput).toBeNull();
+    expect(read('assist', { file: big, session }).updatedInput?.file_path).toMatch(/\.outline\.txt$/);
+  });
+
+  test('a log under the view floor is read whole', () => {
+    const log = writeLog('small.log', 300);
+    expect(statSync(log).size).toBeLessThan(64 * 1024);
+    expect(read('assist', { file: log }).updatedInput).toBeNull();
+  });
+
   test('a read with no outline to offer is still refused', () => {
     // THE GUARD MUST NOT TURN EVERY REFUSAL INTO AN ALLOW. A file the outliner
     // cannot describe has no cheaper answer, so the redirect has to stand.
     //
-    // Markdown, not a binary: `.md` is outside OUTLINEABLE so no substitution
-    // is offered, while still being large text that earns a verdict. A 400 KB
-    // `.bin` was the first fixture here and it proved nothing -- the router
-    // allows it outright, so the test passed without ever reaching the guard.
-    const opaque = join(workspace, 'notes.md');
+    // Text, not a binary: `.dat` is outside OUTLINEABLE and VIEWABLE, so no
+    // substitution is offered, while it is still large text that earns a
+    // verdict. (It was `.md` until large Markdown got a view.) A 400 KB `.bin`
+    // was the first fixture here and it proved nothing -- the router allows it
+    // outright, so the test passed without ever reaching the guard.
+    const opaque = join(workspace, 'notes.dat');
     writeFileSync(opaque, '# Heading\n\nProse that is long enough to matter.\n\n'.repeat(4000));
     const result = read('enforce', { file: opaque });
     expect(result.decision).toBe('deny');

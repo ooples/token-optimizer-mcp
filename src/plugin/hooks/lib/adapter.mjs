@@ -26,6 +26,7 @@ import {
   mode,
   MODE_OFF,
   MODE_ASSIST,
+  MODE_ENFORCE,
   refusalsEnabled,
   largeFileBytes,
   readPayloadResult,
@@ -1882,8 +1883,16 @@ async function runHook(clientName, event, invocation) {
         state.editedFiles[0] ||
         join(payload.cwd || process.cwd(), '__recording__');
       const dir = wikiDir(projectRootFor(anchor, payload.cwd));
+      // ONE ASK PER CLAUDE CODE SESSION. The recording guidance below asks the
+      // same thing after the first edit; replaying THOL #565's refactor-split,
+      // a session got both (~250 then ~470 characters, re-read on every later
+      // turn), and the campaign's 36 paid runs of this arm made no wiki_write
+      // call at all. A second ask the first did not move is cost, not pressure.
+      // Codex keeps both: its nudge naming the files is its designed follow-up.
+      // PreCompact's compactionNudge is separate and unaffected.
+      const askedAlready = clientName === 'claude-code' && state.recordingGuided;
       recordingContext =
-        features.harvest && toolEvidence.names.has('wiki_write')
+        features.harvest && toolEvidence.names.has('wiki_write') && !askedAlready
           ? recordingNudge(dir, {
               state,
               edits: state.edits,
@@ -2196,8 +2205,26 @@ async function runHook(clientName, event, invocation) {
   // adviseOnce -- rather than on every matching call. Not when the output was
   // just compacted: "that search was unbounded, use smart_grep" after the
   // result is already bounded is advice about a cost nobody paid.
+  //
+  // NOR AFTER A CLAUDE CODE SHELL SEARCH AT ALL, outside enforce. There a large
+  // result is compacted after the call (output-compact.mjs), which already
+  // suppresses this; so the advisory fired only when the output was small
+  // enough to pass untouched -- the one case where the search cost nothing.
+  // Replaying THOL #565's settings-inventory calls, it followed a
+  // `grep -roh ... | sort -u` that returned 2.7 KB, and its remedy is a
+  // ToolSearch load the short Claude Code instructions tell the model to skip
+  // for ordinary searches. The same reasoning already keeps decide() silent
+  // about Claude Code's own Grep and Glob.
+  const shellSearchAfterTheFact =
+    clientName === 'claude-code' &&
+    event === 'post-tool' &&
+    mode() !== MODE_ENFORCE &&
+    typeof verdict?.key === 'string' &&
+    verdict.key.startsWith('bash:search:');
   const advisory =
-    verdict && !updatedToolOutput && adviseOnce(state, verdict) ? verdict.reason : null;
+    verdict && !updatedToolOutput && !shellSearchAfterTheFact && adviseOnce(state, verdict)
+      ? verdict.reason
+      : null;
   // THE RECORDING GUIDANCE, ONCE, AFTER REAL WORK (#357, M5). It used to ride in
   // every SessionStart, where it is the largest fixed cost a small session pays
   // and buys nothing until there is something to record. The first edit is the
@@ -2216,6 +2243,8 @@ async function runHook(clientName, event, invocation) {
   const guided =
     event === 'post-tool' &&
     !state.recordingGuided &&
+    // Nor, on Claude Code, after the edit-count nudge asked the same thing.
+    !(clientName === 'claude-code' && state.recordingNudged) &&
     !isWorkerType(raw?.agent_type ?? raw?.agentType) &&
     features.harvest &&
     client.contextStyle !== 'silent' &&
