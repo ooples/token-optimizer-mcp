@@ -116,6 +116,12 @@ them.
   whose mean score is lower on a task is reported as a quality loss on that task,
   whatever its cost.
 - **Secondary:** turns, wall time, input/output/cache tokens, setup time.
+- **Amendment, 2026-11-15, after this campaign and before any later one:**
+  `cold_start_cost_usd`, which prices each run's first request without another
+  run's cache, is added as a secondary cost endpoint. It is reported beside the
+  primary and never replaces it. Why: control read a cache entry the other
+  plain-prefix arms kept warm (RESULTS-BEFORE-FIXES.md, "The rig shared a cache
+  between arms"). This campaign's results were not re-ranked by it.
 - **Failures:** every non-`ok` run is reported by arm, task and error. The ratios
   above use `ok` runs only, so the failure table is part of the result and not an
   appendix.

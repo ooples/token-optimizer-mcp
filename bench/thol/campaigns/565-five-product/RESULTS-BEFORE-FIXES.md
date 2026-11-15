@@ -121,3 +121,53 @@ with the finding, but not proof of it.
 
 Hooks alone, with no MCP tool used, won on code-migration-py (0.72×). Routing to
 `smart_grep` for location search won on code-comprehension-django (0.63×).
+
+## After the findings were measured (2026-11-15)
+
+Each finding was checked against the 288 development-task transcripts before
+anything was changed. The held-out tasks were not opened. Two were fixed, two
+did not hold up, and one turned out to be the rig.
+
+| finding | verdict | evidence |
+| --- | --- | --- |
+| 1. `smart_grep` large result sets | **fixed** | 75397770: hits grouped by file on the wire, plus a `distinct` summary. On this repository's `process.env` search, one page now carries 291 hits where the record form fitted ~149. |
+| 2. `smart_read` of a huge log | **fixed** | 41690567: an envelope field no longer disarms the partial-admission floor. The same 524 KB log now returns 5,000 characters of content where it returned 121 of metadata. |
+| 3. ToolSearch round trip | **kept as is** | A ToolSearch-only turn costs **$0.004** at the margin (12.8k cached tokens read, 4 output), 0.72 per run, so ~$0.003 per run. Marking `smart_read`, `smart_grep` and `expand` always-loaded (`_meta["anthropic/alwaysLoad"]`) would put ~1.6k schema tokens in every request: one write plus ~13 reads per run, ~$0.012. Deferral is 4× cheaper. |
+| 4. Fixed overhead on short tasks | **mostly the rig** | See below. code-bugfix-py ran 6.3 turns against 5.3, which is the remaining 1.09×. |
+| 5. Small Bash output | **did not hold** | Outside the two fixed tasks, our Bash results average **3,857** characters a run against tokenjuice's 4,162 and control's 8,023. |
+
+### The rig shared a cache between arms
+
+Control's first request read **14,070** cached tokens on all 36 development
+runs, as did tokenade, tokenjuice, cto and cto-patched. Ours read 14,070 on its
+first 12 runs and then 8,297, 11,098 or 11,298 for the rest, rewriting the
+difference at the 1-hour tier ($6/MTok). Headroom read 11,088 throughout.
+
+Arms run back to back per task, so the five arms whose prefix the server matches
+keep one cache entry warm for each other, and control reads it. Ours did not get
+that from run 13 on, although with the 1-hour tier its runs 5–6 minutes apart
+should have hit its own prefix. Captured locally against a mock on the same
+Claude Code version with the same login, our request prefix is **byte-identical**
+to control's: all 14 tool hashes and both cached system blocks. The installed
+7.11.0 server's tool list is byte-identical between runs too. Whatever splits
+the match happens server-side, where it cannot be observed.
+
+No real user shares a cache entry with another product's sessions. So
+`analyse-campaign.py` gains a pre-registered secondary endpoint,
+`cold_start_cost_usd`: every arm's first request is priced as if nothing earlier
+had been cached, its cache reads billed as writes at the tier it wrote at.
+Later requests are unchanged. The primary endpoint is unchanged.
+
+| arm | `total_cost_usd` | `cold_start_cost_usd` |
+| --- | ---: | ---: |
+| tokenjuice | 0.975 | 0.983 |
+| headroom-cache | 1.080 | **0.977** |
+| tokenade | 1.028 | 1.010 |
+| cto-patched | 1.036 | 1.017 |
+| headroom-token | 1.145 | 1.036 |
+| **ours** | 1.149 | **1.036** |
+| cto | 1.070 | 1.040 |
+
+These are the before-fixes numbers re-scored, not a new measurement. Every
+95% CI spans 1.0 on both endpoints except headroom-token's primary. The full
+board reports both endpoints.
