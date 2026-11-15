@@ -55,13 +55,15 @@ const MAX_DISTINCT_MATCHES = 500;
 const MAX_DISTINCT_TOKENS = 4_000;
 
 /** One hit on the wire: [line number, line text], plus anything optional. */
-export type CompactHit =
-  | [number, string]
-  | [
-      number,
-      string,
-      { columns?: number[]; before?: string[]; after?: string[] },
-    ];
+export type CompactHit = [number, string] | [number, string, HitExtra];
+
+/** What a hit carries beyond its line, only when present. */
+type HitExtra = {
+  columns?: number[];
+  before?: string[];
+  after?: string[];
+  contextOmitted?: number;
+};
 
 /**
  * THE SHAPE A MATCH LIST CROSSES THE WIRE IN: one key per file, each hit a
@@ -83,13 +85,13 @@ export function compactGrepMatches(
   // from the JSON. Object.fromEntries defines every key as an own property.
   const byFile = new Map<string, CompactHit[]>();
   for (const m of matches) {
-    const extra: { columns?: number[]; before?: string[]; after?: string[] } =
-      {};
+    const extra: HitExtra = {};
     const columns =
       m.columns ?? (m.column !== undefined ? [m.column] : undefined);
     if (columns) extra.columns = columns;
     if (m.before?.length) extra.before = m.before;
     if (m.after?.length) extra.after = m.after;
+    if (m.contextOmitted) extra.contextOmitted = m.contextOmitted;
     const hit: CompactHit = Object.keys(extra).length
       ? [m.lineNumber, m.line, extra]
       : [m.lineNumber, m.line];
@@ -588,6 +590,8 @@ export interface GrepMatch {
   match?: string; // The matched text, when it differs from the pattern
   before?: string[]; // Context lines before match
   after?: string[]; // Context lines after match
+  /** Context lines dropped so a lone hit fits the response budget. */
+  contextOmitted?: number;
 }
 
 export interface SmartGrepOptions {
@@ -1195,6 +1199,46 @@ export class SmartGrepTool {
         }
       };
       trimTo(MAX_RESPONSE_TOKENS);
+
+      // A LONE HIT IS BOUND TOO. trimTo never drops the last hit, so one match
+      // with a large requested context returned all of it, past the budget,
+      // with truncated still false. Its context is cut from the far ends
+      // inward, the lines nearest the match kept, and the count of lines
+      // dropped is reported on the hit.
+      if (paginatedMatches.length === 1) {
+        const only = paginatedMatches[0];
+        const sizeOf = (m: GrepMatch) =>
+          this.tokenCounter.count(
+            JSON.stringify({ hits: compactGrepMatches([m]) })
+          ).tokens;
+        const before = only.before ?? [];
+        const after = only.after ?? [];
+        const total = before.length + after.length;
+        let size = sizeOf(only);
+        if (size > MAX_RESPONSE_TOKENS && total > 0) {
+          let keep = total;
+          let fitted: GrepMatch = only;
+          while (size > MAX_RESPONSE_TOKENS && keep > 0) {
+            keep = Math.floor(keep * Math.min(0.9, MAX_RESPONSE_TOKENS / size));
+            // Nearest lines first: the end of `before`, the start of `after`,
+            // split in proportion to what was asked on each side.
+            const keepBefore = Math.min(
+              before.length,
+              Math.round((keep * before.length) / total)
+            );
+            const keepAfter = Math.min(after.length, keep - keepBefore);
+            fitted = {
+              ...only,
+              before: before.slice(before.length - keepBefore),
+              after: after.slice(0, keepAfter),
+              contextOmitted: total - keepBefore - keepAfter,
+            };
+            size = sizeOf(fitted);
+          }
+          paginatedMatches = [fitted];
+          budgetTruncated = true;
+        }
+      }
 
       const truncated =
         budgetTruncated || totalMatches > paginatedMatches.length + opts.offset;

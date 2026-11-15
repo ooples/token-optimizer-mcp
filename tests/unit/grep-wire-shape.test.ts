@@ -167,6 +167,46 @@ describe('smart_grep aggregation', () => {
     }
   });
 
+  it('bounds a lone hit whose requested context exceeds the budget', async () => {
+    const loneDir = mkdtempSync(join(tmpdir(), 'grep-lone-'));
+    try {
+      const dense = (i: number) =>
+        '# ' + Array.from({ length: 200 }, (_, k) => `c${i}x${k}`).join(' ');
+      const lines: string[] = [];
+      for (let i = 0; i < 50; i++) lines.push(dense(i));
+      lines.push('THE_ONLY_MATCH = 1');
+      for (let i = 50; i < 100; i++) lines.push(dense(i));
+      writeFileSync(join(loneDir, 'a.py'), lines.join('\n') + '\n');
+      const result = await tool.grep('THE_ONLY_MATCH', {
+        path: loneDir,
+        includeContext: true,
+        contextBefore: 50,
+        contextAfter: 50,
+      });
+      const hit = result.matches?.[0];
+      const sent = tokenCounter.count(
+        JSON.stringify({ hits: compactGrepMatches(result.matches ?? []) })
+      ).tokens;
+      expect(result.matches).toHaveLength(1);
+      expect(sent).toBeLessThanOrEqual(8_000);
+      expect(result.metadata.truncated).toBe(true);
+      // What was dropped is said, and what was kept is nearest the match.
+      expect(hit?.contextOmitted).toBeGreaterThan(0);
+      expect(
+        (hit?.before?.length ?? 0) +
+          (hit?.after?.length ?? 0) +
+          (hit?.contextOmitted ?? 0)
+      ).toBe(100);
+      expect(hit?.before?.at(-1)).toBe(dense(49));
+      expect(hit?.after?.[0]).toBe(dense(50));
+      expect(
+        compactGrepMatches(result.matches ?? [])['a.py'][0][2]
+      ).toMatchObject({ contextOmitted: hit?.contextOmitted });
+    } finally {
+      rmSync(loneDir, { recursive: true, force: true });
+    }
+  });
+
   it('adds no summary when every hit is already on the page', async () => {
     const result = await search('settings\\.NAME_7\\b');
     expect(result.metadata.truncated).toBe(false);
