@@ -162,7 +162,9 @@ export function substitutionFor(filePath, { turnsSoFar = 0, alreadyRead = false 
   // without it is how the hook stops being fail-open.
   if (!isFsSafePath(filePath)) return null;
 
-  if (!OUTLINEABLE.has(extensionOf(filePath))) return null;
+  const extension = extensionOf(filePath);
+  const outlineable = OUTLINEABLE.has(extension);
+  if (!outlineable && !VIEWABLE.has(extension)) return null;
 
   let bytes;
   try {
@@ -173,7 +175,8 @@ export function substitutionFor(filePath, { turnsSoFar = 0, alreadyRead = false 
     return null;
   }
 
-  if (bytes < floorBytes(turnsSoFar)) return null;
+  if (bytes < (outlineable ? floorBytes(turnsSoFar) : VIEW_FLOOR_BYTES)) return null;
+  if (!outlineable && bytes > VIEW_CEILING_BYTES) return null;
 
   // ONE OUTLINE PER FILE PER SESSION. `alreadyRead` was accepted here, echoed
   // back in the result, and never passed by any caller nor consulted by any
@@ -203,11 +206,86 @@ export function substitutionFor(filePath, { turnsSoFar = 0, alreadyRead = false 
   }
 
   const lines = source.split(/\r?\n/).length;
-  const outline = outlineFor(filePath, source, { lines, bytes });
+  const outline = outlineable
+    ? outlineFor(filePath, source, { lines, bytes })
+    : viewFor(filePath, source, { lines, bytes });
   if (!outline) return null;
 
   // An outline that is not decisively smaller buys nothing and risks a re-read.
   if (Buffer.byteLength(outline, 'utf8') > bytes / 4) return null;
 
-  return { outline, bytes, lines, alreadyRead };
+  return { outline, bytes, lines, alreadyRead, kind: outlineable ? 'outline' : 'view' };
+}
+
+/**
+ * LARGE TEXT WITH NO SYMBOLS TO OUTLINE: logs, data, prose.
+ *
+ * In the default mode a whole-file Read of one went into context untouched:
+ * the redirect to smart_read is dropped under assist by design, there is no
+ * outline for it, and PostToolUse does not run on Read. Replaying THOL #565's
+ * log-needle-zh calls through Claude Code put a 512 KB release log -- 437,332
+ * characters -- into context in our arm exactly as in control's. The short
+ * Claude Code instructions tell the model built-in Read is compacted by these
+ * hooks, so for these files that has to be true.
+ *
+ * The view is the file's opening and closing lines with their numbers: enough
+ * to see its format and how it ends, and to aim a Grep or an offset/limit read
+ * at the rest. It is served once per file per session, like an outline; a
+ * second whole read returns the file.
+ */
+const VIEWABLE = new Set([
+  '.log', '.out', '.err', '.trace', '.txt',
+  '.md', '.markdown', '.rst',
+  '.json', '.jsonl', '.ndjson', '.csv', '.tsv', '.xml', '.html', '.htm',
+]);
+
+/**
+ * Below this a view does not pay. Code outlines start at ~7 KB because an
+ * outline often answers outright; a view of text rarely does, so a file that
+ * would cost little to read whole is better read whole than viewed and then
+ * read again. A chosen value, not a measured break-even.
+ */
+export const VIEW_FLOOR_BYTES = 64 * 1024;
+
+/**
+ * Above this the host already refuses the read, and its refusal is cheaper
+ * than any view. Claude Code answers a whole Read over 256 KB, or over 25,000
+ * tokens, with a ~480-character error naming offset/limit and search. Replaying
+ * THOL #565's log-needle, a view of its 512 KB log added 9,361 characters where
+ * control's identical Read added 479, and the task went from 1.00x to 1.02x
+ * control. 88 KB is the 25,000-token cap at ~3.6 bytes a token, the density of
+ * ASCII logs. Denser text (CJK) can hit the host's cap below it, where a view
+ * still costs more than the refusal would have; that band is accepted.
+ */
+export const VIEW_CEILING_BYTES = 88 * 1024;
+
+const VIEW_HEAD_LINES = 60;
+const VIEW_TAIL_LINES = 40;
+const VIEW_LINE_CHARS = 240;
+
+/** The opening and closing lines of a large text file, numbered. */
+export function viewFor(path, source, { lines, bytes }) {
+  const text = source.split(/\r?\n/);
+  // A trailing newline leaves an empty last element, which is not a line.
+  if (text.length > 1 && text[text.length - 1] === '') text.pop();
+  if (text.length <= VIEW_HEAD_LINES + VIEW_TAIL_LINES) return null;
+  const numbered = (index) => {
+    const line = text[index];
+    const shown = line.length > VIEW_LINE_CHARS ? `${line.slice(0, VIEW_LINE_CHARS)}...` : line;
+    return `${String(index + 1).padStart(6)}  ${shown}`;
+  };
+  const head = text.slice(0, VIEW_HEAD_LINES).map((_, i) => numbered(i));
+  const tailStart = text.length - VIEW_TAIL_LINES;
+  const tail = text.slice(tailStart).map((_, i) => numbered(tailStart + i));
+  const omitted = tailStart - VIEW_HEAD_LINES;
+  return (
+    `view of ${path} (${lines} lines, ${Math.round(bytes / 1024)}KB): its first ` +
+    `${VIEW_HEAD_LINES} and last ${VIEW_TAIL_LINES} lines\n\n` +
+    head.join('\n') +
+    `\n   ...  [lines ${VIEW_HEAD_LINES + 1}-${tailStart} not shown: ${omitted} lines]\n` +
+    tail.join('\n') +
+    '\n\n' +
+    `This is a view, not the file. Grep ${path} for what you are looking for, ` +
+    `or Read it with offset and limit for any range in full.\n`
+  );
 }

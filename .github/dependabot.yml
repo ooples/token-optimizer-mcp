@@ -16,14 +16,21 @@ updates:
     # hono and @hono/node-server arrived as two PRs (#566, #569) because
     # security updates ignore groups unless a group applies to them, and the
     # old split (development minor+patch, production patch only) sent every
-    # production minor bump on its own. Majors stay separate on purpose: a
-    # breaking bump that has to be held must not hold the week's patches.
+    # production minor bump on its own. Majors get their own group, apart
+    # from minor and patch, so a breaking bump that has to be held does not
+    # hold the week's patches. They are grouped rather than sent one per
+    # package: on 2026-11-16 six npm majors and five GitHub Actions majors
+    # arrived as eleven PRs (#595-#605), each running the full pipeline. If
+    # one major breaks the group, hold that package with an ignore entry below.
     groups:
       npm-minor-and-patch:
         patterns: ["*"]
         update-types:
           - "minor"
           - "patch"
+      npm-major:
+        patterns: ["*"]
+        update-types: ["major"]
       npm-security:
         applies-to: security-updates
         patterns: ["*"]
@@ -84,11 +91,15 @@ updates:
       - "automated"
 
     # Every minor and patch action bump in one PR; a pinned-SHA change does not
-    # need its own run. Majors stay separate, so one held back holds nothing else.
+    # need its own run. Majors share a second PR, so one held back holds no
+    # minor or patch bump.
     groups:
       github-actions:
         patterns: ["*"]
         update-types: ["minor", "patch"]
+      github-actions-major:
+        patterns: ["*"]
+        update-types: ["major"]
       github-actions-security:
         applies-to: security-updates
         patterns: ["*"]

@@ -37,7 +37,7 @@ jobs:
           fetch-depth: 0
       - name: Setup Node.js
         if: ${{ env.OPENAI_API_KEY != '' }}
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: '22'
           cache: 'npm'
@@ -86,7 +86,7 @@ jobs:
         # fix -- a consequence of making that step non-fatal, and worse than
         # the red job it replaced.
         if: ${{ success() && env.OPENAI_API_KEY != '' && steps.codex.outcome == 'success' }}
-        uses: peter-evans/create-pull-request@v6
+        uses: peter-evans/create-pull-request@v8
         with:
           commit-message: "fix(ci): auto-fix failing tests via Codex"
           branch: codex/auto-fix-${{ github.event.workflow_run.run_id }}

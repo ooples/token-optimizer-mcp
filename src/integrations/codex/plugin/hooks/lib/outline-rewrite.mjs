@@ -14,7 +14,7 @@
  */
 
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, openSync, readSync, closeSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { substitutionFor } from './substitute.mjs';
@@ -24,6 +24,28 @@ import { canonicalPath } from './paths.mjs';
 /** Where served outlines are written; a file's presence is the once-per-file record. */
 export function outlineDir() {
   return join(tmpdir(), 'token-optimizer-compact');
+}
+
+/**
+ * Whether the record at `target` is an OUTLINE that was served, as opposed to
+ * a view (substitute.mjs, viewFor). A paged read after an outline is the model
+ * saying the outline did not answer, which ends outlining for the session. A
+ * paged read or a grep after a view is the view working: it says to do exactly
+ * that. Read from the record's first bytes, which viewFor always begins with.
+ */
+function servedOutline(target) {
+  if (!existsSync(target)) return false;
+  let fd;
+  try {
+    fd = openSync(target, 'r');
+    const head = Buffer.alloc(8);
+    const n = readSync(fd, head, 0, head.length, 0);
+    return head.subarray(0, n).toString('utf8') !== 'view of ';
+  } catch {
+    return true;
+  } finally {
+    if (fd !== undefined) closeSync(fd);
+  }
 }
 
 /** The record key for one file in one session -- the formula the router always used. */
@@ -67,7 +89,7 @@ export function outlineRead({ sessionId, filePath, offset, limit, state }) {
     // followed by paged reads of the same file, usually covering all of it, so
     // the outlines saved 21k tokens and cost about 25 extra calls. Stopping at
     // the first such read keeps all but ~3 of those calls off.
-    if (missed && existsSync(target)) {
+    if (missed && servedOutline(target)) {
       try {
         writeFileSync(missed, '', { flag: 'a', mode: 0o600 });
       } catch {
@@ -126,7 +148,7 @@ function noteRangedShellRead({ sessionId, command, cwd }) {
       continue;
     }
     const target = join(outlineDir(), `${recordKey(sessionId, canonical)}.outline.txt`);
-    if (!existsSync(target)) continue;
+    if (!servedOutline(target)) continue;
     try {
       writeFileSync(missed, '', { flag: 'a', mode: 0o600 });
     } catch {
@@ -241,6 +263,13 @@ function missedMarker(sessionId) {
 
 /** What the model is told when its read is answered with an outline. */
 export function readNotice(displayPath, found) {
+  if (found.kind === 'view')
+    return (
+      `token-optimizer replaced this read with a view of ${displayPath} ` +
+      `(${found.lines} lines, ${Math.round(found.bytes / 1024)}KB): its first and ` +
+      `last lines, numbered. Grep it, or read it with offset and limit, for the ` +
+      `rest; reading it whole again returns all ${found.lines} lines.`
+    );
   return (
     `token-optimizer replaced this read with a structural outline of ` +
     `${displayPath} (${found.lines} lines, ${Math.round(found.bytes / 1024)}KB). ` +

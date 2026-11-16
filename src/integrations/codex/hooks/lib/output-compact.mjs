@@ -125,15 +125,24 @@ function namesIn(lines, limit = 5) {
 }
 
 /** `path(line,col): error|warning CODE: message [project]` or project-level `path.csproj : warning NU1903: ...` */
-const MSBUILD_DIAGNOSTIC = /(?:\(\d{1,9},\d{1,9}\)|\.(?:csproj|fsproj|vbproj|props|targets)\s*): (?:error|warning) [A-Za-z]{1,20}\d{1,9}:/i;
+const MSBUILD_DIAGNOSTIC =
+  /(?:\(\d{1,9},\d{1,9}\)|\.(?:csproj|fsproj|vbproj|props|targets)\s*): (?:error|warning) [A-Za-z]{1,20}\d{1,9}:/i;
 
 /** The line without its trailing ` [project...]`, or the normalized project-level diagnostic key. */
 function withoutProjectSuffix(line) {
   const end = line.trimEnd();
   const open = end.lastIndexOf(' [');
-  if (end.endsWith(']') && open > 0 && /\.(?:csproj|fsproj|vbproj|props|targets)(?:::[^\]]*)?\]$/i.test(end.slice(open)))
+  if (
+    end.endsWith(']') &&
+    open > 0 &&
+    /\.(?:csproj|fsproj|vbproj|props|targets)(?:::[^\]]*)?\]$/i.test(
+      end.slice(open)
+    )
+  )
     return end.slice(0, open).trimEnd();
-  return /\.(?:csproj|fsproj|vbproj|props|targets)\s*: (?:error|warning) [A-Za-z]{1,20}\d{1,9}:/i.test(end)
+  return /\.(?:csproj|fsproj|vbproj|props|targets)\s*: (?:error|warning) [A-Za-z]{1,20}\d{1,9}:/i.test(
+    end
+  )
     ? end
     : null;
 }
@@ -188,7 +197,9 @@ export function foldOutput(text) {
       return;
     }
     if (r) {
-      out.push(`${line}  [+${r} more: same diagnostic in other projects/target frameworks]`);
+      out.push(
+        `${line}  [+${r} more: same diagnostic in other projects/target frameworks]`
+      );
       return;
     }
     const s = shapeOf(line);
@@ -197,7 +208,9 @@ export function foldOutput(text) {
       // A compiler error with a long path has almost no spaces, so it reads as
       // dense -- but its middle is the message. Signal lines stay whole unless
       // they are genuinely huge (a minified bundle that happens to say "error").
-      const keepWhole = line.length <= SIGNAL_LINE_MAX && (SIGNAL.test(line) || SUMMARY.test(line));
+      const keepWhole =
+        line.length <= SIGNAL_LINE_MAX &&
+        (SIGNAL.test(line) || SUMMARY.test(line));
       out.push(isDenseLine(line) && !keepWhole ? elideDense(line) : line);
       return;
     }
@@ -297,7 +310,8 @@ const RANGE_STAGE =
 /** `grep -v X` / `grep -vE X` / `Select-String -NotMatch X`: drops lines, never adds any. */
 function isInverseFilter(stage) {
   const words = stage.split(/\s+/);
-  if (/^Select-String$|^sls$/i.test(words[0])) return words.some((w) => /^-NotMatch$/i.test(w));
+  if (/^Select-String$|^sls$/i.test(words[0]))
+    return words.some((w) => /^-NotMatch$/i.test(w));
   if (words[0] !== 'grep') return false;
   for (const w of words.slice(1)) {
     if (!w.startsWith('-')) return false;
@@ -306,7 +320,8 @@ function isInverseFilter(stage) {
   return false;
 }
 
-const isRangeStage = (stage) => RANGE_STAGE.test(stage) || isInverseFilter(stage);
+const isRangeStage = (stage) =>
+  RANGE_STAGE.test(stage) || isInverseFilter(stage);
 
 /**
  * The pipeline stages of the statement the command's output ends with,
@@ -321,7 +336,13 @@ function lastStatementStages(command) {
 /** Every statement's stages, cd/Set-Location statements dropped, `$x = ` and `(` stripped. */
 function statementStages(command) {
   return shellStatements(command)
-    .filter((stages) => !(stages.length === 1 && /^(cd|Set-Location|sl|pushd|Push-Location)\s+\S+$/i.test(stages[0])))
+    .filter(
+      (stages) =>
+        !(
+          stages.length === 1 &&
+          /^(cd|Set-Location|sl|pushd|Push-Location)\s+\S+$/i.test(stages[0])
+        )
+    )
     .map((stages) =>
       stages
         // A loop or conditional body's first word is a keyword, not the program:
@@ -428,7 +449,8 @@ function verdictBytes(text) {
   const lines = String(text).split('\n');
   const keep = new Set();
   lines.forEach((l, i) => {
-    if (SIGNAL.test(l) || SUMMARY.test(l)) for (const j of [i, i + 1, i + 2]) if (j < lines.length) keep.add(j);
+    if (SIGNAL.test(l) || SUMMARY.test(l))
+      for (const j of [i, i + 1, i + 2]) if (j < lines.length) keep.add(j);
   });
   let n = 0;
   for (const j of keep) n += bytes(lines[j]) + 1;
@@ -454,10 +476,17 @@ export function compactText(
     // tail before it reaches the verdict lines, so the budget is sized for the
     // verdicts to fit after that: a small budget cuts progress noise, never a
     // failure line.
-    if (size < BUILD_LOG_MIN_BYTES || !isBuildOrTestCommand(command) || isReadLikeCommand(command))
+    if (
+      size < BUILD_LOG_MIN_BYTES ||
+      !isBuildOrTestCommand(command) ||
+      isReadLikeCommand(command)
+    )
       return null;
     const verdicts = verdictBytes(collapseCarriageReturns(stripAnsi(source)));
-    budget = Math.min(budget, BUILD_LOG_BUDGET_BYTES + Math.ceil(verdicts / 0.75));
+    budget = Math.min(
+      budget,
+      BUILD_LOG_BUDGET_BYTES + Math.ceil(verdicts / 0.75)
+    );
   }
   const readLike = isReadLikeCommand(command);
   if (readLike && size <= READ_EXACT_BYTES) return null;
@@ -542,18 +571,35 @@ export function compactToolResponse({
   if (tool === 'Bash' || tool === 'PowerShell') {
     if (response.isImage) return null;
     const command = String(input?.command ?? '');
+    // THE HOST ALREADY KEPT IT. Past its own size limit Claude Code writes the
+    // whole output to a file, sets persistedOutputPath, and hands the hook only
+    // the first ~30 KB. Compacting that stored the truncated copy and labelled
+    // it "full output" -- a false pointer beside the host's true one (#594
+    // discipline A/B: a 549 KB `cat -n` showed both, 982 characters against
+    // the 371 of Read's refusal). stdout is left to the host; stderr is not
+    // persisted with it, so it is still compacted.
+    const persisted = typeof response.persistedOutputPath === 'string';
     // A shell search prints the same `path:line:text` the Grep tool does, and
     // gets the same lossless grouping first (see isShellSearchCommand). Not
     // when another statement reads a file: grouped output is compacted as a
     // search, which would fold that file's lines (`cat a.cs; grep -n X b.cs`).
     const grouped =
-      typeof response.stdout === 'string' && isShellSearchCommand(command) && !isReadLikeCommand(command)
+      !persisted &&
+      typeof response.stdout === 'string' &&
+      isShellSearchCommand(command) &&
+      !isReadLikeCommand(command)
         ? groupGrepByFile(response.stdout)
         : null;
-    const out = compactText(grouped ?? response.stdout, { command: grouped ? '' : command });
+    const out = persisted
+      ? null
+      : compactText(grouped ?? response.stdout, {
+          command: grouped ? '' : command,
+        });
     const err = compactText(response.stderr, { command: '' });
     if (!out && !err) return grouped ? { ...response, stdout: grouped } : null;
-    const replaced = grouped ? { ...response, stdout: grouped } : { ...response };
+    const replaced = grouped
+      ? { ...response, stdout: grouped }
+      : { ...response };
     for (const [key, done] of [
       ['stdout', out],
       ['stderr', err],
@@ -571,7 +617,10 @@ export function compactToolResponse({
     }
     return replaced;
   }
-  if ((tool === 'Agent' || tool === 'Task') && Array.isArray(response.content)) {
+  if (
+    (tool === 'Agent' || tool === 'Task') &&
+    Array.isArray(response.content)
+  ) {
     const lean = leanHandoff(response, { dir, sessionId, tool });
     if (lean) return lean;
     return null;
@@ -620,7 +669,8 @@ export function isShellSearchCommand(command) {
 
 /** Below this a Grep result is left exactly as it is. */
 export const GREP_GROUP_MIN_CHARS = 1000;
-const GREP_GROUP_HEADER = '[grouped by file: each path once, then its line:text]';
+const GREP_GROUP_HEADER =
+  '[grouped by file: each path once, then its line:text]';
 
 /**
  * A content-mode Grep result with each file's path stated once, as `rg
@@ -645,7 +695,8 @@ const GREP_GROUP_HEADER = '[grouped by file: each path once, then its line:text]
  * hides the log line behind a bogus header. A real path has no tab and does not
  * end in an hour.
  */
-const isClockPrefix = (path) => path.includes('\t') || /(?:^|\s|\d{2}T)\d{1,2}$/.test(path);
+const isClockPrefix = (path) =>
+  path.includes('\t') || /(?:^|\s|\d{2}T)\d{1,2}$/.test(path);
 
 export function groupGrepByFile(text) {
   const source = String(text ?? '');
@@ -653,7 +704,10 @@ export function groupGrepByFile(text) {
   const out = [GREP_GROUP_HEADER];
   let path = null;
   for (const line of source.split('\n')) {
-    if (path !== null && (line.startsWith(`${path}:`) || line.startsWith(`${path}-`))) {
+    if (
+      path !== null &&
+      (line.startsWith(`${path}:`) || line.startsWith(`${path}-`))
+    ) {
       const rest = line.slice(path.length + 1);
       if (/^\d+[:-]/.test(rest)) {
         out.push(rest);
@@ -687,7 +741,9 @@ export const HANDOFF_BUDGET = 2400;
  * every subagent completion was latency for nothing.
  */
 export function leanHandoffEnabled(env = process.env) {
-  return /^(1|true|yes|on)$/i.test(String(env.TOKEN_OPTIMIZER_LEAN_HANDOFF ?? '').trim());
+  return /^(1|true|yes|on)$/i.test(
+    String(env.TOKEN_OPTIMIZER_LEAN_HANDOFF ?? '').trim()
+  );
 }
 
 /** A line a caller acts on: a file:line citation, a figure, a heading, a verdict. */
@@ -706,7 +762,10 @@ const REPORT_SIGNAL =
  * verdict, and the ending; the full report one Read away in the artifact store.
  * Opt-in: see leanHandoffEnabled.
  */
-export function leanHandoff(response, { dir, sessionId = null, tool = 'Agent' }) {
+export function leanHandoff(
+  response,
+  { dir, sessionId = null, tool = 'Agent' }
+) {
   if (!leanHandoffEnabled()) return null;
   const text = response.content
     .filter((b) => b?.type === 'text' && typeof b.text === 'string')
@@ -729,16 +788,26 @@ export function leanHandoff(response, { dir, sessionId = null, tool = 'Agent' })
     n += lines[i].length + 1;
   }
   // The ending, then every line a caller acts on.
-  for (let i = lines.length - 1, n = 0; i >= 0 && n < HANDOFF_BUDGET * 0.15; i--) {
+  for (
+    let i = lines.length - 1, n = 0;
+    i >= 0 && n < HANDOFF_BUDGET * 0.15;
+    i--
+  ) {
     if (!take(i)) break;
     n += lines[i].length + 1;
   }
   // Citations first -- they are what a caller acts on -- then the other signals.
   for (const re of [CITATION, REPORT_SIGNAL])
-    for (let i = 0; i < lines.length; i++) if (re.test(lines[i]) && !take(i)) break;
+    for (let i = 0; i < lines.length; i++)
+      if (re.test(lines[i]) && !take(i)) break;
   // A report in a few long lines keeps too little to act on: it goes through whole.
   if (used < HANDOFF_BUDGET / 2) return null;
-  const ref = capture(dir, text, { tool, command: null, sessionId, shape: 'handoff' });
+  const ref = capture(dir, text, {
+    tool,
+    command: null,
+    sessionId,
+    shape: 'handoff',
+  });
   if (!ref) return null;
   const out = [];
   let gap = 0;
@@ -751,5 +820,8 @@ export function leanHandoff(response, { dir, sessionId = null, tool = 'Agent' })
   });
   if (gap) out.push(`  [… ${gap} lines …]`);
   const notice = `[lean handoff: ${text.length} characters reported, the lines above kept; the full report: Read ${artifactPath(dir, ref)}]`;
-  return { ...response, content: [{ type: 'text', text: `${out.join('\n')}\n${notice}` }] };
+  return {
+    ...response,
+    content: [{ type: 'text', text: `${out.join('\n')}\n${notice}` }],
+  };
 }

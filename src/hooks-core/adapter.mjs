@@ -24,6 +24,7 @@ import {
   mode,
   MODE_OFF,
   MODE_ASSIST,
+  MODE_ENFORCE,
   refusalsEnabled,
   largeFileBytes,
   readPayloadResult,
@@ -54,7 +55,11 @@ import {
   recordEpisodeOutcome,
   readMetrics,
 } from './metrics.mjs';
-import { CORRECTION_OPENER, derive, projectRootFromActivity } from './derive.mjs';
+import {
+  CORRECTION_OPENER,
+  derive,
+  projectRootFromActivity,
+} from './derive.mjs';
 import {
   contentHash,
   harvest,
@@ -122,15 +127,29 @@ import { takeSlowHookNotice } from './hook-latency.mjs';
 import { nodeFloorNotice, nodeHooksMeasuredSlow } from './node-floor.mjs';
 import { serverCrashNotice } from './server-crash.mjs';
 import { CHECK_EVERY_CALLS, overWindowNotice } from './context-window.mjs';
-import { compactToolResponse, outputCompactEnabled } from './output-compact.mjs';
+import {
+  compactToolResponse,
+  outputCompactEnabled,
+  OUTPUT_COMPACT_MIN_BYTES,
+} from './output-compact.mjs';
 import { repeatResponse, repeatsEnabled } from './repeats.mjs';
 import { isVerificationCommand } from './verification.mjs';
 import { recordOnBoard, recordReadOnBoard } from './blackboard.mjs';
-import { nextPacedContinuation, recordWindowActivity, pacerEnabled } from './quota-pacer.mjs';
+import {
+  nextPacedContinuation,
+  recordWindowActivity,
+  pacerEnabled,
+} from './quota-pacer.mjs';
 import { artifactPath, capture } from './expand.mjs';
 import { applyHoldout } from './injection-holdout.mjs';
 import { isWorkerType } from './agent-brief.mjs';
-import { hasLiveRestorable, learnedLocation, restoreForPrompt, scheduleFold, takeNotice } from './toolprune.mjs';
+import {
+  hasLiveRestorable,
+  learnedLocation,
+  restoreForPrompt,
+  scheduleFold,
+  takeNotice,
+} from './toolprune.mjs';
 import { scheduleCodexFold, takeCodexNotice } from './codexprune.mjs';
 import { onToolFailure, recordTurnEnd } from './loopguard.mjs';
 
@@ -151,7 +170,8 @@ function outlineRewrite(raw, payload, state, clientName) {
   if (payload.replacement) return null;
   // A Codex code-mode envelope orchestrates several operations; rewriting one
   // would discard the rest, the same reason the refusal path leaves it alone.
-  if (clientName === 'codex' && payload.tool_input?.code_mode_envelope) return null;
+  if (clientName === 'codex' && payload.tool_input?.code_mode_envelope)
+    return null;
   const input = rawToolInput(raw);
   const sessionId = payload.session_id || '';
 
@@ -175,16 +195,32 @@ function outlineRewrite(raw, payload, state, clientName) {
   if (payload.tool_name === 'Bash') {
     const key = firstKey(input, COMMAND_KEYS);
     if (key === undefined || typeof input[key] !== 'string') return null;
-    const toolName = String(raw?.tool_name ?? raw?.toolName ?? raw?.tool ?? raw?.toolCall?.name ?? '');
-    const isAgy = clientName === 'antigravity' || clientName === 'agy' || Boolean(raw?.toolCall);
-    const shell = /powershell|pwsh/i.test(toolName) || (isAgy && process.platform === 'win32')
-      ? 'powershell'
-      : process.platform === 'win32'
-        ? null
-        : 'posix';
-    const outline = outlineShell({ sessionId, command: input[key], cwd: payload.cwd, shell, state });
+    const toolName = String(
+      raw?.tool_name ?? raw?.toolName ?? raw?.tool ?? raw?.toolCall?.name ?? ''
+    );
+    const isAgy =
+      clientName === 'antigravity' ||
+      clientName === 'agy' ||
+      Boolean(raw?.toolCall);
+    const shell =
+      /powershell|pwsh/i.test(toolName) ||
+      (isAgy && process.platform === 'win32')
+        ? 'powershell'
+        : process.platform === 'win32'
+          ? null
+          : 'posix';
+    const outline = outlineShell({
+      sessionId,
+      command: input[key],
+      cwd: payload.cwd,
+      shell,
+      state,
+    });
     if (!outline) return null;
-    return { input: { ...input, [key]: outline.command }, notice: outline.notice };
+    return {
+      input: { ...input, [key]: outline.command },
+      notice: outline.notice,
+    };
   }
 
   return null;
@@ -245,7 +281,9 @@ export function sessionActivity(cwdRoot) {
   let projects = [];
   try {
     // Sorted most-recently-seen first by `registeredProjects`.
-    projects = registeredProjects().filter((p) => (p.lastSeenAt || 0) >= cutoff);
+    projects = registeredProjects().filter(
+      (p) => (p.lastSeenAt || 0) >= cutoff
+    );
   } catch {
     return events;
   }
@@ -348,9 +386,7 @@ export function mutationSucceeded(clientName, raw) {
     'opencode',
     'kilo',
     'windsurf',
-  ]).has(
-    clientName
-  );
+  ]).has(clientName);
 }
 
 /** Conservative success classification for any completed tool call. */
@@ -508,22 +544,36 @@ export function exitFrom(raw) {
 
 /** Verification requires affirmative evidence; a result envelope alone is not success. */
 export function verificationSucceeded(raw) {
-  const envelopes = [raw, ...responseEnvelopes(raw), raw?.postToolUse]
-    .filter((value) => value && typeof value === 'object');
-  if (!toolSucceeded(raw) || envelopes.some((value) =>
-    value.success === false || /^(?:error|failed|failure|cancelled|canceled|denied)$/i.test(String(value.status ?? ''))
-  )) return false;
-  const exitCodes = envelopes.flatMap((value) => EXIT_KEYS.flatMap((key) => {
-    const code = value[key];
-    if (Number.isInteger(code)) return [code];
-    if (typeof code === 'string' && /^-?\d{1,5}$/.test(code.trim())) return [Number(code.trim())];
-    return [];
-  }));
+  const envelopes = [raw, ...responseEnvelopes(raw), raw?.postToolUse].filter(
+    (value) => value && typeof value === 'object'
+  );
+  if (
+    !toolSucceeded(raw) ||
+    envelopes.some(
+      (value) =>
+        value.success === false ||
+        /^(?:error|failed|failure|cancelled|canceled|denied)$/i.test(
+          String(value.status ?? '')
+        )
+    )
+  )
+    return false;
+  const exitCodes = envelopes.flatMap((value) =>
+    EXIT_KEYS.flatMap((key) => {
+      const code = value[key];
+      if (Number.isInteger(code)) return [code];
+      if (typeof code === 'string' && /^-?\d{1,5}$/.test(code.trim()))
+        return [Number(code.trim())];
+      return [];
+    })
+  );
   if (exitCodes.length) return exitCodes.every((code) => code === 0);
-  return envelopes.some((value) => value.success === true ||
-    /^(?:ok|success|succeeded|passed)$/i.test(String(value.status ?? '')));
+  return envelopes.some(
+    (value) =>
+      value.success === true ||
+      /^(?:ok|success|succeeded|passed)$/i.test(String(value.status ?? ''))
+  );
 }
-
 
 function contextOutput(client, eventName, additionalContext) {
   if (client.contextStyle === 'top-level') return { additionalContext };
@@ -539,7 +589,9 @@ function contextOutput(client, eventName, additionalContext) {
   }
   if (client.contextStyle === 'antigravity-ephemeral') {
     if (eventName === 'PreToolUse' || eventName === 'PostToolUse') return null;
-    return additionalContext ? { injectSteps: [{ ephemeralMessage: additionalContext }] } : null;
+    return additionalContext
+      ? { injectSteps: [{ ephemeralMessage: additionalContext }] }
+      : null;
   }
   if (client.contextStyle === 'silent') return null;
   return {
@@ -567,8 +619,18 @@ function codexStringLiteral(literal) {
     if (index >= literal.length - 1) return null;
     const escaped = literal[index];
     const simple = {
-      b: '\b', f: '\f', n: '\n', r: '\r', t: '\t', v: '\v', 0: '\0',
-      '\\': '\\', "'": "'", '"': '"', '`': '`', '$': '$',
+      b: '\b',
+      f: '\f',
+      n: '\n',
+      r: '\r',
+      t: '\t',
+      v: '\v',
+      0: '\0',
+      '\\': '\\',
+      "'": "'",
+      '"': '"',
+      '`': '`',
+      $: '$',
     };
     if (Object.hasOwn(simple, escaped)) {
       decoded += simple[escaped];
@@ -595,7 +657,8 @@ function codexStringLiteral(literal) {
       if (
         close < 0 ||
         !(braced ? /^[0-9a-f]{1,6}$/i : /^[0-9a-f]{4}$/i).test(digits)
-      ) return null;
+      )
+        return null;
       const codePoint = Number.parseInt(digits, 16);
       if (codePoint > 0x10ffff) return null;
       decoded += String.fromCodePoint(codePoint);
@@ -644,18 +707,29 @@ export function hostToolName(raw) {
     // ONLY THE OPTIMIZER'S OWN SERVER, BY ITS EXACT NAME. A bare `wiki_write`
     // from any other server would otherwise be graded as an optimizer call that
     // answered -- and a substring test let `other-token-optimizer` through.
-    const server = String(body.parameters?.server_name ?? body.parameters?.serverName ?? '');
+    const server = String(
+      body.parameters?.server_name ?? body.parameters?.serverName ?? ''
+    );
     if (!OPTIMIZER_SERVER_NAMES.has(server.toLowerCase())) return null;
     const tool = body.parameters?.tool_name ?? body.parameters?.toolName;
     return tool ? `mcp__${server}__${tool}` : null;
   }
-  return raw?.tool_name ?? raw?.toolName ?? raw?.tool ?? raw?.toolCall?.name ?? body?.toolName ?? body?.tool ?? null;
+  return (
+    raw?.tool_name ??
+    raw?.toolName ??
+    raw?.tool ??
+    raw?.toolCall?.name ??
+    body?.toolName ??
+    body?.tool ??
+    null
+  );
 }
 
 /** Convert client-specific lifecycle envelopes into the common tool shape. */
 function codexStringBindings(source) {
   const values = new Map();
-  const declaration = /\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*((?:"(?:\\.|[^"\\])*")|(?:'(?:\\.|[^'\\])*')|(?:`(?:\\.|[^`\\])*`))/gs;
+  const declaration =
+    /\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*((?:"(?:\\.|[^"\\])*")|(?:'(?:\\.|[^'\\])*')|(?:`(?:\\.|[^`\\])*`))/gs;
   for (const match of String(source || '').matchAll(declaration)) {
     try {
       const value = codexStringLiteral(match[2]);
@@ -686,7 +760,10 @@ function codexExecCommands(source, bindings) {
   for (const call of String(source || '').matchAll(
     /(?:tools\.)?exec_command\s*\(\s*\{([\s\S]*?)\}\s*\)/gi
   )) {
-    const property = /\bcmd\s*:\s*((?:"(?:\\.|[^"\\])*")|(?:'(?:\\.|[^'\\])*')|(?:`(?:\\.|[^`\\])*`)|(?:[A-Za-z_$][\w$]*))/s.exec(call[1]);
+    const property =
+      /\bcmd\s*:\s*((?:"(?:\\.|[^"\\])*")|(?:'(?:\\.|[^'\\])*')|(?:`(?:\\.|[^`\\])*`)|(?:[A-Za-z_$][\w$]*))/s.exec(
+        call[1]
+      );
     if (!property) continue;
     const command = codexLiteral(property[1], bindings);
     if (command) commands.push(command);
@@ -698,11 +775,12 @@ export function normalizeClientPayload(clientName, event, raw) {
   if (clientName === 'codex') {
     const outerName = String(raw.tool_name ?? raw.toolName ?? raw.tool ?? '');
     if (/^(?:functions\.)?exec$/i.test(outerName)) {
-      const envelope = raw.tool_input ?? raw.toolInput ?? raw.arguments ?? raw.args;
+      const envelope =
+        raw.tool_input ?? raw.toolInput ?? raw.arguments ?? raw.args;
       const source =
         typeof envelope === 'string'
           ? envelope
-          : envelope?.code ?? envelope?.input ?? envelope?.source ?? '';
+          : (envelope?.code ?? envelope?.input ?? envelope?.source ?? '');
       const bindings = codexStringBindings(source);
       const patchCalls = codexCallArguments(source, 'apply_patch');
       const patch = patchCalls
@@ -726,8 +804,7 @@ export function normalizeClientPayload(clientName, event, raw) {
           // A single nested shell call is unambiguous and safe to veto. Keep
           // multi-operation programs advisory because rejecting their outer
           // envelope would discard unrelated work in the same orchestration.
-          code_mode_single_shell_command:
-            !mutation && commands.length === 1,
+          code_mode_single_shell_command: !mutation && commands.length === 1,
         },
       };
     }
@@ -812,7 +889,9 @@ export function sessionTaskContext(raw = {}) {
  */
 function harvestDeferred(clientName) {
   if (clientName !== 'claude-code') return false;
-  return !/^(1|true|yes|on)$/i.test(String(process.env.TOKEN_OPTIMIZER_HARVEST_TURN ?? '').trim());
+  return !/^(1|true|yes|on)$/i.test(
+    String(process.env.TOKEN_OPTIMIZER_HARVEST_TURN ?? '').trim()
+  );
 }
 
 function emit(object) {
@@ -1044,15 +1123,27 @@ export function policyText(
  * words; copying them into the benchmark would let the measured text drift
  * from the shipped text, so the arm imports this constant instead.
  */
+/*
+ * IT GOVERNS WHAT THE MODEL WRITES, NEVER HOW IT READS (#594 discipline A/B).
+ * The earlier wording ("quote the shortest decisive line of a command result")
+ * was read as an instruction about tool use: with it, 0 of 5 log-needle runs
+ * used Read (5 of 5 without it), and every bugfix run added `| tail -30` and a
+ * separate find/grep, one more turn each. A turn re-reads the whole context,
+ * so the narrower calls cost more than the bytes they saved: bugfix 0.105 vs
+ * 0.096, log-needle 0.145 vs 0.138 (median $, 5 reps). The output-token gains
+ * were real (seo-audit -9% output), so the block is scoped, not dropped.
+ */
 export const OUTPUT_DISCIPLINE = [
   '## Keep output lean',
   '',
   'Every token you write is billed at output rates -- far dearer than reading.',
   '- No preamble, recap, tool-call narration, or closing summary. Answer directly.',
-  '- Quote the shortest decisive line of a command result; never paste it whole.',
+  '- In replies, quote only the decisive line of a result; never paste it whole.',
   '- Write the least code that works; reuse what exists before adding.',
   '- Keep identifiers, paths, API names and error strings verbatim -- never paraphrase.',
   '- Correctness first: brevity that loses a fact is not a saving.',
+  '- This is about what you write, not how you read: read files and run commands as',
+  '  usual, and prefer fewer tool calls over smaller ones.',
 ].join('\n');
 
 function outputDiscipline() {
@@ -1062,8 +1153,11 @@ function outputDiscipline() {
   // run every hook with the block removed and nothing else changed -- the only
   // comparison that can say whether the instructions or the interception are
   // doing the work.
-  const raw = String(process.env.TOKEN_OPTIMIZER_OUTPUT_DISCIPLINE || '').trim().toLowerCase();
-  if (raw === '0' || raw === 'off' || raw === 'false' || raw === 'no') return '';
+  const raw = String(process.env.TOKEN_OPTIMIZER_OUTPUT_DISCIPLINE || '')
+    .trim()
+    .toLowerCase();
+  if (raw === '0' || raw === 'off' || raw === 'false' || raw === 'no')
+    return '';
 
   return OUTPUT_DISCIPLINE;
 }
@@ -1362,8 +1456,16 @@ async function runHook(clientName, event, invocation) {
     invocation.bind(raw, null, input.bytes);
     if (input.status !== 'ok') invocation.noteInput(input.status, input.bytes);
     if (features.routing || features.retrieval || features.harvest) {
-      const sessionId = raw.session_id ?? raw.sessionId ?? raw.conversation_id ?? raw.conversationId ?? 'default';
-      const scope = stateScope(raw, raw.transcript_path ?? raw.transcriptPath ?? null);
+      const sessionId =
+        raw.session_id ??
+        raw.sessionId ??
+        raw.conversation_id ??
+        raw.conversationId ??
+        'default';
+      const scope = stateScope(
+        raw,
+        raw.transcript_path ?? raw.transcriptPath ?? null
+      );
       const state = loadState(sessionId, scope);
       if (typeof state.pendingHarvest === 'string' && state.pendingHarvest) {
         emit({ injectSteps: [{ ephemeralMessage: state.pendingHarvest }] });
@@ -1374,7 +1476,6 @@ async function runHook(clientName, event, invocation) {
     process.exit(0);
   }
 
-
   if (event === 'session-start') {
     // Some hook hosts invoke SessionStart without closing stdin. Waiting the
     // full pre-tool timeout would turn optional context into a five-second
@@ -1384,7 +1485,11 @@ async function runHook(clientName, event, invocation) {
     const raw = input.payload || {};
     invocation.bind(raw, null, input.bytes);
     if (input.status !== 'ok') invocation.noteInput(input.status, input.bytes);
-    const cwd = (Array.isArray(raw.workspacePaths) ? raw.workspacePaths[0] : undefined) || raw.cwd || raw.working_directory || process.cwd();
+    const cwd =
+      (Array.isArray(raw.workspacePaths) ? raw.workspacePaths[0] : undefined) ||
+      raw.cwd ||
+      raw.working_directory ||
+      process.cwd();
     const root = projectRootFor(join(cwd, '__session__'), cwd);
     // Finish a store migration a crash interrupted, or a refused one whose
     // blockers may have cleared, before the store is used (#542). BEFORE the
@@ -1395,17 +1500,25 @@ async function runHook(clientName, event, invocation) {
     if (!features.routing && !features.retrieval && !features.harvest)
       process.exit(0);
     const toolEvidence = optimizerToolEvidence(raw);
-    const sessionId = raw.session_id ?? raw.sessionId ?? raw.conversation_id ?? raw.conversationId;
+    const sessionId =
+      raw.session_id ??
+      raw.sessionId ??
+      raw.conversation_id ??
+      raw.conversationId;
     let deferredToolContext = null;
     if (sessionId) {
-      const scope = stateScope(raw, raw.transcript_path ?? raw.transcriptPath ?? null);
+      const scope = stateScope(
+        raw,
+        raw.transcript_path ?? raw.transcriptPath ?? null
+      );
       const state = loadState(sessionId, scope);
       if (toolEvidence.proven) rememberOptimizerTools(state, toolEvidence);
       if (typeof state.pendingHarvest === 'string' && state.pendingHarvest) {
         deferredToolContext = state.pendingHarvest;
         state.pendingHarvest = null;
       }
-      if (toolEvidence.proven || deferredToolContext) saveState(sessionId, state, scope);
+      if (toolEvidence.proven || deferredToolContext)
+        saveState(sessionId, state, scope);
     }
     // ASSEMBLED IN CACHE ORDER, not in whatever order this function happens to
     // discover the blocks. Everything emitted here sits near the FRONT of the
@@ -1426,20 +1539,29 @@ async function runHook(clientName, event, invocation) {
       },
     ];
     const crashed = serverCrashNotice();
-    if (crashed) blocks.push({ id: 'server-crash', volatility: 0, text: crashed });
+    if (crashed)
+      blocks.push({ id: 'server-crash', volatility: 0, text: crashed });
     const oldNode = nodeFloorNotice();
-    if (oldNode) blocks.push({ id: 'node-floor', volatility: 0, text: oldNode });
+    if (oldNode)
+      blocks.push({ id: 'node-floor', volatility: 0, text: oldNode });
     // Below 22.14.0 the floor notice already names the likeliest cause of
     // slow hooks. Above it, the floor notice is about dependency support only,
     // so measured slow or killed hook calls must still be reported.
-    const slowHooks = oldNode && nodeHooksMeasuredSlow() ? null : takeSlowHookNotice();
-    if (slowHooks) blocks.push({ id: 'hook-latency', volatility: 4, text: slowHooks });
+    const slowHooks =
+      oldNode && nodeHooksMeasuredSlow() ? null : takeSlowHookNotice();
+    if (slowHooks)
+      blocks.push({ id: 'hook-latency', volatility: 4, text: slowHooks });
     // Reduce at the source before anything runs: quiet defaults for the tools
     // the agent will call, through the env file Claude Code sources for every
     // later Bash call (quiet-env.mjs). A no-op for clients without one.
     applyQuietEnv();
     if (migrated) blocks.push({ id: 'storage', volatility: 4, text: migrated });
-    if (deferredToolContext) blocks.push({ id: 'deferred-tool-context', volatility: 4, text: deferredToolContext });
+    if (deferredToolContext)
+      blocks.push({
+        id: 'deferred-tool-context',
+        volatility: 4,
+        text: deferredToolContext,
+      });
     registerProject({ root, graphDir: wikiDir(root), client: clientName });
     if (features.retrieval) {
       try {
@@ -1471,17 +1593,25 @@ async function runHook(clientName, event, invocation) {
     // reads, so it is the only one where a withheld class buys a measurement.
     // Withholding anywhere else would cost context and learn nothing.
     const learned = learnedLocation(cwd);
-    const served = applyHoldout(blocks.map((block) => ({ ...block, cls: block.id })), {
-      dir: clientName === 'claude-code' ? learned.dir : null,
-      sessionId,
-    });
+    const served = applyHoldout(
+      blocks.map((block) => ({ ...block, cls: block.id })),
+      {
+        dir: clientName === 'claude-code' ? learned.dir : null,
+        sessionId,
+      }
+    );
     let output = contextOutput(client, eventName, sessionContext(served));
     // LEARNED TOOL PRUNING (toolprune.mjs): finished sessions are folded in the
     // background, and what changed is said to the PERSON, once, as a visible
     // line -- not to the model, whose context it would only cost.
     const transcriptPath = raw.transcript_path ?? raw.transcriptPath ?? null;
     if (clientName === 'claude-code' && sessionId && transcriptPath) {
-      scheduleFold({ dir: learned.dir, root: learned.root, transcriptPath, sessionId });
+      scheduleFold({
+        dir: learned.dir,
+        root: learned.root,
+        transcriptPath,
+        sessionId,
+      });
       const notice = takeNotice(learned.dir);
       if (notice) output = { ...(output || {}), systemMessage: notice };
     }
@@ -1511,7 +1641,11 @@ async function runHook(clientName, event, invocation) {
     // not look like an input reader that never ran in cross-client telemetry.
     invocation.bind(raw, null, input.bytes);
     const sessionId =
-      raw.session_id ?? raw.sessionId ?? raw.conversation_id ?? raw.conversationId ?? 'default';
+      raw.session_id ??
+      raw.sessionId ??
+      raw.conversation_id ??
+      raw.conversationId ??
+      'default';
     // The transcript FILE, for archiving and derivation; the state scope adds
     // the agent id, which is not part of any path.
     const transcriptPath = raw.transcript_path ?? raw.transcriptPath ?? null;
@@ -1524,7 +1658,11 @@ async function runHook(clientName, event, invocation) {
     // Hoisted out of the try below, because the harvest needs the same resolved
     // directory and resolving it twice is how two halves of one hook end up
     // reasoning about different projects.
-    const cwd = (Array.isArray(raw.workspacePaths) ? raw.workspacePaths[0] : undefined) || raw.cwd || raw.working_directory || process.cwd();
+    const cwd =
+      (Array.isArray(raw.workspacePaths) ? raw.workspacePaths[0] : undefined) ||
+      raw.cwd ||
+      raw.working_directory ||
+      process.cwd();
     try {
       const dir = wikiDir(projectRootFor(join(cwd, '__session__'), cwd));
       recordEpisodeOutcome(dir, {
@@ -1560,7 +1698,12 @@ async function runHook(clientName, event, invocation) {
     // only when such a prune is applied, so an ordinary Stop pays one small
     // JSON read. Never on a continuation, so it cannot loop.
     let liveRestore = null;
-    if (clientName === 'claude-code' && transcriptPath && !raw.stop_hook_active && !raw.stopHookActive) {
+    if (
+      clientName === 'claude-code' &&
+      transcriptPath &&
+      !raw.stop_hook_active &&
+      !raw.stopHookActive
+    ) {
       try {
         const learned = learnedLocation(cwd);
         if (hasLiveRestorable(learned.dir)) {
@@ -1591,7 +1734,13 @@ async function runHook(clientName, event, invocation) {
       // firehose is read for ARRIVALS only if an unscored refresh exists, so
       // the dormant case never pays for that. The moment an issuer exists, the
       // decision starts learning with no second wiring change.
-      const cwd = (Array.isArray(raw.workspacePaths) ? raw.workspacePaths[0] : undefined) || raw.cwd || raw.working_directory || process.cwd();
+      const cwd =
+        (Array.isArray(raw.workspacePaths)
+          ? raw.workspacePaths[0]
+          : undefined) ||
+        raw.cwd ||
+        raw.working_directory ||
+        process.cwd();
       const dir = wikiDir(projectRootFor(join(cwd, '__session__'), cwd));
       scoreRefreshes(dir);
     } catch {
@@ -1612,7 +1761,13 @@ async function runHook(clientName, event, invocation) {
       // BEFORE `derive`, deliberately: the correction detector reads the archive
       // first and treats the live transcript as the fallback, and the archive is
       // the copy that survives into later sessions.
-      const cwd = (Array.isArray(raw.workspacePaths) ? raw.workspacePaths[0] : undefined) || raw.cwd || raw.working_directory || process.cwd();
+      const cwd =
+        (Array.isArray(raw.workspacePaths)
+          ? raw.workspacePaths[0]
+          : undefined) ||
+        raw.cwd ||
+        raw.working_directory ||
+        process.cwd();
       const dir = wikiDir(projectRootFor(join(cwd, '__session__'), cwd));
       if (transcriptPath) archive(dir, transcriptPath, { sessionId });
     } catch {
@@ -1630,7 +1785,13 @@ async function runHook(clientName, event, invocation) {
       // the two is the number that says whether the bound is doing anything --
       // one figure alone cannot distinguish "nothing to derive" from "derived
       // plenty and stored none of it".
-      const cwd = (Array.isArray(raw.workspacePaths) ? raw.workspacePaths[0] : undefined) || raw.cwd || raw.working_directory || process.cwd();
+      const cwd =
+        (Array.isArray(raw.workspacePaths)
+          ? raw.workspacePaths[0]
+          : undefined) ||
+        raw.cwd ||
+        raw.working_directory ||
+        process.cwd();
       // WHERE THE WORK HAPPENED, NOT WHERE THE CLIENT WAS LAUNCHED.
       //
       // `projectRootFor` on a cwd with no VCS marker -- a home directory, which
@@ -1706,7 +1867,12 @@ async function runHook(clientName, event, invocation) {
               if (clientName !== 'claude-code') return null;
               try {
                 const turn = turnEvidence(transcriptPath);
-                return turn && { ...turn, corrected: CORRECTION_OPENER.test(turn.opening) };
+                return (
+                  turn && {
+                    ...turn,
+                    corrected: CORRECTION_OPENER.test(turn.opening),
+                  }
+                );
               } catch {
                 return null;
               }
@@ -1730,7 +1896,10 @@ async function runHook(clientName, event, invocation) {
       client.stopDecision &&
       !raw.stop_hook_active &&
       !raw.stopHookActive &&
-      !(clientName === 'cursor' && Number(raw.loop_count ?? raw.loopCount ?? 0) > 0)
+      !(
+        clientName === 'cursor' &&
+        Number(raw.loop_count ?? raw.loopCount ?? 0) > 0
+      )
     ) {
       const paced = nextPacedContinuation({ cwd, state, client: clientName });
       if (paced) {
@@ -1785,12 +1954,20 @@ async function runHook(clientName, event, invocation) {
     }
 
     // After the harvest's own deferral, which would otherwise drop it.
-    if (liveRestore && client.stopDecision) stopPrompt = stopPrompt ? `${liveRestore}\n\n${stopPrompt}` : liveRestore;
+    if (liveRestore && client.stopDecision)
+      stopPrompt = stopPrompt ? `${liveRestore}\n\n${stopPrompt}` : liveRestore;
     if (stopPrompt && client.stopStyle === 'followup') {
-      emit({ followup_message: stopPrompt, ...(harvestNotice ? { systemMessage: harvestNotice } : {}) });
+      emit({
+        followup_message: stopPrompt,
+        ...(harvestNotice ? { systemMessage: harvestNotice } : {}),
+      });
     } else {
       emit({
-        ...(stopPrompt ? { decision: client.stopDecision, reason: stopPrompt } : isAntigravity ? { decision: 'allow' } : {}),
+        ...(stopPrompt
+          ? { decision: client.stopDecision, reason: stopPrompt }
+          : isAntigravity
+            ? { decision: 'allow' }
+            : {}),
         ...(harvestNotice ? { systemMessage: harvestNotice } : {}),
       });
     }
@@ -1880,8 +2057,19 @@ async function runHook(clientName, event, invocation) {
         state.editedFiles[0] ||
         join(payload.cwd || process.cwd(), '__recording__');
       const dir = wikiDir(projectRootFor(anchor, payload.cwd));
+      // ONE IN-TURN ASK PER SESSION, on every client. The recording guidance
+      // below asks the same thing after the first edit; replaying THOL #565's
+      // refactor-split, a session got both (~250 then ~470 characters, re-read
+      // on every later turn), and the campaign's 36 paid runs of this arm made
+      // no wiki_write call at all. A second ask the first did not move is
+      // cost, not pressure. The end-of-session asks are separate surfaces and
+      // unaffected: PreCompact's compactionNudge, and Codex's Stop-hook
+      // semantic harvest, which continues the turn once with the edited files.
+      const askedAlready = state.recordingGuidanceServed === true;
       recordingContext =
-        features.harvest && toolEvidence.names.has('wiki_write')
+        features.harvest &&
+        toolEvidence.names.has('wiki_write') &&
+        !askedAlready
           ? recordingNudge(dir, {
               state,
               edits: state.edits,
@@ -1906,11 +2094,12 @@ async function runHook(clientName, event, invocation) {
             anchor || join(payload.cwd || process.cwd(), '__tool__'),
             payload.cwd
           );
-      if (pacerEnabled()) recordWindowActivity({ calls: 1, edits: isSubstantive(payload.tool_name) ? 1 : 0 });
-      if (
-        isVerificationCommand(command) &&
-        verificationSucceeded(raw)
-      ) {
+      if (pacerEnabled())
+        recordWindowActivity({
+          calls: 1,
+          edits: isSubstantive(payload.tool_name) ? 1 : 0,
+        });
+      if (isVerificationCommand(command) && verificationSucceeded(raw)) {
         state.verifiedEdits = Number(state.edits || 0);
       }
       recordToolOutcome(wikiDir(root), {
@@ -1992,13 +2181,19 @@ async function runHook(clientName, event, invocation) {
   if (event === 'pre-tool' && client.inputRewrite && !ucrGuardVerdict) {
     const rewrite = outlineRewrite(raw, payload, state, clientName);
     if (rewrite) {
-      const told = verdict && adviseOnce(state, verdict) ? verdict.reason : null;
+      const told =
+        verdict && adviseOnce(state, verdict) ? verdict.reason : null;
       remember(payload, state);
       saveState(payload.session_id, state, agentScope);
       const advise = [told, rewrite.notice].filter(Boolean).join('\n\n');
-      if (client.inputRewrite === 'antigravity-overwrite' || Boolean(raw?.toolCall)) {
+      if (
+        client.inputRewrite === 'antigravity-overwrite' ||
+        Boolean(raw?.toolCall)
+      ) {
         if (advise) {
-          state.pendingHarvest = [state.pendingHarvest, advise].filter(Boolean).join('\n\n');
+          state.pendingHarvest = [state.pendingHarvest, advise]
+            .filter(Boolean)
+            .join('\n\n');
           saveState(payload.session_id, state, agentScope);
         }
         emit({
@@ -2024,18 +2219,18 @@ async function runHook(clientName, event, invocation) {
   // turn and save nothing. It advises about the NEXT one instead.
   const canRefuse = Boolean(
     verdict &&
-      client.canDeny &&
-      event === 'pre-tool' &&
-      !repeat &&
-      refusalsEnabled() &&
-      // Codex code mode presents orchestration as one outer `functions.exec`.
-      // Refuse only when it contains one shell call; a multi-operation envelope
-      // can include unrelated safe work that must not be discarded wholesale.
-      !(
-        clientName === 'codex' &&
-        payload.tool_input?.code_mode_envelope &&
-        !payload.tool_input?.code_mode_single_shell_command
-      )
+    client.canDeny &&
+    event === 'pre-tool' &&
+    !repeat &&
+    refusalsEnabled() &&
+    // Codex code mode presents orchestration as one outer `functions.exec`.
+    // Refuse only when it contains one shell call; a multi-operation envelope
+    // can include unrelated safe work that must not be discarded wholesale.
+    !(
+      clientName === 'codex' &&
+      payload.tool_input?.code_mode_envelope &&
+      !payload.tool_input?.code_mode_single_shell_command
+    )
   );
 
   if (canRefuse) {
@@ -2098,7 +2293,9 @@ async function runHook(clientName, event, invocation) {
     // would have thrown at runtime on the one path that matters.
     const authoredWrite =
       event === 'post-tool' &&
-      new Set(['Edit', 'MultiEdit', 'Write']).has(String(payload.tool_name || '')) &&
+      new Set(['Edit', 'MultiEdit', 'Write']).has(
+        String(payload.tool_name || '')
+      ) &&
       mutationSucceeded(clientName, raw);
     graphContext = observeAndInject(
       payload,
@@ -2136,19 +2333,34 @@ async function runHook(clientName, event, invocation) {
           call: Number(state.toolCalls) || 0,
           state,
           store: (text) => {
-            const ref = capture(dir, text, { tool, sessionId: payload.session_id, shape: 'repeat' });
+            const ref = capture(dir, text, {
+              tool,
+              sessionId: payload.session_id,
+              shape: 'repeat',
+            });
             return ref ? artifactPath(dir, ref) : null;
           },
         });
       // THE SIBLING BLACKBOARD (blackboard.mjs): every read-only result, for
       // the agents of this session that have not started yet.
-      const boardText = typeof raw.tool_response?.stdout === 'string'
-        ? raw.tool_response.stdout
-        : typeof raw.tool_response?.file?.content === 'string'
-          ? raw.tool_response.file.content
-          : outputFrom(raw);
-      if ((tool === 'Bash' || tool === 'PowerShell') && typeof boardText === 'string') {
-        const ref = boardText.length > 1000 ? capture(dir, boardText, { tool, sessionId: payload.session_id, shape: 'board' }) : null;
+      const boardText =
+        typeof raw.tool_response?.stdout === 'string'
+          ? raw.tool_response.stdout
+          : typeof raw.tool_response?.file?.content === 'string'
+            ? raw.tool_response.file.content
+            : outputFrom(raw);
+      if (
+        (tool === 'Bash' || tool === 'PowerShell') &&
+        typeof boardText === 'string'
+      ) {
+        const ref =
+          boardText.length > 1000
+            ? capture(dir, boardText, {
+                tool,
+                sessionId: payload.session_id,
+                shape: 'board',
+              })
+            : null;
         recordOnBoard({
           sessionId: payload.session_id,
           agent: String(raw.agent_id ?? raw.agentId ?? ''),
@@ -2157,8 +2369,16 @@ async function runHook(clientName, event, invocation) {
           output: boardText,
           artifact: ref ? artifactPath(dir, ref) : null,
         });
-      } else if (tool === 'Read' && typeof boardText === 'string' && boardText.length > 1000) {
-        const ref = capture(dir, boardText, { tool, sessionId: payload.session_id, shape: 'board-read' });
+      } else if (
+        tool === 'Read' &&
+        typeof boardText === 'string' &&
+        boardText.length > 1000
+      ) {
+        const ref = capture(dir, boardText, {
+          tool,
+          sessionId: payload.session_id,
+          shape: 'board-read',
+        });
         recordReadOnBoard({
           sessionId: payload.session_id,
           agent: String(raw.agent_id ?? raw.agentId ?? ''),
@@ -2174,7 +2394,8 @@ async function runHook(clientName, event, invocation) {
       // compacts with the installed runtime's compactor: it is pure, so the
       // newer one is safe to borrow (runtime-switch.mjs PURE_MODULES).
       const compact =
-        typeof globalThis.__tokenOptimizerPure?.compactToolResponse === 'function'
+        typeof globalThis.__tokenOptimizerPure?.compactToolResponse ===
+        'function'
           ? globalThis.__tokenOptimizerPure.compactToolResponse
           : compactToolResponse;
       if (!updatedToolOutput)
@@ -2194,8 +2415,30 @@ async function runHook(clientName, event, invocation) {
   // adviseOnce -- rather than on every matching call. Not when the output was
   // just compacted: "that search was unbounded, use smart_grep" after the
   // result is already bounded is advice about a cost nobody paid.
+  //
+  // NOR AFTER A SHELL SEARCH THAT RETURNED LITTLE, outside enforce, on any
+  // client. The search has already run, so the advice is only about the next
+  // one, and it is worth its words only when this one cost something. Replaying
+  // THOL #565's settings-inventory calls on Claude Code, it followed a
+  // `grep -roh ... | sort -u` that returned 2.7 KB, and its remedy is loading
+  // smart_grep -- a ToolSearch turn on a deferred-tool client. The bar is the
+  // size output compaction starts at: below it nothing about the output is
+  // worth saving. (On Claude Code a larger result is compacted, which the
+  // `!updatedToolOutput` above already treats as paid for.)
+  const shellSearchAfterTheFact =
+    event === 'post-tool' &&
+    mode() !== MODE_ENFORCE &&
+    typeof verdict?.key === 'string' &&
+    verdict.key.startsWith('bash:search:') &&
+    Buffer.byteLength(String(outputFrom(raw) ?? ''), 'utf8') <
+      OUTPUT_COMPACT_MIN_BYTES;
   const advisory =
-    verdict && !updatedToolOutput && adviseOnce(state, verdict) ? verdict.reason : null;
+    verdict &&
+    !updatedToolOutput &&
+    !shellSearchAfterTheFact &&
+    adviseOnce(state, verdict)
+      ? verdict.reason
+      : null;
   // THE RECORDING GUIDANCE, ONCE, AFTER REAL WORK (#357, M5). It used to ride in
   // every SessionStart, where it is the largest fixed cost a small session pays
   // and buys nothing until there is something to record. The first edit is the
@@ -2214,6 +2457,8 @@ async function runHook(clientName, event, invocation) {
   const guided =
     event === 'post-tool' &&
     !state.recordingGuided &&
+    // Nor after the edit-count nudge asked the same thing.
+    !state.recordingNudged &&
     !isWorkerType(raw?.agent_type ?? raw?.agentType) &&
     features.harvest &&
     client.contextStyle !== 'silent' &&
@@ -2224,7 +2469,9 @@ async function runHook(clientName, event, invocation) {
   // The previous turn's harvest nudge, held back by the Stop hook so it never
   // cost a turn of its own, rides on this result -- once.
   const pendingHarvest =
-    event === 'post-tool' && canDeliverToolContext && typeof state.pendingHarvest === 'string'
+    event === 'post-tool' &&
+    canDeliverToolContext &&
+    typeof state.pendingHarvest === 'string'
       ? state.pendingHarvest
       : null;
   // Cleared explicitly, so saveState knows this caller changed it.
@@ -2240,7 +2487,9 @@ async function runHook(clientName, event, invocation) {
     (Number(state.toolCalls) || 0) % CHECK_EVERY_CALLS === 0
   ) {
     try {
-      overWindow = overWindowNotice(raw.transcript_path ?? raw.transcriptPath ?? null);
+      overWindow = overWindowNotice(
+        raw.transcript_path ?? raw.transcriptPath ?? null
+      );
     } catch {
       overWindow = null;
     }
@@ -2258,7 +2507,7 @@ async function runHook(clientName, event, invocation) {
       holdoutDir = null;
     }
   }
-  const context = applyHoldout(
+  const delivered = applyHoldout(
     [
       { cls: 'advisory', text: advisory },
       { cls: 'graph', text: graphContext },
@@ -2268,15 +2517,28 @@ async function runHook(clientName, event, invocation) {
       { cls: 'over-window', text: overWindow },
     ],
     { dir: holdoutDir, sessionId: payload.session_id }
-  )
-    .map((part) => part.text)
-    .join('\n\n');
-  if (context && !canDeliverToolContext && client.contextStyle === 'antigravity-ephemeral') {
-    state.pendingHarvest = [state.pendingHarvest, context].filter(Boolean).join('\n\n');
+  );
+  // Only guidance the model RECEIVED counts as the session's one recording ask.
+  // A holdout that withheld it asked nothing, so the edit-count nudge stays
+  // available; recordingGuided still marks it decided, so the holdout records
+  // the withheld injection once rather than on every later call.
+  if (guided && delivered.some((part) => part.cls === 'guidance'))
+    state.recordingGuidanceServed = true;
+  const context = delivered.map((part) => part.text).join('\n\n');
+  if (
+    context &&
+    !canDeliverToolContext &&
+    client.contextStyle === 'antigravity-ephemeral'
+  ) {
+    state.pendingHarvest = [state.pendingHarvest, context]
+      .filter(Boolean)
+      .join('\n\n');
   }
   saveState(payload.session_id, state, agentScope);
   if (updatedToolOutput) {
-    const withContext = context ? contextOutput(client, eventName, context) : null;
+    const withContext = context
+      ? contextOutput(client, eventName, context)
+      : null;
     emit({
       hookSpecificOutput: {
         ...(withContext?.hookSpecificOutput ?? { hookEventName: eventName }),
@@ -2286,7 +2548,11 @@ async function runHook(clientName, event, invocation) {
   } else if (context) {
     const output = contextOutput(client, eventName, context);
     if (output) {
-      emit(event === 'pre-tool' && isAntigravity ? { decision: 'allow', ...output } : output);
+      emit(
+        event === 'pre-tool' && isAntigravity
+          ? { decision: 'allow', ...output }
+          : output
+      );
     }
   } else if (event === 'pre-tool' && isAntigravity) {
     emit({ decision: 'allow' });
