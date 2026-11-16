@@ -64,42 +64,71 @@ const MIN_LEAD = 1;
  */
 const RULES = {
   [TaskCategory.FIX]: [
-    [/\b(?:failing|failed|fails|broken|red)\b[^.\n]{0,40}\b(?:tests?|suite|build|ci)\b/i, 3],
-    [/\b(?:tests?|suite|build)\b[^.\n]{0,30}\b(?:fail(?:s|ing)?|red|broken)\b/i, 3],
+    [/\b(?:failing|failed|fails|broken|red)\b[^.\n]{0,40}\b(?:tests?|suite|build|ci|lint|job)\b/i, 3],
+    [/\b(?:tests?|suite|build|lint|job)\b[^.\n]{0,30}\b(?:fail(?:s|ing|ed)?|red|broken|errors? out)\b/i, 3],
     [/\b(?:fix|debug|repair)\b[^.\n]{0,40}\b(?:bugs?|errors?|crash|regression|issue)\b/i, 3],
     [/\broot cause\b/i, 2],
     [/\b(?:traceback|stack trace|exception)\b/i, 1],
-    [/\bfix\b/i, 1],
+    // SYMPTOMS: what a person writes when something that worked does not.
+    [/\b(?:doesn'?t|does not|don'?t|isn'?t|is not|aren'?t|won'?t|can'?t|cannot|never)\b[^.\n]{0,30}\b(?:work|load|save|persist|show|render|reconnect|start|submit|match|appear|update|respond)/i, 2],
+    [/\b(?:does nothing|crash(?:es|ed|ing)?|hangs?|freez(?:es|ing)|deadlock|race (?:condition )?between|memory leak|leaks?|regression|segfault|broken|corrupt(?:s|ed|ion)?|mangled|stale|flaky|off[- ]by[- ]one|twice|goes past|wrong)\b/i, 2],
+    [/\b(?:errors?|fails?|failing|failed|failure|incorrect|instead of)\b/i, 1],
+    // A named exception, an exit status or an HTTP error is a symptom on its own.
+    [/\b\w+(?:Error|Exception)\b|\bexit(?:s|ed)?\b[^.\n]{0,20}\bcode \d+|\breturns? (?:a )?[45]\d\d\b/, 2],
+    // REPAIR VERBS. Weak alone ("fix the grammar" is a rewrite); decisive with a symptom.
+    [/\b(?:fix|repair|resolve|investigate|get rid of|clean (?:them|it) up)\b/i, 1],
+    [/\b(?:fix|repair|correct|sort out) (?:it|this|that)\b|\bsort (?:it|this|that) out\b|\bmake (?:it|them|this) (?:work|pass|handle|accessible|sort)\b|\bget (?:it|this|that) working\b/i, 2],
     [/修复|失败的测试|报错|缺陷/, 3],
   ],
   [TaskCategory.BUILD]: [
     [/\bimplement\b/i, 2],
     [/\b(?:SPEC|MIGRATION|REFACTOR|DESIGN)\.md\b/, 2],
     [/\b(?:add|build|create)\b[^.\n]{0,30}\b(?:feature|endpoint|command|function|class|module|support)\b/i, 2],
-    [/\b(?:migrate|migration|refactor|split)\b/i, 2],
+    [/\b(?:migrate|migration|refactor|split|extract)\b/i, 2],
+    // AN IMPERATIVE THAT MAKES SOMETHING, at the start of the request.
+    [/^\s*(?:please\s+)?(?:add|implement|create|build|introduce|write|wire up|integrate|support|enable|expose|generate|move|upgrade|allow|let|set up|make the|convert|port)\b/i, 2],
+    [/\b(?:we need|we should|I want|I'd like|be able to)\b/i, 1],
+    [/\bnew (?:page|endpoint|feature|flag|option|command|service|table|screen)\b/i, 2],
+    [/\b(?:add|implement|introduce|support|wire up|integrate|expose|set up)\b/i, 1],
     [/实现|新增功能|迁移|重构/, 3],
   ],
   [TaskCategory.REWRITE]: [
     [/\brewrite\b[^.\n]{0,30}\b(?:whole|entire|this|the)\b[^.\n]{0,20}\bfile\b/i, 4],
     [/\b(?:convert|translate|port|reformat)\b[^.\n]{0,40}\b(?:file|module)\b/i, 3],
     [/\b(?:whole|entire)\s+file\b/i, 2],
+    // THE TEXT CHANGES, THE MEANING DOES NOT.
+    [/\b(?:rewrite|reword|rephrase|restate|copy-?edit|proofread|paraphrase|polish|tighten(?: up)?|condense|translate)\b/i, 3],
+    [/\b(?:wording|tone|grammar|typos?|spelling|punchier|concise|plainer|friendlier|robotic|clarity|readability)\b/i, 2],
+    [/\b(?:no (?:logic|behaviou?r) changes?|without changing|keep the (?:text|meaning|behaviou?r)|don'?t change)\b/i, 3],
+    [/\b(?:reformat|reorgani[sz]e|sort the imports|tidy|turn\b[^.\n]{0,40}\binto)\b/i, 2],
     [/重写整个文件|整个文件/, 4],
   ],
   [TaskCategory.SURVEY]: [
     [/\b(?:write|produce|create|generate)\b[^.\n]{0,50}\.md\b/i, 3],
     [/\b(?:audit|inventory|overview|architecture|onboarding|report|documentation)\b/i, 2],
-    [/\b(?:every|all)\b[^.\n]{0,30}\b(?:pages?|files?|modules?|settings?|components?)\b/i, 1],
+    [/\b(?:every|all)\b[^.\n]{0,30}\b(?:pages?|files?|modules?|settings?|components?|places?|endpoints?|packages?|services?|tables?|commands?|calls?)\b/i, 2],
+    // THE WHOLE OF SOMETHING, understood or reported on.
+    [/\b(?:tour|walk me through the (?:repo\w*|codebase|structure|project)|high-level|big picture|structure of|organi[sz]ed|what does this (?:project|repo\w*|codebase) do|just cloned|new here)\b/i, 3],
+    [/\b(?:survey|summari[sz]e|summary|catalog(?:ue)?|map out|assess|evaluate|analy[sz]e|review|compare|research|recommend|write (?:it |them )?up|list (?:all|every)|document all|check (?:every|all|them all)|go through (?:all|the|every)|security review|vulnerabilit\w*|findings)\b/i, 2],
+    [/\b(?:whole|entire|overall)\b[^.\n]{0,20}\b(?:repo\w*|codebase|project|module|api|site|system|app|monorepo|structure)\b/i, 2],
+    [/\b(?:codebase|repository|monorepo|project)\b/i, 1],
     [/报告|审计|文档|概述|清单/, 2],
   ],
   [TaskCategory.LOCATE]: [
     [/\b(?:find|locate|identify|which|where)\b[^.\n]{0,60}\b(?:log|output|line|entry|occurrence)\b/i, 3],
     [/\.log\b/i, 1],
     [/\b(?:noisy|huge|long|large)\b[^.\n]{0,30}\b(?:log|output|file)\b/i, 2],
+    // ONE THING, AND WHERE IT IS.
+    [/^\s*(?:where|which (?:file|module|component|test|commit|function|class|line|template)|what (?:file|line|path)|find (?:the|where)|locate|look (?:for|up)|search|grep|show me where)\b/i, 3],
+    [/\bwhere(?:'s| is| are| do| does| did)\b|\b(?:in which|which (?:file|module|component|test|commit|function|class|line))\b/i, 2],
+    [/\b(?:find|locate|search|grep)\b/i, 1],
     [/日志|找出|查找|定位/, 2],
   ],
   [TaskCategory.EXPLAIN]: [
     [/^\s*(?:why|how does|how do|what does|what is|explain)\b/i, 3],
     [/\bexplain\b/i, 2],
+    [/^\s*(?:how (?:is|are|did)|what(?:'s| is) the (?:point|purpose|reason\w*|difference)|what happens|describe (?:how|what)|help me understand|can you explain|I don'?t (?:get|understand))\b/i, 3],
+    [/\bwalk me through (?:it|how|this|what)\b|\bstep by step\b|\bhelp me understand\b/i, 2],
     [/为什么|解释/, 3],
   ],
 };
