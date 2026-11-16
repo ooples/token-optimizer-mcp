@@ -60,6 +60,9 @@ import {
 } from './lib/observability.mjs';
 import { resolveHook } from './lib/runtime-switch.mjs';
 
+/** Compaction and its SessionStart are back to back; anything older is stale. */
+const COMPACTION_ANCHOR_TTL_MS = 10 * 60 * 1000;
+
 // THE BUNDLED INVENTORY IS ASSERTED ONLY FOR AN ACTUAL PLUGIN INSTALL.
 //
 // This used to run unconditionally, on the grounds that these entry points ship
@@ -123,7 +126,12 @@ async function restoration(parsed) {
   // carries one, so an unscoped read here found an empty state and the
   // restoration never fired outside the tests, whose payloads had no path.
   const state = loadState(parsed.session_id, parsed.transcript_path || null);
-  const seen = Object.keys(state.seen || {});
+  // PreCompact emptied `seen` (the read cache must not outlive the context) and
+  // kept the list as compactionAnchors; nothing runs between it and this hook.
+  // A set older than a few minutes belongs to an earlier compaction.
+  const anchors = state.compactionAnchors;
+  const fresh = anchors && Date.now() - anchors.at < COMPACTION_ANCHOR_TTL_MS ? anchors.paths : [];
+  const seen = [...new Set([...fresh, ...Object.keys(state.seen || {})])];
   if (!seen.length) return null;
 
   // The graph belongs to the project the FILES are in, not to wherever the

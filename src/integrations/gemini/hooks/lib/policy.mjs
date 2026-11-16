@@ -65,6 +65,7 @@ import { isFsSafePath } from './paths.mjs';
 import { SESSION_CAP as ADVISED_CAP } from './advise.mjs';
 import { noteHookOutput } from './observability.mjs';
 import { repoAskEnabled } from './quiet-env.mjs';
+import { RECLASSIFY_WINDOW, TaskCategory, mayReplace } from './task-class.mjs';
 
 /** Enforcement modes, least to most permissive. */
 export const MODE_ENFORCE = 'enforce';
@@ -435,6 +436,9 @@ function emptyState() {
     // The block is said again once the context it was said into is gone.
     disciplineServedAt: 0,
     contextStartedAt: 0,
+    // What was in view when the context was last compacted: clearSeen empties
+    // `seen` for the read cache, and SessionStart's restoration still needs it.
+    compactionAnchors: null,
     // The harvest nudge the Stop hook held for the next turn (null when none).
     pendingHarvest: null,
     repeats: {},
@@ -477,6 +481,16 @@ function changedHarvest(state) {
 }
 
 /** A stored task category, or null when absent or malformed. */
+const MAX_COMPACTION_ANCHORS = 64;
+
+/** `{paths, at}` as clearSeen writes it, or null. */
+function validAnchors(value) {
+  if (!value || typeof value !== 'object' || !Array.isArray(value.paths)) return null;
+  const paths = value.paths.filter((p) => typeof p === 'string').slice(-MAX_COMPACTION_ANCHORS);
+  if (!paths.length || !Number.isFinite(value.at) || value.at <= 0) return null;
+  return { paths, at: value.at };
+}
+
 function validTaskClass(value) {
   if (!value || typeof value !== 'object' || typeof value.category !== 'string') return null;
   return {
@@ -501,6 +515,15 @@ function validTaskClass(value) {
  * otherwise whatever is stored stands, so a mere tally never undoes a
  * concurrent correction. A snapshot this module never handed out (a hand-built
  * state) has nothing to add to and simply carries its own values.
+ *
+ * A CORRECTION OBEYS THE RULES A SINGLE CALL DOES, judged against what is
+ * stored rather than what the caller loaded. It must replace the stored
+ * category by the overrule rule (mayReplace), so a parallel `fix` cannot undo a
+ * stored `rewrite`. And the call behind it must fall inside the window once the
+ * calls other hooks saved meanwhile are counted -- a hook that loaded calls=5
+ * cannot know it was the seventh. Its position is assigned here, under the
+ * lock: its last counted call follows every count already stored; a result
+ * judged without counting belongs to the call its loaded count ends on.
  */
 function mergedTaskClass(current, mine, loaded) {
   const a = validTaskClass(current);
@@ -514,14 +537,15 @@ function mergedTaskClass(current, mine, loaded) {
   const base =
     loaded === undefined
       ? null
-      : (validTaskClass(loaded) ?? { category: 'unknown', source: 'none', calls: 0, gen: 0 });
+      : (validTaskClass(loaded) ?? { category: TaskCategory.UNKNOWN, source: 'none', calls: 0, gen: 0 });
   const sameGen = base !== null && base.gen === b.gen;
   const added = sameGen ? Math.max(0, b.calls - base.calls) : 0;
   const moved = !sameGen || b.category !== base.category;
-  return {
-    ...(moved ? b : a),
-    calls: Math.max(a.calls + added, b.calls),
-  };
+  const calls = Math.max(a.calls + added, b.calls);
+  if (!moved) return { ...a, calls };
+  const position = added > 0 ? a.calls + added : base ? base.calls : b.calls;
+  const admitted = position <= RECLASSIFY_WINDOW && mayReplace(a.category, b.category);
+  return { ...(admitted ? b : a), calls };
 }
 
 export function loadState(sessionId, agent) {
@@ -648,6 +672,7 @@ export function loadState(sessionId, agent) {
       taskClass: validTaskClass(parsed.taskClass),
       disciplineServedAt: Number.isFinite(parsed.disciplineServedAt) ? parsed.disciplineServedAt : 0,
       contextStartedAt: Number.isFinite(parsed.contextStartedAt) ? parsed.contextStartedAt : 0,
+      compactionAnchors: validAnchors(parsed.compactionAnchors),
     });
   } catch {
     return tracked(emptyState());
@@ -827,6 +852,10 @@ export function saveState(sessionId, state, agent) {
       // compaction: this merge would OR the old "said" back in.
       disciplineServedAt: Math.max(Number(current.disciplineServedAt) || 0, Number(state.disciplineServedAt) || 0),
       contextStartedAt: Math.max(Number(current.contextStartedAt) || 0, Number(state.contextStartedAt) || 0),
+      // The latest compaction's set; a caller that loaded an older one keeps nothing back.
+      compactionAnchors: [validAnchors(current.compactionAnchors), validAnchors(state.compactionAnchors)]
+        .filter(Boolean)
+        .sort((x, y) => y.at - x.at)[0] ?? null,
       // ADDED, NOT MAXED: what this caller counted goes on top of what the
       // locked read found, so a concurrent hook's call is not forgotten. See
       // `loadedCalls` above for why this one count is merged differently.
@@ -963,7 +992,7 @@ export function writeAtomically(target, text, { rename = renameSync, attempts = 
   }
 }
 
-export function clearSeen(sessionId, agent) {
+export function clearSeen(sessionId, agent, { anchors = false, now = Date.now() } = {}) {
   let lock = null;
   try {
     mkdirSync(stateRoot(), { recursive: true, mode: 0o700 });
@@ -972,6 +1001,13 @@ export function clearSeen(sessionId, agent) {
 
     const current = loadState(sessionId, agent);
     const cleared = { ...current, seen: {} };
+    // IN THE SAME LOCKED WRITE, so no save can land between "cleared" and
+    // "remembered". A compaction is followed by SessionStart with no tool call
+    // between them: `seen` is empty by then, and restoration starts from these.
+    if (anchors) {
+      const paths = Object.keys(current.seen || {}).slice(-MAX_COMPACTION_ANCHORS);
+      cleared.compactionAnchors = paths.length ? { paths, at: now } : null;
+    }
 
     writeAtomically(statePath(sessionId, agent), JSON.stringify(cleared));
     return true;

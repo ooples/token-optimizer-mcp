@@ -213,6 +213,16 @@ export function categoryFromToolCall(call, { readPaths = [], cwd } = {}) {
 const OVERRULES = new Set([TaskCategory.LOCATE, TaskCategory.REWRITE]);
 
 /**
+ * May tool evidence `seen` replace the category `stored`? Only a locate or a
+ * rewrite overrules a known category; anything may settle UNKNOWN. One rule,
+ * used where a call is judged and again where parallel saves are merged
+ * (policy.mjs), so a save cannot carry a move a single call could not make.
+ */
+export function mayReplace(stored, seen) {
+  return Boolean(seen) && seen !== stored && (OVERRULES.has(seen) || stored === TaskCategory.UNKNOWN);
+}
+
+/**
  * The session's category after one more tool call.
  *
  * @param {{category: string, source: string, calls: number}} current
@@ -236,7 +246,7 @@ export function afterToolCall(current, call, context = {}, { count = true } = {}
   }
   const calls = before + (count ? 1 : 0);
   const seen = categoryFromToolCall(call, context);
-  if (seen && seen !== base.category && (OVERRULES.has(seen) || base.category === TaskCategory.UNKNOWN))
+  if (mayReplace(base.category, seen))
     return { category: seen, source: 'tools', calls };
   return calls === before ? base : { ...base, calls };
 }

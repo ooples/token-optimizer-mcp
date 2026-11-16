@@ -1339,6 +1339,25 @@ function observeAndInject(payload, state, episode, features, authored = false) {
  * @param {string} clientName  Key into CLIENTS.
  * @param {'session-start'|'pre-tool'|'post-tool'|'stop'} event
  */
+/**
+ * The workspace a lifecycle payload is about. Cursor names it in
+ * `workspacePaths`, Cline in `workspaceRoots` (or `workspacePath`), the rest in
+ * `cwd` or `working_directory`. Missing Cline's fields made a prompt's relative
+ * file names resolve against wherever the hook process started, so a named
+ * file's size -- classification evidence -- was read from the wrong place.
+ */
+function payloadCwd(raw) {
+  const first = (list) => (Array.isArray(list) ? list[0] : undefined);
+  return (
+    first(raw.workspacePaths) ||
+    first(raw.workspaceRoots) ||
+    raw.workspacePath ||
+    raw.cwd ||
+    raw.working_directory ||
+    process.cwd()
+  );
+}
+
 export async function run(clientName, event) {
   const invocation = beginHookInvocation(clientName, event);
   try {
@@ -1466,11 +1485,7 @@ async function runHook(clientName, event, invocation) {
     const prompt =
       raw.prompt ?? raw.userPromptSubmit?.prompt ?? raw.user_prompt ?? raw.message ?? '';
     if (!sessionId || typeof prompt !== 'string' || !features.routing) process.exit(0);
-    const cwd =
-      (Array.isArray(raw.workspacePaths) ? raw.workspacePaths[0] : undefined) ||
-      raw.cwd ||
-      raw.working_directory ||
-      process.cwd();
+    const cwd = payloadCwd(raw);
     const scope = stateScope(raw, raw.transcript_path ?? raw.transcriptPath ?? null);
     const { context } = promptSubmitted({
       sessionId,
@@ -1497,11 +1512,7 @@ async function runHook(clientName, event, invocation) {
     const raw = input.payload || {};
     invocation.bind(raw, null, input.bytes);
     if (input.status !== 'ok') invocation.noteInput(input.status, input.bytes);
-    const cwd =
-      (Array.isArray(raw.workspacePaths) ? raw.workspacePaths[0] : undefined) ||
-      raw.cwd ||
-      raw.working_directory ||
-      process.cwd();
+    const cwd = payloadCwd(raw);
     const root = projectRootFor(join(cwd, '__session__'), cwd);
     // Finish a store migration a crash interrupted, or a refused one whose
     // blockers may have cleared, before the store is used (#542). BEFORE the
@@ -1671,11 +1682,7 @@ async function runHook(clientName, event, invocation) {
     // Hoisted out of the try below, because the harvest needs the same resolved
     // directory and resolving it twice is how two halves of one hook end up
     // reasoning about different projects.
-    const cwd =
-      (Array.isArray(raw.workspacePaths) ? raw.workspacePaths[0] : undefined) ||
-      raw.cwd ||
-      raw.working_directory ||
-      process.cwd();
+    const cwd = payloadCwd(raw);
     try {
       const dir = wikiDir(projectRootFor(join(cwd, '__session__'), cwd));
       recordEpisodeOutcome(dir, {

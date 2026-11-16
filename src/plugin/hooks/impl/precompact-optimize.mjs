@@ -193,7 +193,11 @@ async function main() {
   // concurrent hook processes cannot erase each other's additions, which means it
   // cannot shrink the map at all. The first version of this used saveState and was a
   // silent no-op until a test caught it.
-  clearSeen(payload.session_id, payload.transcript_path || null);
+  //
+  // `anchors: true` keeps the list for SessionStart's restoration, written in
+  // the same locked write: compaction runs no tool call before SessionStart, so
+  // without it restoration found an empty `seen` every time.
+  clearSeen(payload.session_id, payload.transcript_path || null, { anchors: true });
 
   // THE LAST HONEST MOMENT TO ASK FOR A RECORDING. Compaction is the event this whole subsystem
   // exists for: an unrecorded conclusion does not survive it, it is destroyed rather than merely

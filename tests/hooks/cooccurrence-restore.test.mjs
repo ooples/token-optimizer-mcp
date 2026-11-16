@@ -238,7 +238,8 @@ describe('SessionStart spends them', () => {
   it('restores in a real session, whose every payload carries a transcript path', () => {
     // The router records `seen` under the transcript path. PreCompact and
     // SessionStart used to read the unscoped file, which a real session never
-    // writes, so the restoration fired only in tests that sent no path.
+    // writes; and PreCompact cleared `seen` before SessionStart could use it.
+    // Both hid behind tests that re-wrote `seen` between the two hooks.
     const a = join(project, 'a.ts');
     const b = join(project, 'b.ts');
     const transcript_path = join(project, 'transcript.jsonl');
@@ -263,9 +264,10 @@ describe('SessionStart spends them', () => {
     read(a);
     read(b);
     run(PRECOMPACT, { session_id: session, cwd: project, transcript_path });
-    // PreCompact found what the router recorded, related the two files...
+    // PreCompact found what the router recorded and related the two files.
     expect(load(dir).edges.filter((e) => e.edge === 'related').length).toBeGreaterThan(0);
-    read(a); // ...and cleared it, so after the compaction only `a` is in view
+    // NOTHING RUNS BETWEEN THEM: a compaction is followed directly by
+    // SessionStart, with `seen` already cleared for the read cache.
     const out = run(SESSION_START, {
       session_id: session,
       cwd: project,
@@ -275,6 +277,35 @@ describe('SessionStart spends them', () => {
     const ctx = JSON.parse(out.stdout || '{}')?.hookSpecificOutput?.additionalContext || '';
     expect(ctx).toContain('Restored after compaction');
     expect(ctx).toContain('b.ts owns the retry budget');
+  }, 90_000);
+
+  it('ignores anchors left by an earlier compaction', () => {
+    const a = join(project, 'a.ts');
+    const b = join(project, 'b.ts');
+    writeFileSync(a, 'export const a = 1;\n');
+    writeFileSync(b, 'export const b = 2;\n');
+    const bNode = putNode(dir, { kind: 'file', key: b, hash: 'h' });
+    putNodeWithEdges(
+      dir,
+      { kind: 'finding', key: 'about-b', claim: 'b.ts owns the retry budget.', confidence: 0.95 },
+      [{ edge: 'derived_from', to: bNode }]
+    );
+    mkdirSync(stateRoot, { recursive: true });
+    const restoreWith = (at) => {
+      writeFileSync(
+        join(stateRoot, `${session}.json`),
+        JSON.stringify({ seen: {}, compactionAnchors: { paths: [a, b], at } })
+      );
+      const out = run(SESSION_START, { session_id: session, cwd: project, source: 'compact' });
+      expect(out.status).toBe(0);
+      return JSON.parse(out.stdout || '{}')?.hookSpecificOutput?.additionalContext || '';
+    };
+    // The control: the same anchors, just written, do restore.
+    expect(restoreWith(Date.now())).toContain('b.ts owns the retry budget');
+    // An hour old, they belong to an earlier compaction.
+    const stale = restoreWith(Date.now() - 60 * 60 * 1000);
+    expect(stale).toContain('Token optimization is active');
+    expect(stale).not.toContain('Restored after compaction');
   }, 90_000);
 
   it('says nothing on a cold start, so the text is not paid for every session', () => {

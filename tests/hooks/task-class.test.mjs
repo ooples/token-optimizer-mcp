@@ -20,7 +20,7 @@ import {
   settingsFor,
   settingsTable,
 } from '../../src/hooks-core/task-settings.mjs';
-import { loadState, saveState } from '../../src/hooks-core/policy.mjs';
+import { clearSeen, loadState, saveState } from '../../src/hooks-core/policy.mjs';
 import { promptSubmitted, toolCallObserved } from '../../src/hooks-core/task-session.mjs';
 import { probeTaskSettings } from '../../src/hooks-core/doctor.mjs';
 
@@ -218,6 +218,62 @@ describe('saved by parallel hooks (saveState)', () => {
     expect(stale.taskClass.category).toBe(TaskCategory.FIX);
     saveState(session, stale);
     expect(loadState(session).taskClass.category).toBe(TaskCategory.REWRITE);
+  });
+
+  test('a parallel correction cannot make a move one call could not', () => {
+    // Both load UNKNOWN. One sees a rewrite and saves it; the other then sees
+    // a red test -- FIX settles UNKNOWN, but never overrules a stored REWRITE.
+    const session = `o${Math.random().toString(36).slice(2)}`;
+    promptSubmitted({ sessionId: session, prompt: 'Look around this repository.', cwd: dir, env: {} });
+    const rewriting = loadState(session);
+    const testing = loadState(session);
+    rewriting.seen = { [join(dir, 'a.js')]: 1 };
+    toolCallObserved(rewriting, { tool_name: 'Write', tool_input: { file_path: join(dir, 'a.js') } }, { cwd: dir });
+    expect(rewriting.taskClass.category).toBe(TaskCategory.REWRITE);
+    saveState(session, rewriting);
+    toolCallObserved(testing, red, { cwd: dir });
+    expect(testing.taskClass.category).toBe(TaskCategory.FIX);
+    saveState(session, testing);
+    expect(loadState(session).taskClass).toMatchObject({ category: TaskCategory.REWRITE, calls: 2 });
+  });
+
+  test('a call that parallel saves push past the window moves nothing', () => {
+    const session = `w${Math.random().toString(36).slice(2)}`;
+    promptSubmitted({ sessionId: session, prompt: 'Rewrite the whole file rules.py in TypeScript.', cwd: dir, env: {} });
+    const warm = loadState(session);
+    for (let i = 0; i < RECLASSIFY_WINDOW - 1; i++) toolCallObserved(warm, grep, { cwd: dir });
+    saveState(session, warm);
+    // Two hooks load calls=5 at once: one is the sixth call, one the seventh.
+    const sixth = loadState(session);
+    const seventh = loadState(session);
+    expect(sixth.taskClass.calls).toBe(RECLASSIFY_WINDOW - 1);
+    toolCallObserved(sixth, grep, { cwd: dir });
+    saveState(session, sixth);
+    toolCallObserved(seventh, { tool_name: 'Read', tool_input: { file_path: bigLog } }, { cwd: dir });
+    expect(seventh.taskClass.category).toBe(TaskCategory.LOCATE); // locally it looked inside
+    saveState(session, seventh);
+    expect(loadState(session).taskClass).toMatchObject({
+      category: TaskCategory.REWRITE,
+      calls: RECLASSIFY_WINDOW + 1,
+    });
+  });
+
+  test('a compaction empties the read cache but keeps what was in view, through later saves', () => {
+    const session = `k${Math.random().toString(36).slice(2)}`;
+    const files = [join(dir, 'a.ts'), join(dir, 'b.ts')];
+    const before = loadState(session);
+    before.seen = Object.fromEntries(files.map((f) => [f, 1]));
+    saveState(session, before);
+    const stale = loadState(session); // a hook that loaded before the compaction
+    expect(clearSeen(session, null, { anchors: true, now: 5_000 })).toBe(true);
+    const after = loadState(session);
+    expect(after.seen).toEqual({});
+    expect(after.compactionAnchors).toEqual({ paths: files, at: 5_000 });
+    saveState(session, stale); // ...saves afterwards
+    expect(loadState(session).compactionAnchors).toEqual({ paths: files, at: 5_000 });
+    // A plain clear (no compaction) leaves the anchors alone.
+    clearSeen(session, null);
+    expect(loadState(session).compactionAnchors).toEqual({ paths: files, at: 5_000 });
   });
 
   test("a tally never undoes a concurrent correction in the same task", () => {
@@ -490,6 +546,43 @@ describe('Copilot CLI: the block at SessionStart, the prompt hook only classifie
       expect(JSON.parse(readFileSync(join(dir, 'state', file), 'utf8')).taskClass.category).toBe(TaskCategory.FIX);
     } finally {
       rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('Cline: the prompt is read against its workspace', () => {
+  test('a file named relative to workspaceRoots is sized there, not where the hook started', () => {
+    const state = mkdtempSync(join(tmpdir(), 'task-cline-'));
+    const elsewhere = mkdtempSync(join(tmpdir(), 'task-cline-cwd-'));
+    try {
+      const taskId = `cl-${Math.random().toString(36).slice(2)}`;
+      const out = spawnSync(
+        process.execPath,
+        [join(HERE, '..', '..', 'src', 'integrations', 'cline', 'hooks', 'token-optimizer', 'prompt.mjs')],
+        {
+          // Cline's own shape: workspaceRoots, no cwd field.
+          input: JSON.stringify({
+            taskId,
+            workspaceRoots: [workspace],
+            userPromptSubmit: { prompt: 'Look at `release.log` and tell me about the deploy.' },
+          }),
+          cwd: elsewhere,
+          encoding: 'utf8',
+          timeout: 30_000,
+          env: {
+            ...process.env,
+            TOKEN_OPTIMIZER_MODE: 'assist',
+            TOKEN_OPTIMIZER_STATE_DIR: state,
+            TOKEN_OPTIMIZER_WIKI_DIR: join(state, 'wiki'),
+          },
+        }
+      );
+      expect(out.status).toBe(0);
+      const file = readdirSync(state).find((f) => f.startsWith(taskId) && f.endsWith('.json'));
+      expect(JSON.parse(readFileSync(join(state, file), 'utf8')).taskClass.category).toBe(TaskCategory.LOCATE);
+    } finally {
+      rmSync(state, { recursive: true, force: true });
+      rmSync(elsewhere, { recursive: true, force: true });
     }
   });
 });
