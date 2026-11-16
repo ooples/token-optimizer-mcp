@@ -238,7 +238,7 @@
     "@types/qs": "^6.15.1",
     "@types/range-parser": "^1.2.7",
     "@types/send": "^1.2.1",
-    "@types/serve-static": "^1.15.9",
+    "@types/serve-static": "^2.2.0",
     "@types/tar-stream": "^3.1.5",
     "@typescript-eslint/eslint-plugin": "^8.72.2",
     "@typescript-eslint/parser": "^8.46.1",
