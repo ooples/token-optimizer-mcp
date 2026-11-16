@@ -452,7 +452,7 @@ jobs:
             — automated by the release pipeline
 
       - name: Comment on resolved issues
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const tag = '${{ needs.release-please.outputs.tag_name }}';
