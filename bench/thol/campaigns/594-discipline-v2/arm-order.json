@@ -1,0 +1,10 @@
+{
+  "arms": ["token-optimizer-mcp", "token-optimizer-nodisc"],
+  "orders": [
+    ["token-optimizer-mcp", "token-optimizer-nodisc"],
+    ["token-optimizer-nodisc", "token-optimizer-mcp"],
+    ["token-optimizer-mcp", "token-optimizer-nodisc"],
+    ["token-optimizer-nodisc", "token-optimizer-mcp"],
+    ["token-optimizer-mcp", "token-optimizer-nodisc"]
+  ]
+}
