@@ -72,7 +72,7 @@ import { writeAtomically } from './policy.mjs';
 import { decide as decideHoldout, holdoutSettings, recordOutcome } from './injection-holdout.mjs';
 import { projectRootFor, unrootedRoot, wikiDir } from './wiki.mjs';
 import { canonicalPath } from './paths.mjs';
-import { ledgerPath, readTaskEvents, recordOutcomes as recordTaskOutcomes } from './task-ledger.mjs';
+import { ledgerPath, readTaskEvents, recordOutcomes } from './task-ledger.mjs';
 
 export const TOOLPRUNE_MODES = Object.freeze(['auto', 'propose', 'off']);
 export const STORE_FILE = 'toolprune.json';
@@ -651,7 +651,7 @@ export function runFold({
       // What each prompt cost, for the task-classification report. Every
       // folded session, whatever the holdout setting: with it off there is no
       // comparison, but the per-category cost is still the user's to see.
-      if (ledgerKnows(sessionId)) recordTaskOutcomes(sessionId, usage.segments, env);
+      if (ledgerKnows(sessionId)) recordOutcomes(sessionId, usage.segments, env);
       foldedNow += 1;
     }
   } catch {

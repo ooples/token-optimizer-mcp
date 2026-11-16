@@ -57,6 +57,16 @@ const MIN_SCORE = 2;
 const MIN_LEAD = 1;
 
 /*
+ * A HIGHER BAR WHERE A WRONG ANSWER COSTS SOMETHING. Survey and rewrite are the
+ * only categories whose settings differ from UNKNOWN's (task-settings.mjs), so
+ * a false survey turns output discipline off on a debugging session. On 1,063
+ * real prompts labelled by two judge models (2026-11-16), survey at the plain
+ * bar fired on 122 fix/build prompts: precision 0.15. Every other category
+ * runs UNKNOWN's settings, so for them a weak guess is free.
+ */
+const MIN_SCORE_FOR = { survey: 3 };
+
+/*
  * Each rule is [pattern, weight]. Patterns are single-level (no quantified
  * group inside a quantified group) because they run over pasted text, and a
  * JavaScript regex cannot be given a timeout. CJK alternatives are included
@@ -78,6 +88,8 @@ const RULES = {
     // REPAIR VERBS. Weak alone ("fix the grammar" is a rewrite); decisive with a symptom.
     [/\b(?:fix|repair|resolve|investigate|get rid of|clean (?:them|it) up)\b/i, 1],
     [/\b(?:fix|repair|correct|sort out) (?:it|this|that)\b|\bsort (?:it|this|that) out\b|\bmake (?:it|them|this) (?:work|pass|handle|accessible|sort)\b|\bget (?:it|this|that) working\b/i, 2],
+    // WORK ON A RED PR. What follow-up prompts to an agent ask for most often.
+    [/\b(?:unresolved|open|new|outstanding|remaining)\b[^.\n]{0,25}\b(?:review )?(?:comments?|threads?|findings)\b|\breview comments?\b|\bmerge conflicts?\b|\bfailing (?:shards?|checks?|jobs?|workflows?)\b|\bstill (?:red|failing)\b/i, 3],
     [/修复|失败的测试|报错|缺陷/, 3],
   ],
   [TaskCategory.BUILD]: [
@@ -104,12 +116,21 @@ const RULES = {
     [/重写整个文件|整个文件/, 4],
   ],
   [TaskCategory.SURVEY]: [
+    // A REPORT AS THE DELIVERABLE. A noun alone is a mention ("the architecture
+    // discussion", "the report said"); asking for one is a survey.
     [/\b(?:write|produce|create|generate)\b[^.\n]{0,50}\.md\b/i, 3],
-    [/\b(?:audit|inventory|overview|architecture|onboarding|report|documentation)\b/i, 2],
-    [/\b(?:every|all)\b[^.\n]{0,30}\b(?:pages?|files?|modules?|settings?|components?|places?|endpoints?|packages?|services?|tables?|commands?|calls?)\b/i, 2],
+    [/\b(?:write|produce|create|generate|give me|prepare|draft|put together|need)\b[^.\n]{0,25}\b(?:audit|inventory|overview|report|summary|write-?up|gap analysis|comparison|catalog(?:ue)?|(?:sprint |project |implementation |migration )?plan|task list|checklist|user stories)\b/i, 3],
+    [/\b(?:sprint plans?|(?:detailed|comprehensive|exhaustive) (?:report|sprint plan|review|write-?up|analysis|github issue|issue|list))\b/i, 3],
+    [/\banaly[sz]e\b[^.\n]{0,30}\b(?:issues|PRs|pull requests|reports?|results|gaps|findings)\b/i, 2],
+    [/\b(?:audit|inventory|overview|architecture|onboarding|report|documentation)\b/i, 1],
+    [/\b(?:every|all)\b[^.\n]{0,30}\b(?:pages?|files?|modules?|settings?|components?|places?|endpoints?|packages?|services?|tables?|commands?|calls?)\b/i, 1],
     // THE WHOLE OF SOMETHING, understood or reported on.
     [/\b(?:tour|walk me through the (?:repo\w*|codebase|structure|project)|high-level|big picture|structure of|organi[sz]ed|what does this (?:project|repo\w*|codebase) do|just cloned|new here)\b/i, 3],
-    [/\b(?:survey|summari[sz]e|summary|catalog(?:ue)?|map out|assess|evaluate|analy[sz]e|review|compare|research|recommend|write (?:it |them )?up|list (?:all|every)|document all|check (?:every|all|them all)|go through (?:all|the|every)|security review|vulnerabilit\w*|findings)\b/i, 2],
+    [/^\s*(?:please\s+)?(?:survey|summari[sz]e|catalog(?:ue)?|map out|audit|assess|evaluate|review|compare|research|inventory|list (?:all|every)|document all|go through (?:all|every))\b/i, 3],
+    // Not "findings" or a bare "review": in real follow-ups those are a code
+    // review's comments to fix, not a report to write.
+    [/\b(?:survey|summari[sz]e|catalog(?:ue)?|map out|write (?:it |them )?up|list (?:all|every)|document all|check (?:every|all|them all)|go through (?:all|every)|security review|vulnerabilit\w*)\b/i, 2],
+    [/\b(?:summary|assess|evaluate|compare|research|analy[sz]e)\b/i, 1],
     [/\b(?:whole|entire|overall)\b[^.\n]{0,20}\b(?:repo\w*|codebase|project|module|api|site|system|app|monorepo|structure)\b/i, 2],
     [/\b(?:codebase|repository|monorepo|project)\b/i, 1],
     [/报告|审计|文档|概述|清单/, 2],
@@ -187,7 +208,8 @@ export function classifyPrompt(prompt, { cwd } = {}) {
     .filter(([c]) => c !== TaskCategory.UNKNOWN)
     .sort((a, b) => b[1] - a[1]);
   const [[best, top], [, second]] = ranked;
-  const category = top >= MIN_SCORE && top - second >= MIN_LEAD ? best : TaskCategory.UNKNOWN;
+  const bar = MIN_SCORE_FOR[best] ?? MIN_SCORE;
+  const category = top >= bar && top - second >= MIN_LEAD ? best : TaskCategory.UNKNOWN;
   return { category, scores, signals };
 }
 
