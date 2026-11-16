@@ -14,7 +14,7 @@
       "token-optimizer": {
         "command": "node",
         "args": [
-          "/usr/local/lib/node_modules/@ooples/token-optimizer-mcp/plugin/launch.mjs"
+          "/usr/local/lib/node_modules/@ooples/token-optimizer-mcp/src/plugin/launch.mjs"
         ],
         "env": {
           "TOKEN_OPTIMIZER_REFRESH_INTERVAL_MS": "999999999999",

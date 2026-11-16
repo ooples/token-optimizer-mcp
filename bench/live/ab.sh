@@ -65,6 +65,16 @@ ALT_A_PORT="${ALT_A_PORT:-8787}"
 
 command -v claude >/dev/null 2>&1 || { echo "claude CLI not found" >&2; exit 2; }
 python -m pytest --version >/dev/null 2>&1 || { echo "pytest not available" >&2; exit 2; }
+# The compared proxy is checked here, before any arm runs. Checked inside the
+# backgrounded launch instead, a missing module only surfaced as altA SKIP after
+# the readiness wait, and the campaign finished without the comparison.
+case ",$ARMS," in *,altA,*)
+  ALT_A_MODULE="$(printf '%s' "${ALT_A_MODULE:-}" | tr -d '[:space:]')"
+  [ -n "$ALT_A_MODULE" ] || { echo "ARMS includes altA: set ALT_A_MODULE to the top-level module of the compared package" >&2; exit 2; }
+  python -c 'import importlib.util, sys; sys.exit(importlib.util.find_spec(sys.argv[1] + ".cli") is None)' "$ALT_A_MODULE" 2>/dev/null \
+    || { echo "ALT_A_MODULE=$ALT_A_MODULE: $ALT_A_MODULE.cli is not importable" >&2; exit 2; }
+  ;;
+esac
 
 rm -rf "$OUT"; mkdir -p "$OUT"
 echo "arm,rep,position,verdict,seconds,weighted_input,output" > "$OUT/results.csv"
@@ -132,7 +142,8 @@ run_arm() { # arm rep
   # nothing at all.
   local upstream=""
   if [ "$arm" = "altA" ]; then
-    python -m alternative_a.cli proxy --port "$ALT_A_PORT" \
+    # `python -m` cannot see bench/alt_a_alias.py, so the real module is named.
+    python -m "$ALT_A_MODULE.cli" proxy --port "$ALT_A_PORT" \
       >/dev/null 2>"$OUT/$arm-$rep.alt-a.err" &
     hrpid=$!
     local hrup=1

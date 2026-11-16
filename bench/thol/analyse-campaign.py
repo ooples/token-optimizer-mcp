@@ -20,6 +20,7 @@ Usage:
 """
 
 import json
+import os
 import random
 import sqlite3
 import statistics
@@ -27,7 +28,100 @@ import sys
 
 DB = sys.argv[1]
 BASELINE = sys.argv[2] if len(sys.argv) > 2 else "control"
-METRICS = ("total_cost_usd", "num_turns", "score")
+METRICS = ("total_cost_usd", "cold_start_cost_usd", "num_turns", "score")
+
+# COLD-START COST: THE FIRST REQUEST PRICED WITHOUT ANOTHER RUN'S CACHE.
+#
+# A run's first request can read its whole tool + system prefix from a cache
+# entry some EARLIER run wrote. Arms are interleaved per task, so the arms that
+# send plain Claude Code's prefix keep one shared entry warm for each other,
+# and control rides on it. An arm whose prefix the server does not match -- for
+# any reason, including server-side cache placement nobody outside can see --
+# writes its prefix fresh every run. In #565 that alone was 0.057 of
+# token-optimizer's 1.149 ratio and 0.070 of headroom-cache's 1.080, while
+# its request prefix was byte-identical to control's when captured locally. No
+# real user shares a cache with another product's sessions, so this is the
+# rig's effect, not the arm's. Every arm's first request is repriced as if
+# nothing earlier had been cached: its cache reads billed as cache writes at
+# the tier it wrote at. Later requests are untouched -- they read what this run
+# itself wrote. total_cost_usd stays the primary endpoint; this is the
+# secondary one, pre-registered for every campaign after #565's first.
+INPUT_USD_PER_MTOK = (
+    # (model-id prefix, base input $/MTok). Longest prefix wins.
+    ("claude-sonnet-", 3.0),
+    ("claude-opus-4-5", 5.0), ("claude-opus-4-6", 5.0), ("claude-opus-4-7", 5.0),
+    ("claude-opus-5", 5.0),
+    ("claude-haiku-4-5", 1.0), ("claude-haiku-5", 1.0),
+)
+
+
+def input_price(model):
+    hits = [p for prefix, p in sorted(INPUT_USD_PER_MTOK, key=lambda x: -len(x[0]))
+            if model.startswith(prefix)]
+    if not hits:
+        raise SystemExit(f"no input price for model {model!r}: add it to "
+                         "INPUT_USD_PER_MTOK rather than guessing")
+    return hits[0]
+
+
+def model_requests(run_id):
+    """(usage, model) of every model request in the run, in order."""
+    path = os.path.join(os.path.dirname(os.path.abspath(DB)), "artifacts",
+                        run_id, "transcript.jsonl")
+    if not os.path.exists(path):
+        # A results file copied without its artifacts still has a primary
+        # endpoint; only this one is unavailable, and the table says so.
+        return None
+    requests = []
+    with open(path, encoding="utf-8") as f:
+        for line in f:
+            try:
+                entry = json.loads(line)
+            except ValueError:
+                continue
+            if entry.get("type") == "assistant":
+                msg = entry["message"]
+                requests.append((msg.get("usage") or {}, msg.get("model") or ""))
+    if not requests:
+        raise SystemExit(f"run {run_id} has no model request in {path}")
+    return requests
+
+
+def written_tiers(usage):
+    tiers = usage.get("cache_creation") or {}
+    return {name for name, key in (("1h", "ephemeral_1h_input_tokens"),
+                                   ("5m", "ephemeral_5m_input_tokens"))
+            if tiers.get(key, 0) > 0}
+
+
+WRITE_MULTIPLIER = {"5m": 1.25, "1h": 2.0}
+
+
+def cold_start_cost(run_id, total_cost):
+    requests = model_requests(run_id)
+    if requests is None:
+        return None
+    usage, model = requests[0]
+    read = usage.get("cache_read_input_tokens", 0)
+    if read == 0:
+        return total_cost
+    # The transcript does not record the TTL a request asked for, only the
+    # tiers it wrote at. A creation counter of zero says nothing was new, not
+    # which TTL the cached prefix carries, so a fully warm first request
+    # cannot be priced from its own counters. Its TTL is taken from the tier
+    # it wrote at; failing that, from the one tier the run's other requests
+    # wrote at. With no write, or writes at both tiers and none on the first
+    # request, the TTL is unknown and the run's cold start is unavailable
+    # rather than guessed.
+    tiers = written_tiers(usage)
+    if not tiers:
+        for later, _ in requests[1:]:
+            tiers |= written_tiers(later)
+    if len(tiers) != 1:
+        return None
+    multiplier = WRITE_MULTIPLIER[tiers.pop()]
+    return total_cost + read * (multiplier - 0.1) * input_price(model) / 1e6
+
 
 con = sqlite3.connect(DB)
 
@@ -55,16 +149,20 @@ if BASELINE not in arms:
 cell = {}
 for arm in arms:
     for task in tasks:
-        row = con.execute(
-            "SELECT COUNT(*), AVG(total_cost_usd), AVG(num_turns), AVG(score) "
+        rows = con.execute(
+            "SELECT run_id, total_cost_usd, num_turns, score "
             "FROM runs WHERE status='ok' AND competitor=? AND task=?",
-            (arm, task)).fetchone()
-        if row[0]:
+            (arm, task)).fetchall()
+        if rows:
+            cold = [cold_start_cost(r[0], r[1]) for r in rows]
             cell[(arm, task)] = {
-                "n": row[0],
-                "total_cost_usd": row[1],
-                "num_turns": row[2],
-                "score": row[3],
+                "n": len(rows),
+                "total_cost_usd": statistics.mean(r[1] for r in rows),
+                # One run without a transcript makes the cell unknown, not
+                # the mean of the rest: a partial mean is a different sample.
+                "cold_start_cost_usd": None if None in cold else statistics.mean(cold),
+                "num_turns": statistics.mean(r[2] for r in rows),
+                "score": statistics.mean(r[3] for r in rows),
             }
 
 
@@ -101,7 +199,7 @@ for metric in METRICS:
         ratios = []
         for task in tasks:
             a, b = cell.get((arm, task)), cell.get((BASELINE, task))
-            if not a or not b or not b[metric]:
+            if not a or not b or a[metric] is None or not b[metric]:
                 continue
             ratios.append(a[metric] / b[metric])
         if not ratios:

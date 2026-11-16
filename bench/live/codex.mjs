@@ -5,7 +5,7 @@
  * CODEX_BIN may name the Codex executable (or its npm bin/codex.js entrypoint).
  * CODEX_BENCH_MODEL defaults to the model in the user's config.toml.
  */
-import { spawn } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import { createServer } from 'node:net';
 import { createWriteStream } from 'node:fs';
 import { mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises';
@@ -30,6 +30,7 @@ import { adversarialFixture, adversarialTasks } from './adversarial-cases.mjs';
 import { provenance } from './codex-provenance.mjs';
 import { mcpRefreshEvidence } from './codex-mcp-evidence.mjs';
 import { monitorHostMemory, memoryPolicy } from './host-memory.mjs';
+import { altACliModule, altAAttributeScript, altAModule } from './alt-a-module.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const repeatReads = Number(process.env.REPEAT_READS || 1);
@@ -83,6 +84,20 @@ if (
   )
 )
   throw Error('Invalid REPS or ARMS');
+// Before any arm runs: thrown inside the loop, a missing module was caught as
+// one altA row's error after control and proxy had already been paid for.
+if (arms.includes('altA')) {
+  const module = altAModule();
+  try {
+    execFileSync(
+      process.env.PYTHON || 'python',
+      ['-c', altAAttributeScript('__name__'), altACliModule()],
+      { stdio: 'ignore', windowsHide: true }
+    );
+  } catch {
+    throw Error(`ALT_A_MODULE=${module}: ${module}.cli is not importable`);
+  }
+}
 if (new Set(arms).size !== arms.length || new Set(tasks).size !== tasks.length)
   throw Error('Duplicate arms or tasks');
 if (
@@ -301,7 +316,7 @@ try {
               process.env.PYTHON || 'python',
               [
                 '-m',
-                'alternative_a.cli',
+                altACliModule(),
                 'proxy',
                 '--port',
                 String(altAPort),

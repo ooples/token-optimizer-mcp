@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { join, dirname } from 'node:path';
+import { altAAttributeScript, altAModule } from './alt-a-module.mjs';
 const exec = promisify(execFile);
 export async function provenance(root, codex, python, proxyBin) {
   const version = async (command, args) => {
@@ -66,7 +67,15 @@ export async function provenance(root, codex, python, proxyBin) {
       codex.endsWith('.js') ? process.execPath : codex,
       codex.endsWith('.js') ? [codex, '--version'] : ['--version']
     ),
-    version(python, ['-c', 'import importlib, os; print(importlib.import_module(os.environ["ALT_A_MODULE"]).__version__)']),
+    // A campaign without the altA arm need not name the compared module, so a
+    // missing name is recorded like any other failed lookup, not thrown.
+    (async () => {
+      try {
+        return await version(python, ['-c', altAAttributeScript('__version__'), altAModule()]);
+      } catch (error) {
+        return { error: String(error.message) };
+      }
+    })(),
     version('git', ['rev-parse', 'HEAD']),
   ]);
   return {
