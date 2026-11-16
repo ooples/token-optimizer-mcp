@@ -1008,7 +1008,7 @@ describe('arms are data, not code', () => {
   });
 
   test('the documented character counts match the arms they describe', () => {
-    // THE COUNTS ARE THE COMPARISON. "510 against 2,667" is the headline claim
+    // THE COUNTS ARE THE COMPARISON. "647 against 2,667" is the headline claim
     // this whole head-to-head rests on, and it was stated three times in one
     // file as 2,669, 2,667 and 471 -- two of which were wrong, because the
     // block gained a header line after the number was written. A figure that
@@ -1019,7 +1019,7 @@ describe('arms are data, not code', () => {
     // prose has to be updated with it -- which is the point.
     const ours = ARMS['ours-rules'].claudeMd;
     const theirs = ARMS['tokenade-rules'].claudeMd;
-    expect(ours).toHaveLength(510);
+    expect(ours).toHaveLength(647);
     expect(theirs).toHaveLength(2667);
 
     const source = readFileSync(
@@ -1030,7 +1030,7 @@ describe('arms are data, not code', () => {
     // real lengths -- no stale third number surviving in a comment.
     for (const stated of source.match(/\b\d,\d{3}\b|\b\d{3}\b(?= characters)/g) || []) {
       const n = Number(stated.replace(',', ''));
-      expect([510, 2667]).toContain(n);
+      expect([647, 2667]).toContain(n);
     }
   });
 

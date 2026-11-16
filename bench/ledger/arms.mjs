@@ -256,7 +256,7 @@ export const assistMcp = {
  * the honest caveat on any comparison drawn from it. It is included because a
  * text-versus-text head-to-head is the experiment the analysis points at: both
  * products reduce to a block of instructions, and theirs is 2,667 characters
- * against our 510.
+ * against our 647.
  */
 export const tokenadeRules = {
   name: 'tokenade-rules',
@@ -281,10 +281,10 @@ export const tokenadeRules = {
  *
  * This arm carries the shipped constant, imported rather than copied so the
  * measured text cannot drift from the text users get, with no hooks, no MCP,
- * and the optimizer switched off. Against tokenade-rules it is 510 characters
+ * and the optimizer switched off. Against tokenade-rules it is 647 characters
  * against 2,667, same delivery, same everything else.
  *
- * THE NUMBERS ARE THE DELIVERED FILES, not the block alone. 510 is this arm's
+ * THE NUMBERS ARE THE DELIVERED FILES, not the block alone. 647 is this arm's
  * whole claudeMd -- the shipped OUTPUT_DISCIPLINE constant plus the one-line
  * header that makes it a rules file -- measured the same way as their 2,667,
  * so the two are comparable. An earlier "471" counted the constant without the

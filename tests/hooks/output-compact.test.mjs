@@ -392,6 +392,51 @@ describe('compactToolResponse', () => {
     expect(replaced.stdout).not.toContain('(from ');
   });
 
+  test('leaves stdout the host already persisted alone, and still compacts stderr', () => {
+    // Claude Code 2.1.325, a 549 KB `cat -n`: the hook gets ~30 KB of stdout
+    // plus persistedOutputPath. Storing that 30 KB as "full output" was false.
+    const dir = join(root, 'wiki-persisted');
+    mkdirSync(dir, { recursive: true });
+    const response = {
+      stdout: ciLog(),
+      stderr: '',
+      interrupted: false,
+      isImage: false,
+      noOutputExpected: false,
+      persistedOutputPath: '/home/u/.claude/projects/p/s/tool-results/b.txt',
+      persistedOutputSize: 561950,
+    };
+    for (const command of [
+      'cat -n release.log',
+      'python -m pytest -q',
+      'grep -rn x .',
+    ]) {
+      expect(
+        compactToolResponse({ tool: 'Bash', input: { command }, response, dir })
+      ).toBeNull();
+    }
+    const withErr = compactToolResponse({
+      tool: 'Bash',
+      input: { command: 'python -m pytest -q' },
+      response: { ...response, stderr: ciLog() },
+      dir,
+    });
+    expect(withErr.stdout).toBe(response.stdout);
+    expect(withErr.stderr).toMatch(/full output: Read /);
+    // Without the host's pointer the same output is compacted as before.
+    const { persistedOutputPath, persistedOutputSize, ...plain } = response;
+    void persistedOutputPath;
+    void persistedOutputSize;
+    expect(
+      compactToolResponse({
+        tool: 'Bash',
+        input: { command: 'python -m pytest -q' },
+        response: plain,
+        dir,
+      }).stdout
+    ).toMatch(/full output: Read /);
+  });
+
   test('leaves images, small output and Read alone', () => {
     const dir = join(root, 'wiki2');
     expect(
