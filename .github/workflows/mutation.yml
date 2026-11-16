@@ -61,7 +61,7 @@ jobs:
       # run, whereas committing it would put a machine-generated cache into
       # every diff.
       - name: Restore the incremental mutation cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: reports/mutation/stryker-incremental.json
           key: stryker-incremental-${{ github.sha }}
