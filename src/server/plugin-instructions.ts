@@ -248,6 +248,29 @@ async function subdirectories(dir: string): Promise<string[]> {
   }
 }
 
+/**
+ * Gemini CLI's effective `hooksConfig.enabled`, from its settings files in
+ * precedence order (user, then workspace): the last file that sets it decides.
+ * Unset means enabled, Gemini's default. Qwen Code is a Gemini CLI fork that
+ * reads the same settings layout; where it ignores the key, nobody sets it,
+ * so reading it costs nothing.
+ */
+async function geminiHooksEnabled(files: string[]): Promise<boolean> {
+  let enabled = true;
+  for (const file of files) {
+    let settings: unknown;
+    try {
+      settings = JSON.parse(await fs.promises.readFile(file, 'utf8'));
+    } catch {
+      continue;
+    }
+    const flag = (settings as { hooksConfig?: { enabled?: unknown } } | null)
+      ?.hooksConfig?.enabled;
+    if (typeof flag === 'boolean') enabled = flag;
+  }
+  return enabled;
+}
+
 async function anyOf(checks: Promise<boolean>[]): Promise<boolean> {
   return (await Promise.all(checks)).some(Boolean);
 }
@@ -347,29 +370,30 @@ export async function hooksWiredFor(
           path.join(home, '.config', 'kilo', 'plugin'),
         ].map((d) => exists(path.join(d, 'token-optimizer.js')))
       );
-    // An installed extension's hooks/hooks.json is enabled with it.
+    // An installed extension's hooks/hooks.json is enabled with it, unless the
+    // effective settings switch hooks off (`hooksConfig.enabled: false`), which
+    // leaves the extension installed and runs no hook.
     case 'gemini':
-      return exists(
+    case 'qwen': {
+      const dot = client === 'gemini' ? '.gemini' : '.qwen';
+      const installed = await exists(
         path.join(
           home,
-          '.gemini',
+          dot,
           'extensions',
           'token-optimizer',
           'hooks',
           'hooks.json'
         )
       );
-    case 'qwen':
-      return exists(
-        path.join(
-          home,
-          '.qwen',
-          'extensions',
-          'token-optimizer',
-          'hooks',
-          'hooks.json'
-        )
+      return (
+        installed &&
+        geminiHooksEnabled([
+          path.join(home, dot, 'settings.json'),
+          path.join(project, dot, 'settings.json'),
+        ])
       );
+    }
     default:
       return false;
   }

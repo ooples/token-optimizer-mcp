@@ -259,6 +259,39 @@ describe('every hooked client gets the short text, not only Claude Code', () => 
     }
   );
 
+  it.each([['gemini'], ['qwen']] as [HookedClient][])(
+    '%s: an installed extension with hooks switched off in settings is not wired',
+    async (client) => {
+      const dot = client === 'gemini' ? '.gemini' : '.qwen';
+      ship(
+        `${client}/hooks/hooks.json`,
+        path.join(
+          home,
+          dot,
+          'extensions',
+          'token-optimizer',
+          'hooks',
+          'hooks.json'
+        )
+      );
+      expect(await wired(client)).toBe(true);
+      // User settings switch hooks off.
+      mkdirSync(path.join(home, dot), { recursive: true });
+      writeFileSync(
+        path.join(home, dot, 'settings.json'),
+        JSON.stringify({ hooksConfig: { enabled: false } })
+      );
+      expect(await wired(client)).toBe(false);
+      // The workspace file outranks the user file.
+      mkdirSync(path.join(project, dot), { recursive: true });
+      writeFileSync(
+        path.join(project, dot, 'settings.json'),
+        JSON.stringify({ hooksConfig: { enabled: true } })
+      );
+      expect(await wired(client)).toBe(true);
+    }
+  );
+
   it("a config that names someone else's hooks is not ours", async () => {
     mkdirSync(path.join(project, '.cursor'), { recursive: true });
     writeFileSync(

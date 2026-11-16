@@ -27,7 +27,9 @@ const MAX = 400;
 const runOutput = ({ failing }) =>
   [
     ...Array.from({ length: 40 }, (_, i) => `PASS tests/suite-${i}.test.ts`),
-    ...failing.map((name) => `  ● ${name} › does the thing\n    expected true, got false`),
+    ...failing.map(
+      (name) => `  ● ${name} › does the thing\n    expected true, got false`
+    ),
     '',
     `Tests: ${failing.length} failed, 12 passed, ${12 + failing.length} total`,
     'Ran all test suites.',
@@ -46,27 +48,57 @@ describe('compacting a run against its previous run', () => {
     const text = runOutput({ failing: ['alpha'] });
     for (const previous of ['', 'unrelated\nlines\n']) {
       const out = compact(text, { previous, maxBytes: MAX });
-      const marked = out.match(/\[token-optimizer: (\d+) bytes omitted here; ending intact; redirect to a file for all\]/);
+      const marked = out.match(
+        /\[token-optimizer: (\d+) bytes omitted here; ending intact; redirect to a file for all\]/
+      );
       expect(marked).not.toBeNull();
       // The count is what is missing: head + marker + ending accounts for all.
       const [head, ending] = out.split(marked[0]);
-      const dropped = Buffer.byteLength(text) - Buffer.byteLength(head) - Buffer.byteLength(ending) + 2;
+      const dropped =
+        Buffer.byteLength(text) -
+        Buffer.byteLength(head) -
+        Buffer.byteLength(ending) +
+        2;
       expect(Number(marked[1])).toBe(dropped);
       expect(text.endsWith(ending.slice(1))).toBe(true);
       expect(Buffer.byteLength(out, 'utf8')).toBeLessThanOrEqual(MAX);
     }
     // And output that fits carries no marker at all.
-    expect(compact('alpha\nbeta\n', { previous: '', maxBytes: MAX })).toBe('alpha\nbeta\n');
+    expect(compact('alpha\nbeta\n', { previous: '', maxBytes: MAX })).toBe(
+      'alpha\nbeta\n'
+    );
   });
 
   it('keeps a fresh failure line the marker would have pushed out', () => {
     // #594 review: at a 400-byte budget the marker's reservation left 55 bytes
     // for the head, so a 100-byte new FAIL line was dropped for the marker.
     const fail = `FAIL ${'x'.repeat(95)}`;
-    const text = [...Array.from({ length: 40 }, () => 'PASS'), fail, 'y'.repeat(600)].join('\n');
+    const text = [
+      ...Array.from({ length: 40 }, () => 'PASS'),
+      fail,
+      'y'.repeat(600),
+    ].join('\n');
     const out = compact(text, { previous: 'PASS\n', maxBytes: MAX });
     expect(out).toContain(fail);
     expect(Buffer.byteLength(out, 'utf8')).toBeLessThanOrEqual(MAX);
+  });
+
+  it('keeps the first line AND says what it cut, when both do not fit beside it', () => {
+    // #594 review: at the shipped 8,000 bytes a 3,950-byte first line left no
+    // room for the full marker, and the 2,000-byte middle vanished silently.
+    const first = 'F'.repeat(3950);
+    const text = `${first}\n${'m'.repeat(2000)}\n${'t'.repeat(3999)}Z`;
+    const out = compact(text, { previous: '', maxBytes: 8000 });
+    expect(out.startsWith(first)).toBe(true);
+    const marked = out.match(/\[token-optimizer: (\d+) bytes omitted\]/);
+    expect(marked).not.toBeNull();
+    expect(out.endsWith('tZ')).toBe(true);
+    expect(Buffer.byteLength(out, 'utf8')).toBeLessThanOrEqual(8000);
+    // The count is exact: everything not shown is counted.
+    const shown =
+      Buffer.byteLength(out, 'utf8') -
+      Buffer.byteLength(`\n${marked[0]}\n`, 'utf8');
+    expect(Number(marked[1])).toBe(Buffer.byteLength(text, 'utf8') - shown);
   });
 
   it('never returns more than the budget', () => {
@@ -130,8 +162,14 @@ describe('compacting a run against its previous run', () => {
     // near the end and the plain bound's tail shows it anyway, and the test
     // passes or fails for reasons that have nothing to do with compaction --
     // which is how the first version of this was wrong.
-    const before = Array.from({ length: 60 }, (_, i) => `PASS tests/early-${i}.test.ts`);
-    const after = Array.from({ length: 60 }, (_, i) => `PASS tests/late-${i}.test.ts`);
+    const before = Array.from(
+      { length: 60 },
+      (_, i) => `PASS tests/early-${i}.test.ts`
+    );
+    const after = Array.from(
+      { length: 60 },
+      (_, i) => `PASS tests/late-${i}.test.ts`
+    );
 
     const first = [...before, ...after, 'Tests: 0 failed'].join('\n');
     const second = [
@@ -174,23 +212,37 @@ describe('the pipe stage survives output too large to hold', () => {
   // smaller stream so it is fast, but drives the same truncation path -- the
   // retention floor is 1MB, so 3MB crosses it.
   const HERE = dirname(fileURLToPath(import.meta.url));
-  const STAGE = join(HERE, '..', '..', 'src', 'hooks-core', 'compact-stage.mjs');
+  const STAGE = join(
+    HERE,
+    '..',
+    '..',
+    'src',
+    'hooks-core',
+    'compact-stage.mjs'
+  );
 
   it('emits a bound rather than dying, and keeps BOTH ends', () => {
     const previous = join(mkdtempSync(join(tmpdir(), 'stage-')), 'prev.txt');
     // Distinct first and last lines, so keeping only the head would be visible.
     const body = [
       'FIRST-LINE-MARKER',
-      ...Array.from({ length: 60_000 }, (_, i) => `filler line ${i} ${'y'.repeat(40)}`),
+      ...Array.from(
+        { length: 60_000 },
+        (_, i) => `filler line ${i} ${'y'.repeat(40)}`
+      ),
       'LAST-LINE-MARKER',
     ].join('\n');
     expect(Buffer.byteLength(body)).toBeGreaterThan(1024 * 1024);
 
-    const run = spawnSync(process.execPath, ['--max-old-space-size=256', STAGE, previous, '8000'], {
-      input: body,
-      encoding: 'utf8',
-      maxBuffer: 64 * 1024 * 1024,
-    });
+    const run = spawnSync(
+      process.execPath,
+      ['--max-old-space-size=256', STAGE, previous, '8000'],
+      {
+        input: body,
+        encoding: 'utf8',
+        maxBuffer: 64 * 1024 * 1024,
+      }
+    );
 
     expect(run.status).toBe(0);
     expect(run.stdout.length).toBeGreaterThan(0);
