@@ -5,7 +5,7 @@
  * measurement inherits every value from UNKNOWN, so classifying a session can
  * only change behaviour where a measurement says the change pays. A cell that
  * differs from UNKNOWN must name the measurement behind it, in EVIDENCE below;
- * tests/hooks/task-settings.test.mjs fails on a cell without one.
+ * tests/hooks/task-class.test.mjs fails on a cell without one.
  *
  * AN EXPLICIT SWITCH STILL WINS. A user who set TOKEN_OPTIMIZER_OUTPUT_DISCIPLINE
  * or TOKEN_OPTIMIZER_OUTLINE decided for every task; the table only fills in
@@ -34,9 +34,11 @@ import { TaskCategory, isTaskCategory } from './task-class.mjs';
  * were real (seo-audit -9% output), so the block is scoped, not dropped.
  *
  * WHETHER IT HELPS DEPENDS ON THE TASK, which is why it is a per-category
- * setting. The ledger data has it winning on debug-pipeline-py (0.58x) and
- * explain-failure (0.87x); te-bench 594-discipline-v2 has the rewrite losing
- * on seo-audit (1.23x), log-needle (1.17x) and bugfix (1.07x).
+ * setting. te-bench 594-discipline-bycat (block vs no block, median $, 5 reps,
+ * three tasks per category) has it paying on fix (geometric mean 0.897) and
+ * build (0.877) and losing on survey (1.084: seo-audit 1.23x, settings-inventory
+ * 1.18x, cobra overview 0.88x). Survey's report has to be written in full, and
+ * under the block the model packed it into fewer, longer, output-billed turns.
  */
 export const OUTPUT_DISCIPLINE = [
   '## Keep output lean',
@@ -62,18 +64,25 @@ const DEFAULTS = Object.freeze({
 /** Only the cells that differ from DEFAULTS. Every one needs an EVIDENCE entry. */
 const OVERRIDES = Object.freeze({
   [TaskCategory.REWRITE]: Object.freeze({ outlineSubstitution: false }),
+  [TaskCategory.SURVEY]: Object.freeze({ outputDiscipline: false }),
 });
 
 /**
  * Why each override exists. Keyed `${category}.${setting}`.
- * Pending measurements (te-bench campaigns/594-discipline-bycat) fill in
- * outputDiscipline for fix, build and survey; until then they inherit.
+ * fix and build keep outputDiscipline on with a measurement behind it
+ * (te-bench 594-discipline-bycat: 0.897 and 0.877); locate and explain
+ * inherit until they have three measured tasks each.
  */
 export const EVIDENCE = Object.freeze({
   'rewrite.outlineSubstitution':
     'bench/ledger/RESULTS-LARGECONTEXT.md: on whole-file-transform, hooks with outlining cost ' +
     '1.356x [1.125, 1.642] the same text without them, n=30; the model paid for the outline, ' +
     'then read the whole file anyway.',
+  'survey.outputDiscipline':
+    'te-bench bench/thol/campaigns/594-discipline-bycat/RESULTS.md: with the block, survey tasks ' +
+    'cost a geometric mean 1.084x without it (seo-audit 1.229, code-settings-inventory-django ' +
+    '1.179, code-overview-cobra 0.880; median $, 5 reps); the pre-registered rule turns it off ' +
+    'above 1.03.',
 });
 
 const ON = new Set(['1', 'on', 'true', 'yes']);

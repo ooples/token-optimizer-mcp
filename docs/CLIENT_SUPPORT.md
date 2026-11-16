@@ -118,8 +118,10 @@ quietly turn the product off.
 
 Some settings help one kind of task and cost another. Outlining a large file
 helps a model find something in it and costs 1.36x when the model is about to
-rewrite the whole file. So each session gets a task category, and each category
-has its own defaults (`src/hooks-core/task-settings.mjs`).
+rewrite the whole file. The output-discipline block saves 10-12% on fix and
+build tasks and costs 8% on surveys, where the report has to be written in full.
+So each session gets a task category, and each category has its own defaults
+(`src/hooks-core/task-settings.mjs`).
 
 - **When the prompt arrives**, it is classified as fix, build, rewrite, survey,
   locate, explain or unknown. Rules over the prompt's first 4 KB, plus the size

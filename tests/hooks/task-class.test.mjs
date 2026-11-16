@@ -147,8 +147,15 @@ describe('the settings table', () => {
       expect(settingsFor(c, {}).outlineSubstitution).toBe(true);
   });
 
+  test('a survey writes without the block; every other category keeps it', () => {
+    expect(settingsFor(TaskCategory.SURVEY, {}).outputDiscipline).toBe(false);
+    for (const c of Object.values(TaskCategory).filter((c) => c !== TaskCategory.SURVEY))
+      expect(settingsFor(c, {}).outputDiscipline).toBe(true);
+  });
+
   test('an explicit switch wins over the table in both directions', () => {
     expect(settingsFor(TaskCategory.REWRITE, { TOKEN_OPTIMIZER_OUTLINE: 'on' }).outlineSubstitution).toBe(true);
+    expect(settingsFor(TaskCategory.SURVEY, { TOKEN_OPTIMIZER_OUTPUT_DISCIPLINE: 'on' }).outputDiscipline).toBe(true);
     expect(settingsFor(TaskCategory.FIX, { TOKEN_OPTIMIZER_OUTPUT_DISCIPLINE: 'off' }).outputDiscipline).toBe(false);
     expect(settingsFor(TaskCategory.FIX, { TOKEN_OPTIMIZER_OUTPUT_DISCIPLINE: 'maybe' }).outputDiscipline).toBe(true);
   });
@@ -207,6 +214,24 @@ describe('through the Claude Code hooks', () => {
     const second = prompt('Now write `NOTES.md` summarising the audit.');
     expect(second.stdout.trim()).toBe('');
     expect(storedCategory(session)).toBe(TaskCategory.SURVEY);
+  });
+
+  test('a survey prompt adds nothing; a later fix prompt then carries the block', () => {
+    const session = `v${++seq}`;
+    const prompt = (text) =>
+      run('user-prompt-submit.mjs', {
+        hook_event_name: 'UserPromptSubmit',
+        cwd: workspace,
+        session_id: session,
+        prompt: text,
+      });
+    const survey = prompt('Perform a complete on-page SEO audit and write your findings to `seo_report.md`.');
+    expect(survey.status).toBe(0);
+    expect(survey.stdout.trim()).toBe('');
+    expect(storedCategory(session)).toBe(TaskCategory.SURVEY);
+    const fix = prompt('The project has failing tests. Find the root cause and fix the bug.');
+    expect(JSON.parse(fix.stdout).hookSpecificOutput.additionalContext).toBe(OUTPUT_DISCIPLINE);
+    expect(storedCategory(session)).toBe(TaskCategory.FIX);
   });
 
   test('switched off, the prompt adds nothing', () => {
