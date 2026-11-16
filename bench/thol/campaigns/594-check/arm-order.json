@@ -1,0 +1,24 @@
+{
+  "arms": [
+    "control",
+    "token-optimizer-mcp",
+    "tokenjuice"
+  ],
+  "orders": [
+    [
+      "control",
+      "token-optimizer-mcp",
+      "tokenjuice"
+    ],
+    [
+      "token-optimizer-mcp",
+      "tokenjuice",
+      "control"
+    ],
+    [
+      "tokenjuice",
+      "control",
+      "token-optimizer-mcp"
+    ]
+  ]
+}
