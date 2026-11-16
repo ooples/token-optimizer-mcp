@@ -153,6 +153,9 @@ import {
   takeNotice,
 } from './toolprune.mjs';
 import { scheduleCodexFold, takeCodexNotice } from './codexprune.mjs';
+import { OUTPUT_DISCIPLINE, settingsFor } from './task-settings.mjs';
+import { TaskCategory } from './task-class.mjs';
+import { contextStarted, promptSubmitted, toolCallObserved } from './task-session.mjs';
 import { onToolFailure, recordTurnEnd } from './loopguard.mjs';
 
 /**
@@ -1010,7 +1013,8 @@ export function recordingGuidance() {
 export function policyText(
   canDeny,
   availableTools = undefined,
-  registrationProven = availableTools !== undefined
+  registrationProven = availableTools !== undefined,
+  { deferDiscipline = false } = {}
 ) {
   const kb = Math.round(largeFileBytes() / 1024);
   // Direct library callers historically asked for policyText(true) to render
@@ -1078,7 +1082,7 @@ export function policyText(
   // THE RECORDING GUIDANCE IS DELIVERED LATER, NOT HERE (#357, M5): see
   // recordingGuidance. A session that never does real work never pays for it.
 
-  const discipline = outputDiscipline();
+  const discipline = outputDiscipline({ deferred: deferDiscipline });
   return `# Token optimization is active${discipline ? `\n\n${discipline}` : ''}${routing}${enforcement}${unconfirmed}${projectBriefing()}`;
 }
 
@@ -1115,53 +1119,21 @@ export function policyText(
  * "the writer schema is not proven available" -- 139 tokens per session that
  * changed no decision it was ever read by.
  */
-/**
- * The block itself, exported so a benchmark arm can deliver it the way a
- * competitor delivers theirs -- as a CLAUDE.md, with no hooks at all.
- *
- * ONE SOURCE OF TRUTH, deliberately. The head-to-head compared our arm (hooks
- * PLUS this text) against theirs (text alone) and I described it as text
- * versus text, which it was not. Fixing that needs an arm carrying only these
- * words; copying them into the benchmark would let the measured text drift
- * from the shipped text, so the arm imports this constant instead.
- */
 /*
- * IT GOVERNS WHAT THE MODEL WRITES, NEVER HOW IT READS (#594 discipline A/B).
- * The earlier wording ("quote the shortest decisive line of a command result")
- * was read as an instruction about tool use: with it, 0 of 5 log-needle runs
- * used Read (5 of 5 without it), and every bugfix run added `| tail -30` and a
- * separate find/grep, one more turn each. A turn re-reads the whole context,
- * so the narrower calls cost more than the bytes they saved: bugfix 0.105 vs
- * 0.096, log-needle 0.145 vs 0.138 (median $, 5 reps). The output-token gains
- * were real (seo-audit -9% output), so the block is scoped, not dropped.
+ * The block and its history live in task-settings.mjs, so the prompt hook can
+ * deliver it without loading this module. Re-exported here because the
+ * benchmark arms import it from this path (bench/ledger/arms.mjs).
  */
-export const OUTPUT_DISCIPLINE = [
-  '## Keep output lean',
-  '',
-  'Every token you write is billed at output rates -- far dearer than reading.',
-  '- No preamble, recap, tool-call narration, or closing summary. Answer directly.',
-  '- In replies, quote only the decisive line of a result; never paste it whole.',
-  '- Write the least code that works; reuse what exists before adding.',
-  '- Keep identifiers, paths, API names and error strings verbatim -- never paraphrase.',
-  '- Correctness first: brevity that loses a fact is not a saving.',
-  '- This is about what you write, not how you read: read files and run commands as',
-  '  usual, and prefer fewer tool calls over smaller ones.',
-].join('\n');
+export { OUTPUT_DISCIPLINE };
 
-function outputDiscipline() {
-  // THE ISOLATING SWITCH. `assist` carries the bound, the compactor and outline
-  // substitution as well as this block, so a measurement of assist against
-  // control cannot attribute anything to the text. This exists so an arm can
-  // run every hook with the block removed and nothing else changed -- the only
-  // comparison that can say whether the instructions or the interception are
-  // doing the work.
-  const raw = String(process.env.TOKEN_OPTIMIZER_OUTPUT_DISCIPLINE || '')
-    .trim()
-    .toLowerCase();
-  if (raw === '0' || raw === 'off' || raw === 'false' || raw === 'no')
-    return '';
-
-  return OUTPUT_DISCIPLINE;
+/**
+ * The block for a session start: the UNKNOWN row's setting, because no task is
+ * known yet. A client whose prompt hook can add context defers it to the
+ * prompt (task-session.mjs), where the task's own row decides.
+ */
+function outputDiscipline({ deferred = false } = {}) {
+  if (deferred) return '';
+  return settingsFor(TaskCategory.UNKNOWN).outputDiscipline ? OUTPUT_DISCIPLINE : '';
 }
 
 /**
@@ -1394,6 +1366,10 @@ async function runHook(clientName, event, invocation) {
   const eventName =
     event === 'session-start'
       ? 'SessionStart'
+      : event === 'prompt'
+        ? clientName === 'gemini'
+          ? 'BeforeAgent'
+          : 'UserPromptSubmit'
       : event === 'post-tool'
         ? clientName === 'gemini'
           ? 'AfterTool'
@@ -1478,6 +1454,36 @@ async function runHook(clientName, event, invocation) {
     process.exit(0);
   }
 
+  if (event === 'prompt') {
+    // THE TASK IS KNOWN HERE AND NOWHERE EARLIER (task-class.mjs). Classify the
+    // prompt, store the category for the per-call settings, and add whatever
+    // text the category's row calls for. Fails open like every hook: a prompt
+    // must never be held up or rejected by the optimizer.
+    const input = await readPayloadResult({ timeoutMs: 250 });
+    const raw = input.payload || {};
+    invocation.bind(raw, null, input.bytes);
+    if (input.status !== 'ok') invocation.noteInput(input.status, input.bytes);
+    const sessionId =
+      raw.session_id ?? raw.sessionId ?? raw.conversation_id ?? raw.conversationId ?? raw.taskId;
+    const prompt =
+      raw.prompt ?? raw.userPromptSubmit?.prompt ?? raw.user_prompt ?? raw.message ?? '';
+    if (!sessionId || typeof prompt !== 'string' || !features.routing) process.exit(0);
+    const cwd =
+      (Array.isArray(raw.workspacePaths) ? raw.workspacePaths[0] : undefined) ||
+      raw.cwd ||
+      raw.working_directory ||
+      process.cwd();
+    const scope = stateScope(raw, raw.transcript_path ?? raw.transcriptPath ?? null);
+    const { context } = promptSubmitted({ sessionId, prompt, cwd, agent: scope });
+    // Cline reads a reply on every prompt hook; the others take silence as "go on".
+    const output =
+      context || client.contextStyle === 'cline'
+        ? contextOutput(client, eventName, context)
+        : null;
+    if (output) emit(output);
+    process.exit(0);
+  }
+
   if (event === 'session-start') {
     // Some hook hosts invoke SessionStart without closing stdin. Waiting the
     // full pre-tool timeout would turn optional context into a five-second
@@ -1519,7 +1525,9 @@ async function runHook(clientName, event, invocation) {
         deferredToolContext = state.pendingHarvest;
         state.pendingHarvest = null;
       }
-      if (toolEvidence.proven || deferredToolContext)
+      // A rebuilt context is missing the prompt-time text the last one had.
+      if (client.promptContext) contextStarted(state);
+      if (toolEvidence.proven || deferredToolContext || client.promptContext)
         saveState(sessionId, state, scope);
     }
     // ASSEMBLED IN CACHE ORDER, not in whatever order this function happens to
@@ -1533,11 +1541,10 @@ async function runHook(clientName, event, invocation) {
       {
         id: 'policy',
         volatility: 0,
-        text: policyText(
-          client.canDeny,
-          toolEvidence.names,
-          toolEvidence.proven
-        ),
+        text: policyText(client.canDeny, toolEvidence.names, toolEvidence.proven, {
+          // Said with the prompt instead, where the task's own row decides.
+          deferDiscipline: client.promptContext === true,
+        }),
       },
     ];
     const crashed = serverCrashNotice();
@@ -2084,6 +2091,18 @@ async function runHook(clientName, event, invocation) {
     }
   }
   if (event === 'post-tool') {
+    // The second classification pass (task-class.mjs): the first calls can
+    // correct the prompt's category. Saved with the rest of this state below.
+    try {
+      // Not counted: the pre-tool pass already counted this call.
+      toolCallObserved(
+        state,
+        { ...payload, tool_response: raw.tool_response ?? raw.toolResponse },
+        { cwd: payload.cwd, count: false }
+      );
+    } catch {
+      // A classification failure leaves the session on its current settings.
+    }
     try {
       const command = payload.tool_input?.command;
       const touched = touchedFiles(payload);
@@ -2172,6 +2191,14 @@ async function runHook(clientName, event, invocation) {
   if (event === 'pre-tool') {
     // This agent's position in its session, which prices an outline.
     state.toolCalls = (Number(state.toolCalls) || 0) + 1;
+    // The second classification pass, before the outline decision below reads
+    // it: a whole-file read of a huge input or a rewrite of a read file settles
+    // the task's category for this very call (task-class.mjs).
+    try {
+      toolCallObserved(state, payload, { cwd: payload.cwd });
+    } catch {
+      // Unclassified: the session keeps its current settings.
+    }
   }
 
   // A WHOLE-FILE READ IS ANSWERED WITH ITS OUTLINE, for every client whose

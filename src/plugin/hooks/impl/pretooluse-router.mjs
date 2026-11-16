@@ -91,6 +91,7 @@ import {
 } from '../lib/capabilities.mjs';
 import { evaluateUcrGuards } from '../lib/ucr-guard.mjs';
 import { beginHookInvocation } from '../lib/observability.mjs';
+import { toolCallObserved } from '../lib/task-session.mjs';
 
 // The Claude plugin bundles this hook and the MCP declaration as one install.
 // THE BUNDLED INVENTORY IS ASSERTED ONLY FOR AN ACTUAL PLUGIN INSTALL.
@@ -194,6 +195,14 @@ try {
   // agent's own state, so a subagent starts at its own first call rather than at
   // its parent's and siblings' total.
   state.toolCalls = (Number(state.toolCalls) || 0) + 1;
+  // The second classification pass, before the outline decision below reads
+  // it: a whole-file read of a huge input or a rewrite of a read file settles
+  // the task's category for this very call (task-class.mjs).
+  try {
+    toolCallObserved(state, payload, { cwd: payload.cwd });
+  } catch {
+    // Unclassified: the session keeps its current settings.
+  }
   // A subagent never sees SessionStart, so its first tool call carries the
   // guidance instead, on whichever exit this call takes.
   const briefing = subagentBriefing(raw, state);

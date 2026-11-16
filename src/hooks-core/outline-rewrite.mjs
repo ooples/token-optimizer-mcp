@@ -18,6 +18,7 @@ import { join } from 'node:path';
 import { substitutionFor } from './substitute.mjs';
 import { wholeFileDump } from './decide.mjs';
 import { canonicalPath } from './paths.mjs';
+import { sessionSettings } from './task-settings.mjs';
 
 /** Where served outlines are written; a file's presence is the once-per-file record. */
 export function outlineDir() {
@@ -73,6 +74,9 @@ export function turnsSoFar(state) {
  */
 export function outlineRead({ sessionId, filePath, offset, limit, state }) {
   if (!filePath) return null;
+  // PER-TASK. A session about to rewrite the whole file pays for an outline and
+  // then reads the file anyway (task-settings.mjs, rewrite.outlineSubstitution).
+  if (!sessionSettings(state).outlineSubstitution) return null;
   // KEYED ON THE CANONICAL PATH, as outlineShell keys it. Read hands over
   // `C:\x\a.ts` and the shell side canonicalises to `C:/x/a.ts`, so on Windows
   // the record this module calls "shared" between a cat and a Read never was,

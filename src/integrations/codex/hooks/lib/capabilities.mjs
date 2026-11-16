@@ -875,6 +875,9 @@ export function harvestCliFor(client, env = process.env) {
 }
 export const CLIENT_CAPABILITIES = Object.freeze({
   'claude-code': native({
+    // A prompt hook that adds context to the model (task-class.mjs): the
+    // task's own settings decide prompt-time text instead of SessionStart.
+    promptContext: true,
     name: 'Claude Code',
     tier: CAPABILITY_TIERS.CONTINUATION,
     semanticHarvest: 'stop-continuation',
@@ -883,6 +886,9 @@ export const CLIENT_CAPABILITIES = Object.freeze({
     stopDecision: 'block',
   }),
   codex: native({
+    // A prompt hook that adds context to the model (task-class.mjs): the
+    // task's own settings decide prompt-time text instead of SessionStart.
+    promptContext: true,
     name: 'Codex',
     tier: CAPABILITY_TIERS.CONTINUATION,
     semanticHarvest: 'stop-continuation',
@@ -895,6 +901,9 @@ export const CLIENT_CAPABILITIES = Object.freeze({
     stopDecision: 'block',
   }),
   copilot: native({
+    // A prompt hook that adds context to the model (task-class.mjs): the
+    // task's own settings decide prompt-time text instead of SessionStart.
+    promptContext: true,
     name: 'GitHub Copilot CLI',
     tier: CAPABILITY_TIERS.CONTINUATION,
     semanticHarvest: 'agent-stop-continuation',
@@ -904,6 +913,9 @@ export const CLIENT_CAPABILITIES = Object.freeze({
     stopDecision: 'block',
   }),
   gemini: native({
+    // A prompt hook that adds context to the model (task-class.mjs): the
+    // task's own settings decide prompt-time text instead of SessionStart.
+    promptContext: true,
     name: 'Gemini CLI',
     tier: CAPABILITY_TIERS.CONTINUATION,
     semanticHarvest: 'after-agent-retry',
@@ -912,6 +924,9 @@ export const CLIENT_CAPABILITIES = Object.freeze({
     stopDecision: 'deny',
   }),
   qwen: native({
+    // A prompt hook that adds context to the model (task-class.mjs): the
+    // task's own settings decide prompt-time text instead of SessionStart.
+    promptContext: true,
     name: 'Qwen Code',
     tier: CAPABILITY_TIERS.CONTINUATION,
     semanticHarvest: 'stop-continuation',
@@ -934,6 +949,9 @@ export const CLIENT_CAPABILITIES = Object.freeze({
     stopDecision: 'block',
   }),
   cline: native({
+    // A prompt hook that adds context to the model (task-class.mjs): the
+    // task's own settings decide prompt-time text instead of SessionStart.
+    promptContext: true,
     name: 'Cline',
     tier: CAPABILITY_TIERS.OBSERVATION,
     semanticHarvest: 'active-model-rule',

@@ -108,6 +108,30 @@ needs the complete 102-tool specialist catalog. Use the four-operation
 | `TOKEN_OPTIMIZER_LOG_MAX_BYTES`         | `5242880`  | Rotate an active lifecycle log at size   |
 | `TOKEN_OPTIMIZER_LOG_RETENTION_DAYS`    | `14`       | Maximum lifecycle log age                |
 | `TOKEN_OPTIMIZER_LOG_MAX_FILES`         | `40`       | Maximum retained lifecycle log files     |
+| `TOKEN_OPTIMIZER_OUTPUT_DISCIPLINE`     | per task   | `on`/`off` overrides the task's setting  |
+| `TOKEN_OPTIMIZER_OUTLINE`               | per task   | `on`/`off` overrides the task's setting  |
 
 An unrecognised `TOKEN_OPTIMIZER_MODE` falls back to `enforce`, so a typo cannot
 quietly turn the product off.
+
+### Settings follow the task
+
+Some settings help one kind of task and cost another. Outlining a large file
+helps a model find something in it and costs 1.36x when the model is about to
+rewrite the whole file. So each session gets a task category, and each category
+has its own defaults (`src/hooks-core/task-settings.mjs`).
+
+- **When the prompt arrives**, it is classified as fix, build, rewrite, survey,
+  locate, explain or unknown. Rules over the prompt's first 4 KB, plus the size
+  of any file it names; no model call. Weak or tied evidence is `unknown`.
+- **The first six tool calls can correct it.** A whole-file read of a file over
+  256 KB makes it `locate`; writing over a file the session read makes it
+  `rewrite`; a failing test run settles an `unknown` session as `fix`.
+- **`unknown` runs with the defaults the product had before categories.** A
+  category only differs where a measurement says so, and the table names it.
+- **The output-discipline block comes with the prompt** on clients whose prompt
+  hook can add context: Claude Code, Codex, Gemini CLI (`BeforeAgent`), Qwen
+  Code, Cline (4.1.20 or later) and Copilot CLI (1.0.79 or later). Cursor,
+  OpenCode, Kilo and Windsurf get it at session start with the `unknown`
+  setting; their tool-call settings still follow the task.
+- An explicit switch in the table above wins over the category.

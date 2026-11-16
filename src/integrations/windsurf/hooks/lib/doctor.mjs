@@ -61,6 +61,7 @@ import {
   nodeUnsupportedReason,
 } from './node-floor.mjs';
 import { SLOW_P90_MS, recentToolHookLatency } from './hook-latency.mjs';
+import { EVIDENCE, SETTING_ENV, settingsTable } from './task-settings.mjs';
 
 /**
  * Bytes as a person reads them.
@@ -2403,6 +2404,7 @@ export async function diagnose({
 
   const checks = [
     ...probeMode({ settingsPath }),
+    ...probeTaskSettings(),
     ...checklist({ root, settingsPath, install }),
     ...probeVersion({ install, crossClient }),
     ...probeClaudeCodeHooks({ install, versionText: claudeCodeVersion }),
@@ -2440,6 +2442,35 @@ export async function diagnose({
  * as one more PASS let the override sit unnoticed in ~/.claude/settings.json behind a clean sheet,
  * so it is a warning that names the file (or the process environment) and the key to remove.
  */
+/**
+ * The per-task settings table (task-settings.mjs): which categories differ
+ * from the defaults, why, and whether an env switch overrides them all.
+ * Informational -- a table is never a failure -- but it is the one place a
+ * person can see that a rewrite session will not be outlined, and the
+ * measurement that decided it.
+ */
+export function probeTaskSettings(env = process.env) {
+  const table = settingsTable();
+  const base = table.unknown;
+  const differs = [];
+  for (const [category, row] of Object.entries(table))
+    for (const [setting, value] of Object.entries(row))
+      if (value !== base[setting])
+        differs.push(`${category}.${setting}=${value} (${(EVIDENCE[`${category}.${setting}`] || 'no evidence recorded').split(':')[0]})`);
+  const forced = Object.entries(SETTING_ENV)
+    .filter(([, name]) => String(env[name] ?? '').trim() !== '')
+    .map(([setting, name]) => `${name}=${env[name]} fixes ${setting} for every task`);
+  return [
+    ok(
+      'per-task settings',
+      [
+        differs.length ? `differs from defaults: ${differs.join('; ')}` : 'every task runs on the defaults',
+        ...forced,
+      ].join('; ')
+    ),
+  ];
+}
+
 export function probeMode({ settingsPath } = {}) {
   const effective = mode();
   if (effective !== 'off') {

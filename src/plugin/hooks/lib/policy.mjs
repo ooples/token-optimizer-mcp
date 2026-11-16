@@ -429,6 +429,12 @@ function emptyState() {
     optimizerServerFailedAt: 0,
     optimizerTools: [],
     optimizerToolsObservedAt: 0,
+    taskClass: null,
+    // When the prompt hook last said the output-discipline block, and when the
+    // context was last rebuilt (SessionStart: startup, resume, clear, compact).
+    // The block is said again once the context it was said into is gone.
+    disciplineServedAt: 0,
+    contextStartedAt: 0,
     // The harvest nudge the Stop hook held for the next turn (null when none).
     pendingHarvest: null,
     repeats: {},
@@ -464,6 +470,27 @@ function tracked(state) {
 function changedHarvest(state) {
   if (!loadedHarvest.has(state)) return Object.prototype.hasOwnProperty.call(state, 'pendingHarvest');
   return (state.pendingHarvest ?? null) !== loadedHarvest.get(state);
+}
+
+/** A stored task category, or null when absent or malformed. */
+function validTaskClass(value) {
+  if (!value || typeof value !== 'object' || typeof value.category !== 'string') return null;
+  return {
+    category: value.category,
+    source: typeof value.source === 'string' ? value.source : 'none',
+    calls: Number.isFinite(value.calls) && value.calls > 0 ? value.calls : 0,
+    at: Number.isFinite(value.at) && value.at > 0 ? value.at : 0,
+  };
+}
+
+function newerTaskClass(current, mine) {
+  const a = validTaskClass(current);
+  const b = validTaskClass(mine);
+  if (!a) return b;
+  if (!b) return a;
+  // Same decision (same time): the higher count is the later save.
+  if (b.at === a.at) return b.calls > a.calls ? b : a;
+  return b.at > a.at ? b : a;
 }
 
 export function loadState(sessionId, agent) {
@@ -585,6 +612,11 @@ export function loadState(sessionId, agent) {
       optimizerToolsObservedAt: Number.isFinite(parsed.optimizerToolsObservedAt)
         ? parsed.optimizerToolsObservedAt
         : 0,
+      // The task category (task-class.mjs). Set at prompt submit, corrected by
+      // the first tool calls, and read by every hook that applies a setting.
+      taskClass: validTaskClass(parsed.taskClass),
+      disciplineServedAt: Number.isFinite(parsed.disciplineServedAt) ? parsed.disciplineServedAt : 0,
+      contextStartedAt: Number.isFinite(parsed.contextStartedAt) ? parsed.contextStartedAt : 0,
     });
   } catch {
     return tracked(emptyState());
@@ -757,6 +789,13 @@ export function saveState(sessionId, state, agent) {
       // The caller's own view of the run: it just observed this call.
       singleRun: Number(state.singleRun) || 0,
       batchNudged: Boolean(current.batchNudged || state.batchNudged),
+      // NEWEST WINS. A prompt-submit classification and a tool-call correction
+      // can race; the later decision is the one that saw more evidence.
+      taskClass: newerTaskClass(current.taskClass, state.taskClass),
+      // POINTS IN TIME, so the latest wins. A boolean could never be reset by a
+      // compaction: this merge would OR the old "said" back in.
+      disciplineServedAt: Math.max(Number(current.disciplineServedAt) || 0, Number(state.disciplineServedAt) || 0),
+      contextStartedAt: Math.max(Number(current.contextStartedAt) || 0, Number(state.contextStartedAt) || 0),
       // ADDED, NOT MAXED: what this caller counted goes on top of what the
       // locked read found, so a concurrent hook's call is not forgotten. See
       // `loadedCalls` above for why this one count is merged differently.

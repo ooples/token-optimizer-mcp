@@ -248,7 +248,9 @@ describe('SessionStart spends them', () => {
 
     expect(ctx).not.toContain('Restored after compaction');
     // The policy notice still arrives, which is the hook's original job.
-    expect(ctx.length).toBeGreaterThan(50);
+    // Named, not measured: the output-discipline block that used to pad this
+    // past 50 characters now arrives with the prompt (task-session.mjs).
+    expect(ctx).toContain('Token optimization is active');
   }, 60_000);
 
   it('still emits the policy notice when the graph is unreadable', () => {
@@ -265,6 +267,8 @@ describe('SessionStart spends them', () => {
     const ctx =
       JSON.parse(out.stdout || '{}')?.hookSpecificOutput?.additionalContext ||
       '';
-    expect(ctx.length).toBeGreaterThan(50);
+    // Named, not measured: the output-discipline block that used to pad this
+    // past 50 characters now arrives with the prompt (task-session.mjs).
+    expect(ctx).toContain('Token optimization is active');
   }, 60_000);
 });

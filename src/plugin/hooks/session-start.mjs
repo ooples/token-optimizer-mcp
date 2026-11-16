@@ -26,6 +26,7 @@ import {
   saveState,
 } from './lib/policy.mjs';
 import { policyText, sessionTaskContext } from './lib/adapter.mjs';
+import { contextStarted } from './lib/task-session.mjs';
 import {
   HOOK_MCP_TOOLS,
   optimizerToolEvidence,
@@ -201,9 +202,12 @@ if (input.payload) invocation.bind(payload, null, input.bytes);
 else invocation.noteInput(input.status, input.bytes);
 const features = featuresForArm();
 const toolEvidence = optimizerToolEvidence(payload);
-if (payload.session_id && toolEvidence.proven) {
+if (payload.session_id) {
   const state = loadState(payload.session_id);
-  rememberOptimizerTools(state, toolEvidence);
+  if (toolEvidence.proven) rememberOptimizerTools(state, toolEvidence);
+  // Startup, resume, clear and compact all rebuild the context, so the block
+  // the prompt hook said into the old one is due again (task-session.mjs).
+  contextStarted(state);
   saveState(payload.session_id, state);
 }
 // ASSEMBLED IN CACHE ORDER, not in the order the blocks are discovered below.
@@ -216,7 +220,9 @@ const blocks = [
   {
     id: 'policy',
     volatility: 0,
-    text: policyText(true, toolEvidence.names, toolEvidence.proven),
+    // The output-discipline block comes with the prompt (UserPromptSubmit), where
+    // the task is known and its own settings row decides (task-session.mjs).
+    text: policyText(true, toolEvidence.names, toolEvidence.proven, { deferDiscipline: true }),
   },
 ];
 // Short agent prompts: said only when a brief is approved, so only when true.
