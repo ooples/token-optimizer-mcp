@@ -261,7 +261,7 @@
     "@typescript-eslint/typescript-estree": "^8.72.2",
     "async-mutex": "^0.5.0",
     "better-sqlite3": "^13.0.3",
-    "chalk": "^4.1.2",
+    "chalk": "^6.0.1",
     "chart.js": "4.6.1",
     "cors": "^2.8.6",
     "d3-force": "^3.0.1",
