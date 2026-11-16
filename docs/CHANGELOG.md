@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.11.1](https://github.com/ooples/token-optimizer-mcp/compare/v7.11.0...v7.11.1) (2026-11-16)
+
+
+### Bug Fixes
+
+* **ci:** read npm 12 pack reports and the moved installer paths ([#608](https://github.com/ooples/token-optimizer-mcp/issues/608)) ([16a927f](https://github.com/ooples/token-optimizer-mcp/commit/16a927f3afee5f7641f346c554b3e0e387ba835e))
+* cut the fixed context our claude code arm pays where control pays none ([#594](https://github.com/ooples/token-optimizer-mcp/issues/594)) ([5f9975a](https://github.com/ooples/token-optimizer-mcp/commit/5f9975a5d993064d36fcddfe452b0b7e207a323a))
+* **install:** skip powershell activation when windows has no documents folder ([#591](https://github.com/ooples/token-optimizer-mcp/issues/591)) ([36ba792](https://github.com/ooples/token-optimizer-mcp/commit/36ba792955d0c56f6c8580a175d27570892488f8))
+* smart_grep wire shape and disclose envelope floor from the [#565](https://github.com/ooples/token-optimizer-mcp/issues/565) campaign ([#592](https://github.com/ooples/token-optimizer-mcp/issues/592)) ([9e48a3f](https://github.com/ooples/token-optimizer-mcp/commit/9e48a3fb513628212f48dacd8aa1cb4ca51cb9de))
+
+
+### CI/CD
+
+* **deps:** bump actions/cache from 4 to 6 ([#601](https://github.com/ooples/token-optimizer-mcp/issues/601)) ([d7deae9](https://github.com/ooples/token-optimizer-mcp/commit/d7deae99200bc0c4ed3f2e9c91f11714921464ee))
+* **deps:** bump actions/github-script from 7 to 9 ([#599](https://github.com/ooples/token-optimizer-mcp/issues/599)) ([57fa801](https://github.com/ooples/token-optimizer-mcp/commit/57fa801c661083b645d8b6b72dd0c93cbe4b81aa))
+* **deps:** bump actions/setup-node from 4 to 7 ([#595](https://github.com/ooples/token-optimizer-mcp/issues/595)) ([84abe6f](https://github.com/ooples/token-optimizer-mcp/commit/84abe6f463006bddf435361bb7f544135aade1a4))
+* **deps:** bump actions/setup-python from 5 to 7 ([#596](https://github.com/ooples/token-optimizer-mcp/issues/596)) ([e0b65bc](https://github.com/ooples/token-optimizer-mcp/commit/e0b65bcb025960bd8a025910b81a9da741f45fd0))
+* **deps:** bump peter-evans/create-pull-request from 6 to 8 ([#597](https://github.com/ooples/token-optimizer-mcp/issues/597)) ([a09b311](https://github.com/ooples/token-optimizer-mcp/commit/a09b3112ed66aff7b9764d8689e5f94543319601))
+* **deps:** bump the github-actions-major group with 2 updates ([#607](https://github.com/ooples/token-optimizer-mcp/issues/607)) ([5a213c1](https://github.com/ooples/token-optimizer-mcp/commit/5a213c127c96554a7df6753354fdb10e3a564362))
+* group dependabot majors; fix master lock file and chalk 6 build ([#606](https://github.com/ooples/token-optimizer-mcp/issues/606)) ([3ad76b4](https://github.com/ooples/token-optimizer-mcp/commit/3ad76b4da8977e148f4e4a86773a470b5daa8ab3))
+
 ## [7.11.0](https://github.com/ooples/token-optimizer-mcp/compare/v7.10.0...v7.11.0) (2026-11-14)
 
 
