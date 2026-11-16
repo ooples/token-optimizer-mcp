@@ -69,19 +69,25 @@ describe('Codex semantic harvest lifecycle', () => {
     writeFileSync(second, 'export const second = 2;\n');
 
     // The first edit is the first sign of real work, so it carries the deferred
-    // recording guidance (#357, M5) -- once. The nudge naming the files waits
-    // for the second edit, as before.
+    // recording guidance (#357, M5) -- once. That is the session's one in-turn
+    // ask, on Codex as on every client (#594): the nudge due at the second edit
+    // is not sent on top of it.
     const opening = run(POST, editPayload('semantic-1', first));
     expect(opening.hookSpecificOutput.additionalContext).toContain(
       'Record what you work out'
     );
     const output = run(POST, editPayload('semantic-1', second));
-
-    const context = output.hookSpecificOutput.additionalContext;
+    const context = String(output?.hookSpecificOutput?.additionalContext ?? '');
     expect(context).not.toContain('Record what you work out');
-    expect(context).toContain('wiki_write');
-    expect(context).toContain('first.ts');
-    expect(context).toContain('second.ts');
+    expect(context).not.toContain('edits this session');
+
+    // When the nudge is the first ask, it names the files actually edited.
+    env.TOKEN_OPTIMIZER_NUDGE_AFTER = '1';
+    const named = run(POST, editPayload('semantic-1b', second));
+    const nudge = named.hookSpecificOutput.additionalContext;
+    expect(nudge).toContain('wiki_write');
+    expect(nudge).toContain('second.ts');
+    expect(nudge).not.toContain('Record what you work out');
   });
 
   test('continues gpt-5.6-sol once to perform its own harvest', () => {

@@ -59,6 +59,16 @@ describe('compacting a run against its previous run', () => {
     expect(compact('alpha\nbeta\n', { previous: '', maxBytes: MAX })).toBe('alpha\nbeta\n');
   });
 
+  it('keeps a fresh failure line the marker would have pushed out', () => {
+    // #594 review: at a 400-byte budget the marker's reservation left 55 bytes
+    // for the head, so a 100-byte new FAIL line was dropped for the marker.
+    const fail = `FAIL ${'x'.repeat(95)}`;
+    const text = [...Array.from({ length: 40 }, () => 'PASS'), fail, 'y'.repeat(600)].join('\n');
+    const out = compact(text, { previous: 'PASS\n', maxBytes: MAX });
+    expect(out).toContain(fail);
+    expect(Buffer.byteLength(out, 'utf8')).toBeLessThanOrEqual(MAX);
+  });
+
   it('never returns more than the budget', () => {
     const text = 'x'.repeat(50_000);
 

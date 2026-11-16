@@ -3,6 +3,7 @@
 import {
   claudeCodeHooksWired,
   instructionsFor,
+  instructionsForClient,
 } from './plugin-instructions.js';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
@@ -32,7 +33,10 @@ import {
 } from '../tools/intelligence/wiki-query.js';
 import {
   CallToolRequestSchema,
+  InitializeRequestSchema,
   ListToolsRequestSchema,
+  type InitializeRequest,
+  type InitializeResult,
 } from '@modelcontextprotocol/sdk/types.js';
 import { noteToolCall, flushToolRollup } from '../telemetry/tool-rollup.js';
 import { runUcrTool } from './ucr-tools.js';
@@ -377,6 +381,27 @@ const server = new Server(
     },
   }
 );
+// THE INSTRUCTIONS FOLLOW THE CLIENT, and only the handshake names it. The
+// value above is a launch-time guess (it can see Claude Code's own env marker);
+// at `initialize` the client's name picks its hook wiring to check, so every
+// hooked client -- Codex, Cursor, Gemini and the rest -- gets the short text,
+// not just Claude Code (plugin-instructions.ts instructionsForClient). The SDK
+// sends `_instructions` from its own initialize handler, so this sets it and
+// then delegates; a failure keeps the launch-time text.
+const serverInternals = server as unknown as {
+  _instructions?: string;
+  _oninitialize(request: InitializeRequest): Promise<InitializeResult>;
+};
+server.setRequestHandler(InitializeRequestSchema, async (request) => {
+  try {
+    serverInternals._instructions = await instructionsForClient(
+      request.params.clientInfo?.name
+    );
+  } catch {
+    // Keep the launch-time text.
+  }
+  return serverInternals._oninitialize(request);
+});
 const mcpEvidence = new McpEvidenceRecorder(packageVersion);
 server.oninitialized = () => {
   mcpEvidence.clientInitialized(server.getClientVersion());

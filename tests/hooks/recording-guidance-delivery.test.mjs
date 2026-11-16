@@ -13,6 +13,7 @@ import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'n
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
+import { armFor } from '../../src/hooks-core/injection-holdout.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const CLAUDE_POST = join(ROOT, 'src', 'plugin', 'hooks', 'post-tool.mjs');
@@ -42,7 +43,7 @@ function hook(script, payload, env = {}) {
   const saved = readdirSync(state)
     .filter((name) => name.endsWith('.json'))
     .map((name) => JSON.parse(readFileSync(join(state, name), 'utf8')));
-  return { stdout: result.stdout, saved };
+  return { stdout: result.stdout, saved, status: result.status, signal: result.signal, error: result.error };
 }
 
 const file = join(scratch, 'edited.ts');
@@ -112,10 +113,42 @@ describe('the deferred recording guidance', () => {
     // fresh session; then it stays quiet once the guidance has been given.
     const preEdit = (session) => ({ ...claudeEdit(session), hook_event_name: 'PreToolUse', tool_response: undefined });
     const fresh = hook(CLAUDE_PRE, preEdit('router-fresh'), shared({ TOKEN_OPTIMIZER_NUDGE_AFTER: '1' }));
+    expect(fresh.status).toBe(0);
     expect(fresh.stdout).toContain('edits this session');
     const routed = hook(CLAUDE_PRE, preEdit('guidance-first'), env);
+    // The router must have RUN: a crash prints nothing and would pass the
+    // suppression check for the wrong reason, and the state already held two
+    // edits, so only its own increment to three proves it reached the gate.
+    expect({ status: routed.status, signal: routed.signal, error: routed.error }).toEqual({ status: 0, signal: null, error: undefined });
     expect(routed.stdout).not.toContain('edits this session');
-    expect(routed.saved.some((s) => s.edits >= 2)).toBe(true);
+    expect(routed.saved.some((s) => s.edits === 3)).toBe(true);
+  });
+
+  test('guidance the holdout withheld is not the ask, so the nudge still comes', () => {
+    // #594 review: the one-ask gate read the flag set BEFORE the holdout, so a
+    // session whose guidance was withheld was asked nothing at all.
+    const settings = { enabled: true, fraction: 0.5 };
+    let session = null;
+    for (let i = 0; i < 1000 && !session; i++)
+      if (armFor(`withheld-${i}`, settings) === 'guidance') session = `withheld-${i}`;
+    expect(session).not.toBeNull();
+    const graph = mkdtempSync(join(scratch, 'graph-held-'));
+    const env = {
+      TOKEN_OPTIMIZER_WIKI_DIR: graph,
+      TOKEN_OPTIMIZER_SHARED_DIR: graph,
+      TOKEN_OPTIMIZER_STATE_DIR: mkdtempSync(join(scratch, 'state-held-')),
+      // The suite switches the holdout off globally (setup-isolated-home.cjs).
+      TOKEN_OPTIMIZER_INJECTION_HOLDOUT: '1',
+      TOKEN_OPTIMIZER_INJECTION_HOLDOUT_FRACTION: '0.5',
+      TOKEN_OPTIMIZER_NUDGE_AFTER: '2',
+    };
+    const opening = hook(CLAUDE_POST, claudeEdit(session), env);
+    expect(opening.status).toBe(0);
+    expect(opening.stdout).not.toContain('Record what you work out');
+    expect(opening.saved.some((s) => s.recordingGuided === true && s.recordingGuidanceServed !== true)).toBe(true);
+    const second = hook(CLAUDE_POST, claudeEdit(session), env);
+    expect(second.status).toBe(0);
+    expect(second.stdout).toContain('edits this session');
   });
 
   test('is not marked delivered for a client that cannot carry context', () => {

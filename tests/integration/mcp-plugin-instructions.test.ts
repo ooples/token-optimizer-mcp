@@ -8,7 +8,13 @@
  */
 import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
 import { spawn, type ChildProcess } from 'node:child_process';
-import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -16,7 +22,8 @@ const SERVER = join(process.cwd(), 'dist', 'server', 'index.js');
 
 function initialize(
   env: NodeJS.ProcessEnv,
-  dir: string
+  dir: string,
+  clientName = 'plugin-test'
 ): Promise<{ child: ChildProcess; result: { instructions?: string } }> {
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [SERVER], {
@@ -59,7 +66,7 @@ function initialize(
         params: {
           protocolVersion: '2024-11-05',
           capabilities: {},
-          clientInfo: { name: 'plugin-test', version: '0' },
+          clientInfo: { name: clientName, version: '0' },
         },
       })}\n`
     );
@@ -75,9 +82,16 @@ const stop = (child: ChildProcess) =>
 
 describe('instructions by install kind', () => {
   const dir = mkdtempSync(join(tmpdir(), 'mcp-plugin-instr-'));
+  // Neither marker leaks in from the session running the suite: a run inside
+  // Claude Code carries CLAUDECODE=1, which would make every case Claude Code.
   const base = Object.fromEntries(
-    Object.entries(process.env).filter(([k]) => k !== 'CLAUDE_PLUGIN_ROOT')
+    Object.entries(process.env).filter(
+      ([k]) => k !== 'CLAUDE_PLUGIN_ROOT' && k !== 'CLAUDECODE'
+    )
   );
+  const codexHome = join(dir, 'codex-home');
+  let codexHooked: { child: ChildProcess; result: { instructions?: string } };
+  let codexBare: { child: ChildProcess; result: { instructions?: string } };
   let plugin: { child: ChildProcess; result: { instructions?: string } };
   let generic: { child: ChildProcess; result: { instructions?: string } };
 
@@ -89,12 +103,39 @@ describe('instructions by install kind', () => {
       dir
     );
     generic = await initialize(base, dir);
-  }, 60_000);
+    // Codex with nothing installed, then with the shipped hooks.json merged
+    // into its home, as the install guide says. Same server, same env: only
+    // the handshake's client name and the client's own wiring differ.
+    codexBare = await initialize(
+      { ...base, CODEX_HOME: codexHome },
+      dir,
+      'codex-mcp-client'
+    );
+    mkdirSync(codexHome, { recursive: true });
+    copyFileSync(
+      join(
+        process.cwd(),
+        'src',
+        'integrations',
+        'codex',
+        'hooks',
+        'hooks.json'
+      ),
+      join(codexHome, 'hooks.json')
+    );
+    codexHooked = await initialize(
+      { ...base, CODEX_HOME: codexHome },
+      dir,
+      'codex-mcp-client'
+    );
+  }, 90_000);
 
   afterAll(async () => {
     await Promise.all([
       plugin && stop(plugin.child),
       generic && stop(generic.child),
+      codexBare && stop(codexBare.child),
+      codexHooked && stop(codexHooked.child),
     ]);
     rmSync(dir, { recursive: true, force: true });
   });
@@ -123,5 +164,16 @@ describe('instructions by install kind', () => {
     expect(text).not.toContain('Do not load these tools with ToolSearch');
     expect(text).not.toContain('only for what they cannot do');
     expect(text).toContain('ALL_TOOLS');
+  });
+
+  it('a client with our hooks wired is told so at the handshake, whatever the client', () => {
+    const hooked = codexHooked.result.instructions ?? '';
+    expect(hooked).toContain("This install's hooks watch built-in file reads");
+    expect(hooked).not.toContain('mandatory routing policy');
+    expect(hooked).not.toContain('ToolSearch');
+    // The same client without them keeps the routing policy.
+    expect(codexBare.result.instructions ?? '').toContain(
+      'mandatory routing policy'
+    );
   });
 });

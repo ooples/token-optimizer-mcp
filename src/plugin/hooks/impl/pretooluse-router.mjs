@@ -447,7 +447,7 @@ try {
         // ONE ASK PER SESSION: not after the post-tool recording guidance
         // asked the same thing (adapter.mjs). Replaying THOL #565, three tasks
         // got this nudge at the ninth edit on top of that guidance.
-        const nudge = state.recordingGuided
+        const nudge = state.recordingGuidanceServed
           ? null
           : recordingNudge(dirFor(edited || payload.cwd || process.cwd()), {
               state,

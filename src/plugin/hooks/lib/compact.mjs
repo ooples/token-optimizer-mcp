@@ -155,14 +155,20 @@ const cutMarker = (bytes) =>
  * so it knows; the shell head-and-tail it replaces could not (rewrite.mjs).
  *
  * The marker is sized for the worst case before the head is cut, so the result
- * stays within `budget`. A budget too small to hold the marker keeps the old
- * silent cut rather than overflow the bound.
+ * stays within `budget`. A budget too small to hold the marker, or one where
+ * the marker would leave no room for the first line, keeps the old silent cut
+ * rather than overflow the bound or drop that line.
  */
 function headWithin(text, budget) {
   const bytes = Buffer.byteLength(text, 'utf8');
   if (bytes <= budget) return text;
   const room = budget - Buffer.byteLength(cutMarker(bytes), 'utf8');
-  if (room <= 0) return headLines(text, budget);
-  const head = headLines(text, room);
+  const unmarked = headLines(text, budget);
+  const head = room > 0 ? headLines(text, room) : '';
+  // A line is worth more than the word that something was cut: when the
+  // marker's bytes would push out the first fresh line (a new failure, say),
+  // keep the line and cut silently, as before.
+  if (!head && unmarked) return unmarked;
+  if (room <= 0) return unmarked;
   return head + cutMarker(bytes - Buffer.byteLength(head, 'utf8'));
 }
