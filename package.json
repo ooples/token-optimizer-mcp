@@ -248,7 +248,7 @@
     "eslint-plugin-n": "^18.5.0",
     "fast-check": "^4.10.2",
     "jest": "^30.5.2",
-    "npm": "^11.19.0",
+    "npm": "^12.2.2",
     "playwright": "^1.65.0",
     "prettier": "^3.10.1",
     "semantic-release": "^25.0.2",
