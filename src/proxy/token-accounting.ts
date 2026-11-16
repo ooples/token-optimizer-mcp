@@ -184,7 +184,9 @@ function workerBackend(): TokenizerBackend {
       // A worker that dies takes its outstanding jobs with it, and each of them
       // has a caller waiting. Settling them as failures is what keeps a dead
       // thread from turning into a stalled ledger.
-      started.on('error', (error) => fail(error.message));
+      started.on('error', (error) =>
+        fail(error instanceof Error ? error.message : String(error))
+      );
       started.on('exit', () => {
         if (waiting.size > 0) fail('worker exited');
         else worker = null;
