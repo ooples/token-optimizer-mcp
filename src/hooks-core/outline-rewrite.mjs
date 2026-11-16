@@ -102,7 +102,7 @@ export function outlineRead({ sessionId, filePath, offset, limit, state }) {
   // the session, as a ranged shell read does. A session about to rewrite the
   // whole file pays for an outline and then reads the file anyway
   // (task-settings.mjs, rewrite.outlineSubstitution).
-  if (!sessionSettings(state).outlineSubstitution) return null;
+  if (!sessionSettings(state, process.env, { sessionId }).outlineSubstitution) return null;
   if (missed && existsSync(missed)) return null;
   const found = substitutionFor(filePath, {
     turnsSoFar: turnsSoFar(state),

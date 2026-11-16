@@ -59,6 +59,7 @@ import {
   writeHookEvent,
 } from './lib/observability.mjs';
 import { resolveHook } from './lib/runtime-switch.mjs';
+import { learnedLocation, scheduleFold } from './lib/toolprune.mjs';
 
 /** Compaction and its SessionStart are back to back; anything older is stale. */
 const COMPACTION_ANCHOR_TTL_MS = 10 * 60 * 1000;
@@ -224,6 +225,26 @@ if (payload.session_id) {
   // the prompt hook said into the old one is due again (task-session.mjs).
   contextStarted(state);
   saveState(payload.session_id, state, scope);
+}
+// MEASURE-ONLY FOLD (toolprune.mjs `measureOnly`). Claude Code's SessionStart
+// is this file, not the adapter's, so the adapter's fold never ran for it and
+// task classification had no per-prompt costs to report (task-ledger.mjs).
+// This folds finished transcripts for their costs alone: no deny list, no
+// catalog probe, no injection-holdout outcome -- those stay with the adapter
+// until Claude Code adopts them. Detached; never delays the session.
+if (payload.session_id && payload.transcript_path) {
+  try {
+    const learned = learnedLocation(payload.cwd || process.env.CLAUDE_PROJECT_DIR || process.cwd());
+    scheduleFold({
+      dir: learned.dir,
+      root: learned.root,
+      transcriptPath: payload.transcript_path,
+      sessionId: payload.session_id,
+      measureOnly: true,
+    });
+  } catch {
+    // Telemetry never costs the session its start.
+  }
 }
 // ASSEMBLED IN CACHE ORDER, not in the order the blocks are discovered below.
 // This text sits near the FRONT of the prompt prefix, which a cache invalidates

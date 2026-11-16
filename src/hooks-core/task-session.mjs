@@ -11,7 +11,8 @@
 
 import { loadState, saveState } from './policy.mjs';
 import { TaskCategory, afterToolCall, classifyPrompt } from './task-class.mjs';
-import { OUTPUT_DISCIPLINE, settingsFor } from './task-settings.mjs';
+import { OUTPUT_DISCIPLINE, sessionSettings } from './task-settings.mjs';
+import { recordClassified, taskArm } from './task-ledger.mjs';
 
 /**
  * Classify a submitted prompt, store the category, and return the context to add.
@@ -25,8 +26,17 @@ import { OUTPUT_DISCIPLINE, settingsFor } from './task-settings.mjs';
  * @param {{deliver?: boolean}} options deliver: false classifies without adding text
  * @returns {{category: string, context: string}}
  */
-export function promptSubmitted({ sessionId, prompt, cwd, agent, deliver = true, env = process.env, now = Date.now() }) {
-  const { category } = classifyPrompt(prompt, { cwd });
+export function promptSubmitted({
+  sessionId,
+  prompt,
+  cwd,
+  agent,
+  client = null,
+  deliver = true,
+  env = process.env,
+  now = Date.now(),
+}) {
+  const { category, signals } = classifyPrompt(prompt, { cwd });
   const state = loadState(sessionId, agent);
   // A NEW GENERATION per prompt. Tool observations carry the generation they
   // loaded, and saveState never lets an older generation's correction or count
@@ -34,7 +44,10 @@ export function promptSubmitted({ sessionId, prompt, cwd, agent, deliver = true,
   // increasing even for two prompts in one millisecond.
   const gen = Math.max(now, (Number(state.taskClass?.gen) || 0) + 1);
   state.taskClass = { category, source: 'prompt', calls: 0, gen };
-  const settings = settingsFor(category, env);
+  // A held-out session is classified and recorded like any other, and runs the
+  // UNKNOWN row (task-ledger.mjs explains why).
+  const settings = sessionSettings(state, env, { sessionId });
+  recordClassified({ sessionId, gen, category, signals, client, arm: taskArm(sessionId, env) }, env);
   let context = '';
   // Said once per context: again after a compaction or resume rebuilt it.
   const servedAt = Number(state.disciplineServedAt) || 0;

@@ -60,6 +60,8 @@ import {
 } from './node-floor.mjs';
 import { SLOW_P90_MS, recentToolHookLatency } from './hook-latency.mjs';
 import { EVIDENCE, SETTING_ENV, explicitSetting, settingsTable } from './task-settings.mjs';
+import { taskReportFromLedger } from './task-report.mjs';
+import { holdoutSettings } from './injection-holdout.mjs';
 
 /**
  * Bytes as a person reads them.
@@ -2459,9 +2461,23 @@ export function probeTaskSettings(env = process.env) {
     if (value === undefined) ignored.push(`${name}=${raw}`);
     else forced.push(`${name}=${raw} turns ${setting} ${value ? 'on' : 'off'} for every task`);
   }
+  // WHETHER IT IS BEING MEASURED, and how much evidence there is so far: the
+  // full breakdown is get_optimization_report's (task-report.mjs).
+  const holdout = holdoutSettings(env);
+  let evidence = 'no classified prompts recorded yet';
+  try {
+    const { report } = taskReportFromLedger({ env });
+    if (report.prompts) evidence = `${report.prompts} prompt(s) classified, ${report.matched} costed`;
+  } catch {
+    // An unreadable ledger costs the clause, not the check.
+  }
   const detail = [
     differs.length ? `differs from defaults: ${differs.join('; ')}` : 'every task runs on the defaults',
     ...forced,
+    holdout.enabled
+      ? `${Math.round(holdout.fraction * 100)}% of sessions held out on the default row to measure it`
+      : 'holdout off, so no category effect can be measured',
+    evidence,
   ].join('; ');
   if (ignored.length)
     return [

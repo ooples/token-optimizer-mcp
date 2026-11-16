@@ -15,6 +15,7 @@
  */
 
 import { TaskCategory, isTaskCategory } from './task-class.mjs';
+import { ARM_HOLDOUT, taskArm } from './task-ledger.mjs';
 
 /**
  * The output-discipline block, exported so a benchmark arm can deliver it the
@@ -125,8 +126,13 @@ export function settingsFor(category, env = process.env) {
   return row;
 }
 
-/** The settings for a session, from the category its state carries. */
-export function sessionSettings(state, env = process.env) {
+/**
+ * The settings for a session, from the category its state carries -- unless
+ * the session is in the task holdout (task-ledger.mjs), which runs the UNKNOWN
+ * row so classification's effect can be measured against it.
+ */
+export function sessionSettings(state, env = process.env, { sessionId = null } = {}) {
+  if (sessionId && taskArm(sessionId, env) === ARM_HOLDOUT) return settingsFor(TaskCategory.UNKNOWN, env);
   return settingsFor(state?.taskClass?.category ?? TaskCategory.UNKNOWN, env);
 }
 

@@ -154,6 +154,7 @@ import { scheduleCodexFold, takeCodexNotice } from './codexprune.mjs';
 import { OUTPUT_DISCIPLINE, settingsFor } from './task-settings.mjs';
 import { TaskCategory } from './task-class.mjs';
 import { contextStarted, promptSubmitted, toolCallObserved } from './task-session.mjs';
+import { recordSettled } from './task-ledger.mjs';
 import { onToolFailure, recordTurnEnd } from './loopguard.mjs';
 
 /**
@@ -1492,6 +1493,7 @@ async function runHook(clientName, event, invocation) {
       prompt,
       cwd,
       agent: scope,
+      client: clientName,
       deliver: client.promptContext === true,
     });
     // Cline reads a reply on every prompt hook; the others take silence as "go on".
@@ -1675,6 +1677,9 @@ async function runHook(clientName, event, invocation) {
     const transcriptPath = raw.transcript_path ?? raw.transcriptPath ?? null;
     const agentScope = stateScope(raw, transcriptPath);
     const state = loadState(sessionId, agentScope);
+    // The category this turn settled on (task-ledger.mjs). Read from saved
+    // state, after the locked merge, so a correction it rejected never counts.
+    if (sessionId !== 'default') recordSettled({ sessionId, taskClass: state.taskClass });
     gradeObservedTools(state, event, raw, raw);
     const toolEvidence = optimizerToolsForHook(raw, state);
     rememberOptimizerTools(state, toolEvidence);
