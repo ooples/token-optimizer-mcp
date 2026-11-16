@@ -34,6 +34,7 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { parsePackReport } from '../../src/scripts/npm-pack-report.mjs';
 import {
   CLIENT_TARGETS,
   PLUGIN_TARGETS,
@@ -91,14 +92,16 @@ describe('what is composed equals what the repo vendors', () => {
 });
 
 describe('the tarball carries the core once, the tree carries every copy', () => {
-  const packed: string[] = JSON.parse(
+  // parsePackReport, not [0]: npm 12 keys the report by package name.
+  const packed: string[] = parsePackReport(
     execFileSync('npm', ['pack', '--dry-run', '--json'], {
       cwd: ROOT,
       encoding: 'utf8',
       maxBuffer: 200 * 1024 * 1024,
       shell: true,
-    })
-  )[0].files.map((f: { path: string }) => posix(f.path));
+    }),
+    JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')).name
+  ).files.map((f: { path: string }) => posix(f.path));
 
   it.each(PLUGIN_TARGETS)('ships the whole core under %s', (target) => {
     // EVERY name, not a count and not a spot check: a `files` pattern that

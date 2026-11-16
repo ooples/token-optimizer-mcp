@@ -209,7 +209,7 @@ try {
   try {
     execFileSync(
       process.execPath,
-      [join(installed, 'scripts', 'install-cli.mjs')],
+      [join(installed, manifest.bin['token-optimizer-install'])],
       {
         encoding: 'utf8',
         env,
@@ -265,7 +265,7 @@ try {
   try {
     const out = execFileSync(
       process.execPath,
-      [join(installed, 'scripts', 'doctor.mjs')],
+      [join(installed, manifest.bin['token-optimizer-doctor'])],
       { encoding: 'utf8', env, stdio: 'pipe', timeout: 240_000 }
     );
     check(

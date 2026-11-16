@@ -36,18 +36,21 @@ import { tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
 import { coreFiles } from '../../src/scripts/lib/hook-core.mjs';
 import { CLIENT_KEYS, specFor } from '../../src/scripts/install-client-hooks.mjs';
+import { parsePackReport } from '../../src/scripts/npm-pack-report.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const posix = (p: string) => p.replace(/\\/g, '/');
 
-const packed: string[] = JSON.parse(
+// parsePackReport, not [0]: npm 12 keys the report by package name.
+const packed: string[] = parsePackReport(
   execFileSync('npm', ['pack', '--dry-run', '--json'], {
     cwd: ROOT,
     encoding: 'utf8',
     maxBuffer: 200 * 1024 * 1024,
     shell: true,
-  })
-)[0].files.map((f: { path: string }) => posix(f.path));
+  }),
+  JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')).name
+).files.map((f: { path: string }) => posix(f.path));
 
 /**
  * A tree holding exactly the files the tarball ships, and nothing else.
