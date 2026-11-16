@@ -274,6 +274,12 @@ describe('saved by parallel hooks (saveState)', () => {
     // A plain clear (no compaction) leaves the anchors alone.
     clearSeen(session, null);
     expect(loadState(session).compactionAnchors).toEqual({ paths: files, at: 5_000 });
+    // A later compaction with nothing in view still outranks the old set, even
+    // when a hook that loaded the old set saves afterwards.
+    const holdsOld = loadState(session);
+    expect(clearSeen(session, null, { anchors: true, now: 9_000 })).toBe(true);
+    saveState(session, holdsOld);
+    expect(loadState(session).compactionAnchors).toEqual({ paths: [], at: 9_000 });
   });
 
   test("a tally never undoes a concurrent correction in the same task", () => {

@@ -481,11 +481,11 @@ function changedHarvest(state) {
 /** A stored task category, or null when absent or malformed. */
 const MAX_COMPACTION_ANCHORS = 64;
 
-/** `{paths, at}` as clearSeen writes it, or null. */
+/** `{paths, at}` as clearSeen writes it -- `paths` may be empty -- or null. */
 function validAnchors(value) {
   if (!value || typeof value !== 'object' || !Array.isArray(value.paths)) return null;
+  if (!Number.isFinite(value.at) || value.at <= 0) return null;
   const paths = value.paths.filter((p) => typeof p === 'string').slice(-MAX_COMPACTION_ANCHORS);
-  if (!paths.length || !Number.isFinite(value.at) || value.at <= 0) return null;
   return { paths, at: value.at };
 }
 
@@ -1004,7 +1004,9 @@ export function clearSeen(sessionId, agent, { anchors = false, now = Date.now() 
     // between them: `seen` is empty by then, and restoration starts from these.
     if (anchors) {
       const paths = Object.keys(current.seen || {}).slice(-MAX_COMPACTION_ANCHORS);
-      cleared.compactionAnchors = paths.length ? { paths, at: now } : null;
+      // Timestamped even when empty: a snapshot loaded before this clear may
+      // still hold an older set, and only a newer record outranks it in the merge.
+      cleared.compactionAnchors = { paths, at: now };
     }
 
     writeAtomically(statePath(sessionId, agent), JSON.stringify(cleared));
