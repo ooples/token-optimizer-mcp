@@ -9,7 +9,7 @@
 # second image would find every run "already done" and measure nothing.
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-RIG="$(cd "$HERE/../.." && pwd)"
+RIG="$(cd "$HERE/../.." && pwd)"  # bench/thol
 STOP_USD=70
 
 export ARM_ORDER_FILE="$HERE/arm-order.json"
@@ -47,7 +47,7 @@ for rep in 1 2 3 4 5; do
   if [ $((rep % 2)) -eq 1 ]; then order="pr610 master"; else order="master pr610"; fi
   for image in $order; do
     echo ">> rep $rep: $image (spent so far \$$(spent))"
-    IMAGE="thol-rig:$image" RESULTS_VOLUME="$(volume "$image")" REPS="$rep" bash "$RIG/thol/run-campaign.sh"
+    IMAGE="thol-rig:$image" RESULTS_VOLUME="$(volume "$image")" REPS="$rep" bash "$RIG/run-campaign.sh"
     total=$(spent)
     echo ">> after rep $rep $image: \$$total"
     if python -c "import sys; sys.exit(0 if $total > $STOP_USD else 1)"; then
