@@ -5,7 +5,20 @@ token-optimizer-mcp 8f7e6c1f. 30 runs, all `ok`, all successful. Spend $5.36 (bu
 stop at $7). The first launch was stopped by host memory pressure before any run finished; the
 relaunch resumed into the same volume and the same arm order.
 
-## Decision: default the block off
+## Decision: the rule failed on these three tasks; the default is not changed
+
+**Scope correction (same day).** The pre-registered rule said default the block off if it failed
+here, and it failed every row. That rule was wrong in scope. These three tasks were chosen
+because the old block had lost on them, so they cannot speak for the product. The ledger
+attribution data (`bench/ledger/attribution.jsonl`, same hooks with and without the block, old
+wording) has it winning on two other tasks: debug-pipeline-py $0.0375 against $0.0652 (0.58x)
+and explain-failure $0.0771 against $0.0885 (0.87x). The default-off change was made and then
+reverted in token-optimizer-mcp #608. The default waits for an A/B covering both task sets and
+both wordings.
+
+The original decision section follows, unchanged.
+
+### Original decision: default the block off
 
 | Task | Rewrite (median $) | No block (median $) | Ratio | Rule | Met |
 |---|---|---|---|---|---|
@@ -14,8 +27,8 @@ relaunch resumed into the same volume and the same arm order.
 | seo-audit | 0.317 | 0.258 | 1.23x | <= 1.00x | no |
 
 The rule fixed before the runs says ship only if every row is met; none is. So
-`TOKEN_OPTIMIZER_OUTPUT_DISCIPLINE` becomes opt-in (unset means off). Shipped in
-token-optimizer-mcp #608.
+`TOKEN_OPTIMIZER_OUTPUT_DISCIPLINE` becomes opt-in (unset means off). (Withdrawn; see
+the scope correction above.)
 
 For reference, the control medians from `594-discipline-ab` were 0.093, 0.141 and 0.255.
 
@@ -39,9 +52,9 @@ artifact.
 1. **The rewrite did not stop the steering away from `Read`.** Its new line ("read files and run
    commands as usual, and prefer fewer tool calls over smaller ones") was in every run, yet the
    rewrite arm used `Read` in 0 of 10 log-needle and seo-audit runs against 7 of 10 without it.
-   It batched `cat` instead. Disposition: fixed by defaulting the block off.
+   It batched `cat` instead. Disposition: open; the wording still steers reads.
 2. **The block raised the very column it targets.** seo-audit output tokens were 8682 against
-   6868. Fewer turns (7 against 15) did not pay for it. Disposition: same fix.
+   6868. Fewer turns (7 against 15) did not pay for it. Disposition: open.
 3. **A whole-log `cat` only happens with the block.** Every rewrite log-needle run printed the
-   548.8 KB log once, which Claude Code persisted; no no-block run did. Disposition: goes away
-   with the block; nothing in the optimizer to change.
+   548.8 KB log once, which Claude Code persisted; no no-block run did. Disposition: open; same
+   cause as finding 1.
