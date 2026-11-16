@@ -22,17 +22,25 @@ import { OUTPUT_DISCIPLINE, settingsFor } from './task-settings.mjs';
  * SessionStart rebuilt the context (compaction, resume) -- because text already
  * in context cannot be withdrawn and repeating it only re-bills it.
  *
+ * @param {{deliver?: boolean}} options deliver: false classifies without adding text
  * @returns {{category: string, context: string}}
  */
-export function promptSubmitted({ sessionId, prompt, cwd, agent, env = process.env, now = Date.now() }) {
+export function promptSubmitted({ sessionId, prompt, cwd, agent, deliver = true, env = process.env, now = Date.now() }) {
   const { category } = classifyPrompt(prompt, { cwd });
   const state = loadState(sessionId, agent);
-  state.taskClass = { category, source: 'prompt', calls: 0, at: now };
+  // A NEW GENERATION per prompt. Tool observations carry the generation they
+  // loaded, and saveState never lets an older generation's correction or count
+  // overwrite a newer prompt's decision, however late it is saved. Strictly
+  // increasing even for two prompts in one millisecond.
+  const gen = Math.max(now, (Number(state.taskClass?.gen) || 0) + 1);
+  state.taskClass = { category, source: 'prompt', calls: 0, gen };
   const settings = settingsFor(category, env);
   let context = '';
   // Said once per context: again after a compaction or resume rebuilt it.
   const servedAt = Number(state.disciplineServedAt) || 0;
-  if (settings.outputDiscipline && (!servedAt || servedAt < (Number(state.contextStartedAt) || 0))) {
+  // `deliver` is false for a client whose prompt hook classifies but cannot add
+  // text: SessionStart said the block there, so nothing is served or recorded.
+  if (deliver && settings.outputDiscipline && (!servedAt || servedAt < (Number(state.contextStartedAt) || 0))) {
     context = OUTPUT_DISCIPLINE;
     state.disciplineServedAt = now;
   }
@@ -44,7 +52,7 @@ export function promptSubmitted({ sessionId, prompt, cwd, agent, env = process.e
  * Let one finished tool call correct the session's category, in place.
  * The caller saves the state it already holds; this neither loads nor saves.
  */
-export function toolCallObserved(state, payload, { cwd, count = true, now = Date.now() } = {}) {
+export function toolCallObserved(state, payload, { cwd, count = true } = {}) {
   if (!state) return;
   const before = state.taskClass;
   const next = afterToolCall(before, payload, {
@@ -52,10 +60,9 @@ export function toolCallObserved(state, payload, { cwd, count = true, now = Date
     readPaths: Object.keys(state.seen || {}),
   }, { count });
   if (next === before) return;
-  // A correction is a newer decision; a mere count keeps the decision's time,
-  // so a racing prompt classification is not overwritten by a tally.
-  const moved = !before || next.category !== before.category;
-  state.taskClass = { ...next, at: moved ? now : before?.at || now };
+  // Same generation as what was loaded: saveState merges this observation into
+  // that prompt's task, and drops it if a newer prompt has been saved since.
+  state.taskClass = { ...next, gen: Number(before?.gen) || 0 };
 }
 
 /** SessionStart: the context was (re)built, so prompt-time text is due again. */

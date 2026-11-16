@@ -76,9 +76,6 @@ export function turnsSoFar(state) {
  */
 export function outlineRead({ sessionId, filePath, offset, limit, state }) {
   if (!filePath) return null;
-  // PER-TASK. A session about to rewrite the whole file pays for an outline and
-  // then reads the file anyway (task-settings.mjs, rewrite.outlineSubstitution).
-  if (!sessionSettings(state).outlineSubstitution) return null;
   // KEYED ON THE CANONICAL PATH, as outlineShell keys it. Read hands over
   // `C:\x\a.ts` and the shell side canonicalises to `C:/x/a.ts`, so on Windows
   // the record this module calls "shared" between a cat and a Read never was,
@@ -102,6 +99,12 @@ export function outlineRead({ sessionId, filePath, offset, limit, state }) {
     }
     return null;
   }
+  // PER-TASK, and below the paged-read record on purpose: a rewrite session that
+  // pages through a file it was outlined earlier must still end outlining for
+  // the session, as a ranged shell read does. A session about to rewrite the
+  // whole file pays for an outline and then reads the file anyway
+  // (task-settings.mjs, rewrite.outlineSubstitution).
+  if (!sessionSettings(state).outlineSubstitution) return null;
   if (missed && existsSync(missed)) return null;
   const found = substitutionFor(filePath, {
     turnsSoFar: turnsSoFar(state),

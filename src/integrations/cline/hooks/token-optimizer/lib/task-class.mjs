@@ -224,13 +224,21 @@ export function afterToolCall(current, call, context = {}, { count = true } = {}
   const base = current && isTaskCategory(current.category)
     ? current
     : { category: TaskCategory.UNKNOWN, source: 'none', calls: 0 };
-  // Settled once the window has passed: later calls neither count nor move it.
-  if ((Number(base.calls) || 0) >= RECLASSIFY_WINDOW) return base;
+  const before = Number(base.calls) || 0;
   // A call is counted once, where it starts; its result is judged again
   // without counting, so a pre-tool and a post-tool hook do not count it twice.
-  const calls = (Number(base.calls) || 0) + (count ? 1 : 0);
+  //
+  // THE COUNT RUNS ONE PAST THE WINDOW. Stopping it at the window made "the
+  // sixth call has started" and "a seventh has" the same number, so the post-
+  // tool judgement of the sixth call's result -- a red test run -- was refused
+  // as if it came after the window. WINDOW + 1 is "closed": the sixth result
+  // is judged at 6, and nothing at 7 counts or moves.
+  if (before > RECLASSIFY_WINDOW || (count && before >= RECLASSIFY_WINDOW)) {
+    return count && before === RECLASSIFY_WINDOW ? { ...base, calls: before + 1 } : base;
+  }
+  const calls = before + (count ? 1 : 0);
   const seen = categoryFromToolCall(call, context);
   if (seen && seen !== base.category && (OVERRULES.has(seen) || base.category === TaskCategory.UNKNOWN))
     return { category: seen, source: 'tools', calls };
-  return calls === base.calls ? base : { ...base, calls };
+  return calls === before ? base : { ...base, calls };
 }

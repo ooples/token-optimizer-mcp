@@ -133,7 +133,10 @@ So each session gets a task category, and each category has its own defaults
   category only differs where a measurement says so, and the table names it.
 - **The output-discipline block comes with the prompt** on clients whose prompt
   hook can add context: Claude Code, Codex, Gemini CLI (`BeforeAgent`), Qwen
-  Code, Cline (4.1.20 or later) and Copilot CLI (1.0.79 or later). Cursor,
-  OpenCode, Kilo and Windsurf get it at session start with the `unknown`
-  setting; their tool-call settings still follow the task.
+  Code and Cline (4.1.20 or later). Copilot CLI, Cursor, OpenCode, Kilo and
+  Windsurf get it at session start with the `unknown` setting; their tool-call
+  settings still follow the task. Copilot's prompt hook still classifies, but
+  adds no text: its hooks reference says a config-file `userPromptSubmitted`
+  hook's output is dropped, while its changelog says the context arrives since
+  1.0.65, and that has not been confirmed on a live CLI.
 - An explicit switch in the table above wins over the category.

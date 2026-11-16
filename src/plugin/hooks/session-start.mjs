@@ -118,7 +118,11 @@ async function restoration(parsed) {
   // against elsewhere.
   if (parsed.source !== 'compact') return null;
 
-  const state = loadState(parsed.session_id);
+  // THE ROUTER'S SCOPE. It records `seen` under the transcript path (see
+  // pretooluse-router.mjs, agentScope), and every real SessionStart payload
+  // carries one, so an unscoped read here found an empty state and the
+  // restoration never fired outside the tests, whose payloads had no path.
+  const state = loadState(parsed.session_id, parsed.transcript_path || null);
   const seen = Object.keys(state.seen || {});
   if (!seen.length) return null;
 
@@ -203,12 +207,15 @@ else invocation.noteInput(input.status, input.bytes);
 const features = featuresForArm();
 const toolEvidence = optimizerToolEvidence(payload);
 if (payload.session_id) {
-  const state = loadState(payload.session_id);
+  // Scoped as the router and the prompt hook scope it, or the marker below and
+  // the tool evidence land in a file neither of them reads.
+  const scope = payload.transcript_path || null;
+  const state = loadState(payload.session_id, scope);
   if (toolEvidence.proven) rememberOptimizerTools(state, toolEvidence);
   // Startup, resume, clear and compact all rebuild the context, so the block
   // the prompt hook said into the old one is due again (task-session.mjs).
   contextStarted(state);
-  saveState(payload.session_id, state);
+  saveState(payload.session_id, state, scope);
 }
 // ASSEMBLED IN CACHE ORDER, not in the order the blocks are discovered below.
 // This text sits near the FRONT of the prompt prefix, which a cache invalidates

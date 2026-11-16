@@ -15,7 +15,7 @@
  */
 import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
 import { spawnSync } from 'child_process';
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'fs';
+import { mkdtempSync, rmSync, writeFileSync, mkdirSync, readdirSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import {
@@ -33,6 +33,7 @@ const PRECOMPACT = join(
   'hooks',
   'precompact-optimize.mjs'
 );
+const ROUTER = join(process.cwd(), 'src', 'plugin', 'hooks', 'pretooluse-router.mjs');
 const SESSION_START = join(
   process.cwd(),
   'src',
@@ -86,8 +87,10 @@ afterEach(() => {
   }
   // Only this run's own state file -- the directory is shared with real
   // sessions and must not be removed wholesale.
+  // ...including the transcript-scoped ones, `${session}-<hash>.json`.
   try {
-    rmSync(join(stateRoot, `${session}.json`), { force: true });
+    for (const f of readdirSync(stateRoot))
+      if (f.startsWith(session)) rmSync(join(stateRoot, f), { force: true });
   } catch {
     /* already gone */
   }
@@ -228,6 +231,48 @@ describe('SessionStart spends them', () => {
     const ctx =
       JSON.parse(out.stdout || '{}')?.hookSpecificOutput?.additionalContext ||
       '';
+    expect(ctx).toContain('Restored after compaction');
+    expect(ctx).toContain('b.ts owns the retry budget');
+  }, 90_000);
+
+  it('restores in a real session, whose every payload carries a transcript path', () => {
+    // The router records `seen` under the transcript path. PreCompact and
+    // SessionStart used to read the unscoped file, which a real session never
+    // writes, so the restoration fired only in tests that sent no path.
+    const a = join(project, 'a.ts');
+    const b = join(project, 'b.ts');
+    const transcript_path = join(project, 'transcript.jsonl');
+    writeFileSync(a, 'export const a = 1;\n');
+    writeFileSync(b, 'export const b = 2;\n');
+    writeFileSync(transcript_path, '');
+    const bNode = putNode(dir, { kind: 'file', key: b, hash: 'h' });
+    putNodeWithEdges(
+      dir,
+      { kind: 'finding', key: 'about-b', claim: 'b.ts owns the retry budget.', confidence: 0.95 },
+      [{ edge: 'derived_from', to: bNode }]
+    );
+    const read = (file) =>
+      run(ROUTER, {
+        session_id: session,
+        cwd: project,
+        transcript_path,
+        hook_event_name: 'PreToolUse',
+        tool_name: 'Read',
+        tool_input: { file_path: file },
+      });
+    read(a);
+    read(b);
+    run(PRECOMPACT, { session_id: session, cwd: project, transcript_path });
+    // PreCompact found what the router recorded, related the two files...
+    expect(load(dir).edges.filter((e) => e.edge === 'related').length).toBeGreaterThan(0);
+    read(a); // ...and cleared it, so after the compaction only `a` is in view
+    const out = run(SESSION_START, {
+      session_id: session,
+      cwd: project,
+      transcript_path,
+      source: 'compact',
+    });
+    const ctx = JSON.parse(out.stdout || '{}')?.hookSpecificOutput?.additionalContext || '';
     expect(ctx).toContain('Restored after compaction');
     expect(ctx).toContain('b.ts owns the retry budget');
   }, 90_000);

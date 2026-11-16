@@ -88,8 +88,8 @@ export const EVIDENCE = Object.freeze({
 const ON = new Set(['1', 'on', 'true', 'yes']);
 const OFF = new Set(['0', 'off', 'false', 'no']);
 
-/** true / false for an explicit switch, undefined when nobody set it. */
-function explicit(raw) {
+/** true / false for an explicit switch, undefined when unset or not a recognised value. */
+export function explicitSetting(raw) {
   const value = String(raw ?? '').trim().toLowerCase();
   if (ON.has(value)) return true;
   if (OFF.has(value)) return false;
@@ -117,7 +117,7 @@ export function tableRow(category) {
 export function settingsFor(category, env = process.env) {
   const row = tableRow(category);
   for (const [setting, name] of Object.entries(SETTING_ENV)) {
-    const forced = explicit(env[name]);
+    const forced = explicitSetting(env[name]);
     if (forced !== undefined) row[setting] = forced;
   }
   return row;

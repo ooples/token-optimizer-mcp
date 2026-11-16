@@ -61,7 +61,7 @@ import {
   nodeUnsupportedReason,
 } from './node-floor.mjs';
 import { SLOW_P90_MS, recentToolHookLatency } from './hook-latency.mjs';
-import { EVIDENCE, SETTING_ENV, settingsTable } from './task-settings.mjs';
+import { EVIDENCE, SETTING_ENV, explicitSetting, settingsTable } from './task-settings.mjs';
 
 /**
  * Bytes as a person reads them.
@@ -2436,16 +2436,9 @@ export async function diagnose({
 }
 
 /**
- * The effective mode, and where an opt-out comes from (#395).
- *
- * TOKEN_OPTIMIZER_MODE=off is a deliberate, healthy configuration that saves nothing. Reporting it
- * as one more PASS let the override sit unnoticed in ~/.claude/settings.json behind a clean sheet,
- * so it is a warning that names the file (or the process environment) and the key to remove.
- */
-/**
  * The per-task settings table (task-settings.mjs): which categories differ
  * from the defaults, why, and whether an env switch overrides them all.
- * Informational -- a table is never a failure -- but it is the one place a
+ * Never a failure: a switch the hooks ignore is a warning. It is the one place a
  * person can see that a rewrite session will not be outlined, and the
  * measurement that decided it.
  */
@@ -2457,20 +2450,39 @@ export function probeTaskSettings(env = process.env) {
     for (const [setting, value] of Object.entries(row))
       if (value !== base[setting])
         differs.push(`${category}.${setting}=${value} (${(EVIDENCE[`${category}.${setting}`] || 'no evidence recorded').split(':')[0]})`);
-  const forced = Object.entries(SETTING_ENV)
-    .filter(([, name]) => String(env[name] ?? '').trim() !== '')
-    .map(([setting, name]) => `${name}=${env[name]} fixes ${setting} for every task`);
-  return [
-    ok(
-      'per-task settings',
-      [
-        differs.length ? `differs from defaults: ${differs.join('; ')}` : 'every task runs on the defaults',
-        ...forced,
-      ].join('; ')
-    ),
-  ];
+  // Judged by the parser settingsFor uses, so the doctor never reports a value
+  // the hooks ignore as one that fixes a setting.
+  const forced = [];
+  const ignored = [];
+  for (const [setting, name] of Object.entries(SETTING_ENV)) {
+    const raw = String(env[name] ?? '').trim();
+    if (raw === '') continue;
+    const value = explicitSetting(raw);
+    if (value === undefined) ignored.push(`${name}=${raw}`);
+    else forced.push(`${name}=${raw} turns ${setting} ${value ? 'on' : 'off'} for every task`);
+  }
+  const detail = [
+    differs.length ? `differs from defaults: ${differs.join('; ')}` : 'every task runs on the defaults',
+    ...forced,
+  ].join('; ');
+  if (ignored.length)
+    return [
+      warn(
+        'per-task settings',
+        `${detail}; ignored (not on/off): ${ignored.join(', ')}`,
+        'Set each to one of on, off, 1, 0, true, false, yes, no -- or remove it to use the per-task table.'
+      ),
+    ];
+  return [ok('per-task settings', detail)];
 }
 
+/**
+ * The effective mode, and where an opt-out comes from (#395).
+ *
+ * TOKEN_OPTIMIZER_MODE=off is a deliberate, healthy configuration that saves nothing. Reporting it
+ * as one more PASS let the override sit unnoticed in ~/.claude/settings.json behind a clean sheet,
+ * so it is a warning that names the file (or the process environment) and the key to remove.
+ */
 export function probeMode({ settingsPath } = {}) {
   const effective = mode();
   if (effective !== 'off') {

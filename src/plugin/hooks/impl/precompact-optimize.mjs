@@ -132,7 +132,9 @@ async function main() {
   // no `related` edges and therefore no restoration, forever. That is the same
   // shape as the defect this whole change is fixing: a feature present, correct,
   // and unreachable for a reason nobody would think to look for.
-  const state = loadState(payload.session_id);
+  // Under the router's scope (the transcript path), which is where `seen` is
+  // recorded and where clearSeen below empties it.
+  const state = loadState(payload.session_id, payload.transcript_path || null);
   const seen = Object.keys(state.seen || {});
   const seenCount = seen.length;
   if (seenCount === 0) {

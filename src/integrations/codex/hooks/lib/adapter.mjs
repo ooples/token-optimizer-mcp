@@ -1474,7 +1474,13 @@ async function runHook(clientName, event, invocation) {
       raw.working_directory ||
       process.cwd();
     const scope = stateScope(raw, raw.transcript_path ?? raw.transcriptPath ?? null);
-    const { context } = promptSubmitted({ sessionId, prompt, cwd, agent: scope });
+    const { context } = promptSubmitted({
+      sessionId,
+      prompt,
+      cwd,
+      agent: scope,
+      deliver: client.promptContext === true,
+    });
     // Cline reads a reply on every prompt hook; the others take silence as "go on".
     const output =
       context || client.contextStyle === 'cline'

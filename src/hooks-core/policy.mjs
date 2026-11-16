@@ -458,8 +458,12 @@ function emptyState() {
  */
 const loadedHarvest = new WeakMap();
 
+/** The task class each loaded snapshot started from; see mergedTaskClass. */
+const loadedTaskClass = new WeakMap();
+
 function tracked(state) {
   loadedCalls.set(state, Number(state.toolCalls) || 0);
+  loadedTaskClass.set(state, validTaskClass(state.taskClass));
   loadedHarvest.set(state, state.pendingHarvest ?? null);
   return state;
 }
@@ -477,18 +481,45 @@ function validTaskClass(value) {
     category: value.category,
     source: typeof value.source === 'string' ? value.source : 'none',
     calls: Number.isFinite(value.calls) && value.calls > 0 ? value.calls : 0,
-    at: Number.isFinite(value.at) && value.at > 0 ? value.at : 0,
+    gen: Number.isFinite(value.gen) && value.gen > 0 ? value.gen : 0,
   };
 }
 
-function newerTaskClass(current, mine) {
+/**
+ * The task class after one caller's save, under the lock.
+ *
+ * GENERATIONS FIRST. Each prompt starts one (task-session.mjs). A save from an
+ * older generation -- a post-tool hook that loaded before the next prompt
+ * landed -- loses outright, so a late correction for the previous task cannot
+ * become the new task's category.
+ *
+ * WITHIN A GENERATION, COUNTS ARE ADDED, NOT MAXED, as toolCalls is: six
+ * parallel hooks that each loaded calls=0 and saved calls=1 counted six calls,
+ * not one. The category is this caller's only if this caller moved it;
+ * otherwise whatever is stored stands, so a mere tally never undoes a
+ * concurrent correction. A snapshot this module never handed out (a hand-built
+ * state) has nothing to add to and simply carries its own values.
+ */
+function mergedTaskClass(current, mine, loaded) {
   const a = validTaskClass(current);
   const b = validTaskClass(mine);
-  if (!a) return b;
   if (!b) return a;
-  // Same decision (same time): the higher count is the later save.
-  if (b.at === a.at) return b.calls > a.calls ? b : a;
-  return b.at > a.at ? b : a;
+  if (!a || b.gen > a.gen) return b;
+  if (b.gen < a.gen) return a;
+  // `loaded` is undefined for an untracked (hand-built) state, and null for a
+  // loaded state that had no task class yet -- a client with no prompt hook,
+  // whose first tool calls start from the UNKNOWN row with nothing counted.
+  const base =
+    loaded === undefined
+      ? null
+      : (validTaskClass(loaded) ?? { category: 'unknown', source: 'none', calls: 0, gen: 0 });
+  const sameGen = base !== null && base.gen === b.gen;
+  const added = sameGen ? Math.max(0, b.calls - base.calls) : 0;
+  const moved = !sameGen || b.category !== base.category;
+  return {
+    ...(moved ? b : a),
+    calls: Math.max(a.calls + added, b.calls),
+  };
 }
 
 export function loadState(sessionId, agent) {
@@ -789,7 +820,7 @@ export function saveState(sessionId, state, agent) {
       batchNudged: Boolean(current.batchNudged || state.batchNudged),
       // NEWEST WINS. A prompt-submit classification and a tool-call correction
       // can race; the later decision is the one that saw more evidence.
-      taskClass: newerTaskClass(current.taskClass, state.taskClass),
+      taskClass: mergedTaskClass(current.taskClass, state.taskClass, loadedTaskClass.get(state)),
       // POINTS IN TIME, so the latest wins. A boolean could never be reset by a
       // compaction: this merge would OR the old "said" back in.
       disciplineServedAt: Math.max(Number(current.disciplineServedAt) || 0, Number(state.disciplineServedAt) || 0),
@@ -854,6 +885,10 @@ export function saveState(sessionId, state, agent) {
     // nothing. After the rename, because a throw above leaves the delta owed.
     if (loadedCalls.has(state)) {
       loadedCalls.set(state, Number(state.toolCalls) || 0);
+    }
+    // Likewise the task class: what this caller counted or moved is now on disk.
+    if (loadedTaskClass.has(state)) {
+      loadedTaskClass.set(state, validTaskClass(state.taskClass));
     }
   } catch {
     // State is an optimization, not a requirement. Losing it degrades re-read
