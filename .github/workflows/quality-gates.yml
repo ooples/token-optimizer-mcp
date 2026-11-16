@@ -202,7 +202,7 @@ jobs:
         # Fork PRs get a read-only token; skip the comment and never fail the job over it.
         if: github.event_name == 'pull_request' && steps.bundle_size.outputs.baseline_exists == 'true' && github.event.pull_request.head.repo.full_name == github.repository
         continue-on-error: true
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const currentSize = '${{ steps.bundle_size.outputs.current_size_mb }}';
@@ -313,7 +313,7 @@ jobs:
         # Fork PRs get a read-only token; skip the comment and never fail the job over it.
         if: github.event_name == 'pull_request' && (steps.audit.outputs.high_vulnerabilities != '0' || steps.audit.outputs.critical_vulnerabilities != '0') && github.event.pull_request.head.repo.full_name == github.repository
         continue-on-error: true
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const high = '${{ steps.audit.outputs.high_vulnerabilities }}';
@@ -415,7 +415,7 @@ jobs:
         # Fork PRs get a read-only token; skip the comment and never fail the job over it.
         if: github.event_name == 'pull_request' && steps.license_check.outputs.has_copyleft == 'true' && github.event.pull_request.head.repo.full_name == github.repository
         continue-on-error: true
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const body = `## ⚖️ License Compliance Warning
