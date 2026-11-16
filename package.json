@@ -223,7 +223,7 @@
     "@semantic-release/release-notes-generator": "^14.1.1",
     "@stryker-mutator/core": "^10.1.1",
     "@stryker-mutator/jest-runner": "^10.1.1",
-    "@types/better-sqlite3": "^7.6.13",
+    "@types/better-sqlite3": "^9.6.0",
     "@types/body-parser": "^1.19.6",
     "@types/conventional-commits-parser": "^5.0.2",
     "@types/cors": "^2.8.19",
