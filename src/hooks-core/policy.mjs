@@ -400,6 +400,9 @@ function emptyState() {
     // The recording guidance has been delivered (#357, M5); see
     // recordingGuidance in adapter.mjs.
     recordingGuided: false,
+    // ...and the injection holdout actually served it, so the model was asked.
+    // recordingGuided alone is also set when the holdout withheld it.
+    recordingGuidanceServed: false,
     // The session was told it is above its compaction window (context-window.mjs).
     overWindowNoted: false,
     // Facts the search advisory has already delivered this session. Without
@@ -525,6 +528,7 @@ export function loadState(sessionId, agent) {
         : 0,
       recordingNudged: parsed.recordingNudged === true,
       recordingGuided: parsed.recordingGuided === true,
+      recordingGuidanceServed: parsed.recordingGuidanceServed === true,
       overWindowNoted: parsed.overWindowNoted === true,
       // Every hook call is a new process, so a field left out of this list is
       // forgotten between calls: that is how "said once" kept being said on
@@ -713,6 +717,9 @@ export function saveState(sessionId, state, agent) {
       // Same rule: guidance said once stays said.
       recordingGuided: Boolean(
         current.recordingGuided || state.recordingGuided
+      ),
+      recordingGuidanceServed: Boolean(
+        current.recordingGuidanceServed || state.recordingGuidanceServed
       ),
       overWindowNoted: Boolean(
         current.overWindowNoted || state.overWindowNoted

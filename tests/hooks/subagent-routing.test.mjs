@@ -279,7 +279,7 @@ describe('advisories are said once', () => {
     // and loadState. It did not: routingAdvised was missing from both, and an
     // in-process test like the two above passed while the advisory repeated on
     // every real call. Two separate processes are the only honest check.
-    const session = `twice-${randomUUID()}`;
+    let session = `twice-${randomUUID()}`;
     const stateDir = join(workspace, 'state');
     const logDir = join(workspace, 'logs');
     // Everything the hook left on disk, so a failure on CI says WHY the
@@ -313,7 +313,7 @@ describe('advisories are said once', () => {
       walk(dir, '');
       return found;
     };
-    const post = (command) => {
+    const post = (command, mode = 'enforce') => {
       const result = spawnSync(process.execPath, [join(ROOT, 'src/plugin/hooks/post-tool.mjs')], {
         input: JSON.stringify({
           hook_event_name: 'PostToolUse',
@@ -327,6 +327,10 @@ describe('advisories are said once', () => {
         encoding: 'utf8',
         env: {
           ...process.env,
+          // Outside enforce, Claude Code is not told after the fact about a
+          // search that already ran and returned little; enforce keeps the
+          // advisory, so the "once" record is still exercised here.
+          TOKEN_OPTIMIZER_MODE: mode,
           TOKEN_OPTIMIZER_STATE_DIR: stateDir,
           TOKEN_OPTIMIZER_LOG_DIR: logDir,
           TOKEN_OPTIMIZER_MCP_CAPABILITIES:
@@ -362,5 +366,48 @@ describe('advisories are said once', () => {
     };
     expectAdvised(post('grep -rn foo .'), true);
     expectAdvised(post('grep -rn bar src'), false);
+    // Outside enforce the search has already run and returned its output, so
+    // the advisory would only add to the context it is meant to save. Fresh
+    // session, so the "once" record cannot be what withholds it.
+    session = `assist-${randomUUID()}`;
+    expectAdvised(post('grep -rn foo .', 'assist'), false);
+  });
+
+  // The rule is the output's size, not the client: every hooked CLI gets it.
+  test.each([
+    ['codex', 'src/integrations/codex/hooks/post-tool.mjs'],
+    ['claude-code', 'src/plugin/hooks/post-tool.mjs'],
+  ])('outside enforce, %s is advised only after a search that returned a lot', (client, script) => {
+    const stateDir = mkdtempSync(join(workspace, 'state-size-'));
+    const post = (stdout) => {
+      const result = spawnSync(process.execPath, [join(ROOT, script)], {
+        input: JSON.stringify({
+          hook_event_name: 'PostToolUse',
+          session_id: `size-${client}-${randomUUID()}`,
+          transcript_path: join(workspace, 'size.jsonl'),
+          cwd: workspace,
+          tool_name: 'Bash',
+          tool_input: { command: 'grep -rn foo .' },
+          tool_response: { stdout, stderr: '' },
+        }),
+        encoding: 'utf8',
+        env: {
+          ...process.env,
+          TOKEN_OPTIMIZER_MODE: 'assist',
+          TOKEN_OPTIMIZER_STATE_DIR: stateDir,
+          TOKEN_OPTIMIZER_MCP_CAPABILITIES: 'smart_grep',
+        },
+      });
+      expect(result.status).toBe(0);
+      return result.stdout;
+    };
+    const big = Array.from({ length: 200 }, (_, i) => `src/file${i}.js:${i}: const foo = ${i};`).join('\n');
+    // Small: the search cost nothing, so nothing is said, on every client.
+    expect(post('src/a.js:1: foo')).not.toMatch(/Recursive shell searches/);
+    // Large: Codex keeps the whole result, so the advice is earned; Claude Code
+    // compacts it instead, which is already the saving the advice is after.
+    const large = post(big);
+    if (client === 'codex') expect(large).toMatch(/Recursive shell searches/);
+    else expect(large).not.toMatch(/Recursive shell searches/);
   });
 });

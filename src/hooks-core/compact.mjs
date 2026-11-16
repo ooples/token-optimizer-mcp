@@ -78,13 +78,22 @@ function headLines(text, maxBytes) {
   return out.join('\n');
 }
 
-/** The last `maxBytes` of `text`, exactly as the shell's `tail -c` would. */
+/**
+ * At most the last `maxBytes` of `text`, starting on a character boundary.
+ *
+ * A cut inside a multibyte character decodes its orphaned continuation bytes
+ * as U+FFFD, three bytes each, so the "tail" both grew past `maxBytes` and
+ * showed a character the command never printed (#594 review). The cut moves
+ * forward past continuation bytes (10xxxxxx) instead.
+ */
 function tailBytes(text, maxBytes) {
   if (maxBytes <= 0) return '';
 
   const buffer = Buffer.from(text, 'utf8');
   if (buffer.length <= maxBytes) return text;
-  return buffer.subarray(buffer.length - maxBytes).toString('utf8');
+  let start = buffer.length - maxBytes;
+  while (start < buffer.length && (buffer[start] & 0xc0) === 0x80) start += 1;
+  return buffer.subarray(start).toString('utf8');
 }
 
 /**
@@ -101,15 +110,15 @@ export function compact(text, { previous = '', maxBytes = 8000 } = {}) {
 
   // Everything the ending already covers is off limits: eliding a line there
   // would put the summary at risk, which is the one thing that must not happen.
-  const bodyLength = Buffer.byteLength(source, 'utf8') - Buffer.byteLength(ending, 'utf8');
-  const body = Buffer.from(source, 'utf8').subarray(0, Math.max(0, bodyLength)).toString('utf8');
+  const bodyLength =
+    Buffer.byteLength(source, 'utf8') - Buffer.byteLength(ending, 'utf8');
+  const body = Buffer.from(source, 'utf8')
+    .subarray(0, Math.max(0, bodyLength))
+    .toString('utf8');
 
   const budget = maxBytes - Buffer.byteLength(ending, 'utf8');
 
-  if (!previous) {
-    const head = tailBytes(body, budget) === body ? body : headLines(body, budget);
-    return head + ending;
-  }
+  if (!previous) return headWithin(body, budget, ending);
 
   const seen = new Set(splitLines(previous).map(comparisonKey));
   const bodyLines = splitLines(body);
@@ -126,10 +135,7 @@ export function compact(text, { previous = '', maxBytes = 8000 } = {}) {
     fresh.push(line);
   }
 
-  if (!omitted) {
-    const head = headLines(body, budget);
-    return head + ending;
-  }
+  if (!omitted) return headWithin(body, budget, ending);
 
   // TERSE ON PURPOSE. The notice is metadata and the fresh lines are the point,
   // but they compete for the same budget -- and a wordy version lost that
@@ -139,6 +145,64 @@ export function compact(text, { previous = '', maxBytes = 8000 } = {}) {
   // catching at a small one.
   const notice = `[token-optimizer: ${omitted} repeated lines omitted; ending intact]\n`;
 
-  const head = headLines(fresh.join('\n'), budget - Buffer.byteLength(notice, 'utf8'));
-  return notice + head + ending;
+  return (
+    notice +
+    headWithin(
+      fresh.join('\n'),
+      budget - Buffer.byteLength(notice, 'utf8'),
+      ending
+    )
+  );
 }
+
+/** Where the head stops short of the ending, and by how much. */
+const cutMarker = (bytes) =>
+  `\n[token-optimizer: ${bytes} bytes omitted here; ending intact; redirect to a file for all]\n`;
+
+/**
+ * `text` whole if it fits in `budget`, else its leading lines and a marker
+ * saying how much was cut before the ending.
+ *
+ * THE CUT SAYS SO IN-BAND. It used to drop the lines silently, and the only
+ * word of it was the router's boundNotice, attached before the command ran to
+ * every bounded call because nothing before the run can know whether this one
+ * will be cut. Replaying THOL #565, that ~460-character notice rode on bounded
+ * runs whose output was a few hundred bytes. This stage reads the whole output,
+ * so it knows; the shell head-and-tail it replaces could not (rewrite.mjs).
+ *
+ * Returns head, marker and `ending` together, because the fallback below pays
+ * for its marker out of the ending. The marker is sized for the worst case
+ * before the head is cut, so the result stays within `budget` plus the ending.
+ *
+ * NO CUT IS EVER SILENT (#594 review), and no first line is lost to say so.
+ * When the full marker would push out the first fresh line -- a 3.9 KB line at
+ * the shipped 8 KB bound -- the line is kept, and a short marker takes its few
+ * bytes from the start of the ending instead. The ending is a byte tail, so its
+ * first bytes are the least valuable it has; the summary is at its end.
+ */
+function headWithin(text, budget, ending = '') {
+  const bytes = Buffer.byteLength(text, 'utf8');
+  if (bytes <= budget) return text + ending;
+  const room = budget - Buffer.byteLength(cutMarker(bytes), 'utf8');
+  const head = room > 0 ? headLines(text, room) : '';
+  const unmarked = headLines(text, budget);
+  if (room > 0 && (head || !unmarked)) {
+    return head + cutMarker(bytes - Buffer.byteLength(head, 'utf8')) + ending;
+  }
+  // The full marker would cost the first line, or does not fit at all.
+  const endingBytes = Buffer.byteLength(ending, 'utf8');
+  const worst = Buffer.byteLength(shortMarker(bytes + endingBytes), 'utf8');
+  const spare = budget - Buffer.byteLength(unmarked, 'utf8');
+  const take = Math.max(0, worst - spare);
+  // A budget too small even for that keeps the bound, as before.
+  if (take >= endingBytes) return unmarked + ending;
+  const kept = tailBytes(ending, endingBytes - take);
+  const dropped =
+    bytes -
+    Buffer.byteLength(unmarked, 'utf8') +
+    (endingBytes - Buffer.byteLength(kept, 'utf8'));
+  return unmarked + shortMarker(dropped) + kept;
+}
+
+/** The fallback's marker: what was cut, in as few bytes as says it. */
+const shortMarker = (bytes) => `\n[token-optimizer: ${bytes} bytes omitted]\n`;

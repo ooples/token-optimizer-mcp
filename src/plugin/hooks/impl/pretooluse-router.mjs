@@ -444,14 +444,16 @@ try {
             20
           );
 
-        const nudge = recordingNudge(
-          dirFor(edited || payload.cwd || process.cwd()),
-          {
-            state,
-            edits: state.edits,
-            files: state.editedFiles,
-          }
-        );
+        // ONE ASK PER SESSION: not after the post-tool recording guidance
+        // asked the same thing (adapter.mjs). Replaying THOL #565, three tasks
+        // got this nudge at the ninth edit on top of that guidance.
+        const nudge = state.recordingGuidanceServed
+          ? null
+          : recordingNudge(dirFor(edited || payload.cwd || process.cwd()), {
+              state,
+              edits: state.edits,
+              files: state.editedFiles,
+            });
         if (nudge) {
           state.recordingNudged = true;
           context = context
@@ -631,18 +633,18 @@ ${nudge}`
     ) {
       const command = payload.tool_input.command;
       // First run of this command goes through untouched -- see seenPath.
-      const bounded = seenBefore(payload.session_id, command)
-        ? boundedRewrite(command, {
-            compactor: compactorFor(payload.session_id, command),
-          })
-        : null;
+      const compactor = seenBefore(payload.session_id, command)
+        ? compactorFor(payload.session_id, command)
+        : undefined;
+      const bounded =
+        compactor !== undefined ? boundedRewrite(command, { compactor }) : null;
       if (!bounded) markSeen(payload.session_id, command);
       if (bounded) {
         allowWithRewrite(
           { ...payload.tool_input, command: bounded.command },
           // The graph's own context still rides along; a bound must not cost a
           // finding that was about to be delivered.
-          [context, boundNotice(bounded.maxBytes)].filter(Boolean).join('\n\n')
+          [context, announcedBound(bounded, compactor)].filter(Boolean).join('\n\n')
         );
       }
     }
@@ -976,6 +978,20 @@ function compactorFor(sessionId, command) {
   }
 }
 
+/**
+ * What a bounded command is told before it runs: nothing when the compaction
+ * stage bounds it, because that stage marks every cut in the output itself
+ * (compact.mjs headWithin, its repeated-lines notice, and compact-stage.mjs's
+ * own oversize marker), so untouched output arrives with no word and altered
+ * output says so where it was altered. Replaying THOL #565, the ~460-character
+ * notice rode on every bounded run, including ones that returned a few hundred
+ * bytes. The shell head-and-tail fallback cannot see its total from inside the
+ * pipe (rewrite.mjs), so it keeps the policy notice.
+ */
+function announcedBound(bounded, compactor) {
+  return compactor ? null : boundNotice(bounded.maxBytes);
+}
+
   // A DECISION MAY CARRY A REWRITE OF ITS OWN, and it is preferred over every
   // refusal below. `decide` returns one when the cheapest correct answer is to
   // change the call rather than block it -- today that is a WebFetch of a URL
@@ -1012,11 +1028,11 @@ function compactorFor(sessionId, command) {
     const command = payload.tool_input?.command;
     // Same rule on the refusal path: bounding output the model has not seen is
     // what drove the turn inflation, whatever brought us here.
-    const bounded = seenBefore(payload.session_id, command)
-      ? boundedRewrite(command, {
-          compactor: compactorFor(payload.session_id, command),
-        })
-      : null;
+    const compactor = seenBefore(payload.session_id, command)
+      ? compactorFor(payload.session_id, command)
+      : undefined;
+    const bounded =
+      compactor !== undefined ? boundedRewrite(command, { compactor }) : null;
     if (!bounded && command) markSeen(payload.session_id, command);
     if (bounded) {
       allowWithRewrite(
@@ -1025,7 +1041,7 @@ function compactorFor(sessionId, command) {
         // must not cost the guidance the refusal would have carried -- the
         // reason names the optimizer tool that makes the NEXT call cheaper,
         // and dropping it leaves only a byte notice that teaches nothing.
-        [reason, boundNotice(bounded.maxBytes)].filter(Boolean).join('\n\n')
+        [reason, announcedBound(bounded, compactor)].filter(Boolean).join('\n\n')
       );
     }
   }
