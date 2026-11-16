@@ -1,0 +1,12 @@
+{
+  "id": "code-rewrite-modernize-py",
+  "title": "Rewrite a 120-function legacy module in modern Python, behaviour unchanged",
+  "kind": "code",
+  "workspace": {
+    "fixture": "rewrite-modernize-py"
+  },
+  "max_turns": 40,
+  "timeout_s": 1200,
+  "success_threshold": 1.0,
+  "baseline_score": 0.0
+}

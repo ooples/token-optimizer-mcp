@@ -358,6 +358,9 @@ PY
       echo "   fixture set persisted for later segments"
     fi
   fi
+  # The rig's local tasks (local-tasks/). Writes only what is absent, so a
+  # persisted set gains them without upstream's fixtures being regenerated.
+  python3 /home/bench/local-tasks/gen_local_fixtures.py fixtures
 
   log "Verifier selftest (gate: must PASS before any spend)"
   python3 runner.py selftest || die "selftest failed -- do not spend money on a harness whose verifiers are broken"
