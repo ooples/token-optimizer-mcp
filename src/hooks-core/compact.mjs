@@ -78,13 +78,22 @@ function headLines(text, maxBytes) {
   return out.join('\n');
 }
 
-/** The last `maxBytes` of `text`, exactly as the shell's `tail -c` would. */
+/**
+ * At most the last `maxBytes` of `text`, starting on a character boundary.
+ *
+ * A cut inside a multibyte character decodes its orphaned continuation bytes
+ * as U+FFFD, three bytes each, so the "tail" both grew past `maxBytes` and
+ * showed a character the command never printed (#594 review). The cut moves
+ * forward past continuation bytes (10xxxxxx) instead.
+ */
 function tailBytes(text, maxBytes) {
   if (maxBytes <= 0) return '';
 
   const buffer = Buffer.from(text, 'utf8');
   if (buffer.length <= maxBytes) return text;
-  return buffer.subarray(buffer.length - maxBytes).toString('utf8');
+  let start = buffer.length - maxBytes;
+  while (start < buffer.length && (buffer[start] & 0xc0) === 0x80) start += 1;
+  return buffer.subarray(start).toString('utf8');
 }
 
 /**

@@ -101,6 +101,29 @@ describe('compacting a run against its previous run', () => {
     expect(Number(marked[1])).toBe(Buffer.byteLength(text, 'utf8') - shown);
   });
 
+  it('cuts the ending on a character boundary, never inside one', () => {
+    // #594 review: a cut inside `é` decoded as U+FFFD, which is 3 bytes, and
+    // the result came to 8,002 bytes with a character the command never printed.
+    const text = `${'F'.repeat(3997)}\n${'m'.repeat(16002)}${'é'.repeat(1999)}ZZ`;
+    const out = compact(text, { previous: '', maxBytes: 8000 });
+    expect(out).not.toContain('�');
+    expect(Buffer.byteLength(out, 'utf8')).toBeLessThanOrEqual(8000);
+    expect(out.startsWith('F'.repeat(3997))).toBe(true);
+    expect(out.endsWith('éZZ')).toBe(true);
+    const marked = out.match(/\[token-optimizer: (\d+) bytes omitted\]/);
+    expect(marked).not.toBeNull();
+    const shown =
+      Buffer.byteLength(out, 'utf8') -
+      Buffer.byteLength(`\n${marked[0]}\n`, 'utf8');
+    expect(Number(marked[1])).toBe(Buffer.byteLength(text, 'utf8') - shown);
+    // The plain ending path, with no fallback, holds the same line.
+    for (const maxBytes of [401, 402, 403]) {
+      const plain = compact('a'.repeat(1000) + 'é'.repeat(300), { maxBytes });
+      expect(plain).not.toContain('�');
+      expect(Buffer.byteLength(plain, 'utf8')).toBeLessThanOrEqual(maxBytes);
+    }
+  });
+
   it('never returns more than the budget', () => {
     const text = 'x'.repeat(50_000);
 

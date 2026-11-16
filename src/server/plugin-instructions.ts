@@ -254,6 +254,11 @@ async function subdirectories(dir: string): Promise<string[]> {
  * Unset means enabled, Gemini's default. Qwen Code is a Gemini CLI fork that
  * reads the same settings layout; where it ignores the key, nobody sets it,
  * so reading it costs nothing.
+ *
+ * An absent file sets nothing. A file that exists but cannot be read or parsed
+ * might be the one switching hooks off, so it counts as off: the long
+ * instructions are the safe answer when we cannot tell (#594 review). That
+ * includes a file our plain JSON.parse rejects, such as one with comments.
  */
 async function geminiHooksEnabled(files: string[]): Promise<boolean> {
   let enabled = true;
@@ -261,8 +266,9 @@ async function geminiHooksEnabled(files: string[]): Promise<boolean> {
     let settings: unknown;
     try {
       settings = JSON.parse(await fs.promises.readFile(file, 'utf8'));
-    } catch {
-      continue;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') continue;
+      return false;
     }
     const flag = (settings as { hooksConfig?: { enabled?: unknown } } | null)
       ?.hooksConfig?.enabled;

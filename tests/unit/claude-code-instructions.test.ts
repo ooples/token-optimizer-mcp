@@ -292,6 +292,27 @@ describe('every hooked client gets the short text, not only Claude Code', () => 
     }
   );
 
+  it.each([['gemini'], ['qwen']] as [HookedClient][])(
+    '%s: settings that cannot be parsed keep the long instructions',
+    async (client) => {
+      const dot = client === 'gemini' ? '.gemini' : '.qwen';
+      ship(
+        `${client}/hooks/hooks.json`,
+        path.join(
+          home,
+          dot,
+          'extensions',
+          'token-optimizer',
+          'hooks',
+          'hooks.json'
+        )
+      );
+      mkdirSync(path.join(home, dot), { recursive: true });
+      writeFileSync(path.join(home, dot, 'settings.json'), '{ "hooksConfig": ');
+      expect(await wired(client)).toBe(false);
+    }
+  );
+
   it("a config that names someone else's hooks is not ours", async () => {
     mkdirSync(path.join(project, '.cursor'), { recursive: true });
     writeFileSync(
