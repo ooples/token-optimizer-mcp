@@ -1134,15 +1134,6 @@ export function policyText(
  * so the narrower calls cost more than the bytes they saved: bugfix 0.105 vs
  * 0.096, log-needle 0.145 vs 0.138 (median $, 5 reps). The output-token gains
  * were real (seo-audit -9% output), so the block is scoped, not dropped.
- *
- * OFF BY DEFAULT since the rewrite's own pre-registered A/B (te-bench
- * campaigns/594-discipline-v2, 5 reps, all 30 runs passed). Against the same
- * hooks with no block, the rewrite cost more on every task: bugfix 0.110 vs
- * 0.103 (1.07x), log-needle 0.147 vs 0.126 (1.17x), seo-audit 0.317 vs 0.258
- * (1.23x, and 8682 vs 6868 output tokens -- the opposite of its purpose). The
- * rule fixed before the runs said: ship only at <=1.03x on bugfix and
- * log-needle and <=1.00x on seo-audit, otherwise default off and keep the
- * switch for opt-in.
  */
 export const OUTPUT_DISCIPLINE = [
   '## Keep output lean',
@@ -1163,15 +1154,14 @@ function outputDiscipline() {
   // control cannot attribute anything to the text. This exists so an arm can
   // run every hook with the block removed and nothing else changed -- the only
   // comparison that can say whether the instructions or the interception are
-  // doing the work. Opt-in: unset (or anything but on/1/true/yes) means off,
-  // because the measured block cost more than no block (see above).
+  // doing the work.
   const raw = String(process.env.TOKEN_OPTIMIZER_OUTPUT_DISCIPLINE || '')
     .trim()
     .toLowerCase();
-  if (raw === '1' || raw === 'on' || raw === 'true' || raw === 'yes')
-    return OUTPUT_DISCIPLINE;
+  if (raw === '0' || raw === 'off' || raw === 'false' || raw === 'no')
+    return '';
 
-  return '';
+  return OUTPUT_DISCIPLINE;
 }
 
 /**

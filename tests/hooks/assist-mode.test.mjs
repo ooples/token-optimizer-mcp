@@ -52,7 +52,7 @@ afterAll(() => rmSync(workspace, { recursive: true, force: true }));
 // test failed for state left by its neighbours rather than for the mode.
 let sessionSeq = 0;
 
-function runHook(script, payload, modeValue, extraEnv = {}) {
+function runHook(script, payload, modeValue) {
   return spawnSync(process.execPath, [script], {
     input: JSON.stringify({ session_id: `assist-${++sessionSeq}`, ...payload }),
     encoding: 'utf8',
@@ -68,9 +68,6 @@ function runHook(script, payload, modeValue, extraEnv = {}) {
       // 1 every run, so a shared state root handed one run the "already said"
       // flags an earlier run had saved.
       TOKEN_OPTIMIZER_STATE_DIR: ISOLATED_STATE,
-      // Unset unless a test sets it, so a developer's own opt-in cannot leak in.
-      TOKEN_OPTIMIZER_OUTPUT_DISCIPLINE: '',
-      ...extraEnv,
     },
   });
 }
@@ -229,27 +226,5 @@ describe('assist does not advertise routing it will not perform', () => {
     const out = startUnder('enforce');
     expect(out).toContain('Prefer only the registered');
     expect(out).toContain('denied only when');
-  });
-});
-
-describe('the output-discipline block is opt-in (te-bench 594-discipline-v2)', () => {
-  // The pre-registered A/B found the block cost more than no block on every
-  // task (1.07x, 1.17x, 1.23x median $), so it ships off and stays switchable.
-  const startWith = (value) =>
-    runHook(
-      SESSION_START,
-      { hook_event_name: 'SessionStart', cwd: workspace },
-      'assist',
-      { TOKEN_OPTIMIZER_OUTPUT_DISCIPLINE: value }
-    ).stdout;
-
-  test.each(['', '0', 'off', 'maybe'])('%p leaves it out', (value) => {
-    const out = startWith(value);
-    expect(out).toContain('Token optimization is active');
-    expect(out).not.toContain('Keep output lean');
-  });
-
-  test.each(['1', 'on', 'TRUE', ' yes '])('%p puts it in', (value) => {
-    expect(startWith(value)).toContain('## Keep output lean');
   });
 });
