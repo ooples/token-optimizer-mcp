@@ -27,27 +27,54 @@ spent() {
   for image in pr610 master; do
     one=$(MSYS_NO_PATHCONV=1 docker run --rm -v "$(volume "$image"):/results" --entrypoint python3 thol-rig:pr610 -c "
 import sqlite3
-try:
-    c = sqlite3.connect('/results/results.sqlite')
-    print(c.execute('select coalesce(sum(total_cost_usd),0) from runs').fetchone()[0])
-except Exception:
+from pathlib import Path
+if not Path('/results/results.sqlite').exists():
     print(0)
-")
-    total=$(python -c "print(round($total + $one, 2))")
+    raise SystemExit(0)
+try:
+    c = sqlite3.connect('file:/results/results.sqlite?mode=ro', uri=True)
+    if not c.execute(\"select 1 from sqlite_master where type='table' and name='runs'\").fetchone():
+        print(0)
+        raise SystemExit(0)
+    print(c.execute('select coalesce(sum(total_cost_usd),0) from runs').fetchone()[0])
+finally:
+    c.close()
+") || return $?
+    total=$(python -c "print(round($total + $one, 2))") || return $?
   done
   echo "$total"
 }
 
 for image in pr610 master; do
-  head=$(MSYS_NO_PATHCONV=1 docker run --rm --entrypoint cat "thol-rig:$image" /opt/optimizer-provenance.json | grep '"head"')
-  echo ">> thol-rig:$image $head"
+  case "$image" in
+    pr610) expected=6c3bd71d52e7ae65d496e9b0100f474bcada5c3b ;;
+    master) expected=1518a5d7c41f342e65dd10c89ee2595826607828 ;;
+  esac
+  MSYS_NO_PATHCONV=1 docker run --rm --entrypoint python3 "thol-rig:$image" -c \
+    'import json,sys; p=json.load(open("/opt/optimizer-provenance.json")); assert p["head"] == sys.argv[1] and not p["dirty"], p; print(p)' "$expected"
 done
 
 for rep in 1 2 3 4 5; do
   if [ $((rep % 2)) -eq 1 ]; then order="pr610 master"; else order="master pr610"; fi
   for image in $order; do
-    echo ">> rep $rep: $image (spent so far \$$(spent))"
-    IMAGE="thol-rig:$image" RESULTS_VOLUME="$(volume "$image")" REPS="$rep" bash "$RIG/run-campaign.sh"
+    before=$(spent)
+    echo ">> rep $rep: $image (spent so far \$$before)"
+    if python -c "import sys; sys.exit(0 if $before > $STOP_USD else 1)"; then
+      echo "!! recorded spend already passed the stop; halting" >&2
+      exit 3
+    fi
+    # The runner plans reps 1..REPS and resumes past finished ones, and
+    # ordered_campaign.py requires the plan to hold exactly REPS orders. So each
+    # call gets the first $rep orders of the committed arm-order.json: a prefix,
+    # never a reordering (the first launch failed here, before any run).
+    prefix="$HERE/arm-order.rep$rep.json"
+    python -c "
+import json, sys
+plan = json.load(open(sys.argv[1]))
+plan['orders'] = plan['orders'][:int(sys.argv[2])]
+assert len(plan['orders']) == int(sys.argv[2])
+open(sys.argv[3], 'w').write(json.dumps(plan, indent=2) + '\n')" "$HERE/arm-order.json" "$rep" "$prefix"
+    ARM_ORDER_FILE="$prefix" IMAGE="thol-rig:$image" RESULTS_VOLUME="$(volume "$image")" REPS="$rep" bash "$RIG/run-campaign.sh"
     total=$(spent)
     echo ">> after rep $rep $image: \$$total"
     if python -c "import sys; sys.exit(0 if $total > $STOP_USD else 1)"; then

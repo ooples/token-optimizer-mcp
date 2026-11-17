@@ -10,7 +10,8 @@ per-category settings, holdout telemetry) against master as of this campaign.
 ## What runs
 
 - **Images**, built from this branch's rig with each product packed by `bench:pack`:
-  - `thol-rig:pr610`: token-optimizer-mcp 766d1d7e (tree 88c67e22), `feat/task-class-settings`.
+  - `thol-rig:pr610`: token-optimizer-mcp 6c3bd71d (tree 55cfe546), `feat/task-class-settings`.
+    Amended before any run; see "Amendment 2" at the end.
   - `thol-rig:master`: token-optimizer-mcp 1518a5d7 (tree 8b68d518), master.
   - `/opt/optimizer-provenance.json` is checked in each image before launch.
 - **Arm:** `token-optimizer-mcp` in both images. Nothing else differs between the images.
@@ -66,3 +67,50 @@ Per task: ratio = median `total_cost_usd` (pr610) / median (master).
 
 Fixable product issues, missed savings and cheaper strategies, as in the earlier campaigns.
 Each finding is recorded with a disposition.
+
+## Amendment 1 (2026-11-16, before any run was recorded)
+
+The first launch spent nothing. It stopped while building its plan, because
+`run.sh` passed `REPS=<rep>` while `arm-order.json` holds five orders.
+`run.sh` now gives each call the first `rep` orders of `arm-order.json`. That
+is a prefix of the committed plan, never a reordering, and with one arm every
+order is the same.
+
+While it was stopped, the product under test changed:
+
+- **What was found.** Two judge models labelled 1,192 of the user's real
+  prompts. On those, the classifier at 766d1d7e put 11.1% of non-survey prompts
+  in survey, on sessions the rules were never tuned on.
+- **What changed.** At 147f8e5a the survey bar is higher, and that rate is
+  0.4%.
+- **Is 766d1d7e still a candidate?** No. A board measured on 766d1d7e would
+  describe a build that is no longer a candidate, so the pr610 image was rebuilt
+  at 147f8e5a.
+- **What stays fixed.** The master image, tasks, reps, decision rule and stop
+  are unchanged.
+- **How the board classification is affected.** The classification of the board
+  tasks above was re-checked at 147f8e5a and is listed below; any task whose
+  category moved is named.
+
+## Amendment 2 (2026-11-17, before any paid run)
+
+Both result databases had no `runs` table when inspected, and no campaign was
+running. Thus no previous paid results are being replaced or pooled.
+
+- Candidate: `6c3bd71d52e7ae65d496e9b0100f474bcada5c3b`, clean product tree
+  `55cfe5467358a265bf609b4dd232a8e2e8cd9a4c`.
+- Baseline remains `1518a5d7c41f342e65dd10c89ee2595826607828`, clean tree
+  `8b68d518a20e069fa09bc39c6fffff737ff7edf6`.
+- Follow-ups now resolve accepted proposals and numbered choices from bounded
+  conversation, then inherit the active task when unclear. Tool observations
+  cannot replace a known task. Fix-to-survey transitions explicitly release
+  previously delivered output-discipline instructions.
+- The candidate image was rebuilt from this product tarball. Preflight caught
+  that `Dockerfile.reinstall` omitted the local rewrite task; that recipe now
+  copies local tasks as the full Dockerfile does. Both images contain the task.
+- All 17 board prompts were classified again inside the rebuilt image; their
+  categories match the list above. No task moved category.
+- The real-prompt, judge-consensus evaluation is separate: prompt-only 147/487,
+  contextual 155/487. This is not human gold and does not establish high accuracy.
+- Tasks, five repetitions, alternating image order, category thresholds,
+  success gate, outlier inspection and the $70 stop remain unchanged.
