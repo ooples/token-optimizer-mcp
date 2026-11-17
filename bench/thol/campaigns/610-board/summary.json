@@ -1,0 +1,439 @@
+{
+  "complete": false,
+  "runs": {
+    "pr610": 17,
+    "master": 0
+  },
+  "spent_usd": 0,
+  "per_task": {
+    "code-bugfix-py": {
+      "pr610": {
+        "runs": 1,
+        "median_usd": 0.0,
+        "successes": 0,
+        "statuses": {
+          "claude_error": 1
+        }
+      },
+      "master": {
+        "runs": 0,
+        "median_usd": null,
+        "successes": 0,
+        "statuses": {}
+      }
+    },
+    "code-comprehension-django": {
+      "pr610": {
+        "runs": 1,
+        "median_usd": 0.0,
+        "successes": 0,
+        "statuses": {
+          "claude_error": 1
+        }
+      },
+      "master": {
+        "runs": 0,
+        "median_usd": null,
+        "successes": 0,
+        "statuses": {}
+      }
+    },
+    "code-debug-cascade-py": {
+      "pr610": {
+        "runs": 1,
+        "median_usd": 0.0,
+        "successes": 0,
+        "statuses": {
+          "claude_error": 1
+        }
+      },
+      "master": {
+        "runs": 0,
+        "median_usd": null,
+        "successes": 0,
+        "statuses": {}
+      }
+    },
+    "code-debug-ledger-py": {
+      "pr610": {
+        "runs": 1,
+        "median_usd": 0.0,
+        "successes": 0,
+        "statuses": {
+          "claude_error": 1
+        }
+      },
+      "master": {
+        "runs": 0,
+        "median_usd": null,
+        "successes": 0,
+        "statuses": {}
+      }
+    },
+    "code-debug-pipeline-py": {
+      "pr610": {
+        "runs": 1,
+        "median_usd": 0.0,
+        "successes": 0,
+        "statuses": {
+          "claude_error": 1
+        }
+      },
+      "master": {
+        "runs": 0,
+        "median_usd": null,
+        "successes": 0,
+        "statuses": {}
+      }
+    },
+    "code-feature-js": {
+      "pr610": {
+        "runs": 1,
+        "median_usd": 0.0,
+        "successes": 0,
+        "statuses": {
+          "claude_error": 1
+        }
+      },
+      "master": {
+        "runs": 0,
+        "median_usd": null,
+        "successes": 0,
+        "statuses": {}
+      }
+    },
+    "code-feature-validate-py": {
+      "pr610": {
+        "runs": 1,
+        "median_usd": 0.0,
+        "successes": 0,
+        "statuses": {
+          "claude_error": 1
+        }
+      },
+      "master": {
+        "runs": 0,
+        "median_usd": null,
+        "successes": 0,
+        "statuses": {}
+      }
+    },
+    "code-iterate-tests": {
+      "pr610": {
+        "runs": 1,
+        "median_usd": 0.0,
+        "successes": 0,
+        "statuses": {
+          "claude_error": 1
+        }
+      },
+      "master": {
+        "runs": 0,
+        "median_usd": null,
+        "successes": 0,
+        "statuses": {}
+      }
+    },
+    "code-migration-py": {
+      "pr610": {
+        "runs": 1,
+        "median_usd": 0.0,
+        "successes": 0,
+        "statuses": {
+          "claude_error": 1
+        }
+      },
+      "master": {
+        "runs": 0,
+        "median_usd": null,
+        "successes": 0,
+        "statuses": {}
+      }
+    },
+    "code-migration-py-xl": {
+      "pr610": {
+        "runs": 1,
+        "median_usd": 0.0,
+        "successes": 0,
+        "statuses": {
+          "claude_error": 1
+        }
+      },
+      "master": {
+        "runs": 0,
+        "median_usd": null,
+        "successes": 0,
+        "statuses": {}
+      }
+    },
+    "code-overview-cobra": {
+      "pr610": {
+        "runs": 1,
+        "median_usd": 0.0,
+        "successes": 0,
+        "statuses": {
+          "claude_error": 1
+        }
+      },
+      "master": {
+        "runs": 0,
+        "median_usd": null,
+        "successes": 0,
+        "statuses": {}
+      }
+    },
+    "code-refactor-split-py": {
+      "pr610": {
+        "runs": 1,
+        "median_usd": 0.0,
+        "successes": 0,
+        "statuses": {
+          "claude_error": 1
+        }
+      },
+      "master": {
+        "runs": 0,
+        "median_usd": null,
+        "successes": 0,
+        "statuses": {}
+      }
+    },
+    "code-rewrite-modernize-py": {
+      "pr610": {
+        "runs": 1,
+        "median_usd": 0.0,
+        "successes": 0,
+        "statuses": {
+          "claude_error": 1
+        }
+      },
+      "master": {
+        "runs": 0,
+        "median_usd": null,
+        "successes": 0,
+        "statuses": {}
+      }
+    },
+    "code-settings-inventory-django": {
+      "pr610": {
+        "runs": 1,
+        "median_usd": 0.0,
+        "successes": 0,
+        "statuses": {
+          "claude_error": 1
+        }
+      },
+      "master": {
+        "runs": 0,
+        "median_usd": null,
+        "successes": 0,
+        "statuses": {}
+      }
+    },
+    "log-needle-zh": {
+      "pr610": {
+        "runs": 1,
+        "median_usd": 0.0,
+        "successes": 0,
+        "statuses": {
+          "claude_error": 1
+        }
+      },
+      "master": {
+        "runs": 0,
+        "median_usd": null,
+        "successes": 0,
+        "statuses": {}
+      }
+    },
+    "report-pdf": {
+      "pr610": {
+        "runs": 1,
+        "median_usd": 0.0,
+        "successes": 0,
+        "statuses": {
+          "claude_error": 1
+        }
+      },
+      "master": {
+        "runs": 0,
+        "median_usd": null,
+        "successes": 0,
+        "statuses": {}
+      }
+    },
+    "seo-audit": {
+      "pr610": {
+        "runs": 1,
+        "median_usd": 0.0,
+        "successes": 0,
+        "statuses": {
+          "claude_error": 1
+        }
+      },
+      "master": {
+        "runs": 0,
+        "median_usd": null,
+        "successes": 0,
+        "statuses": {}
+      }
+    }
+  },
+  "categories": {},
+  "outliers": [],
+  "missing": [
+    "pr610:code-bugfix-py:r2",
+    "pr610:code-bugfix-py:r3",
+    "pr610:code-bugfix-py:r4",
+    "pr610:code-bugfix-py:r5",
+    "pr610:code-comprehension-django:r2",
+    "pr610:code-comprehension-django:r3",
+    "pr610:code-comprehension-django:r4",
+    "pr610:code-comprehension-django:r5",
+    "pr610:code-debug-cascade-py:r2",
+    "pr610:code-debug-cascade-py:r3",
+    "pr610:code-debug-cascade-py:r4",
+    "pr610:code-debug-cascade-py:r5",
+    "pr610:code-debug-ledger-py:r2",
+    "pr610:code-debug-ledger-py:r3",
+    "pr610:code-debug-ledger-py:r4",
+    "pr610:code-debug-ledger-py:r5",
+    "pr610:code-debug-pipeline-py:r2",
+    "pr610:code-debug-pipeline-py:r3",
+    "pr610:code-debug-pipeline-py:r4",
+    "pr610:code-debug-pipeline-py:r5",
+    "pr610:code-feature-js:r2",
+    "pr610:code-feature-js:r3",
+    "pr610:code-feature-js:r4",
+    "pr610:code-feature-js:r5",
+    "pr610:code-feature-validate-py:r2",
+    "pr610:code-feature-validate-py:r3",
+    "pr610:code-feature-validate-py:r4",
+    "pr610:code-feature-validate-py:r5",
+    "pr610:code-iterate-tests:r2",
+    "pr610:code-iterate-tests:r3",
+    "pr610:code-iterate-tests:r4",
+    "pr610:code-iterate-tests:r5",
+    "pr610:code-migration-py:r2",
+    "pr610:code-migration-py:r3",
+    "pr610:code-migration-py:r4",
+    "pr610:code-migration-py:r5",
+    "pr610:code-migration-py-xl:r2",
+    "pr610:code-migration-py-xl:r3",
+    "pr610:code-migration-py-xl:r4",
+    "pr610:code-migration-py-xl:r5",
+    "pr610:code-overview-cobra:r2",
+    "pr610:code-overview-cobra:r3",
+    "pr610:code-overview-cobra:r4",
+    "pr610:code-overview-cobra:r5",
+    "pr610:code-refactor-split-py:r2",
+    "pr610:code-refactor-split-py:r3",
+    "pr610:code-refactor-split-py:r4",
+    "pr610:code-refactor-split-py:r5",
+    "pr610:code-rewrite-modernize-py:r2",
+    "pr610:code-rewrite-modernize-py:r3",
+    "pr610:code-rewrite-modernize-py:r4",
+    "pr610:code-rewrite-modernize-py:r5",
+    "pr610:code-settings-inventory-django:r2",
+    "pr610:code-settings-inventory-django:r3",
+    "pr610:code-settings-inventory-django:r4",
+    "pr610:code-settings-inventory-django:r5",
+    "pr610:log-needle-zh:r2",
+    "pr610:log-needle-zh:r3",
+    "pr610:log-needle-zh:r4",
+    "pr610:log-needle-zh:r5",
+    "pr610:report-pdf:r2",
+    "pr610:report-pdf:r3",
+    "pr610:report-pdf:r4",
+    "pr610:report-pdf:r5",
+    "pr610:seo-audit:r2",
+    "pr610:seo-audit:r3",
+    "pr610:seo-audit:r4",
+    "pr610:seo-audit:r5",
+    "master:code-bugfix-py:r1",
+    "master:code-bugfix-py:r2",
+    "master:code-bugfix-py:r3",
+    "master:code-bugfix-py:r4",
+    "master:code-bugfix-py:r5",
+    "master:code-comprehension-django:r1",
+    "master:code-comprehension-django:r2",
+    "master:code-comprehension-django:r3",
+    "master:code-comprehension-django:r4",
+    "master:code-comprehension-django:r5",
+    "master:code-debug-cascade-py:r1",
+    "master:code-debug-cascade-py:r2",
+    "master:code-debug-cascade-py:r3",
+    "master:code-debug-cascade-py:r4",
+    "master:code-debug-cascade-py:r5",
+    "master:code-debug-ledger-py:r1",
+    "master:code-debug-ledger-py:r2",
+    "master:code-debug-ledger-py:r3",
+    "master:code-debug-ledger-py:r4",
+    "master:code-debug-ledger-py:r5",
+    "master:code-debug-pipeline-py:r1",
+    "master:code-debug-pipeline-py:r2",
+    "master:code-debug-pipeline-py:r3",
+    "master:code-debug-pipeline-py:r4",
+    "master:code-debug-pipeline-py:r5",
+    "master:code-feature-js:r1",
+    "master:code-feature-js:r2",
+    "master:code-feature-js:r3",
+    "master:code-feature-js:r4",
+    "master:code-feature-js:r5",
+    "master:code-feature-validate-py:r1",
+    "master:code-feature-validate-py:r2",
+    "master:code-feature-validate-py:r3",
+    "master:code-feature-validate-py:r4",
+    "master:code-feature-validate-py:r5",
+    "master:code-iterate-tests:r1",
+    "master:code-iterate-tests:r2",
+    "master:code-iterate-tests:r3",
+    "master:code-iterate-tests:r4",
+    "master:code-iterate-tests:r5",
+    "master:code-migration-py:r1",
+    "master:code-migration-py:r2",
+    "master:code-migration-py:r3",
+    "master:code-migration-py:r4",
+    "master:code-migration-py:r5",
+    "master:code-migration-py-xl:r1",
+    "master:code-migration-py-xl:r2",
+    "master:code-migration-py-xl:r3",
+    "master:code-migration-py-xl:r4",
+    "master:code-migration-py-xl:r5",
+    "master:code-overview-cobra:r1",
+    "master:code-overview-cobra:r2",
+    "master:code-overview-cobra:r3",
+    "master:code-overview-cobra:r4",
+    "master:code-overview-cobra:r5",
+    "master:code-refactor-split-py:r1",
+    "master:code-refactor-split-py:r2",
+    "master:code-refactor-split-py:r3",
+    "master:code-refactor-split-py:r4",
+    "master:code-refactor-split-py:r5",
+    "master:code-rewrite-modernize-py:r1",
+    "master:code-rewrite-modernize-py:r2",
+    "master:code-rewrite-modernize-py:r3",
+    "master:code-rewrite-modernize-py:r4",
+    "master:code-rewrite-modernize-py:r5",
+    "master:code-settings-inventory-django:r1",
+    "master:code-settings-inventory-django:r2",
+    "master:code-settings-inventory-django:r3",
+    "master:code-settings-inventory-django:r4",
+    "master:code-settings-inventory-django:r5",
+    "master:log-needle-zh:r1",
+    "master:log-needle-zh:r2",
+    "master:log-needle-zh:r3",
+    "master:log-needle-zh:r4",
+    "master:log-needle-zh:r5",
+    "master:report-pdf:r1",
+    "master:report-pdf:r2",
+    "master:report-pdf:r3",
+    "master:report-pdf:r4",
+    "master:report-pdf:r5",
+    "master:seo-audit:r1",
+    "master:seo-audit:r2",
+    "master:seo-audit:r3",
+    "master:seo-audit:r4",
+    "master:seo-audit:r5"
+  ]
+}
