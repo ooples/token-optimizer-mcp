@@ -1,0 +1,12 @@
+{
+  "model": "gpt-6.1-sol",
+  "label": "Standard Codex credit-rate scenario; not actual subscription billing",
+  "source": "https://developers.openai.com/codex/pricing",
+  "verifiedOn": "2026-11-17",
+  "creditsPerMillion": { "uncached": 50, "cached": 2.5, "output": 250 },
+  "assumptions": [
+    "Standard speed; no contract, regional, subscription-allowance or discount adjustments.",
+    "Input includes cached input, so uncached = input minus cached.",
+    "Output includes reasoning already; do not add reasoning output a second time."
+  ]
+}
