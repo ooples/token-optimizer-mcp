@@ -110,6 +110,7 @@ needs the complete 102-tool specialist catalog. Use the four-operation
 | `TOKEN_OPTIMIZER_LOG_MAX_FILES`         | `40`       | Maximum retained lifecycle log files     |
 | `TOKEN_OPTIMIZER_OUTPUT_DISCIPLINE`     | per task   | `on`/`off` overrides the task's setting  |
 | `TOKEN_OPTIMIZER_OUTLINE`               | per task   | `on`/`off` overrides the task's setting  |
+| `TOKEN_OPTIMIZER_TASK_CLASSIFIER_MODEL` | unset      | Absolute path to an optional local model |
 
 An unrecognised `TOKEN_OPTIMIZER_MODE` falls back to `enforce`, so a typo cannot
 quietly turn the product off.
@@ -152,3 +153,8 @@ So each session gets a task category, and each category has its own defaults
   hook's output is dropped, while its changelog says the context arrives since
   1.0.65, and that has not been confirmed on a live CLI.
 - An explicit switch in the table above wins over the category.
+
+An optional [local learned classifier](LOCAL_TASK_CLASSIFIER.md) handles intent
+the rules leave unknown. Train it with `token-optimizer-task-classifier`; the
+hook performs inference in Node with no network call. Personal models stay
+local, and unusable models retain the rule fallback with a doctor warning.

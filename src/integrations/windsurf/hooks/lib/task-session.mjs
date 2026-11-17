@@ -14,6 +14,7 @@
 import { loadState, saveState } from './policy.mjs';
 import { TaskCategory, afterToolCall } from './task-class.mjs';
 import { resolveTaskPrompt } from './task-context.mjs';
+import { localTaskClassifier } from './learned-task-class.mjs';
 import { OUTPUT_DISCIPLINE, sessionSettings } from './task-settings.mjs';
 import { recordClassified, taskArm } from './task-ledger.mjs';
 
@@ -42,6 +43,7 @@ export function promptSubmitted({
   const state = loadState(sessionId, agent);
   const { category, source, signals } = resolveTaskPrompt(prompt, {
     cwd, previous: state.taskClass, transcriptPath, now,
+    intentClassifier: localTaskClassifier(env).classify,
   });
   // A NEW GENERATION per prompt. Tool observations carry the generation they
   // loaded, and saveState never lets an older generation's correction or count
