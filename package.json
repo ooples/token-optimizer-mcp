@@ -24,7 +24,8 @@
     "token-optimizer-route": "./src/scripts/route-client.mjs",
     "token-optimizer-learned": "./src/scripts/learned.mjs",
     "token-optimizer-statusline": "./src/scripts/statusline-tap.mjs",
-    "token-optimizer-agent-brief": "./src/scripts/agent-brief.mjs"
+    "token-optimizer-agent-brief": "./src/scripts/agent-brief.mjs",
+    "token-optimizer-task-classifier": "./src/scripts/task-classifier.mjs"
   },
   "files": [
     "dist/**/*",
@@ -44,6 +45,9 @@
     "!src/integrations/**/lib/**",
     "src/plugin/**/*",
     "src/scripts/**/*",
+    "!**/__pycache__/**",
+    "!**/*.pyc",
+    "!**/*.pyo",
     "!**/logs/**",
     "!**/*.log",
     "!**/.cache/**",

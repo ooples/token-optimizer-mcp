@@ -62,6 +62,7 @@ import {
 } from './node-floor.mjs';
 import { SLOW_P90_MS, recentToolHookLatency } from './hook-latency.mjs';
 import { EVIDENCE, SETTING_ENV, explicitSetting, settingsTable } from './task-settings.mjs';
+import { localTaskClassifier } from './learned-task-class.mjs';
 import { taskReportFromLedger } from './task-report.mjs';
 import { holdoutSettings } from './injection-holdout.mjs';
 
@@ -2473,14 +2474,18 @@ export function probeTaskSettings(env = process.env) {
   } catch {
     // An unreadable ledger costs the clause, not the check.
   }
+  const local = localTaskClassifier(env);
   const detail = [
     differs.length ? `differs from defaults: ${differs.join('; ')}` : 'every task runs on the defaults',
+    local.enabled ? (local.ok ? `local task model ${local.id}, ${local.features} features` : 'local task model unavailable; using rules') : 'rule classifier',
     ...forced,
     holdout.enabled
       ? `${Math.round(holdout.fraction * 100)}% of sessions held out on the default row to measure it`
       : 'holdout off, so no category effect can be measured',
     evidence,
   ].join('; ');
+  if (local.enabled && !local.ok)
+    return [warn('per-task settings', `${detail}; ${local.error}`, 'Train a valid local task model, or remove TOKEN_OPTIMIZER_TASK_CLASSIFIER_MODEL to use rules.')];
   if (ignored.length)
     return [
       warn(

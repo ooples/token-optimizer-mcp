@@ -113,7 +113,7 @@ function unquoted(text) {
  * cancellations and unrecognised new requests return UNKNOWN.
  */
 export function resolveTaskPrompt(prompt, {
-  cwd, previous, messages = [], transcriptPath, now = Date.now(),
+  cwd, previous, messages = [], transcriptPath, now = Date.now(), intentClassifier = null,
 } = {}) {
   const text = String(prompt || '').slice(0, MAX_TEXT).trim();
   const intent = text.replace(NEGATED_ACTION, '').replace(/^no,\s*/i, '').trim();
@@ -123,6 +123,17 @@ export function resolveTaskPrompt(prompt, {
   // Classify the selected action rather than that incidental vocabulary. A
   // fresh directive introduced with "now" or "instead" still takes priority.
   const selecting = CHOICE_REPLY.test(text) && !/\b(?:now|instead)\s+(?:write|rewrite|fix|build|implement|explain|find)\b/i.test(text);
+  // Keep cancellation/negation and numbered-option handling deterministic.
+  // The optional learned model resolves the remaining intent from local text.
+  if (intentClassifier && direct.category === TaskCategory.UNKNOWN && !selecting && intent === text) {
+    const recent = transcriptPath ? readTaskContext(transcriptPath, text, { now }) : messages.slice(-MAX_MESSAGES);
+    try {
+      const learned = intentClassifier(text, recent, previous);
+      if (learned && isTaskCategory(learned.category)) return { ...direct, ...learned };
+    } catch {
+      // An optional classifier failure retains the deterministic fallback.
+    }
+  }
   if (direct.category !== TaskCategory.UNKNOWN && !selecting) return { ...direct, source: 'prompt' };
   if (intent !== text) return { ...direct, source: 'prompt' };
   if (!FOLLOW_UP.test(text)) return { ...direct, source: 'prompt' };

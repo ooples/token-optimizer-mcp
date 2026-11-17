@@ -1,0 +1,112 @@
+{"prompt": "the checkout button does nothing on Safari", "before": "", "label": "fix"}
+{"prompt": "our nightly job has been failing since Tuesday with a timeout, please investigate and fix", "before": "", "label": "fix"}
+{"prompt": "images upload but show as broken thumbnails", "before": "", "label": "fix"}
+{"prompt": "NullPointerException in OrderMapper.toDto when the address is missing", "before": "", "label": "fix"}
+{"prompt": "Sorting by price puts 100 before 20. Make it sort numerically.", "before": "", "label": "fix"}
+{"prompt": "the app hangs on startup if the config file is missing", "before": "", "label": "fix"}
+{"prompt": "emails are sent twice to every subscriber, get rid of the duplicate", "before": "", "label": "fix"}
+{"prompt": "cargo build errors out with 'mismatched types' after the refactor", "before": "", "label": "fix"}
+{"prompt": "the progress bar goes past 100%", "before": "", "label": "fix"}
+{"prompt": "tests in packages/core are failing on windows because of path separators", "before": "", "label": "fix"}
+{"prompt": "timezone handling is wrong for the weekly report, the totals don't match the dashboard", "before": "", "label": "fix"}
+{"prompt": "Docker container exits immediately with code 137", "before": "", "label": "fix"}
+{"prompt": "the websocket disconnects every 30 seconds and doesn't reconnect, this is a regression", "before": "", "label": "fix"}
+{"prompt": "unicode filenames get mangled when downloading, can you correct that", "before": "", "label": "fix"}
+{"prompt": "the type checker complains about 40 errors in the generated client, clean them up", "before": "", "label": "fix"}
+{"prompt": "Why is the cart total wrong when a coupon and a sale apply together? Fix it.", "before": "", "label": "fix"}
+{"prompt": "the API returns stale data after an update until I restart the server", "before": "", "label": "fix"}
+{"prompt": "lint is failing on main, make it pass", "before": "", "label": "fix"}
+{"prompt": "deadlock between the importer and the indexer under load", "before": "", "label": "fix"}
+{"prompt": "the screen reader skips the modal's close button; make it accessible", "before": "", "label": "fix"}
+{"prompt": "add dark mode to the marketing site", "before": "", "label": "build"}
+{"prompt": "implement OAuth login with GitHub", "before": "", "label": "build"}
+{"prompt": "create a webhook that notifies Slack when an order ships", "before": "", "label": "build"}
+{"prompt": "I want users to be able to upload a profile picture", "before": "", "label": "build"}
+{"prompt": "build a script that backs up the database to S3 every night", "before": "", "label": "build"}
+{"prompt": "add an option to export reports as Excel files", "before": "", "label": "build"}
+{"prompt": "write a GitHub Action that runs the linters on every PR", "before": "", "label": "build"}
+{"prompt": "add caching to the product lookup so repeated calls are fast", "before": "", "label": "build"}
+{"prompt": "refactor the payment module to use the strategy pattern", "before": "", "label": "build"}
+{"prompt": "convert the class components in src/ui to hooks", "before": "", "label": "build"}
+{"prompt": "Add integration tests for the signup flow", "before": "", "label": "build"}
+{"prompt": "expose the metrics on a /metrics endpoint for Prometheus", "before": "", "label": "build"}
+{"prompt": "make the table sortable by any column", "before": "", "label": "build"}
+{"prompt": "we should support multiple languages in the UI, set up i18n", "before": "", "label": "build"}
+{"prompt": "move the config from env vars to a typed settings object", "before": "", "label": "build"}
+{"prompt": "generate TypeScript types from the OpenAPI spec as part of the build", "before": "", "label": "build"}
+{"prompt": "allow the CLI to read input from stdin", "before": "", "label": "build"}
+{"prompt": "upgrade the project from Python 3.8 to 3.12 and use the new syntax where it helps", "before": "", "label": "build"}
+{"prompt": "add a health check endpoint", "before": "", "label": "build"}
+{"prompt": "extract the email sending into its own service", "before": "", "label": "build"}
+{"prompt": "rewrite the intro of docs/index.md to be shorter and punchier", "before": "", "label": "rewrite"}
+{"prompt": "reword the onboarding emails so they sound less robotic", "before": "", "label": "rewrite"}
+{"prompt": "translate the UI strings in locales/en.json to German", "before": "", "label": "rewrite"}
+{"prompt": "copyedit the FAQ page", "before": "", "label": "rewrite"}
+{"prompt": "make this README more concise", "before": "", "label": "rewrite"}
+{"prompt": "fix the grammar in the user guide", "before": "", "label": "rewrite"}
+{"prompt": "change the tone of the error messages to be more apologetic", "before": "", "label": "rewrite"}
+{"prompt": "rephrase the PR description so reviewers understand the motivation", "before": "", "label": "rewrite"}
+{"prompt": "rewrite the comments in scheduler.go so they explain why, not what", "before": "", "label": "rewrite"}
+{"prompt": "simplify the language in the terms of service summary", "before": "", "label": "rewrite"}
+{"prompt": "can you clean up the wording of my cover letter", "before": "", "label": "rewrite"}
+{"prompt": "Turn the meeting notes in notes.md into a tidy summary with headings", "before": "", "label": "rewrite"}
+{"prompt": "sort the imports and reformat main.py, no logic changes", "before": "", "label": "rewrite"}
+{"prompt": "condense the changelog for 3.0 into five bullet points", "before": "", "label": "rewrite"}
+{"prompt": "adjust the docs to use British spelling throughout", "before": "", "label": "rewrite"}
+{"prompt": "reorganise the sections of the handbook so related topics sit together, keep the text", "before": "", "label": "rewrite"}
+{"prompt": "explain the overall structure of this monorepo", "before": "", "label": "survey"}
+{"prompt": "do a security review of the whole API and list the findings", "before": "", "label": "survey"}
+{"prompt": "find every place we call the payments API and summarise how each uses it", "before": "", "label": "survey"}
+{"prompt": "which of our endpoints lack authentication? check them all", "before": "", "label": "survey"}
+{"prompt": "write ARCHITECTURE.md describing the system", "before": "", "label": "survey"}
+{"prompt": "give me a high-level summary of what each package in packages/ does", "before": "", "label": "survey"}
+{"prompt": "evaluate the accessibility of the whole site and report problems", "before": "", "label": "survey"}
+{"prompt": "survey the codebase for uses of deprecated APIs", "before": "", "label": "survey"}
+{"prompt": "compare the three logging libraries we use and recommend one", "before": "", "label": "survey"}
+{"prompt": "what does this project do? I just cloned it", "before": "", "label": "survey"}
+{"prompt": "list all the database tables and their relationships", "before": "", "label": "survey"}
+{"prompt": "document all the CLI commands and their flags", "before": "", "label": "survey"}
+{"prompt": "check every config file for hard-coded credentials", "before": "", "label": "survey"}
+{"prompt": "analyse the performance hot spots across the services and write them up", "before": "", "label": "survey"}
+{"prompt": "how is this repository organised?", "before": "", "label": "survey"}
+{"prompt": "audit our npm dependencies for known vulnerabilities", "before": "", "label": "survey"}
+{"prompt": "where's the config for the CI cache", "before": "", "label": "locate"}
+{"prompt": "find the function that calculates shipping costs", "before": "", "label": "locate"}
+{"prompt": "which component renders the user avatar?", "before": "", "label": "locate"}
+{"prompt": "where do we read the DATABASE_URL", "before": "", "label": "locate"}
+{"prompt": "what file is the Header component in", "before": "", "label": "locate"}
+{"prompt": "look for the place where retries are capped at 5", "before": "", "label": "locate"}
+{"prompt": "in server.log, find when the disk-full errors began", "before": "", "label": "locate"}
+{"prompt": "Find the test that covers the refund edge case", "before": "", "label": "locate"}
+{"prompt": "which commit changed the default port to 8080?", "before": "", "label": "locate"}
+{"prompt": "search the codebase for TODO(security)", "before": "", "label": "locate"}
+{"prompt": "show me where the feature flag new_checkout is read", "before": "", "label": "locate"}
+{"prompt": "where is the docker-compose file for local dev", "before": "", "label": "locate"}
+{"prompt": "find the occurrences of 'legacyMode' in the frontend", "before": "", "label": "locate"}
+{"prompt": "what line in the trace output first mentions the auth service", "before": "", "label": "locate"}
+{"prompt": "where are the migration files stored", "before": "", "label": "locate"}
+{"prompt": "how does the retry decorator work", "before": "", "label": "explain"}
+{"prompt": "why does the build use two separate tsconfig files", "before": "", "label": "explain"}
+{"prompt": "what does useMemo do in this component", "before": "", "label": "explain"}
+{"prompt": "can you explain how the auth token gets refreshed", "before": "", "label": "explain"}
+{"prompt": "what is the point of the outbox table", "before": "", "label": "explain"}
+{"prompt": "how do the background workers coordinate with each other", "before": "", "label": "explain"}
+{"prompt": "I don't get what this SQL query is doing, walk me through it", "before": "", "label": "explain"}
+{"prompt": "why are we using a mutex here instead of a channel", "before": "", "label": "explain"}
+{"prompt": "describe what happens when a user clicks pay", "before": "", "label": "explain"}
+{"prompt": "what's the difference between staging and preview deployments in our setup", "before": "", "label": "explain"}
+{"prompt": "how are permissions checked for nested resources", "before": "", "label": "explain"}
+{"prompt": "help me understand the event sourcing setup", "before": "", "label": "explain"}
+{"prompt": "what does the Makefile's release target do step by step", "before": "", "label": "explain"}
+{"prompt": "why is the cache key built from the user id and locale", "before": "", "label": "explain"}
+{"prompt": "how is the pagination cursor encoded", "before": "", "label": "explain"}
+{"prompt": "great, thanks!", "before": "", "label": "unknown"}
+{"prompt": "no", "before": "", "label": "unknown"}
+{"prompt": "do it", "before": "", "label": "unknown"}
+{"prompt": "go on", "before": "", "label": "unknown"}
+{"prompt": "what time is it in Tokyo", "before": "", "label": "unknown"}
+{"prompt": "hi there", "before": "", "label": "unknown"}
+{"prompt": "option B please", "before": "", "label": "unknown"}
+{"prompt": "push it", "before": "", "label": "unknown"}
+{"prompt": "stop", "before": "", "label": "unknown"}
+{"prompt": "perfect", "before": "", "label": "unknown"}
