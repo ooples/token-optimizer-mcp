@@ -75,3 +75,8 @@ moves outside `/tmp`, where Codex refuses to create its helper aliases.
 All runs share the existing candidate campaign's read-only fixture and pinned
 repository volume. This prevents independent fixture regeneration from adding
 differences between the products; product state remains fresh for each run.
+
+The input-fingerprint preflight corrected the shared repository-cache path to
+`/frozen/.cache/repos`. No scored task had started. Both changed-setting probes
+passed using the installed hooks: survey selected `{false, true}`, rewrite
+selected `{true, false}` for output discipline and outline substitution.

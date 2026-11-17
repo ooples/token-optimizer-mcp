@@ -61,7 +61,7 @@ def main():
     module.loader.exec_module(rig)
     rig.FIXTURES_OUT = Path('/frozen/fixtures/out')
     rig.TRUTH_DIR = Path('/frozen/fixtures/truth')
-    rig.REPO_CACHE = Path('/frozen/repos')
+    rig.REPO_CACHE = Path('/frozen/.cache/repos')
     if args.probe:
         workspace.mkdir()
         (workspace / 'README.md').write_text('Old wording: a tiny example project.\n')
