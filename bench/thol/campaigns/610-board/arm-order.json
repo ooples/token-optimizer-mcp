@@ -1,4 +1,5 @@
 {
+  "allow_prefix": true,
   "arms": ["token-optimizer-mcp"],
   "orders": [
     ["token-optimizer-mcp"],

@@ -416,7 +416,7 @@ start_proxies() {
       // have left it inert -- the arm would look configured and the scope
       // filter would never fire, which is the exact silent-null shape this rig
       // has produced before.
-      // PASSED THROUGH, NOT COERCED. `? '1' : ''` turned every non-empty value
+      // PASSED THROUGH, NOT COERCED. A truthy ternary turned every non-empty value
       // into '1', so a manifest declaring "0" or "false" -- the spellings an
       // operator would reach for to say NOT shared -- arrived as an assertion
       // that the graph IS shared. The proxy would then drop every

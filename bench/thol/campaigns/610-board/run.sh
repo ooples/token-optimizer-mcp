@@ -20,7 +20,7 @@ export SEG_3="seo-audit,report-pdf,code-overview-cobra,code-settings-inventory-d
 export SEG_4="code-comprehension-django,code-debug-pipeline-py,code-debug-ledger-py,code-debug-cascade-py,code-rewrite-modernize-py"
 export SEGMENTS_MAX=4
 
-volume() { echo "thol-610-board-$1"; }
+volume() { echo "thol-610-board-v2-$1"; }
 
 spent() {
   local total=0 one
@@ -63,18 +63,9 @@ for rep in 1 2 3 4 5; do
       echo "!! recorded spend already passed the stop; halting" >&2
       exit 3
     fi
-    # The runner plans reps 1..REPS and resumes past finished ones, and
-    # ordered_campaign.py requires the plan to hold exactly REPS orders. So each
-    # call gets the first $rep orders of the committed arm-order.json: a prefix,
-    # never a reordering (the first launch failed here, before any run).
-    prefix="$HERE/arm-order.rep$rep.json"
-    python -c "
-import json, sys
-plan = json.load(open(sys.argv[1]))
-plan['orders'] = plan['orders'][:int(sys.argv[2])]
-assert len(plan['orders']) == int(sys.argv[2])
-open(sys.argv[3], 'w').write(json.dumps(plan, indent=2) + '\n')" "$HERE/arm-order.json" "$rep" "$prefix"
-    ARM_ORDER_FILE="$prefix" IMAGE="thol-rig:$image" RESULTS_VOLUME="$(volume "$image")" REPS="$rep" bash "$RIG/run-campaign.sh"
+    # Every prefix uses the same committed file/checksum; only its requested
+    # repetition count changes. The wrapper validates the full plan first.
+    IMAGE="thol-rig:$image" RESULTS_VOLUME="$(volume "$image")" REPS="$rep" bash "$RIG/run-campaign.sh"
     total=$(spent)
     echo ">> after rep $rep $image: \$$total"
     if python -c "import sys; sys.exit(0 if $total > $STOP_USD else 1)"; then

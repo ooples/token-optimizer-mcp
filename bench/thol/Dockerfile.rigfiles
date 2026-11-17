@@ -16,7 +16,8 @@
 # The provenance file comes along deliberately: an image whose entrypoint and manifests
 # are newer than its provenance record is exactly the unattributable build this rig
 # refuses to run. Rebuild from thol/Dockerfile whenever anything under src/ changes.
-FROM thol-rig:local
+ARG BASE_IMAGE=thol-rig:local
+FROM ${BASE_IMAGE}
 
 # THE MOUNTPOINT HAS TO EXIST IN THE IMAGE, OWNED BY THE RUNTIME USER. Docker seeds a
 # fresh named volume from the image path it is mounted at -- content and ownership. The

@@ -15,7 +15,7 @@ per-category settings, holdout telemetry) against master as of this campaign.
   - `thol-rig:master`: token-optimizer-mcp 1518a5d7 (tree 8b68d518), master.
   - `/opt/optimizer-provenance.json` is checked in each image before launch.
 - **Arm:** `token-optimizer-mcp` in both images. Nothing else differs between the images.
-- **Results volumes:** `thol-610-board-pr610` and `thol-610-board-master`, one per image. The runner keys resume on (competitor, task, rep) under the client version, which is the same in both images (2.1.325), so a shared volume would skip the second image's runs.
+- **Results volumes:** `thol-610-board-v2-pr610` and `thol-610-board-v2-master`, one per image. The runner keys resume on (competitor, task, rep) under the client version, which is the same in both images (2.1.325), so a shared volume would skip the second image's runs.
 - **Repetitions:** 5. Images alternate per rep: odd reps run pr610 first, even reps run master
   first (`run.sh`). The same rep of both images runs back to back, so drift over the day hits
   both arms equally.
@@ -114,3 +114,14 @@ running. Thus no previous paid results are being replaced or pooled.
   contextual 155/487. This is not human gold and does not establish high accuracy.
 - Tasks, five repetitions, alternating image order, category thresholds,
   success gate, outlier inspection and the $70 stop remain unchanged.
+
+### Setup-only correction (2026-11-17, still zero paid runs)
+
+The launch completed the harness selftest, then refused the sliced arm-order
+file because its checksum differed from earlier setup metadata. Slicing the
+file would also change its checksum between repetitions. The fixed committed
+plan now explicitly allows prefixes; the wrapper validates all five orders,
+executes the requested prefix, and always hashes the same complete file.
+The wrapper change is applied identically to both images, without changing
+either product. New `v2` volumes preserve the old setup-only volumes and avoid
+silently rewriting their order metadata. No paid rows are discarded.

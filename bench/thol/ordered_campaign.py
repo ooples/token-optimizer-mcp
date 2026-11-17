@@ -26,7 +26,14 @@ def validate(plan, arms, reps):
 def build_plan(arms, tasks, reps):
     path = Path(os.environ["THOL_ARM_ORDER_FILE"])
     raw = path.read_bytes()
-    orders = validate(json.loads(raw), arms, reps)
+    plan = json.loads(raw)
+    # A pre-registered full plan may explicitly allow incremental, resumable
+    # prefixes. Hash the unchanged full file, not a different file per prefix.
+    count = len(plan.get("orders", [])) if plan.get("allow_prefix") is True else reps
+    orders = validate(plan, arms, count)
+    if reps < 1 or reps > len(orders):
+        raise ValueError("Requested repetitions exceed the committed plan")
+    orders = orders[:reps]
     print("arm-order-sha256=" + hashlib.sha256(raw).hexdigest(), flush=True)
     return [(arm, task, rep) for rep, order in enumerate(orders, 1)
             for task in tasks for arm in order]

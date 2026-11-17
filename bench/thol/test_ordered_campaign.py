@@ -26,6 +26,19 @@ class OrderTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             validate({"arms": ['b', 'a'], "orders": [['b', 'a']]}, ['a', 'b'], 1)
 
+    def test_explicit_prefix_keeps_one_order_file_and_cannot_exceed_it(self):
+        plan = {"arms": ["a"], "orders": [["a"], ["a"]], "allow_prefix": True}
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "order.json"
+            path.write_text(json.dumps(plan))
+            original = path.read_bytes()
+            with patch.dict(os.environ, {"THOL_ARM_ORDER_FILE": str(path)}):
+                self.assertEqual(build_plan(["a"], ["task"], 1), [("a", "task", 1)])
+                self.assertEqual(build_plan(["a"], ["task"], 2), [("a", "task", 1), ("a", "task", 2)])
+                with self.assertRaises(ValueError):
+                    build_plan(["a"], ["task"], 3)
+            self.assertEqual(path.read_bytes(), original)
+
     def test_upstream_drift_fails_closed(self):
         with self.assertRaises(ValueError):
             patched_source('plan = []')
