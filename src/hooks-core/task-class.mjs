@@ -9,17 +9,14 @@
  * only be on or off everywhere gives up one of each pair. So the session is
  * given a category, and task-settings.mjs holds a default per category.
  *
- * TWO PASSES, BECAUSE A PROMPT CAN MISLEAD (chosen 2026-11-16). The prompt is
- * classified when it is submitted, which is the only point early enough for
- * text that has to be in context before the first turn. The first tool calls
- * then confirm or correct it: a model that reads a 500 KB log is locating,
- * whatever the prompt said. Text already delivered cannot be retracted, so the
- * second pass only moves settings applied per tool call.
+ * TWO PASSES. The current request and recent conversation choose a task at
+ * prompt submit (task-context.mjs). Early tool calls can fill in UNKNOWN, but
+ * cannot replace a known task: a fix may read a huge log or overwrite a file.
  *
  * DETERMINISTIC AND CHEAP. This runs inside a hook with a deadline, on every
  * prompt, so it is rules over bounded input: no model call, no directory walk.
- * Ties and weak evidence give UNKNOWN, whose settings are today's defaults, so
- * a wrong guess can never be worse than not classifying.
+ * Ties and weak evidence give UNKNOWN, whose settings are today's defaults.
+ * False positives can still apply the wrong setting and require measurement.
  */
 
 import { statSync } from 'node:fs';
@@ -77,6 +74,8 @@ const RULES = {
     [/\b(?:failing|failed|fails|broken|red)\b[^.\n]{0,40}\b(?:tests?|suite|build|ci|lint|job)\b/i, 3],
     [/\b(?:tests?|suite|build|lint|job)\b[^.\n]{0,30}\b(?:fail(?:s|ing|ed)?|red|broken|errors? out)\b/i, 3],
     [/\b(?:fix|debug|repair)\b[^.\n]{0,40}\b(?:bugs?|errors?|crash|regression|issue)\b/i, 3],
+    // A bare issue reference is repair; grammar/style issues keep their rewrite cues.
+    [/\b(?:fix|repair|resolve) (?:these|those|the|all|remaining|reported|identified|new|outstanding|both) issues\b/i, 2],
     [/\broot cause\b/i, 2],
     [/\b(?:traceback|stack trace|exception)\b/i, 1],
     // SYMPTOMS: what a person writes when something that worked does not.
@@ -117,9 +116,11 @@ const RULES = {
   ],
   [TaskCategory.SURVEY]: [
     // A REPORT AS THE DELIVERABLE. A noun alone is a mention ("the architecture
-    // discussion", "the report said"); asking for one is a survey.
-    [/\b(?:write|produce|create|generate)\b[^.\n]{0,50}\.md\b/i, 3],
-    [/\b(?:write|produce|create|generate|give me|prepare|draft|put together|need)\b[^.\n]{0,25}\b(?:audit|inventory|overview|report|summary|write-?up|gap analysis|comparison|catalog(?:ue)?|(?:sprint |project |implementation |migration )?plan|task list|checklist|user stories)\b/i, 3],
+    // discussion", "the report said"); asking for one is a survey. The gap
+    // may cross a line break: task statements are often hard-wrapped
+    // ("write your findings to\n`seo_report.md`").
+    [/\b(?:write|produce|create|generate)\b[^.]{0,50}\.md\b/i, 3],
+    [/\b(?:write|produce|create|generate|give me|prepare|draft|put together|need|perform|conduct|carry out|run|do)\b[^.\n]{0,25}\b(?:audit|inventory|overview|report|summary|write-?up|gap analysis|comparison|catalog(?:ue)?|(?:sprint |project |implementation |migration )?plan|task list|checklist|user stories)\b/i, 3],
     [/\b(?:sprint plans?|(?:detailed|comprehensive|exhaustive) (?:report|sprint plan|review|write-?up|analysis|github issue|issue|list))\b/i, 3],
     [/\banaly[sz]e\b[^.\n]{0,30}\b(?:issues|PRs|pull requests|reports?|results|gaps|findings)\b/i, 2],
     [/\b(?:audit|inventory|overview|architecture|onboarding|report|documentation)\b/i, 1],
@@ -180,10 +181,10 @@ function sizeOf(path, cwd) {
  * The category of a prompt, with the evidence that chose it.
  *
  * @param {string} prompt the user's prompt
- * @param {{cwd?: string}} [workspace] where relative paths in the prompt resolve
+ * @param {{cwd?: string, statPaths?: boolean}} [workspace] where named paths resolve; disable stats for old context
  * @returns {{category: string, scores: Record<string, number>, signals: string[]}}
  */
-export function classifyPrompt(prompt, { cwd } = {}) {
+export function classifyPrompt(prompt, { cwd, statPaths = true } = {}) {
   const text = String(prompt || '').slice(0, PROMPT_HEAD);
   const scores = Object.fromEntries([...CATEGORIES].map((c) => [c, 0]));
   const signals = [];
@@ -196,7 +197,7 @@ export function classifyPrompt(prompt, { cwd } = {}) {
       }
 
   // WORKSPACE EVIDENCE: only what the prompt itself names, and only a stat.
-  for (const path of namedPaths(text).slice(0, MAX_STATS)) {
+  for (const path of (statPaths ? namedPaths(text).slice(0, MAX_STATS) : [])) {
     const size = sizeOf(path, cwd);
     if (size >= LARGE_INPUT_BYTES) {
       scores[TaskCategory.LOCATE] += 3;
@@ -227,21 +228,19 @@ const TEST_COMMAND =
  * apply it the moment the evidence appears.
  *
  * @param {{tool_name?: string, tool_input?: object, tool_response?: unknown}} call
- * @param {{readPaths?: string[], cwd?: string}} [context]
+ * @param {{cwd?: string}} [context]
  */
-export function categoryFromToolCall(call, { readPaths = [], cwd } = {}) {
+export function categoryFromToolCall(call, { cwd } = {}) {
   const name = String(call?.tool_name || '');
   const input = call?.tool_input || {};
   const path = typeof input.file_path === 'string' ? input.file_path : '';
 
-  // A whole-file read of something huge is a search, whatever the prompt said.
+  // A huge input is weak locate evidence, usable only while the task is unknown.
   if (/^(?:Read|read_file|view)$/i.test(name) && path && input.offset == null && input.limit == null)
     if (sizeOf(path, cwd) >= LARGE_INPUT_BYTES) return TaskCategory.LOCATE;
 
-  // Replacing a file the session already read, wholesale, is a rewrite.
-  if (/^(?:Write|write_file|create)$/i.test(name) && path && readPaths.includes(path))
-    return TaskCategory.REWRITE;
-
+  // A whole-file write can implement a feature, fix a bug or rewrite syntax.
+  // It cannot distinguish those tasks, even if the file was previously read.
   // A test run that fails before anything was edited is a fix.
   if (/^(?:Bash|shell|run_shell_command|exec_command)$/i.test(name)) {
     const command = String(input.command || input.cmd || '');
@@ -255,22 +254,12 @@ export function categoryFromToolCall(call, { readPaths = [], cwd } = {}) {
 }
 
 /*
- * WHICH EVIDENCE MAY OVERRULE THE PROMPT. A red test run is how a BUILD task
- * starts too ("implement SPEC.md; the suite is failing"), so it only settles a
- * session the prompt left UNKNOWN. A whole-file read of a huge input and a
- * wholesale rewrite are what LOCATE and REWRITE mean, and they are exactly the
- * cases outline substitution gets right or wrong, so they overrule anything.
- */
-const OVERRULES = new Set([TaskCategory.LOCATE, TaskCategory.REWRITE]);
-
-/**
- * May tool evidence `seen` replace the category `stored`? Only a locate or a
- * rewrite overrules a known category; anything may settle UNKNOWN. One rule,
- * used where a call is judged and again where parallel saves are merged
- * (policy.mjs), so a save cannot carry a move a single call could not make.
+ * Tool use is supporting evidence, not the user's intent: fixing a bug can
+ * require a huge read or a whole-file write. Only settle UNKNOWN; never replace
+ * an explicit, contextual or inherited task. Writes alone prove no category.
  */
 export function mayReplace(stored, seen) {
-  return Boolean(seen) && seen !== stored && (OVERRULES.has(seen) || stored === TaskCategory.UNKNOWN);
+  return isTaskCategory(seen) && seen !== TaskCategory.UNKNOWN && stored === TaskCategory.UNKNOWN;
 }
 
 /**

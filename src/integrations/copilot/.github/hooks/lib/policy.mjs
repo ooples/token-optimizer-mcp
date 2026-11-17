@@ -435,6 +435,7 @@ function emptyState() {
     // context was last rebuilt (SessionStart: startup, resume, clear, compact).
     // The block is said again once the context it was said into is gone.
     disciplineServedAt: 0,
+    disciplineReleasedAt: 0,
     contextStartedAt: 0,
     // What was in view when the context was last compacted: clearSeen empties
     // `seen` for the read cache, and SessionStart's restoration still needs it.
@@ -671,6 +672,7 @@ export function loadState(sessionId, agent) {
       // the first tool calls, and read by every hook that applies a setting.
       taskClass: validTaskClass(parsed.taskClass),
       disciplineServedAt: Number.isFinite(parsed.disciplineServedAt) ? parsed.disciplineServedAt : 0,
+      disciplineReleasedAt: Number.isFinite(parsed.disciplineReleasedAt) ? parsed.disciplineReleasedAt : 0,
       contextStartedAt: Number.isFinite(parsed.contextStartedAt) ? parsed.contextStartedAt : 0,
       compactionAnchors: validAnchors(parsed.compactionAnchors),
     });
@@ -851,6 +853,7 @@ export function saveState(sessionId, state, agent) {
       // POINTS IN TIME, so the latest wins. A boolean could never be reset by a
       // compaction: this merge would OR the old "said" back in.
       disciplineServedAt: Math.max(Number(current.disciplineServedAt) || 0, Number(state.disciplineServedAt) || 0),
+      disciplineReleasedAt: Math.max(Number(current.disciplineReleasedAt) || 0, Number(state.disciplineReleasedAt) || 0),
       contextStartedAt: Math.max(Number(current.contextStartedAt) || 0, Number(state.contextStartedAt) || 0),
       // The latest compaction's set; a caller that loaded an older one keeps nothing back.
       compactionAnchors: [validAnchors(current.compactionAnchors), validAnchors(state.compactionAnchors)]

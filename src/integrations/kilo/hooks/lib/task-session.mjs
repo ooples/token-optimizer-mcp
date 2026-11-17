@@ -12,18 +12,18 @@
  */
 
 import { loadState, saveState } from './policy.mjs';
-import { TaskCategory, afterToolCall, classifyPrompt } from './task-class.mjs';
+import { TaskCategory, afterToolCall } from './task-class.mjs';
+import { resolveTaskPrompt } from './task-context.mjs';
 import { OUTPUT_DISCIPLINE, sessionSettings } from './task-settings.mjs';
 import { recordClassified, taskArm } from './task-ledger.mjs';
 
 /**
  * Classify a submitted prompt, store the category, and return the context to add.
  *
- * Each prompt starts a fresh classification and a fresh correction window: a
- * session that moves from fixing a bug to writing its report has changed task.
- * The discipline block is said once per context -- again only after a
- * SessionStart rebuilt the context (compaction, resume) -- because text already
- * in context cannot be withdrawn and repeating it only re-bills it.
+ * Each prompt starts a fresh correction window. Explicit requests choose the
+ * task; approvals use recent proposals, then inherit the current task if unclear.
+ * The discipline block is said once per context, with explicit release and
+ * reactivation when tasks change: old instructions remain in model context.
  *
  * @param {{deliver?: boolean}} options deliver: false classifies without adding text
  * @returns {{category: string, context: string}}
@@ -33,19 +33,22 @@ export function promptSubmitted({
   prompt,
   cwd,
   agent,
+  transcriptPath,
   client = null,
   deliver = true,
   env = process.env,
   now = Date.now(),
 }) {
-  const { category, signals } = classifyPrompt(prompt, { cwd });
   const state = loadState(sessionId, agent);
+  const { category, source, signals } = resolveTaskPrompt(prompt, {
+    cwd, previous: state.taskClass, transcriptPath, now,
+  });
   // A NEW GENERATION per prompt. Tool observations carry the generation they
   // loaded, and saveState never lets an older generation's correction or count
   // overwrite a newer prompt's decision, however late it is saved. Strictly
   // increasing even for two prompts in one millisecond.
   const gen = Math.max(now, (Number(state.taskClass?.gen) || 0) + 1);
-  state.taskClass = { category, source: 'prompt', calls: 0, gen };
+  state.taskClass = { category, source, calls: 0, gen };
   // A held-out session is classified and recorded like any other, and runs the
   // UNKNOWN row (task-ledger.mjs explains why).
   const settings = sessionSettings(state, env, { sessionId });
@@ -53,11 +56,16 @@ export function promptSubmitted({
   let context = '';
   // Said once per context: again after a compaction or resume rebuilt it.
   const servedAt = Number(state.disciplineServedAt) || 0;
+  const releasedAt = Number(state.disciplineReleasedAt) || 0;
+  const inContext = servedAt > 0 && servedAt >= (Number(state.contextStartedAt) || 0);
   // `deliver` is false for a client whose prompt hook classifies but cannot add
   // text: SessionStart said the block there, so nothing is served or recorded.
-  if (deliver && settings.outputDiscipline && (!servedAt || servedAt < (Number(state.contextStartedAt) || 0))) {
+  if (deliver && settings.outputDiscipline && (!inContext || releasedAt >= servedAt)) {
     context = OUTPUT_DISCIPLINE;
-    state.disciplineServedAt = now;
+    state.disciplineServedAt = gen;
+  } else if (deliver && !settings.outputDiscipline && inContext && servedAt > releasedAt) {
+    context = 'For the current task, the earlier "Keep output lean" instructions are inactive. Write the complete response the task requires.';
+    state.disciplineReleasedAt = gen;
   }
   saveState(sessionId, state, agent);
   return { category, context };
@@ -72,7 +80,6 @@ export function toolCallObserved(state, payload, { cwd, count = true } = {}) {
   const before = state.taskClass;
   const next = afterToolCall(before, payload, {
     cwd,
-    readPaths: Object.keys(state.seen || {}),
   }, { count });
   if (next === before) return;
   // Same generation as what was loaded: saveState merges this observation into

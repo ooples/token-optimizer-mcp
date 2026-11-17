@@ -123,12 +123,24 @@ build tasks and costs 8% on surveys, where the report has to be written in full.
 So each session gets a task category, and each category has its own defaults
 (`src/hooks-core/task-settings.mjs`).
 
-- **When the prompt arrives**, it is classified as fix, build, rewrite, survey,
-  locate, explain or unknown. Rules over the prompt's first 4 KB, plus the size
-  of any file it names; no model call. Weak or tied evidence is `unknown`.
-- **The first six tool calls can correct it.** A whole-file read of a file over
-  256 KB makes it `locate`; writing over a file the session read makes it
-  `rewrite`; a failing test run settles an `unknown` session as `fix`.
+- **When the prompt arrives**, an explicit request selects fix, build, rewrite,
+  survey, locate, explain or unknown. The free classifier uses bounded rules,
+  the prompt's first 4 KB and the sizes of up to eight named files; no model call.
+- **Approvals and continuations use recent context.** “Yes, do that” can accept
+  the assistant's proposed next action, and “do #1” selects just that numbered
+  option. Otherwise a continuation inherits the current task. A new explicit
+  request wins; cancellations and unrelated chat do not inherit.
+  Claude and Codex JSONL transcripts provide up to six recent text messages
+  from a 64 KiB tail, with at most 4,000 characters per message. Tools, reasoning,
+  injected instructions, quotes and code examples do not supply proposals.
+  Missing or unsupported transcripts fall back to the saved category; context
+  older than 24 hours is not reused. Raw conversation is not stored in telemetry.
+- **The first six tool calls can settle `unknown`.** A whole-file read over
+  256 KB suggests `locate`; a failing test run suggests `fix`. Tool use cannot
+  replace a known task, and overwriting a read file does not establish `rewrite`.
+- **Task changes update delivered instructions.** On prompt-context clients,
+  moving from fix/build to survey explicitly releases an earlier output-discipline
+  block; moving back delivers it again. Repeated continuations add no duplicate.
 - **`unknown` runs with the defaults the product had before categories.** A
   category only differs where a measurement says so, and the table names it.
 - **The output-discipline block comes with the prompt** on clients whose prompt

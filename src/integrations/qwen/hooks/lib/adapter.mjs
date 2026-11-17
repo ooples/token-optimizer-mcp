@@ -1495,6 +1495,8 @@ async function runHook(clientName, event, invocation) {
       prompt,
       cwd,
       agent: scope,
+      // A child payload can name its parent's transcript; do not borrow its task.
+      transcriptPath: raw.agent_id || raw.agentId ? null : raw.transcript_path ?? raw.transcriptPath ?? null,
       client: clientName,
       deliver: client.promptContext === true,
     });

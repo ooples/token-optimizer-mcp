@@ -83,32 +83,27 @@ describe('the prompt pass', () => {
 describe('the tool-call pass', () => {
   const start = (category) => ({ category, source: 'prompt', calls: 0, at: 1 });
 
-  test('a whole-file read of a huge input overrules the prompt', () => {
-    const next = afterToolCall(start(TaskCategory.BUILD), {
-      tool_name: 'Read',
-      tool_input: { file_path: bigLog },
+  test('a huge read settles UNKNOWN but never replaces a known task', () => {
+    const call = { tool_name: 'Read', tool_input: { file_path: bigLog } };
+    expect(afterToolCall(start(TaskCategory.UNKNOWN), call)).toMatchObject({
+      category: TaskCategory.LOCATE, source: 'tools', calls: 1,
     });
-    expect(next).toMatchObject({ category: TaskCategory.LOCATE, source: 'tools', calls: 1 });
+    for (const category of Object.values(TaskCategory).filter((c) => c !== TaskCategory.UNKNOWN))
+      expect(afterToolCall(start(category), call).category).toBe(category);
   });
 
   test('a paged read of the same file is not evidence', () => {
-    const next = afterToolCall(start(TaskCategory.BUILD), {
-      tool_name: 'Read',
-      tool_input: { file_path: bigLog, offset: 0, limit: 50 },
+    const next = afterToolCall(start(TaskCategory.UNKNOWN), {
+      tool_name: 'Read', tool_input: { file_path: bigLog, offset: 0, limit: 50 },
     });
-    expect(next.category).toBe(TaskCategory.BUILD);
+    expect(next.category).toBe(TaskCategory.UNKNOWN);
   });
 
-  test('writing over a file the session read is a rewrite', () => {
+  test('overwriting a read file does not identify the task', () => {
     const call = { tool_name: 'Write', tool_input: { file_path: '/w/a.js' } };
-    expect(afterToolCall(start(TaskCategory.BUILD), call, { readPaths: ['/w/a.js'] }).category).toBe(
-      TaskCategory.REWRITE
-    );
-    expect(afterToolCall(start(TaskCategory.BUILD), call, { readPaths: [] }).category).toBe(
-      TaskCategory.BUILD
-    );
+    for (const category of Object.values(TaskCategory))
+      expect(afterToolCall(start(category), call, { readPaths: ['/w/a.js'] }).category).toBe(category);
   });
-
   test('a red test run settles UNKNOWN but never overrules BUILD', () => {
     const red = {
       tool_name: 'Bash',
@@ -219,27 +214,24 @@ describe('saved by parallel hooks (saveState)', () => {
     saveState(session, stale);
     expect(loadState(session).taskClass.category).toBe(TaskCategory.REWRITE);
   });
-
   test('a parallel correction cannot make a move one call could not', () => {
-    // Both load UNKNOWN. One sees a rewrite and saves it; the other then sees
-    // a red test -- FIX settles UNKNOWN, but never overrules a stored REWRITE.
+    // Both loaded UNKNOWN; the locate correction must survive a late red test.
     const session = `o${Math.random().toString(36).slice(2)}`;
-    promptSubmitted({ sessionId: session, prompt: 'Look around this repository.', cwd: dir, env: {} });
-    const rewriting = loadState(session);
+    promptSubmitted({ sessionId: session, prompt: 'Look around.', cwd: dir, env: {} });
+    const locating = loadState(session);
     const testing = loadState(session);
-    rewriting.seen = { [join(dir, 'a.js')]: 1 };
-    toolCallObserved(rewriting, { tool_name: 'Write', tool_input: { file_path: join(dir, 'a.js') } }, { cwd: dir });
-    expect(rewriting.taskClass.category).toBe(TaskCategory.REWRITE);
-    saveState(session, rewriting);
+    toolCallObserved(locating, { tool_name: 'Read', tool_input: { file_path: bigLog } }, { cwd: dir });
+    expect(locating.taskClass.category).toBe(TaskCategory.LOCATE);
+    saveState(session, locating);
     toolCallObserved(testing, red, { cwd: dir });
     expect(testing.taskClass.category).toBe(TaskCategory.FIX);
     saveState(session, testing);
-    expect(loadState(session).taskClass).toMatchObject({ category: TaskCategory.REWRITE, calls: 2 });
+    expect(loadState(session).taskClass).toMatchObject({ category: TaskCategory.LOCATE, calls: 2 });
   });
 
   test('a call that parallel saves push past the window moves nothing', () => {
     const session = `w${Math.random().toString(36).slice(2)}`;
-    promptSubmitted({ sessionId: session, prompt: 'Rewrite the whole file rules.py in TypeScript.', cwd: dir, env: {} });
+    promptSubmitted({ sessionId: session, prompt: 'Look around.', cwd: dir, env: {} });
     const warm = loadState(session);
     for (let i = 0; i < RECLASSIFY_WINDOW - 1; i++) toolCallObserved(warm, grep, { cwd: dir });
     saveState(session, warm);
@@ -253,7 +245,7 @@ describe('saved by parallel hooks (saveState)', () => {
     expect(seventh.taskClass.category).toBe(TaskCategory.LOCATE); // locally it looked inside
     saveState(session, seventh);
     expect(loadState(session).taskClass).toMatchObject({
-      category: TaskCategory.REWRITE,
+      category: TaskCategory.UNKNOWN,
       calls: RECLASSIFY_WINDOW + 1,
     });
   });
@@ -399,7 +391,7 @@ describe('through the Claude Code hooks', () => {
     });
     expect(storedCategory(session)).toBe(TaskCategory.FIX);
     const second = prompt('Now write `NOTES.md` summarising the audit.');
-    expect(second.stdout.trim()).toBe('');
+    expect(second.stdout).toContain('inactive');
     expect(storedCategory(session)).toBe(TaskCategory.SURVEY);
   });
 
