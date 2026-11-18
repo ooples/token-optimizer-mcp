@@ -1,0 +1,235 @@
+{
+  "images": {
+    "token-optimizer-qualification:20261118-v3": {
+      "imageID": "sha256:2a25e6dd9be8d29a11e95da9a90cef4a5c51b99d7e25d3eabf10491d0ec6c610",
+      "metadata": {
+        "codex": "codex-cli 0.169.0",
+        "node": "v22.23.5",
+        "npmGlobal": {
+          "name": "lib",
+          "dependencies": {
+            "@anthropic-ai/claude-code": {
+              "version": "2.1.325",
+              "overridden": false
+            },
+            "@colbymchenry/codegraph": {
+              "version": "1.6.3",
+              "overridden": false
+            },
+            "@ooples/token-optimizer-mcp": {
+              "version": "7.11.0",
+              "overridden": false
+            },
+            "@openai/codex": {
+              "version": "0.169.0",
+              "overridden": false
+            },
+            "@oven/bun-linux-x64": {
+              "version": "1.4.4",
+              "overridden": false
+            },
+            "@tokenade/cli": {
+              "version": "2.0.9",
+              "overridden": false
+            },
+            "claude-mem": {
+              "version": "15.21.0",
+              "overridden": false
+            },
+            "claude-token-optimizer": {
+              "version": "2.3.20",
+              "overridden": false
+            },
+            "corepack": {
+              "version": "0.36.0",
+              "overridden": false
+            },
+            "lean-ctx-bin": {
+              "version": "3.12.3",
+              "overridden": false
+            },
+            "npm": {
+              "version": "10.9.9",
+              "overridden": false
+            },
+            "skills": {
+              "version": "1.9.0",
+              "overridden": false
+            },
+            "tokenjuice": {
+              "version": "0.11.0",
+              "overridden": false
+            }
+          }
+        },
+        "gitMirrors": {
+          "caveman": "1e91f1306d602d4ca23618701b1185575ae1869b",
+          "ponytail": "96608e078b2d5ea607c5c3b8b5a54d1c1fba6846"
+        }
+      }
+    },
+    "token-optimizer-qualification:20261118-v4": {
+      "imageID": "sha256:690ee1f4f93f4c02a87378c7c6da51c94e7962baa9687b911a159f4d80202fe0",
+      "metadata": {
+        "codex": "codex-cli 0.169.0",
+        "node": "v22.23.5",
+        "npmGlobal": {
+          "name": "lib",
+          "dependencies": {
+            "@anthropic-ai/claude-code": {
+              "version": "2.1.325",
+              "overridden": false
+            },
+            "@colbymchenry/codegraph": {
+              "version": "1.6.3",
+              "overridden": false
+            },
+            "@ooples/token-optimizer-mcp": {
+              "version": "7.11.0",
+              "overridden": false
+            },
+            "@openai/codex": {
+              "version": "0.169.0",
+              "overridden": false
+            },
+            "@oven/bun-linux-x64": {
+              "version": "1.4.4",
+              "overridden": false
+            },
+            "@tokenade/cli": {
+              "version": "2.0.9",
+              "overridden": false
+            },
+            "claude-mem": {
+              "version": "15.21.0",
+              "overridden": false
+            },
+            "claude-token-optimizer": {
+              "version": "2.3.20",
+              "overridden": false
+            },
+            "corepack": {
+              "version": "0.36.0",
+              "overridden": false
+            },
+            "lean-ctx-bin": {
+              "version": "3.12.3",
+              "overridden": false
+            },
+            "npm": {
+              "version": "10.9.9",
+              "overridden": false
+            },
+            "skills": {
+              "version": "1.9.0",
+              "overridden": false
+            },
+            "token-optimizer": {
+              "version": "0.2.2",
+              "overridden": false
+            },
+            "tokenjuice": {
+              "version": "0.11.0",
+              "overridden": false
+            }
+          }
+        },
+        "gitMirrors": {
+          "caveman": "1e91f1306d602d4ca23618701b1185575ae1869b",
+          "ponytail": "96608e078b2d5ea607c5c3b8b5a54d1c1fba6846"
+        }
+      }
+    },
+    "token-optimizer-qualification:20261118-v5": {
+      "imageID": "sha256:7771e4c71baf2feaab768b6000c0365494da00d351d504cddc41c2f92d9ae141",
+      "metadata": {
+        "codex": "codex-cli 0.169.0",
+        "node": "v22.23.5",
+        "npmGlobal": {
+          "name": "lib",
+          "dependencies": {
+            "@anthropic-ai/claude-code": {
+              "version": "2.1.325",
+              "overridden": false
+            },
+            "@colbymchenry/codegraph": {
+              "version": "1.6.3",
+              "overridden": false
+            },
+            "@ooples/token-optimizer-mcp": {
+              "version": "7.11.0",
+              "overridden": false
+            },
+            "@openai/codex": {
+              "version": "0.169.0",
+              "overridden": false
+            },
+            "@oven/bun-linux-x64": {
+              "version": "1.4.4",
+              "overridden": false
+            },
+            "@tokenade/cli": {
+              "version": "2.0.9",
+              "overridden": false
+            },
+            "claude-mem": {
+              "version": "15.21.0",
+              "overridden": false
+            },
+            "claude-token-optimizer": {
+              "version": "2.3.20",
+              "overridden": false
+            },
+            "corepack": {
+              "version": "0.36.0",
+              "overridden": false
+            },
+            "lean-ctx-bin": {
+              "version": "3.12.3",
+              "overridden": false
+            },
+            "npm": {
+              "version": "10.9.9",
+              "overridden": false
+            },
+            "skills": {
+              "version": "1.9.0",
+              "overridden": false
+            },
+            "token-optimizer": {
+              "version": "0.2.2",
+              "overridden": false
+            },
+            "tokenjuice": {
+              "version": "0.11.0",
+              "overridden": false
+            }
+          }
+        },
+        "gitMirrors": {
+          "caveman": "1e91f1306d602d4ca23618701b1185575ae1869b",
+          "ponytail": "96608e078b2d5ea607c5c3b8b5a54d1c1fba6846"
+        }
+      }
+    }
+  },
+  "stageImages": {
+    "probes-v7": "token-optimizer-qualification:20261118-v3",
+    "probes-v8": "token-optimizer-qualification:20261118-v3",
+    "probes-v9": "token-optimizer-qualification:20261118-v3",
+    "probes-v10": "token-optimizer-qualification:20261118-v3",
+    "native-client-v1": "token-optimizer-qualification:20261118-v3",
+    "native-client-v2": "token-optimizer-qualification:20261118-v3",
+    "native-client-v3": "token-optimizer-qualification:20261118-v4",
+    "native-client-v4": "token-optimizer-qualification:20261118-v4",
+    "native-client-v5": "token-optimizer-qualification:20261118-v4",
+    "native-client-v6": "token-optimizer-qualification:20261118-v4",
+    "native-client-v7": "token-optimizer-qualification:20261118-v4",
+    "probes-v13": "token-optimizer-qualification:20261118-v4",
+    "probes-v14": "token-optimizer-qualification:20261118-v4",
+    "native-client-v8": "token-optimizer-qualification:20261118-v5"
+  },
+  "network": "none",
+  "hostHomeMounted": false,
+  "providerCredentialsMounted": false
+}

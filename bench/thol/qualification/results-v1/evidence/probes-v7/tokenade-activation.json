@@ -1,0 +1,114 @@
+{
+  "product": "tokenade",
+  "network": "none",
+  "providerCredentials": false,
+  "configurationFiles": [
+    {
+      "path": "home/.codex/hooks.json",
+      "sha256": "b876980741582e9bc76a1100eaadd2599b9e12b872d5a876130386f4e7be9b3b"
+    },
+    {
+      "path": "home/.codex/AGENTS.md",
+      "sha256": "ae74f3b4f06f927f08ff04d6b370165bcf7b2ee0c68d3ca1e5c7230953c03b16"
+    },
+    {
+      "path": "home/.codex/config.toml",
+      "sha256": "bd8172515aa9b8849dab2e22dec7a521b8e9374eedd20053e73926e841d5507c"
+    }
+  ],
+  "codexConfigs": [
+    {
+      "hooks": {
+        "state": {
+          "/home/bench/free-qualification-yx2bfn84/tokenade/home/.codex/hooks.json:post_tool_use:0:0": {
+            "enabled": true,
+            "trusted_hash": "sha256:dd8a660d4eff72447c38795e718a765c16a572db052716355204a6d585f2d4dc"
+          },
+          "/home/bench/free-qualification-yx2bfn84/tokenade/home/.codex/hooks.json:pre_compact:0:0": {
+            "enabled": true,
+            "trusted_hash": "sha256:87eb4f6f74123944b0c62c883cce4d5947969d3cf94b53d3e1d13d98e3f08c51"
+          },
+          "/home/bench/free-qualification-yx2bfn84/tokenade/home/.codex/hooks.json:pre_tool_use:0:0": {
+            "enabled": true,
+            "trusted_hash": "sha256:9934766e1dcc9c6bf35fe1a9602162ddec8918582589fc3a83d6b4a9cce39259"
+          },
+          "/home/bench/free-qualification-yx2bfn84/tokenade/home/.codex/hooks.json:session_start:0:0": {
+            "enabled": true,
+            "trusted_hash": "sha256:28d4ddff8509ae0d56fb3dc96aeeaedd46ba1d890343f9325e834cd37547fe8e"
+          },
+          "/home/bench/free-qualification-yx2bfn84/tokenade/home/.codex/hooks.json:subagent_start:0:0": {
+            "enabled": true,
+            "trusted_hash": "sha256:27fae7a7b3b1a3d36c1d2f65cdf361ee205c1910587441171ac07180e5d3ab38"
+          },
+          "/home/bench/free-qualification-yx2bfn84/tokenade/home/.codex/hooks.json:user_prompt_submit:0:0": {
+            "enabled": true,
+            "trusted_hash": "sha256:56e7369e75f00eaf13c1b94b7668654d261cca72a2eff53fc43d0d5b784ce880"
+          }
+        }
+      }
+    }
+  ],
+  "hookCalls": [
+    {
+      "event": "SessionStart",
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "event": "UserPromptSubmit",
+      "exit_code": 0,
+      "stdout": "{\"hookSpecificOutput\":{\"additionalContext\":\"[tokenade:style=coding] Multi-tool coding workflow. Emit one ASCII status line per tool call (verb \u00b7 target \u00b7 outcome). No paragraphs of narration. Skip greetings, recaps, and trailing summaries. Group identical findings with `(\u00d7N)`.\",\"hookEventName\":\"UserPromptSubmit\"}}\n",
+      "stderr": ""
+    },
+    {
+      "event": "PreToolUse",
+      "exit_code": 0,
+      "stdout": "{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"allow\",\"permissionDecisionReason\":\"tokenade auto-wrap for compaction\",\"updatedInput\":{\"command\":\"TOKENADE_SESSION=freequalificationtokenade '/usr/local/lib/node_modules/@tokenade/cli/node_modules/@tokenade/cli-linux-x64/tokenade' wrap 'ls -la'\"}}}\n",
+      "stderr": ""
+    }
+  ],
+  "mcpCalls": [],
+  "legacyHookCalls": [],
+  "nativeConfigParse": {
+    "exit_code": 0,
+    "stderr": ""
+  },
+  "steps": [
+    {
+      "product": "tokenade",
+      "command": [
+        "tokenade",
+        "--version"
+      ],
+      "returncode": 0,
+      "stdout": "tokenade 2.0.9\n",
+      "stderr": ""
+    },
+    {
+      "product": "tokenade",
+      "command": [
+        "tokenade",
+        "install",
+        "--help"
+      ],
+      "returncode": 0,
+      "stdout": "tokenade install \u2014 register tokenade with detected AI coding agents.\n\nUSAGE:\n  tokenade install [flags]\n\nDefaults (zero-config optimal install):\n  * Detects installed agents (claude-code, cursor, codex, kilo-code,\n    copilot, openclaw, \u2026) and wires tokenade into each one's hook or\n    plugin mechanism.\n  * Installs PostToolUse + PreToolUse hooks for Claude Code (compaction,\n    LSP redirects, search-tool nudges).\n  * Writes a per-project CLAUDE.md scaffold teaching the tokenade CLI.\n  * Global install (writes to ~/.<agent>/config) unless --per-project.\n  * Enables ~/.tokenade/debug.log for live tailing.\n\nFLAGS:\n  --help, -h               show this message and exit\n  --yes, -y                assume yes for destructive cleanup prompts\n  --dry-run                print what would be done, change nothing\n  --only <agent>           restrict install to a single agent\n                           (claude-code, cursor, codex, kilo-code, copilot, droid, \u2026)\n  --per-project            install into ./.<agent>/ instead of global\n  --profile <name>         use a domain-tailored CLAUDE.md template\n  --no-cleanup             skip the incompatible-tools fix-up pass\n  --no-debug-log           don't enable ~/.tokenade/debug.log\n  --debug-log <path>       custom debug.log location\n  --autocompact-pct <N>    ask the agent to auto-compact at N% of its context\n                           window (10-95, default 70). Re-run with a different\n                           N to change it; upgrades keep the N you chose. A\n                           value you edit by hand is never overwritten \u2014 this\n                           flag is how you hand the threshold back to tokenade\n  --no-autocompact         remove the auto-compact threshold tokenade set\n                           (a hand-set value is left alone)\n  --no-hook                skip the Claude Code PostToolUse + Edit/Write\n                           auto-index hooks (MCP only \u2014 power-user opt-out)\n  --no-wrap-mcps           skip the auto-wrap of third-party MCP servers\n                           behind `tokenade mcp-wrap` (opt-out of the\n                           per-MCP compaction/stash pipeline)\n  --with-hook              (legacy) opt-in for the PostToolUse hook\n                           \u2014 now the default; flag retained for back-compat\n  --with-claude-md         add a framework-aware CLAUDE.md (Next.js /\n                           FastAPI / Rust / \u2026) \u2014 opt-in; the minimal\n                           tokenade-rules block is scaffolded either way\n  --with-lsp-enforcement-hook  DEPRECATED no-op (still accepted so old\n                           scripts don't error). The PreToolUse hook it\n                           used to gate is now installed by default.\n  --with-brevity-skill     terse-response style hint in CLAUDE.md \u2014 opt-in\n                           (can degrade reasoning on complex tasks)\n  --defaults               forget the choices remembered from earlier\n                           installs. Otherwise --no-hook, --only, --per-project,\n                           --no-debug-log, --debug-log, --no-autocompact,\n                           --no-wrap-mcps, --profile, --with-* are kept by\n                           every later install, upgrade and self-repair\n\nEXAMPLES:\n  tokenade install                       # everything, all detected agents\n  tokenade install --only claude-code    # just Claude Code\n  tokenade install --dry-run             # preview changes\n  tokenade install --per-project         # ./.claude/ instead of ~/.claude/\n\nSee `tokenade help` for the top-level command list.\n",
+      "stderr": ""
+    },
+    {
+      "product": "tokenade",
+      "command": [
+        "tokenade",
+        "install",
+        "--only",
+        "codex",
+        "--yes"
+      ],
+      "returncode": 0,
+      "stdout": "detected agent(s): codex\n\n\u2500\u2500 Incompatible tools \u2014 suggested fixes \u2500\u2500\n\u2022 [redundant] rtk\n  Output-filtering CLI proxy (filters/compresses bash output)\n  - binary at /usr/local/cargo/bin/rtk (raw binary (needs sudo to remove))\n    needs administrator rights \u2014 run: sudo rm /usr/local/cargo/bin/rtk\n\u2022 [redundant] lean-ctx\n  Context layer that replaces Read/Grep/Shell with its own MCP tools\n  - binary at /home/bench/free-qualification-yx2bfn84/bin/lean-ctx (npm -g lean-ctx-bin)\n    npm exited 243 for /home/bench/free-qualification-yx2bfn84/bin/lean-ctx\n\u2022 [redundant] codegraph\n  MCP symbol-graph + FTS5 index (regenerable from source)\n  - binary at /usr/local/bin/codegraph (npm -g @colbymchenry/codegraph)\n    npm exited 243 for /usr/local/bin/codegraph\n\u2022 [redundant] graphify\n  Codebase dependency graph CLI (graphify)\n  - binary at /usr/local/bin/graphify (npm -g graphifyy)\n\nup to date in 264ms\n    npm OK for /usr/local/bin/graphify\n\u2022 [redundant] token-optimizer-mcp\n  MCP cache/compression layer (ooples/token-optimizer-mcp)\n  - binary at /usr/local/bin/token-optimizer-mcp (npm -g token-optimizer-mcp)\n  - binary at /usr/local/bin/token-optimizer-daemon (npm -g token-optimizer-mcp)\n\nup to date in 257ms\n\nup to date in 299ms\n    npm OK for /usr/local/bin/token-optimizer-mcp\n    npm OK for /usr/local/bin/token-optimizer-daemon\n\n  note: --with-hook names the Claude Code hook specifically, so it does nothing here; codex is wired through its own hooks.\n  \u2713 Codex passive hooks (Pre/PostToolUse/SessionStart/\u2026) \u2192 /home/bench/free-qualification-yx2bfn84/tokenade/home/.codex/hooks.json\n  \u2713 trusted 6 Codex hook(s) (compaction active \u2014 no /hooks step needed)\n\u2713 scaffolded 2 rules file(s) in /home/bench/free-qualification-yx2bfn84/tokenade/workspace: .gitignore (+.tokenade/), ~/.config/git/ignore (+.tokenade/, +*.tokenade-original)\n\n\u2713 installed for 1 agent(s). You're set.\n\n",
+      "stderr": "  `rtk` overlaps with Tokenade. Migrate (if applicable) and remove it to avoid conflicts? [--yes \u2192 YES]\n  `lean-ctx` overlaps with Tokenade. Migrate (if applicable) and remove it to avoid conflicts? [--yes \u2192 YES]\nnpm error code EACCES\nnpm error syscall rename\nnpm error path /usr/local/lib/node_modules/lean-ctx-bin\nnpm error dest /usr/local/lib/node_modules/.lean-ctx-bin-DmUBpNoO\nnpm error errno -13\nnpm error Error: EACCES: permission denied, rename '/usr/local/lib/node_modules/lean-ctx-bin' -> '/usr/local/lib/node_modules/.lean-ctx-bin-DmUBpNoO'\nnpm error     at async Object.rename (node:internal/fs/promises:784:10)\nnpm error     at async moveFile (/usr/local/lib/node_modules/npm/node_modules/@npmcli/fs/lib/move-file.js:30:5)\nnpm error     at async Promise.allSettled (index 0)\nnpm error     at async [reifyPackages] (/usr/local/lib/node_modules/npm/node_modules/@npmcli/arborist/lib/arborist/reify.js:334:11)\nnpm error     at async Arborist.reify (/usr/local/lib/node_modules/npm/node_modules/@npmcli/arborist/lib/arborist/reify.js:149:5)\nnpm error     at async Uninstall.exec (/usr/local/lib/node_modules/npm/lib/commands/uninstall.js:51:5)\nnpm error     at async Npm.exec (/usr/local/lib/node_modules/npm/lib/npm.js:207:9)\nnpm error     at async module.exports (/usr/local/lib/node_modules/npm/lib/cli/entry.js:74:5) {\nnpm error   errno: -13,\nnpm error   code: 'EACCES',\nnpm error   syscall: 'rename',\nnpm error   path: '/usr/local/lib/node_modules/lean-ctx-bin',\nnpm error   dest: '/usr/local/lib/node_modules/.lean-ctx-bin-DmUBpNoO'\nnpm error }\nnpm error\nnpm error The operation was rejected by your operating system.\nnpm error It is likely you do not have the permissions to access this file as the current user\nnpm error\nnpm error If you believe this might be a permissions issue, please double-check the\nnpm error permissions of the file and its containing directories, or try running\nnpm error the command again as root/Administrator.\nnpm error A complete log of this run can be found in: /home/bench/free-qualification-yx2bfn84/tokenade/home/.npm/_logs/2026-11-18T03_19_35_164Z-debug-0.log\n  `codegraph` overlaps with Tokenade. Migrate (if applicable) and remove it to avoid conflicts? [--yes \u2192 YES]\nnpm error code EACCES\nnpm error syscall rename\nnpm error path /usr/local/lib/node_modules/@colbymchenry/codegraph\nnpm error dest /usr/local/lib/node_modules/@colbymchenry/.codegraph-1swTaMOZ\nnpm error errno -13\nnpm error Error: EACCES: permission denied, rename '/usr/local/lib/node_modules/@colbymchenry/codegraph' -> '/usr/local/lib/node_modules/@colbymchenry/.codegraph-1swTaMOZ'\nnpm error     at async Object.rename (node:internal/fs/promises:784:10)\nnpm error     at async moveFile (/usr/local/lib/node_modules/npm/node_modules/@npmcli/fs/lib/move-file.js:30:5)\nnpm error     at async Promise.allSettled (index 0)\nnpm error     at async [reifyPackages] (/usr/local/lib/node_modules/npm/node_modules/@npmcli/arborist/lib/arborist/reify.js:334:11)\nnpm error     at async Arborist.reify (/usr/local/lib/node_modules/npm/node_modules/@npmcli/arborist/lib/arborist/reify.js:149:5)\nnpm error     at async Uninstall.exec (/usr/local/lib/node_modules/npm/lib/commands/uninstall.js:51:5)\nnpm error     at async Npm.exec (/usr/local/lib/node_modules/npm/lib/npm.js:207:9)\nnpm error     at async module.exports (/usr/local/lib/node_modules/npm/lib/cli/entry.js:74:5) {\nnpm error   errno: -13,\nnpm error   code: 'EACCES',\nnpm error   syscall: 'rename',\nnpm error   path: '/usr/local/lib/node_modules/@colbymchenry/codegraph',\nnpm error   dest: '/usr/local/lib/node_modules/@colbymchenry/.codegraph-1swTaMOZ'\nnpm error }\nnpm error\nnpm error The operation was rejected by your operating system.\nnpm error It is likely you do not have the permissions to access this file as the current user\nnpm error\nnpm error If you believe this might be a permissions issue, please double-check the\nnpm error permissions of the file and its containing directories, or try running\nnpm error the command again as root/Administrator.\nnpm error A complete log of this run can be found in: /home/bench/free-qualification-yx2bfn84/tokenade/home/.npm/_logs/2026-11-18T03_19_35_649Z-debug-0.log\n  `graphify` overlaps with Tokenade. Migrate (if applicable) and remove it to avoid conflicts? [--yes \u2192 YES]\n  `token-optimizer-mcp` overlaps with Tokenade. Migrate (if applicable) and remove it to avoid conflicts? [--yes \u2192 YES]\n"
+    }
+  ],
+  "paidCalls": 0
+}

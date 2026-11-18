@@ -1,0 +1,76 @@
+[
+  {
+    "name": "squeez",
+    "version": "v1.49.3",
+    "file": "squeez-linux-x86_64",
+    "url": "https://github.com/claudioemmanuel/squeez/releases/download/v1.49.3/squeez-linux-x86_64",
+    "sha256": "1d1919900482c958255a4e35b5c95301ea9a71e86fedf0c9387b7bc48f8dd6a1",
+    "bytes": 2196392
+  },
+  {
+    "name": "edgee",
+    "version": "v0.18.1",
+    "file": "edgee.x86_64-unknown-linux-musl",
+    "url": "https://github.com/edgee-ai/edgee/releases/download/v0.18.1/edgee.x86_64-unknown-linux-musl",
+    "sha256": "6c61871823e4d7395e6a9a7933b51d3fc7daeb2419d74714e8d72ff0aea2d4ce",
+    "bytes": 25625912
+  },
+  {
+    "name": "lean-ctx",
+    "version": "v3.12.6",
+    "file": "lean-ctx-x86_64-unknown-linux-musl.tar.gz",
+    "url": "https://github.com/yvgude/lean-ctx/releases/download/v3.12.6/lean-ctx-x86_64-unknown-linux-musl.tar.gz",
+    "sha256": "e69f1cbbcfa023140ef2172ce33c3286be850b3ac4c8677dce9cb533941ac978",
+    "bytes": 33370051
+  },
+  {
+    "name": "cartoon",
+    "executable": "cartoon",
+    "version": "v0.8.0",
+    "file": "cartoon-x86_64-unknown-linux-musl.tar.gz",
+    "url": "https://github.com/abhijitbansal/cartoon/releases/download/v0.8.0/cartoon-x86_64-unknown-linux-musl.tar.gz",
+    "sha256": "6482966000515f7d161b7a7eb061d98f9184923f6ac978f6cd82783d11b50eab",
+    "bytes": 3794556,
+    "upstreamDigestVerified": true
+  },
+  {
+    "name": "lm-resizer",
+    "executable": "lm-resizer",
+    "version": "v0.2.6",
+    "file": "lm-resizer-0.2.6-linux-x86_64.tar.gz",
+    "url": "https://github.com/phuetz/lm-resizer/releases/download/v0.2.6/lm-resizer-0.2.6-linux-x86_64.tar.gz",
+    "sha256": "342157eac272962f56dcd0f783881b29f4bc24f32bf31cf02d6f1b8ca09cc43f",
+    "bytes": 13554599,
+    "upstreamDigestVerified": true
+  },
+  {
+    "name": "trs",
+    "executable": "trs",
+    "version": "v0.10.3",
+    "file": "trs-linux-x64",
+    "url": "https://github.com/dPeluChe/trs/releases/download/v0.10.3/trs-linux-x64",
+    "sha256": "797cea13b8b2525d1664e4b8d25d1fcda653e3e2a742654c125e4cbb7129d8ea",
+    "bytes": 9532640,
+    "upstreamDigestVerified": true
+  },
+  {
+    "name": "memphis",
+    "executable": "pyra",
+    "version": "v1.1.0",
+    "file": "pyra-linux-amd64",
+    "url": "https://github.com/path-warden/pyra/releases/download/v1.1.0/pyra-linux-amd64",
+    "sha256": "1d7bd9e314ed5a8c65c8e099ac29c2c0d5c5333f758670389997922b19156b03",
+    "bytes": 67768197,
+    "upstreamDigestVerified": true
+  },
+  {
+    "name": "tokf",
+    "executable": "tokf",
+    "version": "tokf-v0.2.54",
+    "file": "tokf-v0.2.54-x86_64-unknown-linux-gnu.tar.gz",
+    "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.54/tokf-v0.2.54-x86_64-unknown-linux-gnu.tar.gz",
+    "sha256": "50484ad571ef4a7b36386469bb2d07b7f019db1cc22e3895cc9ae8410f8c01f4",
+    "bytes": 8959847,
+    "upstreamDigestVerified": true
+  }
+]

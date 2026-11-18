@@ -1,0 +1,85 @@
+{
+  "product": "token-optimizer",
+  "network": "none",
+  "providerCredentials": false,
+  "configurationFiles": [
+    {
+      "path": "home/.codex/AGENTS.md",
+      "sha256": "5642cdcdec432e4df6a16c4c4e5aeae5492ba3173c8ed5d3777a30ffd2167867"
+    }
+  ],
+  "sourceBuiltArtifacts": [],
+  "codexConfigs": [],
+  "hookCalls": [],
+  "mcpCalls": [],
+  "nativeClientSmoke": {
+    "exit_code": 0,
+    "stdout": "{\"type\":\"thread.started\",\"thread_id\":\"01a1ecc3-ec98-7803-a7dc-3e56d1fda0fe\"}\n{\"type\":\"item.completed\",\"item\":{\"id\":\"item_0\",\"type\":\"error\",\"message\":\"`--dangerously-bypass-hook-trust` is enabled. Enabled hooks may run without review for this invocation.\"}}\n{\"type\":\"item.completed\",\"item\":{\"id\":\"item_1\",\"type\":\"error\",\"message\":\"`--dangerously-bypass-hook-trust` is enabled. Enabled hooks may run without review for this invocation.\"}}\n{\"type\":\"turn.started\"}\n{\"type\":\"item.started\",\"item\":{\"id\":\"item_2\",\"type\":\"command_execution\",\"command\":\"/bin/bash -lc 'cat fixture.py'\",\"aggregated_output\":\"\",\"exit_code\":null,\"status\":\"in_progress\"}}\n{\"type\":\"item.completed\",\"item\":{\"id\":\"item_2\",\"type\":\"command_execution\",\"command\":\"/bin/bash -lc 'cat fixture.py'\",\"aggregated_output\":\"def add(a, b):\\n    return a + b\\n\",\"exit_code\":0,\"status\":\"completed\"}}\n{\"type\":\"item.completed\",\"item\":{\"id\":\"item_3\",\"type\":\"agent_message\",\"text\":\"Local qualification fixture complete.\"}}\n{\"type\":\"turn.completed\",\"usage\":{\"input_tokens\":20,\"cached_input_tokens\":0,\"cache_write_input_tokens\":0,\"output_tokens\":10,\"reasoning_output_tokens\":0}}\n",
+    "stderr": "Reading additional input from stdin...\n",
+    "requests": [
+      {
+        "path": "/v1/responses",
+        "model": "gpt-6.1-sol",
+        "reasoning": {
+          "effort": "high",
+          "context": "all_turns"
+        },
+        "tools": []
+      },
+      {
+        "path": "/v1/responses",
+        "model": "gpt-6.1-sol",
+        "reasoning": {
+          "effort": "high",
+          "context": "all_turns"
+        },
+        "tools": []
+      }
+    ],
+    "modelCalls": 0,
+    "syntheticUsage": true,
+    "network": "none",
+    "scope": "protocol fixture, not model evaluation",
+    "verified": true
+  },
+  "nativeHookReceipts": [],
+  "hookInstrumentation": [],
+  "legacyHookCalls": [],
+  "nativeConfigParse": {
+    "exit_code": 0,
+    "stderr": ""
+  },
+  "steps": [
+    {
+      "product": "token-optimizer",
+      "command": [
+        "token-optimizer",
+        "--version"
+      ],
+      "returncode": 0,
+      "stdout": "token-optimizer v0.2.1\n\nUsage:\n  token-optimizer            Show install status and token totals\n  token-optimizer status     Show install status and token totals\n  token-optimizer install    Auto-detect agents and wire MCP config\n  token-optimizer update     Pull latest changes and reinstall\n  token-optimizer uninstall  Remove injected configs\n  token-optimizer stats      Show token savings stats\n\nGlobal command:\n  npm install -g token-optimizer\n  npx token-optimizer status\n\nIf the global command is not found, add your npm global bin directory to PATH.\n\n",
+      "stderr": ""
+    },
+    {
+      "product": "token-optimizer",
+      "command": [
+        "token-optimizer",
+        "--help"
+      ],
+      "returncode": 0,
+      "stdout": "token-optimizer v0.2.1\n\nUsage:\n  token-optimizer            Show install status and token totals\n  token-optimizer status     Show install status and token totals\n  token-optimizer install    Auto-detect agents and wire MCP config\n  token-optimizer update     Pull latest changes and reinstall\n  token-optimizer uninstall  Remove injected configs\n  token-optimizer stats      Show token savings stats\n\nGlobal command:\n  npm install -g token-optimizer\n  npx token-optimizer status\n\nIf the global command is not found, add your npm global bin directory to PATH.\n\n",
+      "stderr": ""
+    },
+    {
+      "product": "token-optimizer",
+      "command": [
+        "token-optimizer",
+        "install"
+      ],
+      "returncode": 0,
+      "stdout": "\ntoken-optimizer \u2014 install\n\nServer path: /usr/local/lib/node_modules/token-optimizer/dist/src/mcp-server.js\n\nDetected agents:\n  \u25cb OpenCode (not found)\n  \u25cb Cursor (not found)\n  \u25cb Claude Desktop (macOS) (not found)\n  \u25cb Claude Desktop (Linux) (not found)\n  \u25cb Claude Desktop (Windows) (not found)\n  \u25cb Windsurf (not found)\n  \u25cf Codex (global AGENTS.md) (found)\n\nPatching configs...\n  \u2713 Patched Codex (global AGENTS.md): /home/bench/free-qualification-t27y7yve/token-optimizer/home/.codex/AGENTS.md\n\nDone! token-optimizer MCP server is now registered.\n\nRestart your AI agent apps to apply the changes.\n\nThe MCP server will start automatically when your agent connects.\nServer entry: /usr/local/lib/node_modules/token-optimizer/dist/src/mcp-server.js\n\nTo verify: run `token-optimizer status`\nTo remove:  run `token-optimizer uninstall`\n\n",
+      "stderr": ""
+    }
+  ],
+  "paidCalls": 0
+}

@@ -1,0 +1,134 @@
+{
+  "product": "squeez",
+  "network": "none",
+  "providerCredentials": false,
+  "configurationFiles": [
+    {
+      "path": "home/.codex/hooks.json",
+      "sha256": "d23b89b288b61556e9f2b19807b4da4401480fd296149e62dcb2ebf03d21e659"
+    },
+    {
+      "path": "home/.codex/squeez/sessions/current.json",
+      "sha256": "af86f7d7a3697d962436c2d6f4fff1ad24050efb2375ae1b36c286f3c336d399"
+    },
+    {
+      "path": "home/.codex/squeez/sessions/context.json",
+      "sha256": "f4273931fc6c02626a999e42dc16686d6c8ebfd08f5e9f26c2869afae323ef2b"
+    }
+  ],
+  "codexConfigs": [],
+  "hookCalls": [
+    {
+      "event": "SessionStart",
+      "exit_code": 0,
+      "stdout": "{\"hookSpecificOutput\":{\"hookEventName\":\"SessionStart\",\"additionalContext\":\"\u2500\u2500\u2500 squeez active \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\\nContext budget: ~200K tokens | Compression: ON | Memory: ON | Persona: ultra\\n\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\"}}\n",
+      "stderr": ""
+    },
+    {
+      "event": "PreToolUse",
+      "exit_code": 0,
+      "stdout": "{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"allow\",\"updatedInput\":{\"command\":\"/home/bench/free-qualification-hxw8xr2_/bin/squeez wrap 'ls -la'\"}}}\n",
+      "stderr": ""
+    }
+  ],
+  "mcpCalls": [],
+  "nativeClientSmoke": {
+    "exit_code": 0,
+    "stdout": "{\"type\":\"thread.started\",\"thread_id\":\"01a1ecb3-eed8-7440-abd5-34bd6bb44cca\"}\n{\"type\":\"item.completed\",\"item\":{\"id\":\"item_0\",\"type\":\"error\",\"message\":\"`--dangerously-bypass-hook-trust` is enabled. Enabled hooks may run without review for this invocation.\"}}\n{\"type\":\"item.completed\",\"item\":{\"id\":\"item_1\",\"type\":\"error\",\"message\":\"`--dangerously-bypass-hook-trust` is enabled. Enabled hooks may run without review for this invocation.\"}}\n{\"type\":\"turn.started\"}\n{\"type\":\"item.started\",\"item\":{\"id\":\"item_2\",\"type\":\"command_execution\",\"command\":\"/bin/bash -lc \\\"/home/bench/free-qualification-hxw8xr2_/bin/squeez wrap 'cat fixture.py'\\\"\",\"aggregated_output\":\"\",\"exit_code\":null,\"status\":\"in_progress\"}}\n{\"type\":\"item.completed\",\"item\":{\"id\":\"item_2\",\"type\":\"command_execution\",\"command\":\"/bin/bash -lc \\\"/home/bench/free-qualification-hxw8xr2_/bin/squeez wrap 'cat fixture.py'\\\"\",\"aggregated_output\":\"def add(a, b):\\n    return a + b\\n\",\"exit_code\":0,\"status\":\"completed\"}}\n{\"type\":\"item.completed\",\"item\":{\"id\":\"item_3\",\"type\":\"agent_message\",\"text\":\"Local qualification fixture complete.\"}}\n{\"type\":\"turn.completed\",\"usage\":{\"input_tokens\":20,\"cached_input_tokens\":0,\"cache_write_input_tokens\":0,\"output_tokens\":10,\"reasoning_output_tokens\":0}}\n",
+    "stderr": "Reading additional input from stdin...\n",
+    "requests": [
+      {
+        "path": "/v1/responses",
+        "model": "gpt-6.1-sol",
+        "reasoning": {
+          "effort": "high",
+          "context": "all_turns"
+        },
+        "tools": []
+      },
+      {
+        "path": "/v1/responses",
+        "model": "gpt-6.1-sol",
+        "reasoning": {
+          "effort": "high",
+          "context": "all_turns"
+        },
+        "tools": []
+      }
+    ],
+    "modelCalls": 0,
+    "syntheticUsage": true,
+    "network": "none",
+    "scope": "protocol fixture, not model evaluation"
+  },
+  "nativeHookReceipts": [
+    {
+      "command": "bash \"/home/bench/free-qualification-hxw8xr2_/squeez/home/.codex/squeez/hooks/codex-session-start.sh\"",
+      "input": "{\"session_id\":\"01a1ecb3-eed8-7440-abd5-34bd6bb44cca\",\"transcript_path\":\"/home/bench/free-qualification-hxw8xr2_/squeez/home/.codex/sessions/2026/11/18/rollout-2026-11-18T03-29-37-01a1ecb3-eed8-7440-abd5-34bd6bb44cca.jsonl\",\"cwd\":\"/home/bench/free-qualification-hxw8xr2_/squeez/workspace\",\"hook_event_name\":\"SessionStart\",\"model\":\"gpt-6.1-sol\",\"permission_mode\":\"bypassPermissions\",\"source\":\"startup\"}",
+      "exit_code": 0,
+      "stdout": "{\"hookSpecificOutput\":{\"hookEventName\":\"SessionStart\",\"additionalContext\":\"\u2500\u2500\u2500 squeez active \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\\nContext budget: ~200K tokens | Compression: ON | Memory: ON | Persona: ultra\\nPrior session (2026-11-18): 0 files\\n\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\"}}\n",
+      "stderr": ""
+    },
+    {
+      "command": "bash \"/home/bench/free-qualification-hxw8xr2_/squeez/home/.codex/squeez/hooks/codex-pretooluse.sh\"",
+      "input": "{\"session_id\":\"01a1ecb3-eed8-7440-abd5-34bd6bb44cca\",\"turn_id\":\"01a1ecb3-eefb-7e73-837b-d4e4a677ad47\",\"transcript_path\":\"/home/bench/free-qualification-hxw8xr2_/squeez/home/.codex/sessions/2026/11/18/rollout-2026-11-18T03-29-37-01a1ecb3-eed8-7440-abd5-34bd6bb44cca.jsonl\",\"cwd\":\"/home/bench/free-qualification-hxw8xr2_/squeez/workspace\",\"hook_event_name\":\"PreToolUse\",\"model\":\"gpt-6.1-sol\",\"permission_mode\":\"bypassPermissions\",\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"cat fixture.py\"},\"tool_use_id\":\"call_fixture\"}",
+      "exit_code": 0,
+      "stdout": "{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"allow\",\"updatedInput\":{\"command\":\"/home/bench/free-qualification-hxw8xr2_/bin/squeez wrap 'cat fixture.py'\"}}}\n",
+      "stderr": ""
+    },
+    {
+      "command": "bash \"/home/bench/free-qualification-hxw8xr2_/squeez/home/.codex/squeez/hooks/codex-posttooluse.sh\"",
+      "input": "{\"session_id\":\"01a1ecb3-eed8-7440-abd5-34bd6bb44cca\",\"turn_id\":\"01a1ecb3-eefb-7e73-837b-d4e4a677ad47\",\"transcript_path\":\"/home/bench/free-qualification-hxw8xr2_/squeez/home/.codex/sessions/2026/11/18/rollout-2026-11-18T03-29-37-01a1ecb3-eed8-7440-abd5-34bd6bb44cca.jsonl\",\"cwd\":\"/home/bench/free-qualification-hxw8xr2_/squeez/workspace\",\"hook_event_name\":\"PostToolUse\",\"model\":\"gpt-6.1-sol\",\"permission_mode\":\"bypassPermissions\",\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"/home/bench/free-qualification-hxw8xr2_/bin/squeez wrap 'cat fixture.py'\"},\"tool_response\":\"def add(a, b):\\n    return a + b\\n\",\"tool_use_id\":\"call_fixture\"}",
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    }
+  ],
+  "hookInstrumentation": [
+    {
+      "path": "home/.codex/hooks.json",
+      "originalSha256": "d23b89b288b61556e9f2b19807b4da4401480fd296149e62dcb2ebf03d21e659",
+      "instrumentedSha256": "a3655341028fcee0ebb75f1338a0b2e8387b252f06d1e73186e785f7806cd21a"
+    }
+  ],
+  "legacyHookCalls": [],
+  "nativeConfigParse": {
+    "exit_code": 0,
+    "stderr": ""
+  },
+  "steps": [
+    {
+      "product": "squeez",
+      "command": [
+        "squeez",
+        "--version"
+      ],
+      "returncode": 0,
+      "stdout": "squeez 1.49.3\n",
+      "stderr": ""
+    },
+    {
+      "product": "squeez",
+      "command": [
+        "squeez",
+        "setup",
+        "--help"
+      ],
+      "returncode": 0,
+      "stdout": "squeez setup \u2014 register squeez into every detected host CLI\n\nUsage:\n  squeez setup                 Install into every detected host\n  squeez setup --host=<slug>   Install into one host\n\nSupported hosts: claude-code, copilot, opencode, gemini, codex\n",
+      "stderr": ""
+    },
+    {
+      "product": "squeez",
+      "command": [
+        "squeez",
+        "setup",
+        "--host=codex"
+      ],
+      "returncode": 0,
+      "stdout": "squeez setup: codex  \u2713 installed (new config.ini)\nsqueez setup: done \u2014 squeez 1.49.3 installed. Restart the host CLI to activate.\n",
+      "stderr": ""
+    }
+  ],
+  "paidCalls": 0
+}

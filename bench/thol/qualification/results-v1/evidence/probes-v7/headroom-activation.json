@@ -1,0 +1,38 @@
+{
+  "product": "headroom",
+  "network": "none",
+  "providerCredentials": false,
+  "configurationFiles": [],
+  "codexConfigs": [],
+  "hookCalls": [],
+  "mcpCalls": [],
+  "legacyHookCalls": [],
+  "nativeConfigParse": {
+    "exit_code": 0,
+    "stderr": ""
+  },
+  "steps": [
+    {
+      "product": "headroom",
+      "command": [
+        "headroom",
+        "--version"
+      ],
+      "returncode": 0,
+      "stdout": "headroom, version 0.44.0\n",
+      "stderr": ""
+    },
+    {
+      "product": "headroom",
+      "command": [
+        "headroom",
+        "wrap",
+        "--help"
+      ],
+      "returncode": 0,
+      "stdout": "Usage: headroom wrap [OPTIONS] COMMAND [ARGS]...\n\n  Wrap CLI tools to run through Headroom.\n\n  Starts a Headroom proxy, configures the environment, and launches\n  the target tool so all API calls route through Headroom automatically.\n\n  Supported tools (one Click subcommand per tool):\n      headroom wrap claude              # Claude Code (Anthropic)\n      headroom wrap codex               # OpenAI Codex CLI\n      headroom wrap copilot -- --model claude-sonnet-4-20250514\n      headroom wrap vscode             # VS Code Copilot (preserves model picker)\n      headroom wrap vscode-claude      # VS Code Claude Code extension\n      headroom wrap aider               # Aider\n      headroom wrap openclaude          # OpenClaude\n      headroom wrap vibe                # Mistral Vibe\n      headroom wrap grok                # Grok CLI (xAI)\n      headroom wrap cursor              # Cursor (prints config instructions)\n      headroom wrap antigravity         # Antigravity IDE (prints config instructions)\n      headroom wrap grok-build          # Grok Build (updates ~/.grok/config.toml)\n      headroom wrap cline               # Cline (VS Code; prints config instructions)\n      headroom wrap continue            # Continue (VS Code/JetBrains; injects systemMessage)\n      headroom wrap goose               # Goose (Block) CLI\n      headroom wrap openhands           # OpenHands CLI\n      headroom wrap openclaw            # OpenClaw plugin bootstrap\n      headroom wrap opencode            # OpenCode CLI\n      headroom wrap omp                 # Oh My Pi CLI\n      headroom wrap zcode               # ZCode desktop app setup\n\n  `wrap` vs `proxy`:\n      - `headroom wrap <tool>` \u2014 convenience: starts the proxy for you,\n        sets the right env vars, and launches the wrapped CLI.\n      - `headroom proxy` \u2014 just the proxy. Use this with any\n        OpenAI/Anthropic-compatible client by setting\n        ANTHROPIC_BASE_URL / OPENAI_BASE_URL yourself.\n\n  `openclaw` is a separate tool \u2014 different from opencode.\n\nOptions:\n  -?, --help  Show this message and exit.\n\nCommands:\n  aider          Launch aider through Headroom proxy.\n  antigravity    Start Headroom proxy for use with the Antigravity IDE.\n  bob            Launch IBM Bob CLI through Headroom proxy.\n  claude         Launch Claude Code through Headroom proxy.\n  cline          Start Headroom proxy for use with Cline (VS Code...\n  codex          Launch OpenAI Codex CLI through Headroom proxy.\n  continue       Start Headroom proxy for use with Continue (VS Code /...\n  copilot        Launch GitHub Copilot CLI through Headroom proxy.\n  cursor         Start Headroom proxy for use with Cursor.\n  droid          Launch Factory Droid through Headroom proxy.\n  goose          Launch Goose (Block) CLI through Headroom proxy.\n  grok           Launch Grok CLI through Headroom proxy.\n  grok-build     Start Headroom proxy for use with Grok Build.\n  hermes         Launch the Hermes agent through the Headroom proxy.\n  kimi           Launch Kimi CLI through Headroom proxy.\n  omp            Launch Oh My Pi (omp) through Headroom proxy.\n  openclaude     Launch OpenClaude through Headroom proxy.\n  openclaw       Install and configure Headroom OpenClaw plugin in one...\n  opencode       Launch OpenCode through Headroom proxy.\n  openhands      Launch OpenHands CLI through Headroom proxy.\n  vibe           Launch Mistral Vibe through Headroom proxy.\n  vscode         Run Headroom for GitHub Copilot inside Visual Studio Code.\n  vscode-claude  Route VS Code's official Claude Code extension through...\n  zcode          Start Headroom proxy for use with ZCode (zcode.z.ai...\n",
+      "stderr": ""
+    }
+  ],
+  "paidCalls": 0
+}

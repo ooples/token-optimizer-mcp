@@ -1,0 +1,136 @@
+{
+  "product": "graphify",
+  "network": "none",
+  "providerCredentials": false,
+  "configurationFiles": [
+    {
+      "path": "workspace/.codex/hooks.json",
+      "sha256": "123313824d5e7a64f4ced412f15cf2161abb16d6a54bead18abd8f7f40e53eca"
+    },
+    {
+      "path": "workspace/.codex/skills/graphify/SKILL.md",
+      "sha256": "7511352c4cf6da3647462516de41e99a4be53d9ea106fd2e6fadf0bafb9740b0"
+    },
+    {
+      "path": "workspace/.codex/skills/graphify/references/hooks.md",
+      "sha256": "c3141e7124be8d1f0e96ff3895220a1b6318a644c4c6a60120e4aa6b1cd92d4a"
+    },
+    {
+      "path": "workspace/.codex/skills/graphify/references/exports.md",
+      "sha256": "13ecd58be3826dc0172222579cf66ae64c5c1b780c468d40f4f7ca3e2b0f35b4"
+    },
+    {
+      "path": "workspace/.codex/skills/graphify/references/extraction-spec.md",
+      "sha256": "c9583d72b8007722e33e90daa840e46da54fafcc4e638b97dae5c2c1f9832c45"
+    },
+    {
+      "path": "workspace/.codex/skills/graphify/references/update.md",
+      "sha256": "66a13120e96344c0c5c39c54d899b94244c1f50dad6b093af3d633f0a44a3654"
+    },
+    {
+      "path": "workspace/.codex/skills/graphify/references/query.md",
+      "sha256": "314e98daa21478e697643ec5b7cef5a35d04c4eb410037b37e22ac457610a147"
+    },
+    {
+      "path": "workspace/.codex/skills/graphify/references/github-and-merge.md",
+      "sha256": "e5ebd90c7686f50363ff7a535556bc2f596d4c47ec1e6c8b95e11e36a0dfea2b"
+    },
+    {
+      "path": "workspace/.codex/skills/graphify/references/transcribe.md",
+      "sha256": "676a1e39aa6d43cdfcc416ec56616e36f7bad74066a82bd33a9485515b9a865c"
+    },
+    {
+      "path": "workspace/.codex/skills/graphify/references/add-watch.md",
+      "sha256": "1e77351815547334c7e030f018dba513b303d397bf73d11fac47df03ace3b3f4"
+    }
+  ],
+  "codexConfigs": [],
+  "hookCalls": [
+    {
+      "event": "PreToolUse",
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    }
+  ],
+  "mcpCalls": [],
+  "nativeClientSmoke": {
+    "exit_code": 0,
+    "stdout": "{\"type\":\"thread.started\",\"thread_id\":\"01a1ecb4-4ef3-7672-9fa5-4ef4ed095ca3\"}\n{\"type\":\"item.completed\",\"item\":{\"id\":\"item_0\",\"type\":\"error\",\"message\":\"`--dangerously-bypass-hook-trust` is enabled. Enabled hooks may run without review for this invocation.\"}}\n{\"type\":\"item.completed\",\"item\":{\"id\":\"item_1\",\"type\":\"error\",\"message\":\"`--dangerously-bypass-hook-trust` is enabled. Enabled hooks may run without review for this invocation.\"}}\n{\"type\":\"turn.started\"}\n{\"type\":\"item.started\",\"item\":{\"id\":\"item_2\",\"type\":\"command_execution\",\"command\":\"/bin/bash -lc 'cat fixture.py'\",\"aggregated_output\":\"\",\"exit_code\":null,\"status\":\"in_progress\"}}\n{\"type\":\"item.completed\",\"item\":{\"id\":\"item_2\",\"type\":\"command_execution\",\"command\":\"/bin/bash -lc 'cat fixture.py'\",\"aggregated_output\":\"def add(a, b):\\n    return a + b\\n\",\"exit_code\":0,\"status\":\"completed\"}}\n{\"type\":\"item.completed\",\"item\":{\"id\":\"item_3\",\"type\":\"agent_message\",\"text\":\"Local qualification fixture complete.\"}}\n{\"type\":\"turn.completed\",\"usage\":{\"input_tokens\":20,\"cached_input_tokens\":0,\"cache_write_input_tokens\":0,\"output_tokens\":10,\"reasoning_output_tokens\":0}}\n",
+    "stderr": "warning: Untrusted project-local configuration is disabled. Run `codex exec --trust` to allow project configuration and MCP servers for this and future chats in the project, including MCP commands outside the sandbox. Explicitly untrusted projects must have their trust setting updated first.\nReading additional input from stdin...\n",
+    "requests": [
+      {
+        "path": "/v1/responses",
+        "model": "gpt-6.1-sol",
+        "reasoning": {
+          "effort": "high",
+          "context": "all_turns"
+        },
+        "tools": []
+      },
+      {
+        "path": "/v1/responses",
+        "model": "gpt-6.1-sol",
+        "reasoning": {
+          "effort": "high",
+          "context": "all_turns"
+        },
+        "tools": []
+      }
+    ],
+    "modelCalls": 0,
+    "syntheticUsage": true,
+    "network": "none",
+    "scope": "protocol fixture, not model evaluation"
+  },
+  "nativeHookReceipts": [],
+  "hookInstrumentation": [
+    {
+      "path": "workspace/.codex/hooks.json",
+      "originalSha256": "123313824d5e7a64f4ced412f15cf2161abb16d6a54bead18abd8f7f40e53eca",
+      "instrumentedSha256": "f772b7d7e12a8224f3ecf8aa7a49274e82f6e276b4e2a10f3454702f5cc975b4"
+    }
+  ],
+  "legacyHookCalls": [],
+  "nativeConfigParse": {
+    "exit_code": 0,
+    "stderr": ""
+  },
+  "steps": [
+    {
+      "product": "graphify",
+      "command": [
+        "graphify",
+        "--version"
+      ],
+      "returncode": 0,
+      "stdout": "graphify 0.9.112\n",
+      "stderr": ""
+    },
+    {
+      "product": "graphify",
+      "command": [
+        "graphify",
+        "install",
+        "--help"
+      ],
+      "returncode": 0,
+      "stdout": "Usage: graphify install [--project] [--strict] [--platform P|P]\nPlatforms: claude, codex, opencode, kilo, aider, copilot, claw, droid, trae, trae-cn, hermes, kiro, pi, codebuddy, antigravity, antigravity-windows, windows, kimi, amp, agents, devin, gemini, cursor\n  --strict  block the first raw Read or dedicated Grep per session unless recently oriented with `graphify query` (Claude Code project hooks only; needs --project; Bash/Glob stay advisory)\n",
+      "stderr": ""
+    },
+    {
+      "product": "graphify",
+      "command": [
+        "graphify",
+        "install",
+        "--project",
+        "--platform",
+        "codex"
+      ],
+      "returncode": 0,
+      "stdout": "  references       ->  .codex/skills/graphify/references\n  skill installed  ->  .codex/skills/graphify/SKILL.md\ngraphify section written to /home/bench/free-qualification-hxw8xr2_/graphify/workspace/AGENTS.md\n  .codex/hooks.json  ->  PreToolUse hook registered (graphify hook-check - intentional no-op; Codex Desktop rejects additionalContext on PreToolUse, so graph guidance comes from AGENTS.md)\n\nCodex will now check the knowledge graph before answering\ncodebase questions and rebuild it after code changes.\n\nProject-scoped install. Add to version control:\n  git add .codex/ AGENTS.md\n",
+      "stderr": ""
+    }
+  ],
+  "paidCalls": 0
+}

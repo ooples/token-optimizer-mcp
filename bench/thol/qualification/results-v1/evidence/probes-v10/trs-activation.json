@@ -1,0 +1,38 @@
+{
+  "product": "trs",
+  "network": "none",
+  "providerCredentials": false,
+  "configurationFiles": [],
+  "codexConfigs": [],
+  "hookCalls": [],
+  "mcpCalls": [],
+  "legacyHookCalls": [],
+  "nativeConfigParse": {
+    "exit_code": 0,
+    "stderr": ""
+  },
+  "steps": [
+    {
+      "product": "trs",
+      "command": [
+        "trs",
+        "--version"
+      ],
+      "returncode": 1,
+      "stdout": "",
+      "stderr": "trs: /lib/x86_64-linux-gnu/libm.so.6: version `GLIBC_2.43' not found (required by trs)\ntrs: /lib/x86_64-linux-gnu/libc.so.6: weak version `GLIBC_2.39' not found (required by trs)\n"
+    },
+    {
+      "product": "trs",
+      "command": [
+        "trs",
+        "init",
+        "--help"
+      ],
+      "returncode": 1,
+      "stdout": "",
+      "stderr": "trs: /lib/x86_64-linux-gnu/libm.so.6: version `GLIBC_2.43' not found (required by trs)\ntrs: /lib/x86_64-linux-gnu/libc.so.6: weak version `GLIBC_2.39' not found (required by trs)\n"
+    }
+  ],
+  "paidCalls": 0
+}

@@ -1,0 +1,144 @@
+{
+  "product": "tokf",
+  "network": "none",
+  "providerCredentials": false,
+  "configurationFiles": [
+    {
+      "path": "home/.codex/TOKF.md",
+      "sha256": "027782bcf45f5ea98a9de4f6da7352e5b05c9aa4271c6e27acd98fe37dda03bc"
+    },
+    {
+      "path": "home/.codex/hooks.json",
+      "sha256": "2ee011bb4c3a61aba83c1a689659ffe319995fcf9e6efec600ffe0397e7e8890"
+    },
+    {
+      "path": "home/.codex/AGENTS.md",
+      "sha256": "4bd7156f7d1f9d36adb0163aabb7ce3b714bf8210e6687d15142125eb8272752"
+    },
+    {
+      "path": "home/.agents/skills/tokf-discover/SKILL.md",
+      "sha256": "45ec43388377e0cc28707d391df8f0d608f6e887f00d477ec03c53d825c0ebab"
+    },
+    {
+      "path": "home/.agents/skills/tokf-run/SKILL.md",
+      "sha256": "ae001108872709d2a78af36bbebdd8fc0ac49d8772a21d5a9875b711f9e4061f"
+    }
+  ],
+  "sourceBuiltArtifacts": [
+    {
+      "name": "tokf",
+      "file": "tokf",
+      "sha256": "5989d4376888dbb5fb6ffafeed6dfc462207fda040b47641d8a600cc2e039aec",
+      "source": {
+        "name": "tokf",
+        "url": "https://codeload.github.com/mpecan/tokf/tar.gz/tokf-v0.2.54",
+        "sha256": "2c1a13cdc422eed7700f70c067c58afd7206e6036e47f2eb3b7f02a2a32143e3"
+      },
+      "variant": "unmodified official source, locally compiled; not the upstream prebuilt binary",
+      "buildRecipeSha256": "437b2529e996741e63d67c2dad74942eb97c35dbb146cbfccb012f4ab977a4f0",
+      "compiler": "rustc 1.100.0 (0ef1bc386 2026-11-09)",
+      "builderImage": "rust:1-bookworm@sha256:ade39a710ef85f3506cffcfec3e8a24ba090badef1dff2fb798f71d878833fea",
+      "buildNetwork": "none"
+    }
+  ],
+  "codexConfigs": [],
+  "hookCalls": [
+    {
+      "event": "PreToolUse",
+      "exit_code": 0,
+      "stdout": "{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"allow\",\"updatedInput\":{\"command\":\"tokf run ls -la\"}}}\n",
+      "stderr": ""
+    }
+  ],
+  "mcpCalls": [],
+  "nativeClientSmoke": {
+    "exit_code": 0,
+    "stdout": "{\"type\":\"thread.started\",\"thread_id\":\"01a1ecc2-5e25-77d3-95cb-bd1236c73fdb\"}\n{\"type\":\"item.completed\",\"item\":{\"id\":\"item_0\",\"type\":\"error\",\"message\":\"`--dangerously-bypass-hook-trust` is enabled. Enabled hooks may run without review for this invocation.\"}}\n{\"type\":\"item.completed\",\"item\":{\"id\":\"item_1\",\"type\":\"error\",\"message\":\"`--dangerously-bypass-hook-trust` is enabled. Enabled hooks may run without review for this invocation.\"}}\n{\"type\":\"turn.started\"}\n{\"type\":\"item.started\",\"item\":{\"id\":\"item_2\",\"type\":\"command_execution\",\"command\":\"/bin/bash -lc 'cat fixture.py'\",\"aggregated_output\":\"\",\"exit_code\":null,\"status\":\"in_progress\"}}\n{\"type\":\"item.completed\",\"item\":{\"id\":\"item_2\",\"type\":\"command_execution\",\"command\":\"/bin/bash -lc 'cat fixture.py'\",\"aggregated_output\":\"def add(a, b):\\n    return a + b\\n\",\"exit_code\":0,\"status\":\"completed\"}}\n{\"type\":\"item.completed\",\"item\":{\"id\":\"item_3\",\"type\":\"agent_message\",\"text\":\"Local qualification fixture complete.\"}}\n{\"type\":\"turn.completed\",\"usage\":{\"input_tokens\":20,\"cached_input_tokens\":0,\"cache_write_input_tokens\":0,\"output_tokens\":10,\"reasoning_output_tokens\":0}}\n",
+    "stderr": "Reading additional input from stdin...\n",
+    "requests": [
+      {
+        "path": "/v1/responses",
+        "model": "gpt-6.1-sol",
+        "reasoning": {
+          "effort": "high",
+          "context": "all_turns"
+        },
+        "tools": []
+      },
+      {
+        "path": "/v1/responses",
+        "model": "gpt-6.1-sol",
+        "reasoning": {
+          "effort": "high",
+          "context": "all_turns"
+        },
+        "tools": []
+      }
+    ],
+    "modelCalls": 0,
+    "syntheticUsage": true,
+    "network": "none",
+    "scope": "protocol fixture, not model evaluation",
+    "verified": true
+  },
+  "nativeHookReceipts": [
+    {
+      "command": "'/home/bench/free-qualification-vo0rbk8v/tokf/home/.config/tokf/hooks/codex-pre-tool-use.sh'",
+      "input": "{\"session_id\":\"01a1ecc2-5e25-77d3-95cb-bd1236c73fdb\",\"turn_id\":\"01a1ecc2-5e50-70f3-8b4e-6715b57547ed\",\"transcript_path\":\"/home/bench/free-qualification-vo0rbk8v/tokf/home/.codex/sessions/2026/11/18/rollout-2026-11-18T03-45-23-01a1ecc2-5e25-77d3-95cb-bd1236c73fdb.jsonl\",\"cwd\":\"/home/bench/free-qualification-vo0rbk8v/tokf/workspace\",\"hook_event_name\":\"PreToolUse\",\"model\":\"gpt-6.1-sol\",\"permission_mode\":\"bypassPermissions\",\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"cat fixture.py\"},\"tool_use_id\":\"call_fixture\"}",
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    }
+  ],
+  "hookInstrumentation": [
+    {
+      "path": "home/.codex/hooks.json",
+      "originalSha256": "2ee011bb4c3a61aba83c1a689659ffe319995fcf9e6efec600ffe0397e7e8890",
+      "instrumentedSha256": "bd68261de39ef7f225814c02d3cde19afd67096b2bf169e650d33028ac087224"
+    }
+  ],
+  "legacyHookCalls": [],
+  "nativeConfigParse": {
+    "exit_code": 0,
+    "stderr": ""
+  },
+  "steps": [
+    {
+      "product": "tokf",
+      "command": [
+        "tokf",
+        "--version"
+      ],
+      "returncode": 0,
+      "stdout": "tokf 0.2.54\n",
+      "stderr": ""
+    },
+    {
+      "product": "tokf",
+      "command": [
+        "tokf",
+        "hook",
+        "install",
+        "--help"
+      ],
+      "returncode": 0,
+      "stdout": "Install the integration for the target tool\n\nUsage: tokf hook install [OPTIONS]\n\nOptions:\n      --global             Install globally instead of project-local\n      --timing             Show how long filtering took\n      --no-filter          Skip filtering, pass output through raw\n      --tool <TOOL>        Target tool to install hook for (default: claude-code) [default: claude-code] [possible values: claude-code, opencode, codex, gemini-cli, cursor, cline, windsurf, copilot, aider]\n      --path <PATH>        Path to the tokf binary to embed in generated scripts. Defaults to bare \"tokf\" (relies on PATH at runtime)\n  -v, --verbose            Show filter resolution details\n      --no-cache           Bypass the binary config cache for this invocation\n      --no-context         Skip creating TOKF.md context file and CLAUDE.md reference\n      --no-mask-exit-code  Disable exit-code masking. By default tokf exits 0 and prepends \"Error: Exit code N\" to output when the underlying command fails. This flag restores real exit-code propagation\n      --preserve-color     Preserve ANSI color codes in filtered output. Internally strips ANSI for pattern matching but restores original colored lines in the result. Note: this is not `--color=always/never/auto` \u2014 it controls passthrough of the child command's existing ANSI codes through the filter pipeline [env: TOKF_PRESERVE_COLOR=]\n      --otel-export        Export metrics via OpenTelemetry OTLP (requires --features otel)\n  -h, --help               Print help\n",
+      "stderr": ""
+    },
+    {
+      "product": "tokf",
+      "command": [
+        "tokf",
+        "hook",
+        "install",
+        "--tool",
+        "codex",
+        "--global"
+      ],
+      "returncode": 0,
+      "stdout": "",
+      "stderr": "[tokf] detected Codex 0.169.0 with updatedInput support\n[tokf] Codex hook installed\n[tokf]   rewrite mode: updated-input\n[tokf]   script: /home/bench/free-qualification-vo0rbk8v/tokf/home/.config/tokf/hooks/codex-pre-tool-use.sh\n[tokf]   hooks: /home/bench/free-qualification-vo0rbk8v/tokf/home/.codex/hooks.json\n[tokf]   context: /home/bench/free-qualification-vo0rbk8v/tokf/home/.codex/TOKF.md\n[tokf] wrote /home/bench/free-qualification-vo0rbk8v/tokf/home/.agents/skills/tokf-run/SKILL.md\n[tokf] wrote /home/bench/free-qualification-vo0rbk8v/tokf/home/.agents/skills/tokf-discover/SKILL.md\n[tokf] Codex skills installed to /home/bench/free-qualification-vo0rbk8v/tokf/home/.agents/skills\n[tokf] Codex will auto-discover the skills on next start.\n"
+    }
+  ],
+  "paidCalls": 0
+}

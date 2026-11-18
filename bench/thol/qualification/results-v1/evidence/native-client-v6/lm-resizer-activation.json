@@ -1,0 +1,278 @@
+{
+  "product": "lm-resizer",
+  "network": "none",
+  "providerCredentials": false,
+  "configurationFiles": [
+    {
+      "path": "home/.codex/config.toml",
+      "sha256": "e0a0dcce17ad7b12c745b6962c92b62fe7bede0f20b3fcbad4bac8a030ce5d9e"
+    },
+    {
+      "path": "workspace/.codex/hooks.json",
+      "sha256": "88f4eb47428d2d61fdba585eeec55f7fc140e36f2aaf8af80d6fe1027911d610"
+    }
+  ],
+  "sourceBuiltArtifacts": [],
+  "codexConfigs": [
+    {
+      "mcp_servers": {
+        "lm_resizer": {
+          "command": "/home/bench/free-qualification-t27y7yve/bin/lm-resizer",
+          "args": [
+            "mcp"
+          ],
+          "enabled": true,
+          "startup_timeout_sec": 30
+        }
+      }
+    }
+  ],
+  "hookCalls": [
+    {
+      "event": "PreToolUse",
+      "exit_code": 0,
+      "stdout": "{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"allow\",\"permissionDecisionReason\":\"lm-resizer auto-rewrite\",\"updatedInput\":{\"command\":\"\\\"/home/bench/free-qualification-t27y7yve/bin/lm-resizer\\\" exec -- ls -la\"}}}\n",
+      "stderr": ""
+    }
+  ],
+  "mcpCalls": [
+    {
+      "name": "lm_resizer",
+      "command": [
+        "/home/bench/free-qualification-t27y7yve/bin/lm-resizer",
+        "mcp"
+      ],
+      "initialize": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": {
+          "protocolVersion": "2024-11-05",
+          "capabilities": {
+            "tools": {}
+          },
+          "serverInfo": {
+            "name": "lm-resizer",
+            "version": "0.2.6"
+          }
+        }
+      },
+      "tools": [
+        {
+          "name": "lm_resizer_compress",
+          "description": "Compress tool output, logs, diffs, JSON, or text and return CCR retrieval keys.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "content": {
+                "type": "string"
+              },
+              "query": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "content"
+            ]
+          }
+        },
+        {
+          "name": "lm_resizer_tool_output",
+          "description": "Compress already captured output using the named command's filter; never execute that command.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "content": {
+                "type": "string"
+              },
+              "command": {
+                "type": "string"
+              },
+              "exit_code": {
+                "type": "integer",
+                "default": 0
+              },
+              "raw_on_failure": {
+                "type": "boolean",
+                "default": false
+              },
+              "query": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "content",
+              "command"
+            ]
+          }
+        },
+        {
+          "name": "lm_resizer_retrieve",
+          "description": "Retrieve original content by CCR hash.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "hash": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "hash"
+            ]
+          }
+        },
+        {
+          "name": "lm_resizer_stats",
+          "description": "Return CCR store statistics.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {}
+          }
+        }
+      ],
+      "error": null,
+      "knownAnswer": {
+        "jsonrpc": "2.0",
+        "id": 3,
+        "result": {
+          "isError": false,
+          "content": [
+            {
+              "type": "text",
+              "text": "{\n  \"tokenizer\": \"tiktoken-rs/o200k_base\",\n  \"token_count_method\": \"exact\",\n  \"original_tokens\": 12,\n  \"compressed_tokens\": 12,\n  \"tokens_saved\": 0,\n  \"command\": \"cat fixture.py\",\n  \"exit_code\": 0,\n  \"filter\": \"lossless:file\",\n  \"original_bytes\": 32,\n  \"filtered_bytes\": 32,\n  \"compressed_bytes\": 32,\n  \"bytes_saved\": 0,\n  \"compression_steps\": [],\n  \"cache_keys\": [],\n  \"tee_hint\": null,\n  \"output\": \"def add(a, b):\\n    return a + b\\n\"\n}"
+            }
+          ]
+        }
+      },
+      "knownAnswerVerified": true,
+      "unknownToolReply": {
+        "jsonrpc": "2.0",
+        "id": 10,
+        "error": {
+          "code": -32000,
+          "message": "unknown tool: __missing_qualification_tool__"
+        }
+      },
+      "failedCallRecoveryVerified": true
+    }
+  ],
+  "nativeClientSmoke": {
+    "exit_code": 0,
+    "stdout": "{\"type\":\"thread.started\",\"thread_id\":\"01a1ecc3-d389-7813-8fba-7df8a2d9997d\"}\n{\"type\":\"item.completed\",\"item\":{\"id\":\"item_0\",\"type\":\"error\",\"message\":\"`--dangerously-bypass-hook-trust` is enabled. Enabled hooks may run without review for this invocation.\"}}\n{\"type\":\"item.completed\",\"item\":{\"id\":\"item_1\",\"type\":\"error\",\"message\":\"`--dangerously-bypass-hook-trust` is enabled. Enabled hooks may run without review for this invocation.\"}}\n{\"type\":\"turn.started\"}\n{\"type\":\"item.started\",\"item\":{\"id\":\"item_2\",\"type\":\"command_execution\",\"command\":\"/bin/bash -lc 'cat fixture.py'\",\"aggregated_output\":\"\",\"exit_code\":null,\"status\":\"in_progress\"}}\n{\"type\":\"item.completed\",\"item\":{\"id\":\"item_2\",\"type\":\"command_execution\",\"command\":\"/bin/bash -lc 'cat fixture.py'\",\"aggregated_output\":\"def add(a, b):\\n    return a + b\\n\",\"exit_code\":0,\"status\":\"completed\"}}\n{\"type\":\"item.completed\",\"item\":{\"id\":\"item_3\",\"type\":\"agent_message\",\"text\":\"Local qualification fixture complete.\"}}\n{\"type\":\"turn.completed\",\"usage\":{\"input_tokens\":20,\"cached_input_tokens\":0,\"cache_write_input_tokens\":0,\"output_tokens\":10,\"reasoning_output_tokens\":0}}\n",
+    "stderr": "Reading additional input from stdin...\n",
+    "requests": [
+      {
+        "path": "/v1/responses",
+        "model": "gpt-6.1-sol",
+        "reasoning": {
+          "effort": "high",
+          "context": "all_turns"
+        },
+        "tools": []
+      },
+      {
+        "path": "/v1/responses",
+        "model": "gpt-6.1-sol",
+        "reasoning": {
+          "effort": "high",
+          "context": "all_turns"
+        },
+        "tools": []
+      }
+    ],
+    "modelCalls": 0,
+    "syntheticUsage": true,
+    "network": "none",
+    "scope": "protocol fixture, not model evaluation",
+    "verified": true
+  },
+  "nativeHookReceipts": [
+    {
+      "command": "\"/home/bench/free-qualification-t27y7yve/bin/lm-resizer\" hook --client codex --event PreToolUse",
+      "input": "{\"session_id\":\"01a1ecc3-d389-7813-8fba-7df8a2d9997d\",\"turn_id\":\"01a1ecc3-d3a8-7872-a7c3-3ac66ead5635\",\"transcript_path\":\"/home/bench/free-qualification-t27y7yve/lm-resizer/home/.codex/sessions/2026/11/18/rollout-2026-11-18T03-46-59-01a1ecc3-d389-7813-8fba-7df8a2d9997d.jsonl\",\"cwd\":\"/home/bench/free-qualification-t27y7yve/lm-resizer/workspace\",\"hook_event_name\":\"PreToolUse\",\"model\":\"gpt-6.1-sol\",\"permission_mode\":\"bypassPermissions\",\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"cat fixture.py\"},\"tool_use_id\":\"call_fixture\"}",
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": "\"/home/bench/free-qualification-t27y7yve/bin/lm-resizer\" hook --client codex --event PostToolUse",
+      "input": "{\"session_id\":\"01a1ecc3-d389-7813-8fba-7df8a2d9997d\",\"turn_id\":\"01a1ecc3-d3a8-7872-a7c3-3ac66ead5635\",\"transcript_path\":\"/home/bench/free-qualification-t27y7yve/lm-resizer/home/.codex/sessions/2026/11/18/rollout-2026-11-18T03-46-59-01a1ecc3-d389-7813-8fba-7df8a2d9997d.jsonl\",\"cwd\":\"/home/bench/free-qualification-t27y7yve/lm-resizer/workspace\",\"hook_event_name\":\"PostToolUse\",\"model\":\"gpt-6.1-sol\",\"permission_mode\":\"bypassPermissions\",\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"cat fixture.py\"},\"tool_response\":\"def add(a, b):\\n    return a + b\\n\",\"tool_use_id\":\"call_fixture\"}",
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    }
+  ],
+  "hookInstrumentation": [
+    {
+      "path": "workspace/.codex/hooks.json",
+      "originalSha256": "88f4eb47428d2d61fdba585eeec55f7fc140e36f2aaf8af80d6fe1027911d610",
+      "instrumentedSha256": "4af3e611192161840dc4c0d74db6c7767aae227b512f8000fed94462bffd49d4"
+    }
+  ],
+  "legacyHookCalls": [],
+  "nativeConfigParse": {
+    "exit_code": 0,
+    "stderr": ""
+  },
+  "steps": [
+    {
+      "product": "lm-resizer",
+      "command": [
+        "lm-resizer",
+        "--version"
+      ],
+      "returncode": 0,
+      "stdout": "lm-resizer 0.2.6\n",
+      "stderr": ""
+    },
+    {
+      "product": "lm-resizer",
+      "command": [
+        "lm-resizer",
+        "init-native-hooks",
+        "--help"
+      ],
+      "returncode": 0,
+      "stdout": "Install native agent hooks that call `lm-resizer hook`\n\nUsage: lm-resizer init-native-hooks [OPTIONS]\n\nOptions:\n      --client <CLIENT>            Agent: codex, claude, gemini, copilot, cursor, or all (codex + claude) [default: all]\n      --project-dir <PROJECT_DIR>  Project directory where native hook config will be written\n      --force                      Overwrite existing native hook config files\n      --json                       Emit machine-readable JSON\n  -h, --help                       Print help\n",
+      "stderr": ""
+    },
+    {
+      "product": "lm-resizer",
+      "command": [
+        "lm-resizer",
+        "install",
+        "--help"
+      ],
+      "returncode": 0,
+      "stdout": "Install lm-resizer as an MCP server for common agent clients\n\nUsage: lm-resizer install [OPTIONS]\n\nOptions:\n      --client <CLIENT>            Client to configure: claude, codex, cursor, vscode, all [default: claude]\n      --scope <SCOPE>              Installation scope: project or global. Codex is user-scoped: `--client codex` requires `--scope global`, and `--client all` writes Codex to `~/.codex/config.toml` even with `project` [default: project]\n      --project-dir <PROJECT_DIR>  Project directory for project-scoped config files\n      --store <STORE>              CCR SQLite database path passed to the MCP server\n  -h, --help                       Print help\n",
+      "stderr": ""
+    },
+    {
+      "product": "lm-resizer",
+      "command": [
+        "lm-resizer",
+        "init-native-hooks",
+        "--client",
+        "codex",
+        "--json"
+      ],
+      "returncode": 0,
+      "stdout": "{\n  \"project_dir\": \"/home/bench/free-qualification-t27y7yve/lm-resizer/workspace\",\n  \"files\": [\n    \"/home/bench/free-qualification-t27y7yve/lm-resizer/workspace/.codex/hooks.json\"\n  ]\n}\n",
+      "stderr": ""
+    },
+    {
+      "product": "lm-resizer",
+      "command": [
+        "lm-resizer",
+        "install",
+        "--client",
+        "codex",
+        "--scope",
+        "global"
+      ],
+      "returncode": 0,
+      "stdout": "Configured Codex MCP server at /home/bench/free-qualification-t27y7yve/lm-resizer/home/.codex/config.toml\n",
+      "stderr": ""
+    }
+  ],
+  "paidCalls": 0
+}

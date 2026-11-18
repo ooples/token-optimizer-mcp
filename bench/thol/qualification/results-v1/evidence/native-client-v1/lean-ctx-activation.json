@@ -1,0 +1,788 @@
+{
+  "product": "lean-ctx",
+  "network": "none",
+  "providerCredentials": false,
+  "configurationFiles": [
+    {
+      "path": "home/.codex/hooks.json",
+      "sha256": "1e8907011b95215ba47fa6dd9be492bfd56ccecb4ff818e5aa440c0899686374"
+    },
+    {
+      "path": "home/.codex/AGENTS.md",
+      "sha256": "11985b4132d1a9cbd090eddde7a64dece04c27da44a7b91fa884f3875262cf56"
+    },
+    {
+      "path": "home/.codex/LEAN-CTX.md",
+      "sha256": "9ebb5a9ea7cf2bb7af8e34413830f7eb7bfc2165d85e08d18250375061ebc147"
+    },
+    {
+      "path": "home/.codex/instructions.md",
+      "sha256": "0db740e8d45345307359b38dd724ee0f1921fea15c3fb251977568a4b4ca43cf"
+    },
+    {
+      "path": "home/.codex/config.toml",
+      "sha256": "14e1bbf2bf4073cce8f1b438a570a8a4d47e715fe1046d0861f7f2fa1681f2a3"
+    }
+  ],
+  "codexConfigs": [
+    {
+      "mcp_servers": {
+        "lean-ctx": {
+          "command": "/home/bench/free-qualification-hxw8xr2_/bin/lean-ctx",
+          "args": [
+            "mcp"
+          ],
+          "startup_timeout_sec": 30,
+          "tool_timeout_sec": 120
+        }
+      },
+      "features": {
+        "hooks": true
+      }
+    }
+  ],
+  "hookCalls": [
+    {
+      "event": "SessionStart",
+      "exit_code": 0,
+      "stdout": "{\"hookSpecificOutput\":{\"additionalContext\":\"lean-ctx SESSION BRIEFING\\n\\nlean-ctx is active \u2014 hooks compress native Read and Grep output, and shell\\ncommands that only read (file reads, searches, listings), without approving\\nanything for you. Every other shell command runs unchanged and uncompressed\\nunder your Codex approval policy.\\nUse native Read, Grep, Glob, and Shell normally.\\nGlob may fall back to ctx_glob if the hook cannot safely redirect.\\n\\nExclusive tools (no native equivalent \u2014 call these via MCP):\\n  ctx_compose (search + read + symbols), ctx_callgraph (callers/impact),\\n  ctx_search(action=symbol | semantic), ctx_knowledge, ctx_session.\\n\\nCHECKPOINT: after 20+ tool calls, document progress with ctx_session(action=\\\"task\\\", value=\\\"<status>\\\").\",\"hookEventName\":\"SessionStart\"}}\n",
+      "stderr": ""
+    },
+    {
+      "event": "SessionStart",
+      "exit_code": 0,
+      "stdout": "{\"hookSpecificOutput\":{\"additionalContext\":\"lean-ctx tools for this session: ctx_read for Read, ctx_search for Grep, ctx_shell for Shell, ctx_glob for Glob, ctx_tree for ls. Native Read stays available for editing.\",\"hookEventName\":\"SessionStart\"}}\n",
+      "stderr": ""
+    },
+    {
+      "event": "PreToolUse",
+      "exit_code": 0,
+      "stdout": "{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"allow\",\"updatedInput\":{\"command\":\"/home/bench/free-qualification-hxw8xr2_/bin/lean-ctx -c 'ls -la'\"}}}",
+      "stderr": ""
+    }
+  ],
+  "mcpCalls": [
+    {
+      "name": "lean-ctx",
+      "command": [
+        "/home/bench/free-qualification-hxw8xr2_/bin/lean-ctx",
+        "mcp"
+      ],
+      "initialize": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": {
+          "protocolVersion": "2024-11-05",
+          "capabilities": {
+            "tools": {
+              "listChanged": true
+            }
+          },
+          "serverInfo": {
+            "name": "lean-ctx",
+            "title": "LeanCTX",
+            "version": "3.12.6",
+            "description": "Context Gateway for AI agents: task-relevant context, supported controls, local knowledge and observable evidence.",
+            "websiteUrl": "https://leanctx.com"
+          },
+          "instructions": "lean-ctx routing \u2014 the host's built-in tools map to:\n\u2022 Read/cat -> ctx_read(path, mode)\n\u2022 Grep -> ctx_search(pattern, path)\n\u2022 Shell/bash -> ctx_shell(command)\n\u2022 Glob/find -> ctx_glob(pattern)\n\u2022 ls/find -> ctx_tree(path, depth)\nThis covers built-in file/search/shell tools only; other MCP servers keep their own jobs.\n\nBy task:\n\u2022 Unfamiliar code -> ctx_compose (search + read + symbols in one call)\n\u2022 Read -> ctx_read(mode=signatures|map|full); edit -> ctx_patch\n\u2022 Symbol -> ctx_search(action=symbol); meaning -> ctx_search(action=semantic)\n\u2022 Callers/impact -> ctx_callgraph; memory -> ctx_session\n\nRECOVER: compression is reversible \u2014 read the shown path (no MCP) or ctx_read(raw=true), never re-read line-by-line.\n\nROOTS: ctx_* read ~ projects, write the active one; ~/.ssh etc. closed. Use native Read for out-of-root; `lean-ctx doctor` shows effective roots.\n\nOther tools: ctx_call(tool=<name>).\nOUTPUT STYLE: concise\n- Bullet points over paragraphs\n- Skip filler words and hedging (\"I think\", \"probably\", \"it seems\")\n- 1-sentence explanations max, then code/action\n- No repeating what the user said\n\n\nFull instructions at ~/.claude/CLAUDE.md\n\n\n\n\nlean-ctx 3.12.6 (official, https://github.com/yvgude/lean-ctx)\n"
+        }
+      },
+      "tools": [
+        {
+          "name": "ctx_call",
+          "description": "Invoke any non-core lean-ctx tool by name \u2014 for tools not exposed as standalone MCP tools.\nCategories: arch, debug, memory, batch, agent, util. Find exact names with\nctx_discover_tools (query=keyword; empty query lists all). Cannot invoke itself.",
+          "inputSchema": {
+            "properties": {
+              "arguments": {
+                "description": "Tool arguments",
+                "type": "object"
+              },
+              "name": {
+                "description": "Tool name",
+                "type": "string"
+              }
+            },
+            "required": [
+              "name"
+            ],
+            "type": "object"
+          }
+        },
+        {
+          "name": "ctx_callgraph",
+          "description": "Callers/callees for one symbol (function call edges, not const/var refs).\naction=callers|callees symbol='fn' \u2192 every call site with file:line.\naction=trace from\u2192to finds the path between two symbols (depth=N).\nFor end-to-end flow understanding use ctx_compose FIRST.",
+          "inputSchema": {
+            "properties": {
+              "action": {
+                "enum": [
+                  "callers",
+                  "callees",
+                  "trace",
+                  "risk"
+                ],
+                "type": "string"
+              },
+              "depth": {
+                "maximum": 5,
+                "minimum": 1,
+                "type": "integer"
+              },
+              "file": {
+                "description": "Scope results to file",
+                "type": "string"
+              },
+              "from": {
+                "type": "string"
+              },
+              "symbol": {
+                "type": "string"
+              },
+              "to": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "action"
+            ],
+            "type": "object"
+          },
+          "annotations": {
+            "readOnlyHint": true,
+            "destructiveHint": false,
+            "idempotentHint": true
+          }
+        },
+        {
+          "name": "ctx_compose",
+          "description": "First-pass context for one task; returns ranked files and inline source \u2014 use instead of search\u2192read chains.",
+          "inputSchema": {
+            "properties": {
+              "path": {
+                "description": "Project root",
+                "type": "string"
+              },
+              "task": {
+                "description": "Short English task/question or symbol names",
+                "type": "string"
+              },
+              "task_aware": {
+                "default": true,
+                "description": "Rank compose sections against the task (default: true)",
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "task"
+            ],
+            "type": "object"
+          }
+        },
+        {
+          "name": "ctx_expand",
+          "description": "Retrieve archived tool output: see [Archived:ID] \u2192 ctx_expand id=ID (zero-loss, original preserved). head/tail/search filter lines; action=list|search_all browses/queries archives.\nANTIPATTERN: not for project files \u2014 use ctx_read or ctx_compose.",
+          "inputSchema": {
+            "properties": {
+              "action": {
+                "description": "retrieve|list|search_all",
+                "type": "string"
+              },
+              "end_line": {
+                "type": "integer"
+              },
+              "head": {
+                "type": "integer"
+              },
+              "id": {
+                "description": "Archive ID, shell_* job ID, or @F1 ref",
+                "type": "string"
+              },
+              "json_keys": {
+                "type": "boolean"
+              },
+              "json_path": {
+                "description": "e.g. data.items.0",
+                "type": "string"
+              },
+              "query": {
+                "type": "string"
+              },
+              "search": {
+                "type": "string"
+              },
+              "session_id": {
+                "type": "string"
+              },
+              "start_line": {
+                "type": "integer"
+              },
+              "tail": {
+                "type": "integer"
+              }
+            },
+            "required": [],
+            "type": "object"
+          },
+          "annotations": {
+            "readOnlyHint": true,
+            "destructiveHint": false,
+            "idempotentHint": true
+          }
+        },
+        {
+          "name": "ctx_glob",
+          "description": "Find files by glob pattern (respects .gitignore; multi-root via paths).\nFor file CONTENT search use ctx_search.",
+          "inputSchema": {
+            "properties": {
+              "ignore_gitignore": {
+                "description": "Requires admin role",
+                "type": "boolean"
+              },
+              "max_results": {
+                "description": "default 200",
+                "type": "integer"
+              },
+              "path": {
+                "type": "string"
+              },
+              "paths": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "pattern": {
+                "description": "e.g. **/*.ts",
+                "type": "string"
+              }
+            },
+            "required": [
+              "pattern"
+            ],
+            "type": "object"
+          },
+          "annotations": {
+            "readOnlyHint": true,
+            "destructiveHint": false,
+            "idempotentHint": true
+          }
+        },
+        {
+          "name": "ctx_patch",
+          "description": "Safe file edit, project-relative paths. replace_unique(path,old_text,new_text): exact unique replacement, needs no anchors. Line ops take line+hash from ctx_read(mode=\"anchored:N-M\"); CONFLICT means re-read. ops[] batch (cross-file, incl. replace_unique/replace_symbol); create and replace_all only as top-level calls. A 0-byte file: create, or replace_unique with old_text=\"\".",
+          "inputSchema": {
+            "properties": {
+              "dry_run": {
+                "type": "boolean"
+              },
+              "end_hash": {
+                "type": "string"
+              },
+              "end_line": {
+                "type": "integer"
+              },
+              "find": {
+                "type": "string"
+              },
+              "hash": {
+                "type": "string"
+              },
+              "line": {
+                "type": "integer"
+              },
+              "name": {
+                "type": "string"
+              },
+              "new_text": {
+                "type": "string"
+              },
+              "old_text": {
+                "type": "string"
+              },
+              "op": {
+                "enum": [
+                  "set_line",
+                  "replace_lines",
+                  "insert_after",
+                  "delete",
+                  "replace_unique",
+                  "replace_symbol",
+                  "create",
+                  "replace_all"
+                ],
+                "type": "string"
+              },
+              "ops": {
+                "items": {
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "path": {
+                "type": "string"
+              },
+              "replace": {
+                "type": "string"
+              },
+              "start_hash": {
+                "type": "string"
+              },
+              "start_line": {
+                "type": "integer"
+              }
+            },
+            "required": [],
+            "type": "object"
+          },
+          "annotations": {
+            "readOnlyHint": false,
+            "destructiveHint": true
+          }
+        },
+        {
+          "name": "ctx_read",
+          "description": "Read files. No mode: \u2264300 lines whole, larger files as outline with line ranges.\nsymbol=Name or lines:N-M reads just that part, also for edits.\nTo UNDERSTAND code run ctx_compose FIRST.",
+          "inputSchema": {
+            "properties": {
+              "aggressiveness": {
+                "description": "0.0\u20131.0 density (entropy/task)",
+                "type": "number"
+              },
+              "engine_interface": {
+                "description": "Opt into one receipt-backed Engine v1 invocation (single-path aggressive reads only)",
+                "enum": [
+                  "v1"
+                ],
+                "type": "string"
+              },
+              "fresh": {
+                "description": "Bypass cache",
+                "type": "boolean"
+              },
+              "limit": {
+                "description": "Max lines",
+                "type": "integer"
+              },
+              "mode": {
+                "description": "Default auto. full=complete(edit-ready; \u2264turn budget, raw=true beyond) anchored=+N:hh|anchors(line ops) raw=exact-bytes signatures=API map=structure auto=smart diff=cache-delta lines:N-M=window -N=tail 5,10-20=multi reference=pointer task=focus",
+                "type": "string"
+              },
+              "offset": {
+                "description": "start_line alias",
+                "type": "integer"
+              },
+              "path": {
+                "description": "Relative to project root",
+                "type": "string"
+              },
+              "paths": {
+                "description": "Batch read",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "protect": {
+                "description": "Symbols kept verbatim",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "raw": {
+                "description": "Verbatim except redaction (= mode=raw + fresh)",
+                "type": "boolean"
+              },
+              "start_line": {
+                "description": "1-based",
+                "type": "integer"
+              },
+              "symbol": {
+                "description": "Name or Class.method: only its lines",
+                "type": "string"
+              }
+            },
+            "required": [],
+            "type": "object"
+          },
+          "annotations": {
+            "readOnlyHint": true,
+            "destructiveHint": false,
+            "idempotentHint": true
+          }
+        },
+        {
+          "name": "ctx_search",
+          "description": "Search code: regex(pattern, default) | semantic(query) | symbol(name|handle) | find_related(file_path,line). Read-only. anchored=true enables ctx_patch refs; queries batches regex searches. Run ctx_compose FIRST.",
+          "inputSchema": {
+            "properties": {
+              "action": {
+                "enum": [
+                  "regex",
+                  "semantic",
+                  "symbol",
+                  "find_related"
+                ],
+                "type": "string"
+              },
+              "anchored": {
+                "type": "boolean"
+              },
+              "exclude": {
+                "type": "string"
+              },
+              "exclude_pattern": {
+                "type": "string"
+              },
+              "file": {
+                "type": "string"
+              },
+              "file_path": {
+                "type": "string"
+              },
+              "handle": {
+                "type": "string"
+              },
+              "include": {
+                "description": "Glob, e.g. *.rs",
+                "type": "string"
+              },
+              "kind": {
+                "type": "string"
+              },
+              "line": {
+                "type": "integer"
+              },
+              "max_results": {
+                "description": "shared across queries",
+                "type": "integer"
+              },
+              "mode": {
+                "enum": [
+                  "bm25",
+                  "dense",
+                  "hybrid"
+                ],
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "path": {
+                "type": "string"
+              },
+              "paths": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "pattern": {
+                "type": "string"
+              },
+              "queries": {
+                "items": {
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "query": {
+                "type": "string"
+              },
+              "top_k": {
+                "type": "integer"
+              }
+            },
+            "required": [],
+            "type": "object"
+          },
+          "annotations": {
+            "readOnlyHint": true,
+            "destructiveHint": false,
+            "idempotentHint": true
+          }
+        },
+        {
+          "name": "ctx_session",
+          "description": "Session memory. save at session end, load at start, status = snapshot;\ntask|finding|decision record progress (value=text).\nANTIPATTERN: permanent project knowledge \u2192 ctx_knowledge.",
+          "inputSchema": {
+            "properties": {
+              "action": {
+                "description": "status|handoff|load|save|task|finding|decision|compact|restore|list|\u2026 (invalid action lists all)",
+                "type": "string"
+              },
+              "keep_recent_turns": {
+                "description": "compact: trailing user turns kept verbatim (default 6)",
+                "type": "integer"
+              },
+              "session_id": {
+                "description": "Omit for your own session",
+                "type": "string"
+              },
+              "tag": {
+                "description": "finding: dead_end = tried and abandoned",
+                "enum": [
+                  "note",
+                  "dead_end"
+                ],
+                "type": "string"
+              },
+              "value": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "action"
+            ],
+            "type": "object"
+          }
+        },
+        {
+          "name": "ctx_shell",
+          "description": "WORKFLOW: preferred \u2014 auto-compresses output (build/test/log).\nBig logs: narrow the command (grep, sed -n, head/tail).\n[exit:N] on errors (lossless).\nPOLICY: allowlisted read-only path.\nA [BLOCKED] command is permanent; ctx_execute shares the same allowlist \u2014 fix with `lean-ctx allow <cmd>`.\nANTIPATTERN: multi-line scripts, sh/bash script.sh, $var-as-command \u2192 ctx_execute (when exposed).",
+          "inputSchema": {
+            "properties": {
+              "background_action": {
+                "description": "Inspect or cancel a background ctx_shell job; terminal status may include archiveId. Evicted/expired jobs return a structured lookup error.",
+                "enum": [
+                  "status",
+                  "cancel"
+                ],
+                "type": "string"
+              },
+              "command": {
+                "description": "Shell command",
+                "type": "string"
+              },
+              "cwd": {
+                "description": "Working dir (persists across calls)",
+                "type": "string"
+              },
+              "env": {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "description": "Extra env vars",
+                "type": "object"
+              },
+              "inline": {
+                "description": "Verbatim up to archive.inline_max_bytes, else archived",
+                "type": "boolean"
+              },
+              "job_id": {
+                "description": "Job id returned by run_in_background.",
+                "type": "string"
+              },
+              "raw": {
+                "description": "Exact bytes; only for diffs to apply, hashes, encoded output",
+                "type": "boolean"
+              },
+              "run_in_background": {
+                "description": "Detach immediately and return a job id. The command keeps timeout_ms (default here: the 1 h ceiling); poll or cancel with background_action and job_id.",
+                "type": "boolean"
+              },
+              "timeout_ms": {
+                "description": "Job lifetime in ms (max 3600000) \u2014 NOT the inline wait. A command still running at the ~110s foreground cap detaches to a pollable shell_* job and keeps running up to timeout_ms. Overridden by LEAN_CTX_SHELL_TIMEOUT_MS.",
+                "type": "integer"
+              }
+            },
+            "required": [],
+            "type": "object"
+          },
+          "annotations": {
+            "readOnlyHint": false,
+            "destructiveHint": true
+          }
+        },
+        {
+          "name": "ctx_tree",
+          "description": "Directory tree with file counts per directory. depth=N (default 3);\nshow_hidden for dotfiles; paths for multi-root.\nrespect_gitignore filters ignored files (default true).\nWORKFLOW: lightweight orientation before ctx_compose.",
+          "inputSchema": {
+            "properties": {
+              "depth": {
+                "description": "Max depth",
+                "type": "integer"
+              },
+              "path": {
+                "description": "Dir",
+                "type": "string"
+              },
+              "paths": {
+                "description": "Multi-root (alternative to path)",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "respect_gitignore": {
+                "description": "Filter ignored",
+                "type": "boolean"
+              },
+              "show_hidden": {
+                "description": "Include dotfiles",
+                "type": "boolean"
+              }
+            },
+            "required": [],
+            "type": "object"
+          },
+          "annotations": {
+            "readOnlyHint": true,
+            "destructiveHint": false,
+            "idempotentHint": true
+          }
+        },
+        {
+          "name": "shell",
+          "description": "Shell command with auto-compression (~95 patterns). Alias for ctx_shell.\nOutput is compressed for token savings. Big logs: narrow the command (grep, sed -n, head/tail).\nUse when your MCP client prefers shell/bash over ctx_shell \u2014 transparently\ndelegates to ctx_shell internals.",
+          "inputSchema": {
+            "properties": {
+              "command": {
+                "description": "Shell command",
+                "type": "string"
+              },
+              "cwd": {
+                "description": "Working dir",
+                "type": "string"
+              },
+              "raw": {
+                "description": "Exact bytes, uncompressed; only for diffs to apply, hashes, encoded output. Default false.",
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "command"
+            ],
+            "type": "object"
+          }
+        }
+      ],
+      "error": null,
+      "knownAnswer": {
+        "jsonrpc": "2.0",
+        "id": 3,
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "def add(a, b):\n    return a + b\n"
+            }
+          ],
+          "isError": false,
+          "_meta": {
+            "cache_hint": "stable"
+          }
+        }
+      },
+      "knownAnswerVerified": true
+    }
+  ],
+  "nativeClientSmoke": {
+    "exit_code": 0,
+    "stdout": "{\"type\":\"thread.started\",\"thread_id\":\"01a1ecb4-0e02-79a2-9656-0c0055243dea\"}\n{\"type\":\"item.completed\",\"item\":{\"id\":\"item_0\",\"type\":\"error\",\"message\":\"`--dangerously-bypass-hook-trust` is enabled. Enabled hooks may run without review for this invocation.\"}}\n{\"type\":\"item.completed\",\"item\":{\"id\":\"item_1\",\"type\":\"error\",\"message\":\"`--dangerously-bypass-hook-trust` is enabled. Enabled hooks may run without review for this invocation.\"}}\n{\"type\":\"turn.started\"}\n{\"type\":\"item.started\",\"item\":{\"id\":\"item_2\",\"type\":\"command_execution\",\"command\":\"/bin/bash -lc '/home/bench/free-qualification-hxw8xr2_/bin/lean-ctx read fixture.py'\",\"aggregated_output\":\"\",\"exit_code\":null,\"status\":\"in_progress\"}}\n{\"type\":\"item.completed\",\"item\":{\"id\":\"item_2\",\"type\":\"command_execution\",\"command\":\"/bin/bash -lc '/home/bench/free-qualification-hxw8xr2_/bin/lean-ctx read fixture.py'\",\"aggregated_output\":\"def add(a, b):\\n    return a + b\\n\",\"exit_code\":0,\"status\":\"completed\"}}\n{\"type\":\"item.completed\",\"item\":{\"id\":\"item_3\",\"type\":\"agent_message\",\"text\":\"Local qualification fixture complete.\"}}\n{\"type\":\"turn.completed\",\"usage\":{\"input_tokens\":20,\"cached_input_tokens\":0,\"cache_write_input_tokens\":0,\"output_tokens\":10,\"reasoning_output_tokens\":0}}\n",
+    "stderr": "Reading additional input from stdin...\n",
+    "requests": [
+      {
+        "path": "/v1/responses",
+        "model": "gpt-6.1-sol",
+        "reasoning": {
+          "effort": "high",
+          "context": "all_turns"
+        },
+        "tools": []
+      },
+      {
+        "path": "/v1/responses",
+        "model": "gpt-6.1-sol",
+        "reasoning": {
+          "effort": "high",
+          "context": "all_turns"
+        },
+        "tools": []
+      }
+    ],
+    "modelCalls": 0,
+    "syntheticUsage": true,
+    "network": "none",
+    "scope": "protocol fixture, not model evaluation"
+  },
+  "nativeHookReceipts": [
+    {
+      "command": "/home/bench/free-qualification-hxw8xr2_/bin/lean-ctx hook codex-session-start",
+      "input": "{\"session_id\":\"01a1ecb4-0e02-79a2-9656-0c0055243dea\",\"transcript_path\":\"/home/bench/free-qualification-hxw8xr2_/lean-ctx/home/.codex/sessions/2026/11/18/rollout-2026-11-18T03-29-45-01a1ecb4-0e02-79a2-9656-0c0055243dea.jsonl\",\"cwd\":\"/home/bench/free-qualification-hxw8xr2_/lean-ctx/workspace\",\"hook_event_name\":\"SessionStart\",\"model\":\"gpt-6.1-sol\",\"permission_mode\":\"bypassPermissions\",\"source\":\"startup\"}",
+      "exit_code": 0,
+      "stdout": "{\"hookSpecificOutput\":{\"additionalContext\":\"lean-ctx SESSION BRIEFING\\n\\nlean-ctx is active \u2014 hooks compress native Read and Grep output, and shell\\ncommands that only read (file reads, searches, listings), without approving\\nanything for you. Every other shell command runs unchanged and uncompressed\\nunder your Codex approval policy.\\nUse native Read, Grep, Glob, and Shell normally.\\nGlob may fall back to ctx_glob if the hook cannot safely redirect.\\n\\nExclusive tools (no native equivalent \u2014 call these via MCP):\\n  ctx_compose (search + read + symbols), ctx_callgraph (callers/impact),\\n  ctx_search(action=symbol | semantic), ctx_knowledge, ctx_session.\\n\\nCHECKPOINT: after 20+ tool calls, document progress with ctx_session(action=\\\"task\\\", value=\\\"<status>\\\").\",\"hookEventName\":\"SessionStart\"}}\n",
+      "stderr": ""
+    },
+    {
+      "command": "/home/bench/free-qualification-hxw8xr2_/bin/lean-ctx hook observe",
+      "input": "{\"session_id\":\"01a1ecb4-0e02-79a2-9656-0c0055243dea\",\"transcript_path\":\"/home/bench/free-qualification-hxw8xr2_/lean-ctx/home/.codex/sessions/2026/11/18/rollout-2026-11-18T03-29-45-01a1ecb4-0e02-79a2-9656-0c0055243dea.jsonl\",\"cwd\":\"/home/bench/free-qualification-hxw8xr2_/lean-ctx/workspace\",\"hook_event_name\":\"SessionStart\",\"model\":\"gpt-6.1-sol\",\"permission_mode\":\"bypassPermissions\",\"source\":\"startup\"}",
+      "exit_code": 0,
+      "stdout": "{\"hookSpecificOutput\":{\"additionalContext\":\"lean-ctx tools for this session: ctx_read for Read, ctx_search for Grep, ctx_shell for Shell, ctx_glob for Glob, ctx_tree for ls. Native Read stays available for editing.\",\"hookEventName\":\"SessionStart\"}}\n",
+      "stderr": ""
+    },
+    {
+      "command": "/home/bench/free-qualification-hxw8xr2_/bin/lean-ctx hook codex-pretooluse",
+      "input": "{\"session_id\":\"01a1ecb4-0e02-79a2-9656-0c0055243dea\",\"turn_id\":\"01a1ecb4-0e28-77d3-a536-8d84f9b5b392\",\"transcript_path\":\"/home/bench/free-qualification-hxw8xr2_/lean-ctx/home/.codex/sessions/2026/11/18/rollout-2026-11-18T03-29-45-01a1ecb4-0e02-79a2-9656-0c0055243dea.jsonl\",\"cwd\":\"/home/bench/free-qualification-hxw8xr2_/lean-ctx/workspace\",\"hook_event_name\":\"PreToolUse\",\"model\":\"gpt-6.1-sol\",\"permission_mode\":\"bypassPermissions\",\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"cat fixture.py\"},\"tool_use_id\":\"call_fixture\"}",
+      "exit_code": 0,
+      "stdout": "{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"allow\",\"updatedInput\":{\"command\":\"/home/bench/free-qualification-hxw8xr2_/bin/lean-ctx read fixture.py\"}}}",
+      "stderr": ""
+    },
+    {
+      "command": "/home/bench/free-qualification-hxw8xr2_/bin/lean-ctx hook observe",
+      "input": "{\"session_id\":\"01a1ecb4-0e02-79a2-9656-0c0055243dea\",\"transcript_path\":\"/home/bench/free-qualification-hxw8xr2_/lean-ctx/home/.codex/sessions/2026/11/18/rollout-2026-11-18T03-29-45-01a1ecb4-0e02-79a2-9656-0c0055243dea.jsonl\",\"cwd\":\"/home/bench/free-qualification-hxw8xr2_/lean-ctx/workspace\",\"hook_event_name\":\"SessionEnd\",\"reason\":\"other\"}",
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    }
+  ],
+  "hookInstrumentation": [
+    {
+      "path": "home/.codex/hooks.json",
+      "originalSha256": "1e8907011b95215ba47fa6dd9be492bfd56ccecb4ff818e5aa440c0899686374",
+      "instrumentedSha256": "d7cb945a97227d516cf3423d68632bf26e353b2b5adabd5b14044eb13090d30a"
+    }
+  ],
+  "legacyHookCalls": [],
+  "nativeConfigParse": {
+    "exit_code": 0,
+    "stderr": ""
+  },
+  "steps": [
+    {
+      "product": "lean-ctx",
+      "command": [
+        "lean-ctx",
+        "--version"
+      ],
+      "returncode": 0,
+      "stdout": "lean-ctx 3.12.6 (official, https://github.com/yvgude/lean-ctx)\n",
+      "stderr": ""
+    },
+    {
+      "product": "lean-ctx",
+      "command": [
+        "lean-ctx",
+        "onboard",
+        "--help"
+      ],
+      "returncode": 0,
+      "stdout": "Usage: lean-ctx onboard [--agents <list>] [--dry-run] [--no-agent-aliases]\nConnect your AI tools with one command: detects installed\nagents, installs hooks/rules/MCP registrations, verifies.\nOn a terminal it first asks which detected tools to connect.\n\n  --agents <list>     Connect only these tools (e.g. claude,cursor; or none)\n                      and remember the choice for updates; `all` connects\n                      (and remembers) every tool installed now\n  --dry-run           Show what would be written; change nothing\n  --yes, -y           Do not ask; connect every detected tool (or the\n                      recorded choice)\n  --non-interactive   Do not ask; act as without a terminal\n  --no-agent-aliases  Do not install claude/codex/gemini shell aliases\n\nWithout a terminal and without a recorded choice (npm install, CI) onboard\nconfigures no new tool: it refreshes only tools that already use lean-ctx.\nEnvironment: LEAN_CTX_AGENTS=claude,cursor (or all) works like --agents.\nFine-grained control: lean-ctx setup --help\n",
+      "stderr": ""
+    },
+    {
+      "product": "lean-ctx",
+      "command": [
+        "lean-ctx",
+        "onboard",
+        "--agents",
+        "codex",
+        "--yes"
+      ],
+      "returncode": 0,
+      "stdout": "\n  \u001b[1mConnecting lean-ctx to your AI tools\u2026\u001b[0m\n  \u001b[2mRecommended defaults. Run `lean-ctx setup` for full control.\u001b[0m\n\nAdded lean-ctx hook to /home/bench/free-qualification-hxw8xr2_/lean-ctx/home/.bashrc\n  Login shell: /home/bench/free-qualification-hxw8xr2_/lean-ctx/home/.bash_profile now sources ~/.bashrc\n  Binary: /home/bench/free-qualification-hxw8xr2_/bin/lean-ctx\n\nlean-ctx init complete (24 aliases installed)\n\n  Disable temporarily:  lean-ctx-off\n  Re-enable:            lean-ctx-on\n  Check status:         lean-ctx-status\n  Full uninstall:       lean-ctx uninstall\n  Diagnose issues:      lean-ctx doctor\n  Preview changes:      lean-ctx init --global --dry-run\n\n  Restart your shell or run: source ~/.bashrc\n\nFor AI tool integration: lean-ctx init --agent <tool> [--mode <mode>]\n  Supported: aider, amazonq, amp, antigravity, antigravity-cli, augment,\n    claude, cline, codewhale, codex, commandcode, continue, copilot, crush, cursor, emacs, gemini, goose,\n    grok, hermes, jetbrains, kiro, muse, neovim, omp, openclaw, opencode, pi,\n    qoder, qodercli, qoderwork, qwen, roo, sublime, trae, verdent, vscode,\n    windsurf, zed\n  Modes: mcp, hybrid, replace  (auto-detected per agent, override with --mode)\n  New Claude Code installs get governor-mcp; existing setups keep their mode\n\n  \u001b[1;32m\u2713 lean-ctx is connected.\u001b[0m\n\n  \u001b[1mConnected:\u001b[0m Codex CLI\n  \u001b[2mData dir:\u001b[0m  /home/bench/free-qualification-hxw8xr2_/lean-ctx/home/.local/share/lean-ctx\n\n  \u001b[1mOne last step:\u001b[0m\n  \u001b[36m1.\u001b[0m Reload your shell:  \u001b[1mRestart your shell\u001b[0m\n  \u001b[36m2.\u001b[0m \u001b[33mFully restart your AI tool\u001b[0m \u001b[2m(so it reconnects to lean-ctx)\u001b[0m\n  \u001b[36m3.\u001b[0m Ask your AI to read a file \u2014 lean-ctx optimizes it automatically.\n\n  \u001b[2mCheck anytime:\u001b[0m  \u001b[1mlean-ctx doctor\u001b[0m  \u001b[2m\u00b7\u001b[0m  \u001b[1mlean-ctx cockpit\u001b[0m\n\n  \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n  \u2502  lean-ctx gain        Token savings dashboard         \u2502\n  \u2502  lean-ctx cockpit     The Cockpit (browser)          \u2502\n  \u2502  lean-ctx heatmap     Project context heat map        \u2502\n  \u2502  lean-ctx benchmark   Test compression quality        \u2502\n  \u2502  lean-ctx config      Edit settings                   \u2502\n  \u2502  lean-ctx doctor      Verify installation             \u2502\n  \u2502  lean-ctx update      Self-update to latest           \u2502\n  \u2502  LEAN_CTX_DISABLED=1  Disable compression             \u2502\n  \u2502  lean-ctx report-issue Report a bug (auto-diagnostics) \u2502\n  \u2502  lean-ctx contribute  Share anonymized compression stats\u2502\n  \u2502  lean-ctx uninstall   Clean removal                   \u2502\n  \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n  Ready! Your next AI command will be automatically optimized.\n  Docs: https://leanctx.com/docs\n\n",
+      "stderr": "  env.sh: /home/bench/free-qualification-hxw8xr2_/lean-ctx/home/.config/lean-ctx/env.sh\n\n  \u001b[33m\u26a0  Docker detected \u2014 environment hints:\u001b[0m\n  For generic bash -c usage (non-interactive shells):\n    \u001b[1mENV BASH_ENV=\"/home/bench/free-qualification-hxw8xr2_/lean-ctx/home/.config/lean-ctx/env.sh\"\u001b[0m\n  For Claude Code (sources before each command):\n    \u001b[1mENV CLAUDE_ENV_FILE=\"/home/bench/free-qualification-hxw8xr2_/lean-ctx/home/.config/lean-ctx/env.sh\"\u001b[0m\n\n  Installed shell hook in ~/.bashenv\n  Installed agent aliases in ~/.bashrc\n  env.sh: /home/bench/free-qualification-hxw8xr2_/lean-ctx/home/.config/lean-ctx/env.sh\nUpdated Codex config (MCP server + hooks) in /home/bench/free-qualification-hxw8xr2_/lean-ctx/home/.codex/config.toml\nInstalled Codex SessionStart/PreToolUse hooks (Bash/Read/Grep/Glob) at /home/bench/free-qualification-hxw8xr2_/lean-ctx/home/.codex\nInstalled Codex instructions at /home/bench/free-qualification-hxw8xr2_/lean-ctx/home/.codex\n"
+    }
+  ],
+  "paidCalls": 0
+}

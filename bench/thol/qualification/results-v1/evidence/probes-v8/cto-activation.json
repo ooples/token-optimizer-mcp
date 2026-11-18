@@ -1,0 +1,63 @@
+{
+  "product": "cto",
+  "network": "none",
+  "providerCredentials": false,
+  "configurationFiles": [
+    {
+      "path": "workspace/.claude/ARCHITECTURE_MAP.md",
+      "sha256": "f8c9daaccbda423486b0e8a11f1d0ecf47f590bf412c56309d31036f09582235"
+    },
+    {
+      "path": "workspace/.claude/COMMON_MISTAKES.md",
+      "sha256": "98bd2d2f76cc6361e4e93c4a3f17a56511983b08acb9f220dd1f3ad7518927e5"
+    },
+    {
+      "path": "workspace/.claude/QUICK_START.md",
+      "sha256": "80d709bfbfc8061d8e9ee86cdc5a01345cfc0df19bc33e0a1b2c4fb195772c3d"
+    }
+  ],
+  "codexConfigs": [],
+  "hookCalls": [],
+  "mcpCalls": [],
+  "legacyHookCalls": [],
+  "nativeConfigParse": {
+    "exit_code": 0,
+    "stderr": ""
+  },
+  "steps": [
+    {
+      "product": "cto",
+      "command": [
+        "cto",
+        "--version"
+      ],
+      "returncode": 0,
+      "stdout": "2.3.20\n",
+      "stderr": ""
+    },
+    {
+      "product": "cto",
+      "command": [
+        "cto",
+        "init",
+        "--help"
+      ],
+      "returncode": 0,
+      "stdout": "Usage: cto init [options]\n\nSet up optimized documentation structure in your project\n\nOptions:\n  --framework <name>  skip prompts, use known framework patterns (express,\n                      nextjs, django, rails, vue, nuxtjs, angular, nestjs,\n                      laravel, fastapi, go, spring-boot, svelte)\n  --yes               non-interactive with defaults\n  --force             overwrite existing CLAUDE.md if present\n  --hooks             install all Claude Code hooks non-interactively\n  -h, --help          display help for command\n",
+      "stderr": ""
+    },
+    {
+      "product": "cto",
+      "command": [
+        "cto",
+        "init",
+        "--yes",
+        "--hooks"
+      ],
+      "returncode": 0,
+      "stdout": "\n\u2554\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2557\n\u2551   Claude Token Optimizer - Project Setup       \u2551\n\u255a\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u255d\n\n\u2139\ufe0f  No framework detected \u2014 using base .claudeignore\n\n\ud83d\udcc1 Creating directory structure...\n\n\u2705 Setup Complete!\n\n\ud83d\udcca Token Optimization:\n   \u2022 Session start: ~800 tokens (vs ~8,000 before)\n   \u2022 Savings: ~88% reduction \u26a1\n\n\ud83e\ude9d Installing Claude Code hooks...\n\u2713 Installed: .claude/hooks/notification-token-display.sh\n\u2713 Installed: .claude/hooks/post-write-token-diff.sh\n\u2713 Installed: .claude/hooks/pre-tool-bash-guard.sh\n\u2713 Installed: .claude/hooks/pre-tool-read-guard.sh\n\u2713 Installed: .claude/hooks/pre-tool-token-guard.sh\n\u2713 Installed: .claude/hooks/session-end-token-report.sh\n\u2713 Installed: .claude/hooks/stop-path-guard.sh\n\u2713 Installed: .claude/hooks/stop-session-snapshot.sh\n\u2713 Installed: .claude/hooks/user-prompt-ghost-scanner.sh\n\u2713 Installed: .claude/hooks/user-prompt-inject-context.sh\n\u2713 Installed: .claude/hooks/user-prompt-inject-snapshot.sh\n\u2713 Installed: .claude/hooks/user-prompt-validate-claude-md.sh\n\n12 hooks installed.\nRun: cto hooks settings  to get your settings.json block\n\nAdd hooks to ~/.claude/settings.json:\n{\n  \"hooks\": {\n    \"Notification\": [\n      {\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"bash .claude/hooks/notification-token-display.sh\"\n          }\n        ]\n      }\n    ],\n    \"PostToolUse\": [\n      {\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"bash .claude/hooks/post-write-token-diff.sh\"\n          }\n        ]\n      },\n      {\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"bash .claude/hooks/session-end-token-report.sh\"\n          }\n        ]\n      }\n    ],\n    \"PreToolUse\": [\n      {\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"bash .claude/hooks/pre-tool-bash-guard.sh\"\n          }\n        ]\n      },\n      {\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"bash .claude/hooks/pre-tool-read-guard.sh\"\n          }\n        ]\n      },\n      {\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"bash .claude/hooks/pre-tool-token-guard.sh\"\n          }\n        ]\n      }\n    ],\n    \"Stop\": [\n      {\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"bash .claude/hooks/stop-path-guard.sh\"\n          }\n        ]\n      },\n      {\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"bash .claude/hooks/stop-session-snapshot.sh\"\n          }\n        ]\n      }\n    ],\n    \"UserPromptSubmit\": [\n      {\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"bash .claude/hooks/user-prompt-ghost-scanner.sh\"\n          }\n        ]\n      },\n      {\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"bash .claude/hooks/user-prompt-inject-context.sh\"\n          }\n        ]\n      },\n      {\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"bash .claude/hooks/user-prompt-inject-snapshot.sh\"\n          }\n        ]\n      },\n      {\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"bash .claude/hooks/user-prompt-validate-claude-md.sh\"\n          }\n        ]\n      }\n    ]\n  }\n}\n\n\ud83d\udcdd Next Steps:\n   1. Customize .claude/COMMON_MISTAKES.md\n   2. Update .claude/QUICK_START.md with your commands\n   3. Fill in .claude/ARCHITECTURE_MAP.md\n   4. Add to CI: npx claude-token-optimizer audit --json\n\n   Run cto measure to verify savings\n\n",
+      "stderr": ""
+    }
+  ],
+  "paidCalls": 0
+}

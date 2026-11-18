@@ -1,0 +1,84 @@
+{
+  "product": "token-saving-hooks-codex",
+  "network": "none",
+  "providerCredentials": false,
+  "configurationFiles": [
+    {
+      "path": "home/.codex/config.toml",
+      "sha256": "36e8796460b542ad4697ce32e457a1162ebc074b0db9457c1400012d03d0ad7f"
+    }
+  ],
+  "codexConfigs": [
+    {
+      "features": {
+        "codex_hooks": true
+      },
+      "hooks": [
+        {
+          "event": "UserPromptSubmit",
+          "command": "python3 /opt/qualification-vendor/token-saving-hooks-codex/hooks/user-prompt-submit.py"
+        },
+        {
+          "event": "PreToolUse",
+          "matcher": "Bash",
+          "command": "bash /opt/qualification-vendor/token-saving-hooks-codex/hooks/pre-bash-diff-guard.sh"
+        },
+        {
+          "event": "PreToolUse",
+          "matcher": "Bash",
+          "command": "bash /opt/qualification-vendor/token-saving-hooks-codex/hooks/pre-bash-dedup.sh"
+        },
+        {
+          "event": "Stop",
+          "command": "bash /opt/qualification-vendor/token-saving-hooks-codex/hooks/stop-quality-gate.sh"
+        }
+      ]
+    }
+  ],
+  "hookCalls": [],
+  "mcpCalls": [],
+  "legacyHookCalls": [
+    {
+      "event": "UserPromptSubmit",
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "event": "PreToolUse",
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "event": "PreToolUse",
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "event": "Stop",
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    }
+  ],
+  "nativeConfigParse": {
+    "exit_code": 1,
+    "stderr": "Error: failed to load bootstrap configuration\n\nCaused by:\n    invalid type: sequence, expected struct HooksToml\n    in `hooks`\n    \n"
+  },
+  "steps": [
+    {
+      "product": "token-saving-hooks-codex",
+      "command": [
+        "node",
+        "/opt/qualification-vendor/token-saving-hooks-codex/setup.js",
+        "--global"
+      ],
+      "returncode": 0,
+      "stdout": "token-saving-hooks-codex setup\nPlugin root: /opt/qualification-vendor/token-saving-hooks-codex\nConfig target: /home/bench/free-qualification-_86fb36f/token-saving-hooks-codex/home/.codex/config.toml\n\nconfig.toml: written to /home/bench/free-qualification-_86fb36f/token-saving-hooks-codex/home/.codex/config.toml\nAGENTS.md: updated at /home/bench/free-qualification-_86fb36f/token-saving-hooks-codex/workspace/AGENTS.md\n\nSetup complete. Restart Codex for hooks to take effect.\n",
+      "stderr": ""
+    }
+  ],
+  "paidCalls": 0
+}

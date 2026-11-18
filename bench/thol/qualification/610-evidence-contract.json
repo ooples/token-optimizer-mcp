@@ -1,0 +1,141 @@
+{
+  "schema": "task-benchmark-evidence/1",
+  "model": "gpt-6.1-sol",
+  "client": "codex-cli 0.169.0",
+  "effort": "high",
+  "repetitions": 5,
+  "creditsPerMillion": {
+    "uncached": 50,
+    "cached": 2.5,
+    "output": 250
+  },
+  "arms": {
+    "pr610": {
+      "head": "6c3bd71d52e7ae65d496e9b0100f474bcada5c3b",
+      "tree": "55cfe5467358a265bf609b4dd232a8e2e8cd9a4c",
+      "requiredHooks": [
+        "session-start.mjs",
+        "prompt.mjs",
+        "stop.mjs"
+      ],
+      "classifies": true,
+      "settingsTable": {
+        "fix": {
+          "outputDiscipline": true,
+          "outlineSubstitution": true
+        },
+        "build": {
+          "outputDiscipline": true,
+          "outlineSubstitution": true
+        },
+        "rewrite": {
+          "outputDiscipline": true,
+          "outlineSubstitution": false
+        },
+        "survey": {
+          "outputDiscipline": false,
+          "outlineSubstitution": true
+        },
+        "locate": {
+          "outputDiscipline": true,
+          "outlineSubstitution": true
+        },
+        "explain": {
+          "outputDiscipline": true,
+          "outlineSubstitution": true
+        },
+        "unknown": {
+          "outputDiscipline": true,
+          "outlineSubstitution": true
+        }
+      }
+    },
+    "master": {
+      "head": "1518a5d7c41f342e65dd10c89ee2595826607828",
+      "tree": "8b68d518a20e069fa09bc39c6fffff737ff7edf6",
+      "requiredHooks": [
+        "session-start.mjs",
+        "stop.mjs"
+      ],
+      "classifies": false
+    }
+  },
+  "tasks": {
+    "code-bugfix-py": {
+      "category": "fix",
+      "successThreshold": 1
+    },
+    "code-iterate-tests": {
+      "category": "fix",
+      "successThreshold": 1
+    },
+    "code-debug-pipeline-py": {
+      "category": "fix",
+      "successThreshold": 1
+    },
+    "code-debug-ledger-py": {
+      "category": "fix",
+      "successThreshold": 1
+    },
+    "code-debug-cascade-py": {
+      "category": "fix",
+      "successThreshold": 1
+    },
+    "code-feature-js": {
+      "category": "build",
+      "successThreshold": 1
+    },
+    "code-feature-validate-py": {
+      "category": "build",
+      "successThreshold": 1
+    },
+    "code-migration-py": {
+      "category": "build",
+      "successThreshold": 1
+    },
+    "code-migration-py-xl": {
+      "category": "build",
+      "successThreshold": 1
+    },
+    "code-refactor-split-py": {
+      "category": "build",
+      "successThreshold": 1
+    },
+    "code-comprehension-django": {
+      "category": "survey",
+      "successThreshold": 0.7
+    },
+    "code-overview-cobra": {
+      "category": "survey",
+      "successThreshold": 0.8
+    },
+    "code-settings-inventory-django": {
+      "category": "survey",
+      "successThreshold": 0.7
+    },
+    "report-pdf": {
+      "category": "survey",
+      "successThreshold": 0.8
+    },
+    "seo-audit": {
+      "category": "survey",
+      "successThreshold": 0.7
+    },
+    "log-needle-zh": {
+      "category": "locate",
+      "successThreshold": 0.8
+    },
+    "code-rewrite-modernize-py": {
+      "category": "rewrite",
+      "successThreshold": 1
+    }
+  },
+  "publication": {
+    "omit": [
+      "startedAt"
+    ],
+    "defaults": {
+      "selectedSettings": null
+    }
+  }
+}

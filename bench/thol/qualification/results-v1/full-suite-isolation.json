@@ -1,0 +1,320 @@
+{
+  "complete": true,
+  "tasks": 17,
+  "modelCalls": 0,
+  "syntheticAgent": true,
+  "network": "none",
+  "agentImageID": "sha256:e48f59cdba69a3cbd9ed2cf0f348d90d45a8d350d98134cf1070bc106ee9ed90",
+  "graderImageID": "sha256:22e7d3481ca9c2c870d82237877ebb6d6edaedb34f3e9360a4e3835a56612b81",
+  "rows": [
+    {
+      "task": "code-bugfix-py",
+      "scores": [
+        0.0,
+        0.0
+      ],
+      "agentTruthVisible": false,
+      "modelCalls": 0,
+      "workspaceArchiveSha256": "2abd268d3ceb25cc8c8cc2eabf17b5f0b750be8cb8bfea7d7eabc8a22c11d462",
+      "preparation": {
+        "task": "code-bugfix-py",
+        "promptSha256": "789373d88dd3a620008cabfddb456f002b2002f7d6754ef7f2e9b82a23dfdb6d",
+        "taskJsonSha256": "cd2ab971e53363bfadc81e848ea4248f41b1d5009d725ee915c7c692442bb4db",
+        "verifierSha256": "56ef4d86af4abc18bd39a560f3ca6a5407c88ad79c00de1226abae467eb3df5c",
+        "rigSha256": "8af1689b8027c6a9eaa64d779595082a38339231dba136b47981a1f896a27f86",
+        "gitRootInitialized": true
+      }
+    },
+    {
+      "task": "code-iterate-tests",
+      "scores": [
+        0.0,
+        0.0
+      ],
+      "agentTruthVisible": false,
+      "modelCalls": 0,
+      "workspaceArchiveSha256": "4bee79eff0a0bcd8c22c51245b8fdd6f123db6d537de456398b3504fafd6caec",
+      "preparation": {
+        "task": "code-iterate-tests",
+        "promptSha256": "5585b28077e1a3b8f9bed70be6ffc58e277af935dff210a82b8f8bc71495eeaf",
+        "taskJsonSha256": "c667d89c6cb8da6559fe4a80e8aab9661b0a1968e4d124f39f7a3dd30d3516b0",
+        "verifierSha256": "c7a0117040bfae37ce03e8197d71ece4c8a65158d0183d8bd3a95857c601c5dd",
+        "rigSha256": "8af1689b8027c6a9eaa64d779595082a38339231dba136b47981a1f896a27f86",
+        "gitRootInitialized": true
+      }
+    },
+    {
+      "task": "code-debug-pipeline-py",
+      "scores": [
+        0.0,
+        0.0
+      ],
+      "agentTruthVisible": false,
+      "modelCalls": 0,
+      "workspaceArchiveSha256": "ae53d0fe211576827bac19d115f896948313801e7d46f0258bd124d939f0221b",
+      "preparation": {
+        "task": "code-debug-pipeline-py",
+        "promptSha256": "e172b3b0f5f4cbd7e93b64f3cd0c9891c81eea71ee139f9e00a62e6b220e3f87",
+        "taskJsonSha256": "e91c3711e9c44f5a70047ffe35bfbd70417a6bcc127e792107eb740b193bceaa",
+        "verifierSha256": "2ff8921ef045e7b2e780c40993abc2d1b59563684b6e10d88c521441b58ded7b",
+        "rigSha256": "8af1689b8027c6a9eaa64d779595082a38339231dba136b47981a1f896a27f86",
+        "gitRootInitialized": true
+      }
+    },
+    {
+      "task": "code-debug-ledger-py",
+      "scores": [
+        0.0,
+        0.0
+      ],
+      "agentTruthVisible": false,
+      "modelCalls": 0,
+      "workspaceArchiveSha256": "fbec4755f7c806ed66ca8a934686cf56998c925907363ed31dc57eeb78a329cb",
+      "preparation": {
+        "task": "code-debug-ledger-py",
+        "promptSha256": "bc32b2583ff00126d10e26b6a9aae63f50a76cf0f1598f307ee8f1b026fd8bb7",
+        "taskJsonSha256": "a452f911c66298683812bb610576c240e5a2eaeac34788923f45c66dd308f295",
+        "verifierSha256": "b9e2d40b22943628fd16bf03ea171dc11c1fd56c7b308ab8cfe8f4a0618f2378",
+        "rigSha256": "8af1689b8027c6a9eaa64d779595082a38339231dba136b47981a1f896a27f86",
+        "gitRootInitialized": true
+      }
+    },
+    {
+      "task": "code-debug-cascade-py",
+      "scores": [
+        0.0,
+        0.0
+      ],
+      "agentTruthVisible": false,
+      "modelCalls": 0,
+      "workspaceArchiveSha256": "59c2dfcbdac07c662ed69e84fce870169a648040e17fdce65237c69da56508d1",
+      "preparation": {
+        "task": "code-debug-cascade-py",
+        "promptSha256": "95dd2ddb109e1bb65042c29891c7279f492cc6edd89aebfc593d1aab628ab880",
+        "taskJsonSha256": "997335a84170e847c7e26894e6243685e2aeba8512846f9acbd3b1ffc3001ef4",
+        "verifierSha256": "989c5cb3abbfad17133e624f4661e04d5fe45a475dd43bd5199b854bd90cb5c1",
+        "rigSha256": "8af1689b8027c6a9eaa64d779595082a38339231dba136b47981a1f896a27f86",
+        "gitRootInitialized": true
+      }
+    },
+    {
+      "task": "code-feature-js",
+      "scores": [
+        0.0,
+        0.0
+      ],
+      "agentTruthVisible": false,
+      "modelCalls": 0,
+      "workspaceArchiveSha256": "36c21fed7141468aa725cea1273a33ec91e74e7031d683761d581705cb1869db",
+      "preparation": {
+        "task": "code-feature-js",
+        "promptSha256": "6e9b701d975c0bf6ea26aea5b552b7477ba8438f5ff4d555573fb554b24021f5",
+        "taskJsonSha256": "604e5c5484998df09502036dd89fae61e4799aa1aa30af96345e92850dc6bccb",
+        "verifierSha256": "424febd0e186f666dd92f8964f01e117f3eedd791df82f6bd8290273fc21731f",
+        "rigSha256": "8af1689b8027c6a9eaa64d779595082a38339231dba136b47981a1f896a27f86",
+        "gitRootInitialized": true
+      }
+    },
+    {
+      "task": "code-feature-validate-py",
+      "scores": [
+        0.0,
+        0.0
+      ],
+      "agentTruthVisible": false,
+      "modelCalls": 0,
+      "workspaceArchiveSha256": "419eef2d27a36a498a9cd1dac9304eea635b711895b6afb62b6214f0a1d128e6",
+      "preparation": {
+        "task": "code-feature-validate-py",
+        "promptSha256": "7701bd0bccba41fc3a0ea59986f6f3f17f539f336c1015d1529ac346aea0849a",
+        "taskJsonSha256": "73045cae457e350735246370c547e7720dc74becf732f3559cec15848a7fe591",
+        "verifierSha256": "84143d9e120f6b0917107f1f826639e5e96b071c16ece4b53debf5e7a7ac2e23",
+        "rigSha256": "8af1689b8027c6a9eaa64d779595082a38339231dba136b47981a1f896a27f86",
+        "gitRootInitialized": true
+      }
+    },
+    {
+      "task": "code-migration-py",
+      "scores": [
+        0.0,
+        0.0
+      ],
+      "agentTruthVisible": false,
+      "modelCalls": 0,
+      "workspaceArchiveSha256": "3c1b6ff8e0b87ca66802f6b635cc1450bfc09d5ecdf34fd81aa8bd2601de50c9",
+      "preparation": {
+        "task": "code-migration-py",
+        "promptSha256": "4548cf0440995fe285f6c702786984e632afe615034ad37f687fe25d9455b867",
+        "taskJsonSha256": "c058379ff44828583a2b4f802d36abaa4640aafc207bd31fae7ea644be325826",
+        "verifierSha256": "84a0b005bb194dfae4ab65f0fc6376f51cbf67785147e550968c9eca7313cf0f",
+        "rigSha256": "8af1689b8027c6a9eaa64d779595082a38339231dba136b47981a1f896a27f86",
+        "gitRootInitialized": true
+      }
+    },
+    {
+      "task": "code-migration-py-xl",
+      "scores": [
+        0.0,
+        0.0
+      ],
+      "agentTruthVisible": false,
+      "modelCalls": 0,
+      "workspaceArchiveSha256": "02d0b79f153d96e71382b2c626e9e009d234b0955280ea56e59915b5d46e13eb",
+      "preparation": {
+        "task": "code-migration-py-xl",
+        "promptSha256": "7529c69c72247f03d970dfa33ec9060f805b255f2d5c97d0e445f2977828a023",
+        "taskJsonSha256": "156438c985bdd73f2b0460b373c5ae6d379e4243002ee2dbbebd3a4d5044a74e",
+        "verifierSha256": "1ee2d8077f11ef82f69641e059dde87b6a15577c0fdd9cbdbb512429cb08244f",
+        "rigSha256": "8af1689b8027c6a9eaa64d779595082a38339231dba136b47981a1f896a27f86",
+        "gitRootInitialized": true
+      }
+    },
+    {
+      "task": "code-refactor-split-py",
+      "scores": [
+        0.0,
+        0.0
+      ],
+      "agentTruthVisible": false,
+      "modelCalls": 0,
+      "workspaceArchiveSha256": "263abf3b45934fb81b803c29cadef288ae32f06b945f8401bbfc7f517cfa05b6",
+      "preparation": {
+        "task": "code-refactor-split-py",
+        "promptSha256": "cde90a166e7ca0764c280853d868fa3b03b2e74b14724cb1b90804909d914d12",
+        "taskJsonSha256": "aaa304e0a7199d77f4a35b1a71687554ef784b1c1995410e2f47ddcd7468c7f4",
+        "verifierSha256": "16eeb50ccff402dbf5d94c52401dd7277d56dad425d8d8fa336402ff1400e8ec",
+        "rigSha256": "8af1689b8027c6a9eaa64d779595082a38339231dba136b47981a1f896a27f86",
+        "gitRootInitialized": true
+      }
+    },
+    {
+      "task": "code-comprehension-django",
+      "scores": [
+        0.0,
+        0.0
+      ],
+      "agentTruthVisible": false,
+      "modelCalls": 0,
+      "workspaceArchiveSha256": "27ff99fca30d7f86e0f2137e5e84deed999859abf0cfebc7cd510536b83e3b0b",
+      "preparation": {
+        "task": "code-comprehension-django",
+        "promptSha256": "40b37b1a46dbe90ca9ca371a63a654be5a282f4e5629d1992dd29be2c1022228",
+        "taskJsonSha256": "6107f9b8add99d1d97d4cb20bab1690a12965210fce4f9d9e7c983e7a698e956",
+        "verifierSha256": "0b21321ace49857ce27c3cea4845c877f7318440a807aed7096c010a1231cf77",
+        "rigSha256": "8af1689b8027c6a9eaa64d779595082a38339231dba136b47981a1f896a27f86",
+        "gitRootInitialized": true
+      }
+    },
+    {
+      "task": "code-overview-cobra",
+      "scores": [
+        0.0,
+        0.0
+      ],
+      "agentTruthVisible": false,
+      "modelCalls": 0,
+      "workspaceArchiveSha256": "309c4d3038a3a793fee0753ea83fb865015041f6b358c0f680f21eb4fe8e30c5",
+      "preparation": {
+        "task": "code-overview-cobra",
+        "promptSha256": "425356a1f0801dd3e2ab5b472e438b1affa2941e89b4e19de60e8733210bf6ce",
+        "taskJsonSha256": "c34d57912e3855c7cfce7ca3da70393dfebb82ab2b4c51ee464aa6ad05197a02",
+        "verifierSha256": "b41c1881b84924566e42280f62ef200fe6544e22be3bfd95407ed9c2e58f95aa",
+        "rigSha256": "8af1689b8027c6a9eaa64d779595082a38339231dba136b47981a1f896a27f86",
+        "gitRootInitialized": true
+      }
+    },
+    {
+      "task": "code-settings-inventory-django",
+      "scores": [
+        0.0,
+        0.0
+      ],
+      "agentTruthVisible": false,
+      "modelCalls": 0,
+      "workspaceArchiveSha256": "a8a4e78ba6bebe681dc64cc19de7c8df70f1d035b1bae7226032b2145cd9533c",
+      "preparation": {
+        "task": "code-settings-inventory-django",
+        "promptSha256": "8cd28261fc265daefc0a2c7fe60d002f1aa4fec28196a8b3be57d36fe2d26657",
+        "taskJsonSha256": "9b40aedc7bb0112cb999fe16eac29147e64b485f69d2051c0e7043bd979bf4e2",
+        "verifierSha256": "fa8c1d3e2d70aa6e95bea9ffc6ef4540d9edcc892c074cd395fec9065949c8af",
+        "rigSha256": "8af1689b8027c6a9eaa64d779595082a38339231dba136b47981a1f896a27f86",
+        "gitRootInitialized": true
+      }
+    },
+    {
+      "task": "report-pdf",
+      "scores": [
+        0.0,
+        0.0
+      ],
+      "agentTruthVisible": false,
+      "modelCalls": 0,
+      "workspaceArchiveSha256": "2631a5e2b25964f503f3fc4bdf242d78d82195a6e48939cc92a4231fc40518cb",
+      "preparation": {
+        "task": "report-pdf",
+        "promptSha256": "6499ee461d6025d1e98ca80f2afb18108d608fca2813f8dde2fabfcd2f099837",
+        "taskJsonSha256": "207443cba1a0999c5e7d12b9885adb7e7388418342dfdb2638386a2d7e763c73",
+        "verifierSha256": "16ea4ff189679e9ea3c06b7df425d7999eb86b09f0ea1a8f667b5d7bb2ed54f8",
+        "rigSha256": "8af1689b8027c6a9eaa64d779595082a38339231dba136b47981a1f896a27f86",
+        "gitRootInitialized": true
+      }
+    },
+    {
+      "task": "seo-audit",
+      "scores": [
+        0.0,
+        0.0
+      ],
+      "agentTruthVisible": false,
+      "modelCalls": 0,
+      "workspaceArchiveSha256": "81c28ff300741c05f506ead72aee239a1bccddee97baeacf7ffab4a05d6208fe",
+      "preparation": {
+        "task": "seo-audit",
+        "promptSha256": "0caed2bedd87fc640ee75b9e5cf8861127a9a9156038aca139e1ee0993882c2a",
+        "taskJsonSha256": "82d34a8616a1ad9c99edaa359234dcee60a764d58d8ed3bdd78e6b391492c706",
+        "verifierSha256": "c7408861b667f85cf5d72b3a5894c2549e3562bbfc0847263035c230c7caaa7e",
+        "rigSha256": "8af1689b8027c6a9eaa64d779595082a38339231dba136b47981a1f896a27f86",
+        "gitRootInitialized": true
+      }
+    },
+    {
+      "task": "log-needle-zh",
+      "scores": [
+        0.0,
+        0.0
+      ],
+      "agentTruthVisible": false,
+      "modelCalls": 0,
+      "workspaceArchiveSha256": "ced16a77c23ad50ce68da1802df92f02a288ba17817a5a7fd7bf8985ed3523b2",
+      "preparation": {
+        "task": "log-needle-zh",
+        "promptSha256": "567ab9e744b90d3e3e74341aaea9ed37f429e329de42bb9b92f284514688619f",
+        "taskJsonSha256": "4fb83e5a4db13537ef4d37664127f562d2b5338118ee54deafb35db67c2b0fda",
+        "verifierSha256": "54a761e08fcb3cf864d602bbc78886902bd587ab85fa4f943c88375c3df4c10f",
+        "rigSha256": "8af1689b8027c6a9eaa64d779595082a38339231dba136b47981a1f896a27f86",
+        "gitRootInitialized": true
+      }
+    },
+    {
+      "task": "code-rewrite-modernize-py",
+      "scores": [
+        0.0,
+        0.0
+      ],
+      "agentTruthVisible": false,
+      "modelCalls": 0,
+      "workspaceArchiveSha256": "28b98f99953df5e8fd77c7d7dc2dff3cd2aac869a14a4613af1dd951096b8594",
+      "preparation": {
+        "task": "code-rewrite-modernize-py",
+        "promptSha256": "10654de1bf417dc3176ce6794f60bb5221e8e41fe478e26d675419be97fac78d",
+        "taskJsonSha256": "de75fcb18f059e3a63c1adf904f24830870db70866676ef01cd7fe3558b51a3d",
+        "verifierSha256": "4dd288ed4fa35f50ec58e2b87bf529a4e367e94979a74ce6110c398b36f7ffd7",
+        "rigSha256": "8af1689b8027c6a9eaa64d779595082a38339231dba136b47981a1f896a27f86",
+        "gitRootInitialized": true
+      }
+    }
+  ],
+  "finishedUTC": "2026-11-18T04:20:04.160161+00:00",
+  "scope": "Actual fixture/retention/grader pipeline rehearsal; scores are not model-quality results",
+  "retainedVolumes": []
+}

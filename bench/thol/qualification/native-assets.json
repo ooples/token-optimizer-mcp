@@ -1,0 +1,137 @@
+[
+  {
+    "name": "squeez",
+    "repo": "claudioemmanuel/squeez",
+    "tag": "v1.49.3",
+    "assets": [
+      {
+        "name": "squeez-linux-x86_64",
+        "url": "https://github.com/claudioemmanuel/squeez/releases/download/v1.49.3/squeez-linux-x86_64",
+        "digest": "sha256:1d1919900482c958255a4e35b5c95301ea9a71e86fedf0c9387b7bc48f8dd6a1",
+        "size": 2196392
+      }
+    ]
+  },
+  {
+    "name": "edgee",
+    "repo": "edgee-ai/edgee",
+    "tag": "v0.18.1",
+    "assets": [
+      {
+        "name": "edgee.x86_64-unknown-linux-gnu",
+        "url": "https://github.com/edgee-ai/edgee/releases/download/v0.18.1/edgee.x86_64-unknown-linux-gnu",
+        "digest": "sha256:83478f969002c87d5a4789beaf428951d6c85138d5fe3ba0eab774b3b532b620",
+        "size": 26260936
+      },
+      {
+        "name": "edgee.x86_64-unknown-linux-gnu.sha256",
+        "url": "https://github.com/edgee-ai/edgee/releases/download/v0.18.1/edgee.x86_64-unknown-linux-gnu.sha256",
+        "digest": "sha256:44a98f5e618b24bdaed4e6280bbbe25fe341b47b2d32d37be0660f2458c66e3c",
+        "size": 65
+      },
+      {
+        "name": "edgee.x86_64-unknown-linux-musl",
+        "url": "https://github.com/edgee-ai/edgee/releases/download/v0.18.1/edgee.x86_64-unknown-linux-musl",
+        "digest": "sha256:6c61871823e4d7395e6a9a7933b51d3fc7daeb2419d74714e8d72ff0aea2d4ce",
+        "size": 25625912
+      },
+      {
+        "name": "edgee.x86_64-unknown-linux-musl.sha256",
+        "url": "https://github.com/edgee-ai/edgee/releases/download/v0.18.1/edgee.x86_64-unknown-linux-musl.sha256",
+        "digest": "sha256:85a0644cf8f0b0f7b6ecec53288c1687fec60d42884994fb42fc6422228e38cc",
+        "size": 65
+      }
+    ]
+  },
+  {
+    "name": "lean-ctx",
+    "repo": "yvgude/lean-ctx",
+    "tag": "v3.12.6",
+    "assets": [
+      {
+        "name": "lean-ctx-cockpit-x86_64-unknown-linux-gnu-archive.tar.gz",
+        "url": "https://github.com/yvgude/lean-ctx/releases/download/v3.12.6/lean-ctx-cockpit-x86_64-unknown-linux-gnu-archive.tar.gz",
+        "digest": "sha256:8c6e1a9a41ac00a9a9abf635c874e5332b1cb28e83e978e79474bc484fb26d43",
+        "size": 3012507
+      },
+      {
+        "name": "lean-ctx-cockpit-x86_64-unknown-linux-gnu-manifest.json",
+        "url": "https://github.com/yvgude/lean-ctx/releases/download/v3.12.6/lean-ctx-cockpit-x86_64-unknown-linux-gnu-manifest.json",
+        "digest": "sha256:e825de78e5c55da38eb3eb8f5e8effa257ccae5764510be8999ec71b2e0de545",
+        "size": 515
+      },
+      {
+        "name": "lean-ctx-cockpit-x86_64-unknown-linux-gnu-manifest.sig",
+        "url": "https://github.com/yvgude/lean-ctx/releases/download/v3.12.6/lean-ctx-cockpit-x86_64-unknown-linux-gnu-manifest.sig",
+        "digest": "sha256:255970f9059e9484d1cf7ec0ed738faea5452acf13f42f9760e00a281c85228d",
+        "size": 64
+      },
+      {
+        "name": "lean-ctx-cockpit-x86_64-unknown-linux-gnu.tar.gz",
+        "url": "https://github.com/yvgude/lean-ctx/releases/download/v3.12.6/lean-ctx-cockpit-x86_64-unknown-linux-gnu.tar.gz",
+        "digest": "sha256:229197684417d325d35001e468689d1e204e9dbc6a9e67df20ed5b4690c0db9d",
+        "size": 3000514
+      },
+      {
+        "name": "lean-ctx-cockpit-x86_64-unknown-linux-musl-archive.tar.gz",
+        "url": "https://github.com/yvgude/lean-ctx/releases/download/v3.12.6/lean-ctx-cockpit-x86_64-unknown-linux-musl-archive.tar.gz",
+        "digest": "sha256:1dcc406878fa20d8bf47a7cfc7cac67fe3f996411859036943411d09f4fd963a",
+        "size": 3096914
+      },
+      {
+        "name": "lean-ctx-cockpit-x86_64-unknown-linux-musl-manifest.json",
+        "url": "https://github.com/yvgude/lean-ctx/releases/download/v3.12.6/lean-ctx-cockpit-x86_64-unknown-linux-musl-manifest.json",
+        "digest": "sha256:55759981631df299f96bfb01c6737995c4214386e1d09b74ba8b4fe769845ba6",
+        "size": 515
+      },
+      {
+        "name": "lean-ctx-cockpit-x86_64-unknown-linux-musl-manifest.sig",
+        "url": "https://github.com/yvgude/lean-ctx/releases/download/v3.12.6/lean-ctx-cockpit-x86_64-unknown-linux-musl-manifest.sig",
+        "digest": "sha256:400f4edaab24e5ed3bdeac426d100c4911f8c824a1c90808b84a9870acbd4904",
+        "size": 64
+      },
+      {
+        "name": "lean-ctx-cockpit-x86_64-unknown-linux-musl.tar.gz",
+        "url": "https://github.com/yvgude/lean-ctx/releases/download/v3.12.6/lean-ctx-cockpit-x86_64-unknown-linux-musl.tar.gz",
+        "digest": "sha256:bc647835d0c8f8e124ac37695b7a6aae7ed07290c2da0e0a6fa042b37488e889",
+        "size": 3078114
+      },
+      {
+        "name": "lean-ctx-x86_64-unknown-linux-gnu-cuda.tar.gz",
+        "url": "https://github.com/yvgude/lean-ctx/releases/download/v3.12.6/lean-ctx-x86_64-unknown-linux-gnu-cuda.tar.gz",
+        "digest": "sha256:20c26a6701ed52af7b0532272093323c38ed9c3f574f1f1acd301e42411899a6",
+        "size": 33280952
+      },
+      {
+        "name": "lean-ctx-x86_64-unknown-linux-gnu.tar.gz",
+        "url": "https://github.com/yvgude/lean-ctx/releases/download/v3.12.6/lean-ctx-x86_64-unknown-linux-gnu.tar.gz",
+        "digest": "sha256:b205d4d158ac5425dabc50ddf491d11bbfdb1377121596ced8bb275040eb660d",
+        "size": 33401229
+      },
+      {
+        "name": "lean-ctx-x86_64-unknown-linux-musl.tar.gz",
+        "url": "https://github.com/yvgude/lean-ctx/releases/download/v3.12.6/lean-ctx-x86_64-unknown-linux-musl.tar.gz",
+        "digest": "sha256:e69f1cbbcfa023140ef2172ce33c3286be850b3ac4c8677dce9cb533941ac978",
+        "size": 33370051
+      },
+      {
+        "name": "thinkery_leanctx_engine-3.12.6-py3-none-manylinux_2_35_x86_64.whl",
+        "url": "https://github.com/yvgude/lean-ctx/releases/download/v3.12.6/thinkery_leanctx_engine-3.12.6-py3-none-manylinux_2_35_x86_64.whl",
+        "digest": "sha256:c78473610bf87d21e136cd32ad2e0bc1b6d8a4404beeedab8219dd93382d846f",
+        "size": 33162283
+      },
+      {
+        "name": "thinkery_leanctx_engine-3.12.6-py3-none-musllinux_1_2_x86_64.whl",
+        "url": "https://github.com/yvgude/lean-ctx/releases/download/v3.12.6/thinkery_leanctx_engine-3.12.6-py3-none-musllinux_1_2_x86_64.whl",
+        "digest": "sha256:72ef813f681b8480b4551c6b5a7a1bc087fe9c5aeca8a65d173ab2faf45b51af",
+        "size": 33133134
+      },
+      {
+        "name": "thinkery_leanctx_engine_cuda-3.12.6-py3-none-manylinux_2_35_x86_64.whl",
+        "url": "https://github.com/yvgude/lean-ctx/releases/download/v3.12.6/thinkery_leanctx_engine_cuda-3.12.6-py3-none-manylinux_2_35_x86_64.whl",
+        "digest": "sha256:909ae2ce725a2f90bc8502307a116ad06c709e13f98512c90e24bacbf8a3ce92",
+        "size": 33037402
+      }
+    ]
+  }
+]

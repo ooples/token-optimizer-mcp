@@ -1,0 +1,37 @@
+{
+  "product": "lm-resizer",
+  "network": "none",
+  "providerCredentials": false,
+  "configurationFiles": [],
+  "codexConfigs": [],
+  "hookCalls": [],
+  "mcpCalls": [],
+  "legacyHookCalls": [],
+  "nativeConfigParse": {
+    "exit_code": 0,
+    "stderr": ""
+  },
+  "steps": [
+    {
+      "product": "lm-resizer",
+      "command": [
+        "lm-resizer",
+        "--version"
+      ],
+      "returncode": 0,
+      "stdout": "lm-resizer 0.2.6\n",
+      "stderr": ""
+    },
+    {
+      "product": "lm-resizer",
+      "command": [
+        "lm-resizer",
+        "--help"
+      ],
+      "returncode": 0,
+      "stdout": "Rust-native context compression for LLM agents\n\nUsage: lm-resizer <COMMAND>\n\nCommands:\n  observe                    Summarize an arbitrary command; the complete output stays recoverable\n  err                        Keep diagnostic paragraphs from any failed command\n  test                       Summarize test output from any command\n  summary                    Summarize any command while retaining unknown diagnostics\n  proxy                      Execute literally while retaining raw recovery and measured history\n  run                        Execute a literal shell command with recovery and measured history\n  json                       Show a compact JSON schema (all input bytes remain recoverable)\n  outline                    Show callable signatures using a fresh local syntax index; bodies stay in tee\n  read                       Read a file literally, optionally showing only its first lines\n  deps                       List direct dependencies from local manifests\n  env                        Show sorted environment variables with secrets redacted\n  format                     Run a formatter through the native capture and view engine\n  dedup                      Fold exact repeated tool blocks inside a supplied JSON message window\n  hook-audit                 Count locally recorded hook rewrites by client\n  config                     Show effective local storage and capture configuration\n  pipe                       Filter stdin without executing any command; accepts native pipe filter names\n  expand                     Expand a reversible view from stdin or a file, without accessing tee\n  compress                   Compress stdin or a file and persist originals for CCR retrieval\n  smart                      Summarize a source file with indexed Code Explorer symbols when available\n  batch                      Compress many files in parallel\n  exec                       Execute a command with the native command view and recoverable raw output\n  tool-output                Filter output already captured by a host or benchmark; never execute the command\n  rewrite                    Show how a shell command would be routed through `lm-resizer exec`\n  rewrite-shell              Rewrite a full shell command line without executing it\n  retrieve                   Retrieve an original payload by CCR hash [aliases: recall]\n  share                      Save a named, compressed handoff for other agents sharing this store\n  shared-get                 Read a named handoff, compressed by default or verbatim with --full\n  shared-list                List names of handoffs in the shared store\n  stats                      Show CCR store statistics [aliases: gain]\n  image                      Inspect image payload size and dimensions for context-budget decisions\n  voice                      Analyze or clean voice transcript filler words\n  ml-status                  Report optional ML classifier/model configuration\n  tee                        Manage raw output recovery files created by exec\n  trust-filters              Trust a project-local `.lm-resizer/filters.toml` file\n  list-trusted-filters       List trusted project filter files\n  untrust-filters            Remove a project filter file from the trust registry\n  audit-filters              Show a readable audit of a TOML filter file before trusting it\n  verify-filters             Validate a TOML filter file and run its inline tests\n  init-filters               Create a starter project filter file with inline tests\n  sanitize-provider-fixture  Sanitize a real provider payload into a shareable fixture JSON file\n  discover                   Analyze logs/session files for commands that lm-resizer exec can reduce\n  discover-sessions          Discover compressible command output in known Claude/Codex session stores\n  eval                       Run a lightweight evaluation harness over session/log fixtures\n  learn                      Mine sessions/history and propose durable AGENTS.md / CLAUDE.md guidance\n  init-hooks                 Generate local hook helper scripts for agent command rewriting\n  init-native-hooks          Install native agent hooks that call `lm-resizer hook` [aliases: init]\n  hook                       Native Codex/Claude hook handler. Reads event JSON from stdin and never blocks\n  init-shims                 Generate opt-in PATH shims that automatically route known commands through exec\n  install-hooks              Install reversible project agent instructions for hook helpers\n  uninstall-hooks            Remove generated lm-resizer hook instructions, helpers, and matching native configs\n  doctor                     Diagnose local lm-resizer setup\n  mcp                        Run a minimal MCP stdio server\n  mcp-proxy                  Relay an MCP stdio server and compress successful tool text results\n  install                    Install lm-resizer as an MCP server for common agent clients\n  uninstall                  Remove the lm-resizer MCP server entry written by `install`, keeping the rest of each file\n  serve                      Run a small HTTP API\n  wrap                       Start the local proxy, then launch an agent through it\n  help                       Print this message or the help of the given subcommand(s)\n\nOptions:\n  -h, --help     Print help\n  -V, --version  Print version\n",
+      "stderr": ""
+    }
+  ],
+  "paidCalls": 0
+}

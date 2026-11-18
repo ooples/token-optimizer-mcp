@@ -1,0 +1,37 @@
+{
+  "product": "edgee",
+  "network": "none",
+  "providerCredentials": false,
+  "configurationFiles": [],
+  "codexConfigs": [],
+  "hookCalls": [],
+  "mcpCalls": [],
+  "legacyHookCalls": [],
+  "nativeConfigParse": {
+    "exit_code": 0,
+    "stderr": ""
+  },
+  "steps": [
+    {
+      "product": "edgee",
+      "command": [
+        "edgee",
+        "--version"
+      ],
+      "returncode": 0,
+      "stdout": "edgee 0.18.1\n",
+      "stderr": ""
+    },
+    {
+      "product": "edgee",
+      "command": [
+        "edgee",
+        "--help"
+      ],
+      "returncode": 0,
+      "stdout": "Edgee CLI\n\nUsage: edgee [OPTIONS] <COMMAND>\n\nCommands:\n  alias       Install shell aliases for Edgee launch commands\n  auth        Authenticate with Edgee\n  launch      Launch an AI tool routed through Edgee\n  plugins     Show and install the plugins your organization has assigned to you\n  settings    Configure compression settings for a coding-agent key\n  stats       Show stored session stats [aliases: report]\n  statusline  Render the Edgee statusline and manage the Copilot CLI integration\n  reset       Reset Edgee credentials and connection mode\n  update      Update Edgee [aliases: self-update]\n  help        Print this message or the help of the given subcommand(s)\n\nOptions:\n  -p, --profile <PROFILE>  Profile to use [env: EDGEE_PROFILE=]\n  -h, --help               Print help\n  -V, --version            Print version\n",
+      "stderr": ""
+    }
+  ],
+  "paidCalls": 0
+}

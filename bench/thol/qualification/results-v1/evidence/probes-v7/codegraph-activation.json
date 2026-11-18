@@ -1,0 +1,155 @@
+{
+  "product": "codegraph",
+  "network": "none",
+  "providerCredentials": false,
+  "configurationFiles": [
+    {
+      "path": "home/.codex/AGENTS.md",
+      "sha256": "a071ae5c25478e84abf40c0b9454d937b3c10786e38890b887445d3426ae4afb"
+    },
+    {
+      "path": "home/.codex/config.toml",
+      "sha256": "640888a751e8a923fcdcdae72cfbcdf6ca2e9e95caef063d2f11b21b89aeb4a7"
+    }
+  ],
+  "codexConfigs": [
+    {
+      "mcp_servers": {
+        "codegraph": {
+          "command": "codegraph",
+          "args": [
+            "serve",
+            "--mcp"
+          ]
+        }
+      }
+    }
+  ],
+  "hookCalls": [],
+  "mcpCalls": [
+    {
+      "name": "codegraph",
+      "command": [
+        "codegraph",
+        "serve",
+        "--mcp"
+      ],
+      "initialize": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": {
+          "protocolVersion": "2024-11-05",
+          "capabilities": {
+            "tools": {}
+          },
+          "serverInfo": {
+            "name": "codegraph",
+            "title": "CodeGraph",
+            "version": "1.6.3",
+            "icons": [
+              {
+                "src": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMiAzMiIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMTYxNTBmIiBzdHJva2Utd2lkdGg9IjIiPjxyZWN0IHdpZHRoPSIzMiIgaGVpZ2h0PSIzMiIgcng9IjYiIGZpbGw9IiNmN2Y2ZjIiIHN0cm9rZT0ibm9uZSIvPjxsaW5lIHgxPSIxNiIgeTE9IjgiIHgyPSI4IiB5Mj0iMjMiLz48bGluZSB4MT0iMTYiIHkxPSI4IiB4Mj0iMjQiIHkyPSIyMyIvPjxsaW5lIHgxPSI4IiB5MT0iMjMiIHgyPSIyNCIgeTI9IjIzIi8+PGNpcmNsZSBjeD0iMTYiIGN5PSI4IiByPSIzLjQiIGZpbGw9IiMxNjE1MGYiLz48Y2lyY2xlIGN4PSI4IiBjeT0iMjMiIHI9IjMuNCIgZmlsbD0iI2Y3ZjZmMiIvPjxjaXJjbGUgY3g9IjI0IiBjeT0iMjMiIHI9IjMuNCIgZmlsbD0iI2Y3ZjZmMiIvPjwvc3ZnPg==",
+                "mimeType": "image/svg+xml"
+              }
+            ]
+          },
+          "instructions": "# Codegraph \u2014 code intelligence over an indexed knowledge graph\n\nCodegraph is a SQLite knowledge graph of every symbol, edge, and file in\nthe workspace \u2014 pre-computed structure you would otherwise re-derive by\nreading files (cached intelligence: thousands of parse/trace decisions you\ndon't pay to re-reason each run). It indexes 30+ languages\n(TypeScript/JavaScript, Python, Go, Rust, Java, C#, C/C++, PHP, Ruby, Swift,\nKotlin, and more) \u2014 don't assume a language here isn't covered. Reads are\nsub-millisecond; the index lags writes by ~1s through the file watcher. Reach for it BEFORE *and* while\nwriting or editing code \u2014 not just for questions: one call returns the\nverbatim source PLUS who calls it and what it affects, so you edit with the\nblast radius in view. More accurate context, in far fewer tokens and\nround-trips than reading files yourself.\n\n## One tool: codegraph_explore \u2014 use it instead of reading files\n\nThere is a single tool, `codegraph_explore`, and it is Read-equivalent. It\ntakes either a natural-language question or a bag of symbol/file names and\nreturns the **verbatim, line-numbered source** of the relevant symbols\ngrouped by file \u2014 the same `<n>\\t<line>` shape `Read` gives you, safe to\n`Edit` from \u2014 PLUS the call path among them (including dynamic-dispatch hops\nlike callbacks, React re-render, and JSX children that grep can't follow) and\na blast-radius summary of what depends on them.\n\nWhether you're answering \"how does X work\" or implementing a change (fixing a\nbug, adding a feature), call `codegraph_explore` before you Read. ONE call\nusually answers the whole question. Codegraph IS the pre-built search index \u2014\nso running your own grep + read loop, or delegating the lookup to a separate\nfile-reading sub-task/agent, repeats work codegraph already did and costs more\nfor the same answer. A direct codegraph answer is typically one to a few\ncalls; a grep/read exploration is dozens.\n\n## How to query\n\n- **Almost any question \u2014 \"how does X work\", architecture, a bug, \"what/where is X\", or surveying an area** \u2192 `codegraph_explore` with a natural-language question or the relevant names. ONE capped call returns the verbatim source grouped by file; most often the ONLY call you need.\n- **\"How does X reach/become Y? / the flow / the path from X to Y\"** \u2192 `codegraph_explore`, naming the symbols that span the flow (e.g. `mutateElement renderScene`) \u2014 it surfaces the call path among them, riding dynamic-dispatch hops, and returns their source.\n- **Reading or editing a file/symbol you can name** \u2192 put its name or file path in the `codegraph_explore` query \u2014 it returns that current line-numbered source (safe to `Edit` from) with the call path and blast radius attached, so you don't Read it separately. For an overloaded name it returns every matching definition's body in one call.\n- **Need more?** Call `codegraph_explore` again with more specific names \u2014 treat the source it returns as already Read. Suggested call counts are advisory only, NOT a quota; extra calls are never rejected or rate-limited.\n- Qualified symbol names accept dots, `::`, or slashes, including containers whose names contain dots (for example, `AppWeb.Format.group`).\n- Named-symbol call paths require exact matches; partial or mistyped names are never silently substituted as flow endpoints. If a graph query reports a missing symbol with did-you-mean suggestions, query the suggested name explicitly.\n- Explore matches names and indexed code words lexically, not by meaning; an empty result reports word matches and may suggest indexed candidate names to retry with `codegraph_explore`.\n\n## Anti-patterns\n\n- **Trust codegraph's results \u2014 don't re-verify them with grep.** They come from a full AST parse; re-checking with grep is slower, less accurate, and wastes context.\n- **Don't grep or Read first** to find or understand indexed code \u2014 ONE `codegraph_explore` returns the relevant symbols' source together in a single round-trip. Reach for raw `Read`/`Grep` only to confirm a specific detail codegraph didn't cover, or for what codegraph doesn't index (configs, docs).\n- **Don't reconstruct a flow by hand** \u2014 name the endpoints in one `codegraph_explore` and it surfaces the path between them, dynamic-dispatch hops included.\n- **After editing, check the staleness banner.** When a tool response starts with \"\u26a0\ufe0f Some files referenced below were edited since the last index sync\u2026\", the listed files are pending re-index \u2014 Read those specific files for accurate content. Every file NOT in that banner is fresh, so still trust codegraph. A different, rarer banner \u2014 \"\u26a0\ufe0f CodeGraph auto-sync is DISABLED\u2026\" or \"\u26a0\ufe0f CodeGraph auto-sync is RECOVERING\u2026\" \u2014 means the whole index may be stale; until the full catch-up completes, Read files directly to confirm anything that may have changed. If a response refuses to answer from changed files or says freshness could not be verified within its budget, retry after sync or narrow the query; that refusal is not an error in the tool.\n- **A file flagged \"\u26a0 changed on disk after the last index sync\" drifted from its index** (most common on projects queried via `projectPath`, which have no live watcher). Codegraph never serves a possibly-mis-sliced body from such a file \u2014 it either shows the file's full CURRENT source (trust it as a Read) or omits the source with this flag. When the source was omitted, Read that specific file; line numbers referencing it elsewhere in the response may be shifted until that project's next sync. All unflagged files remain trustworthy.\n\n- **Source is re-served on every call by default**, including for fresh subagents and after context compaction. Cross-call dedup requires `CODEGRAPH_EXPLORE_DEDUP=1` and is only suitable for hosts that guarantee one durable context per connection. With that opt-in, **\"Already sent earlier in this conversation\"** points to exact, unchanged source returned by an earlier `codegraph_explore` in that context. Use that copy; don't re-fetch it and don't Read the file. The bytes it freed went into source you have not seen yet, elsewhere in the same response.\n\n## Limitations\n\n- If a tool reports a project isn't indexed (no `.codegraph/`), stop calling codegraph tools for that project for the rest of the session and use your built-in tools there instead. Indexing is the user's decision \u2014 mention they can run `codegraph init` if it comes up, but don't run it yourself.\n- Index lags file writes by ~1 second.\n- Cross-file resolution is best-effort name matching; ambiguous calls may return multiple candidates.\n- No live correctness validation \u2014 that's still the TypeScript compiler / test suite / linter's job. Codegraph supplements those with structural context they don't have.\n"
+        }
+      },
+      "tools": [
+        {
+          "name": "codegraph_explore",
+          "description": "PRIMARY TOOL \u2014 call FIRST for almost any question OR before an edit: how does X work, architecture, a bug, where/what is X, surveying an area, or the symbols you are about to change. Returns the verbatim source of the relevant symbols grouped by file in ONE capped call (Read-equivalent \u2014 treat the shown source as already Read; do NOT re-open those files), plus the call path among them. Query can be a natural-language question OR a bag of symbol/file names. Usually the ONLY call you need \u2014 more accurate context, in far fewer tokens and round-trips than a search/Read/Grep loop.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "query": {
+                "type": "string",
+                "description": "Symbol names, file names, or short code terms to explore (e.g., \"AuthService loginUser session-manager\", \"GraphTraverser BFS impact traversal.ts\"). For a flow question, name the symbols spanning the flow (e.g. \"mutateElement renderScene\"). A natural-language question works too."
+              },
+              "maxFiles": {
+                "type": "number",
+                "description": "Maximum number of files to return source from, 1\u201320. Omit it to use a default sized to the project (4 files below 150 indexed files, 5 below 500, 8 otherwise). Total output is also capped by characters (about 13K\u201324K by project size), so a higher maxFiles spreads that budget over more files rather than returning more text."
+              },
+              "projectPath": {
+                "type": "string",
+                "description": "Absolute path to the project to query (or any directory inside it) \u2014 codegraph uses the nearest .codegraph/ index at or above that path. Omit to use this session's default project. Pass it to query a second codebase, or when the server root has no index of its own (e.g. a monorepo where only sub-projects are indexed, so there is no default project)."
+              }
+            },
+            "required": [
+              "query"
+            ]
+          },
+          "annotations": {
+            "readOnlyHint": true,
+            "destructiveHint": false,
+            "idempotentHint": true,
+            "openWorldHint": false
+          },
+          "_meta": {
+            "anthropic/alwaysLoad": true
+          }
+        }
+      ],
+      "error": null,
+      "knownAnswer": {
+        "jsonrpc": "2.0",
+        "id": 3,
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "**Exploration: add**\n\nFound 1 symbol across 1 file.\n\n**Source Code**\n\n> The code below is the **verbatim, current on-disk source** of these files \u2014 re-read from disk on this call and line-numbered, byte-for-byte identical to what the Read tool returns. It is NOT a summary, outline, or stale cache. Treat each block as a Read you have already performed: do not Read a file shown here.\n\n**`fixture.py`** \u2014 add(function)\n\n```python\n1\tdef add(a, b):\n2\t    return a + b\n```\n"
+            }
+          ]
+        }
+      },
+      "knownAnswerVerified": true
+    }
+  ],
+  "legacyHookCalls": [],
+  "nativeConfigParse": {
+    "exit_code": 0,
+    "stderr": ""
+  },
+  "steps": [
+    {
+      "product": "codegraph",
+      "command": [
+        "codegraph",
+        "--version"
+      ],
+      "returncode": 0,
+      "stdout": "1.6.3\n",
+      "stderr": ""
+    },
+    {
+      "product": "codegraph",
+      "command": [
+        "codegraph",
+        "install",
+        "--help"
+      ],
+      "returncode": 0,
+      "stdout": "Usage: codegraph install [options]\n\nInstall codegraph MCP server into one or more agents (Claude Code, Cursor, Codex\nCLI, opencode, Hermes Agent, Gemini CLI, Antigravity IDE, Kiro, GitHub Copilot,\nIBM Bob, Factory Droid, Windsurf, Qwen Code, DeepSeek Harness, Grok Build, Kimi\nCode, Qoder CLI, Pi)\n\nOptions:\n  -t, --target <ids>      Target agent(s): comma-separated ids, or\n                          \"auto\"|\"all\"|\"none\". Default: prompt\n  -l, --location <where>  Install location: \"global\" or \"local\". Default: prompt\n  -y, --yes               Non-interactive: defaults to --location=global\n                          --target=auto, auto-allow on\n  -i, --init              After wiring agents, also run `codegraph init` in the\n                          current directory \u2014 builds this project\u2019s index, so\n                          install + index is one command (combine with --yes for\n                          an unattended bootstrap)\n  --no-permissions        Skip writing the auto-allow permissions list (Claude\n                          Code and Qwen Code only)\n  --print-config <id>     Print MCP config snippet for the named agent and exit\n                          (no file writes)\n  --refresh               Rewrite what previous installs configured, for\n                          already-configured agents only (never adds new ones).\n                          Run automatically by `codegraph upgrade`\n  -h, --help              display help for command\n",
+      "stderr": ""
+    },
+    {
+      "product": "codegraph",
+      "command": [
+        "codegraph",
+        "install",
+        "--target",
+        "codex",
+        "--location",
+        "global",
+        "--yes",
+        "--init"
+      ],
+      "returncode": 0,
+      "stdout": "\u250c  CodeGraph v1.6.3\n\u2502\n\u25c6  Codex CLI: Created ~/.codex/config.toml\n\u2502\n\u25c6  Codex CLI: Created ~/.codex/AGENTS.md\n\u2502\n\u25c7  Next: index a project \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256e\n\u2502                                                                          \u2502\n\u2502  cd <your-project>                                                       \u2502\n\u2502  codegraph init        # build a project\u2019s graph (one time; auto-syncs   \u2502\n\u2502  after)                                                                  \u2502\n\u2502  # (codegraph install --init does both steps in one command)             \u2502\n\u2502                                                                          \u2502\n\u251c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256f\n\u2502\n\u2514  Done! Restart your agent to use CodeGraph.\n\n\u250c  Initializing CodeGraph\n\u2502\n\u25c6  Initialized in /home/bench/free-qualification-yx2bfn84/codegraph/workspace\n\u001b[2m\u2502\u001b[0m\nScanning files...\nParsing code...\nResolving refs...\nLinking dynamic dispatch...\n\u2502\n\u25c6  Indexed 1 files\n\u2502\n\u25cf  2 nodes, 1 edges in 485ms\n\u2502\n\u2514  Done\n\n",
+      "stderr": ""
+    }
+  ],
+  "paidCalls": 0
+}

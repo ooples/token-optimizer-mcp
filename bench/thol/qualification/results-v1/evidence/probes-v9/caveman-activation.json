@@ -1,0 +1,221 @@
+{
+  "product": "caveman",
+  "network": "none",
+  "providerCredentials": false,
+  "configurationFiles": [
+    {
+      "path": "home/.codex/hooks.json",
+      "sha256": "cada80d5fec53cd7182136968b2df9fdcf35e191a8978a9d25f2690ca29adb56"
+    },
+    {
+      "path": "home/.codex/.caveman-codex-hooks-ownership.json",
+      "sha256": "3a1ca01dbfd812389155e26321d4760a4a27920b114ae09eb6b73c9556173550"
+    },
+    {
+      "path": "home/.codex/caveman/skills/ultracave/SKILL.md",
+      "sha256": "a8da5b0b3501b853e1b98f2ae09fe8dc9c0edf481b1d3fa9529f8557011c1ef8"
+    },
+    {
+      "path": "home/.codex/caveman/skills/megacave/SKILL.md",
+      "sha256": "139105296c0686c1ee24610caca1db293ab84162beb0d94aa7a9ad7cbc3352bf"
+    },
+    {
+      "path": "home/.codex/caveman/skills/caveman/SKILL.md",
+      "sha256": "415d43518f2b1a9498c15a445d4657117b129ee5e81b19454ce348439cc6672b"
+    },
+    {
+      "path": "home/.codex/caveman/hooks/package.json",
+      "sha256": "8005a3491db7d92f36ac66369861589f9c47123d3a7c71e643fc2c06168cd45a"
+    },
+    {
+      "path": "home/.agents/.skill-lock.json",
+      "sha256": "bd164467223ef7e0342353f76ca20068e82711be7af53fa215d958a4fab01373"
+    },
+    {
+      "path": "home/.agents/skills/caveman-stats/README.md",
+      "sha256": "a6d778cf6dd8382b7c27695aa57e5d2d70e93c5b326347f6c17162f56cddbfd6"
+    },
+    {
+      "path": "home/.agents/skills/caveman-stats/SKILL.md",
+      "sha256": "4632f1611a56483df7851a0dabcc1e0c1952393cd8f5d08ddeda17f81a4e1e50"
+    },
+    {
+      "path": "home/.agents/skills/caveman-optimize/SKILL.md",
+      "sha256": "93f391beb93198b5bf9c0c21bc8b7b194e57cb7855fbf05384a4a5d6dd8c06cb"
+    },
+    {
+      "path": "home/.agents/skills/migration/SKILL.md",
+      "sha256": "fe7cf96a58b0521130fbb886dab2a326869d6ed0001e0306fd244014ba7a9662"
+    },
+    {
+      "path": "home/.agents/skills/caveman-evidence-review/SKILL.md",
+      "sha256": "05bd896c76a41918fe7b87113dabe852117727a579a7e445891aa41391ed57c2"
+    },
+    {
+      "path": "home/.agents/skills/lean-build/SKILL.md",
+      "sha256": "4d498073c6312858b220e9a04b7456c2485c734edb077f6bb17d88a7ed96ad7a"
+    },
+    {
+      "path": "home/.agents/skills/caveman-explore/package.json",
+      "sha256": "ab6c6186b9b87d4a68183625d23ef422e05e99aeab9228cac2924fc5391dc7a6"
+    },
+    {
+      "path": "home/.agents/skills/caveman-explore/SKILL.md",
+      "sha256": "908f504ce45f5f8517ac7b64dc89fef57c4519d26f92b0b1843febf4b6fe2ac8"
+    },
+    {
+      "path": "home/.agents/skills/ultracave/README.md",
+      "sha256": "3f4138ddc07c08bb41946f96a41e4cee8800d979ed458d0eec35959686ea781a"
+    },
+    {
+      "path": "home/.agents/skills/ultracave/SKILL.md",
+      "sha256": "a8da5b0b3501b853e1b98f2ae09fe8dc9c0edf481b1d3fa9529f8557011c1ef8"
+    },
+    {
+      "path": "home/.agents/skills/caveman-commit/README.md",
+      "sha256": "a2e82924b487fc1845114c247b47c2d3c2d1bd60f90bbfa60e9831319eb964fa"
+    },
+    {
+      "path": "home/.agents/skills/caveman-commit/SKILL.md",
+      "sha256": "c788a282fc75b981b421dfdad5d84ea7f83f946c126daa39cfc7d3f97845e193"
+    },
+    {
+      "path": "home/.agents/skills/investigate-first/SKILL.md",
+      "sha256": "7cc19dd2fc457eb20d65c44dee4d1b72dcdfcd1617182f5bff666700f2a055d8"
+    },
+    {
+      "path": "home/.agents/skills/megacave/README.md",
+      "sha256": "abeda79940cf9368492e3376744b92e88d38700432b6b06da9125d98e6c25977"
+    },
+    {
+      "path": "home/.agents/skills/megacave/SKILL.md",
+      "sha256": "139105296c0686c1ee24610caca1db293ab84162beb0d94aa7a9ad7cbc3352bf"
+    },
+    {
+      "path": "home/.agents/skills/caveman-learn/package.json",
+      "sha256": "8a6b98d06c1b12a7b0378a33f16d12432095bc80526338b7d0bb42f3ccd734f9"
+    },
+    {
+      "path": "home/.agents/skills/caveman-learn/README.md",
+      "sha256": "ddfc56c25014003ef38de2e15fb712872183ab16c05db47aa342e775b13d3fe4"
+    },
+    {
+      "path": "home/.agents/skills/caveman-learn/SKILL.md",
+      "sha256": "05e803e8024786b4abf78cb89ccbd6aa3834a042f398fc84a69f5652368b2d0a"
+    },
+    {
+      "path": "home/.agents/skills/caveman-learn/CLAUDE.md",
+      "sha256": "d954541f8cd9805a5ffaa3b0e078109f355067795b129e7c01071a94fd7ca700"
+    },
+    {
+      "path": "home/.agents/skills/cavecrew/README.md",
+      "sha256": "42e9972951719548b83402c726e8c07a01305e609c3d49626d1cab7dc5af7315"
+    },
+    {
+      "path": "home/.agents/skills/cavecrew/SKILL.md",
+      "sha256": "7a5acd01a87896d82bc9cb0bfcf1bc1eb7008fb437f0bc60d692b30fd81ac084"
+    },
+    {
+      "path": "home/.agents/skills/caveman-compress/SECURITY.md",
+      "sha256": "4586c95df9227f3f1d7efdced361197aa8ad7ed33056c78a789ce42f10287bb0"
+    },
+    {
+      "path": "home/.agents/skills/caveman-compress/README.md",
+      "sha256": "954c7a890169cf21221bcff6b1b2523bc38819f97bc62c77014b17638e93cb61"
+    },
+    {
+      "path": "home/.agents/skills/caveman-compress/SKILL.md",
+      "sha256": "788d6fd86a35007845fd709fbcb788c7eda3c7dc51e63c67e276b0964d77faec"
+    },
+    {
+      "path": "home/.agents/skills/caveman-setup/SKILL.md",
+      "sha256": "42c8b8eeba19c6d4ffd3c421be60a7e8b5c0e5108fd4496f0be3c7ced90bfd5f"
+    },
+    {
+      "path": "home/.agents/skills/caveman/README.md",
+      "sha256": "e8b22f37ccb204bd00cdf98c723c0df37aeda1f5863e9ad1d634f5c839d99e5d"
+    },
+    {
+      "path": "home/.agents/skills/caveman/SKILL.md",
+      "sha256": "415d43518f2b1a9498c15a445d4657117b129ee5e81b19454ce348439cc6672b"
+    },
+    {
+      "path": "home/.agents/skills/caveman-discover/SKILL.md",
+      "sha256": "0483d17fce14ca5bbfcf1e085c180412dc20a672f5e8e4171fd0bbbb6f42b81a"
+    },
+    {
+      "path": "home/.agents/skills/caveman-manage/SKILL.md",
+      "sha256": "3404a3c8651d63b6a7c02ccda17fcb4fca2489e931bb814580979a9ff548a48e"
+    },
+    {
+      "path": "home/.agents/skills/verify-and-stop/SKILL.md",
+      "sha256": "3d5599f49771b864eba94f27f456fda295c48c1a37fa6ba2f65fdcb13cc32acb"
+    },
+    {
+      "path": "home/.agents/skills/surgical-patch/SKILL.md",
+      "sha256": "81ea9f7b51409970099e04b98875dd65806cd35472f9a774b847030328187387"
+    },
+    {
+      "path": "home/.agents/skills/caveman-help/README.md",
+      "sha256": "b88d5e36dfab3a681f52d6b4bfcdbe188aebd2ef9decf7f58b025a75867810e3"
+    },
+    {
+      "path": "home/.agents/skills/caveman-help/SKILL.md",
+      "sha256": "0bf9ee3fc8a9258b2d5f6b8bf24ac21f0bf2e4b9b4641dbc426b74f18186f81d"
+    },
+    {
+      "path": "home/.agents/skills/caveman-review/README.md",
+      "sha256": "a06403b2722a069a9a2b0011772ae73296e68b4e46ace2f4b42b4ea546052b64"
+    },
+    {
+      "path": "home/.agents/skills/caveman-review/SKILL.md",
+      "sha256": "599330563f19b5c59c3efddffcd7e8d9098b74c29817ab422ccd3253b103fcb8"
+    },
+    {
+      "path": "home/.agents/skills/safe-refactor/SKILL.md",
+      "sha256": "cd52867aba26aafb53379d43068cef9b2feca3a3fff850f877a99f710ccd02c0"
+    }
+  ],
+  "codexConfigs": [],
+  "hookCalls": [
+    {
+      "event": "SessionStart",
+      "exit_code": 0,
+      "stdout": "CAVEMAN MODE ACTIVE \u2014 mode: caveman\n\n# caveman\n\nRespond terse like smart caveman. All technical substance stay. Only fluff die.\n\nCaveman is a voice, not broken grammar. Reader pays per token and reads in a terminal. Every word earns its place. Every fact survives.\n\n## Persistence\n\nEvery response, whole session, until user says \"stop caveman\" or \"normal mode\". Unsure if still on? It is. Confirm the switch-off in one line.\n\n`/caveman ultra` and `/caveman wenyan` are aliases: follow the `ultracave` or `megacave` skill instead of this one. `/caveman status` reports the mode and changes nothing. Relay the hook's `Caveman mode: <mode>` value when present. No hook value (host without hooks): report the mode you followed before this command, or `off` if caveman was turned off or never active, plus `(not tracked by this host)`. Example: `Caveman mode: caveman (not tracked by this host)`. Loading this skill to answer status is not activation. Never infer a mode from the configured default.\n\n## Why\n\n1. Every output token is billed and read. Filler costs twice.\n2. Code, commands, paths, numbers, errors are the payload. One changed character breaks them.\n3. Ceremony is expensive, grammar is cheap. \"Sure, I'd be happy to help\" is ten tokens. \"the\" is one.\n4. A dropped negation costs more than every token saved. Clarity beats compression.\n\n## Rules\n\n### 1. Answer first\n\nAnswer, then reason, then next step. Pattern: `[thing] [action] [reason]. [next step].`\n\nBad: \"Sure! I'd be happy to help. The issue you're experiencing is likely caused by...\"\nGood: \"Bug in auth middleware. Token expiry check use `<` not `<=`. Fix:\"\n\n### 2. Kill ceremony\n\nNo greeting, hedging, pleasantries, recap, or closer. No \"Sure!\", \"Let me\", \"I'll now\", \"Hope this helps\". No just/really/basically/actually/simply.\n\n### 3. Short word\n\n\"fix\" not \"implement a solution for\". Standard acronyms fine (DB, API, HTTP). Invented abbreviations not (cfg, impl, fn): same tokens, harder read. No arrows.\n\n### 4. Articles optional, meaning never\n\nDrop a/an/the when the sentence still reads in one pass. Fragments fine. Never drop not/never/no/only/except. Numbers and units exact.\n\nBad: \"Migration drop column backup first.\"\nGood: \"Back up first. Then run migration: it drops the column.\"\n\n### 5. One idea per sentence\n\nASD-STE100 is the floor: 20 words max, active voice, imperative for instructions, one term per thing, pronoun only with an obvious referent. Compression and clarity conflict? Clarity wins.\n\n### 6. Payload verbatim\n\nCode blocks unchanged. Commands, paths, API names exact. Errors quoted exact, shortest decisive line only. Code change shown in chat: changed lines plus 1-2 lines of context, not the whole file. Whole file only if the user asks, the file is new, or most of it changes. Existing comments in files you edit are payload too: never delete or shorten one you were not asked to change.\n\n### 7. Tool runs: bounded status\n\nNo text between routine calls. One line before a multi-step run, one line per phase change, one line with the result at the end. Otherwise text before a call only to clarify, warn, or disambiguate.\n\n### 8. User's language\n\nCompress the style, not the language. An explicit reply-language instruction wins. Never switch because of quoted text. Technical terms and errors stay verbatim. Particles and case markers are grammar, not filler.\n\n### 9. Never perform caveman\n\nNo \"caveman mode on\", no \"me think\", no \"Caveman:\" prefix, no normal answer plus caveman copy. No decorative tables or emoji. Never add a word to sound caveman. Caveman phrasing not shorter than plain? Use plain.\n\n## When to break the rules\n\nPlain prose, then resume:\n\n1. Security warning.\n2. Irreversible action. Confirm in full sentences first.\n3. Step order a fragment could scramble.\n4. User confused or repeats the question.\n5. Anything persisted outside chat: code, comments, commits, docs, issues, PRs, tickets, memory files, third-party messages. `/caveman-compress` exempt.\n6. Harness asks for a s",
+      "stderr": ""
+    }
+  ],
+  "mcpCalls": [],
+  "legacyHookCalls": [],
+  "nativeConfigParse": {
+    "exit_code": 0,
+    "stderr": ""
+  },
+  "steps": [
+    {
+      "product": "caveman",
+      "command": [
+        "node",
+        "/opt/qualification-vendor/caveman/installer/install.js",
+        "--help"
+      ],
+      "returncode": 0,
+      "stdout": "caveman installer \u2014 detects your agents and installs caveman for each one.\n\nUSAGE\n  npx -y github:JuliusBrussee/caveman -- [flags]\n  node installer/install.js [flags]\n  bun installer/install.js [flags]    # experimental skills-only fallback\n  bash install.sh [flags]              # Node first, Bun when Node is absent\n  pwsh install.ps1 [flags]             # same runtime selection on Windows\n\nRUNTIMES\n  Node >=18, or Bun for skills and file-based integrations. With Bun,\n  automatic hooks are skipped; Claude's plugin, --with-hooks and\n  --with-mcp-shrink still require Node. The runtime CLI needs Node 22.13+.\n\nFLAGS\n  --dry-run             Print what would run, do nothing.\n  --force               Re-run even if a target reports already installed.\n  --only <agent>        Install only for the named agent. Repeatable.\n                        See --list for valid ids.\n  --all                 Turn on hooks + init. (mcp-shrink needs an upstream;\n                        pass --with-mcp-shrink=\"<cmd>\" to add it.)\n  --minimal             Just the plugin/extension install.\n  --with-hooks          Claude Code: install SessionStart/SubagentStart/\n                        UserPromptSubmit/SessionEnd hooks + statusline badge.\n                        Codex: SessionStart hook in $CODEX_HOME/hooks.json.\n                        Cursor sessionStart hook, Copilot CLI session hook.\n                        (Default: auto. Codex, Cursor and Copilot CLI get\n                        their hook. Claude Code gets these only when its\n                        plugin did not install, because the plugin already\n                        runs them; --with-hooks wires them anyway.)\n  --no-hooks            Skip the hooks installer.\n  --hook-node <node|path>\n                        Node the hooks run with. Default: node's absolute path,\n                        found at install time, so apps started outside a\n                        terminal still find it.\n                        `node` looks node up on the agent's PATH each run, so\n                        switching Node versions needs no reinstall, but the\n                        agent must see node on its PATH. A path pins that node.\n                        (Windows Codex, Cursor and Copilot hooks always use\n                        `node`.)\n  --with-init           Write per-repo IDE rule files into $PWD.\n  --with-mcp-shrink=\"<upstream cmd>\"\n                        Claude Code (and opencode): register caveman-shrink MCP\n                        proxy wrapping the given upstream. Default OFF.\n                        caveman-shrink crashes without an upstream, so a value\n                        is required. Quotes group paths containing spaces;\n                        backslashes stay literal. A JSON argv array also works.\n                        Example: --with-mcp-shrink=\"npx @modelcontextprotocol/server-filesystem /tmp\"\n  --no-mcp-shrink       Skip MCP shrink. (Default.)\n  --uninstall, -u       Remove caveman from this machine.\n  --config-dir <path>   Claude Code config dir for hook files + settings.json.\n                        Default: $CLAUDE_CONFIG_DIR or ~/.claude. Does NOT\n                        scope `claude plugin install`, `gemini extensions\n                        install`, Codex (CODEX_HOME), OMP (~/.omp/), opencode\n                        (XDG_CONFIG_HOME), or openclaw (OPENCLAW_WORKSPACE) \u2014\n                        those use their own paths.\n  --non-interactive     Never prompt; use defaults. (Auto when stdin is not a TTY.)\n  --list                Print provider matrix and exit.\n  --no-color            Disable ANSI colors.\n  -h, --help            Show this help.\n\nEXAMPLES\n  npx -y github:JuliusBrussee/caveman                        # default install\n  npx -y github:JuliusBrussee/caveman -- --all               # all the trimmings\n  npx -y github:JuliusBrussee/caveman -- --only claude --no-mcp-shrink\n  npx -y github:JuliusBrussee/caveman -- --uninstall\n\n  Issues: https://github.com/JuliusBrussee/caveman/issues\n",
+      "stderr": ""
+    },
+    {
+      "product": "caveman",
+      "command": [
+        "node",
+        "/opt/qualification-vendor/caveman/installer/install.js",
+        "--only",
+        "codex",
+        "--with-init"
+      ],
+      "returncode": 0,
+      "stdout": "\ud83e\udea8 caveman installer\n  JuliusBrussee/caveman\n\n\u2192 Codex CLI detected\n  $ npx -y skills add 'JuliusBrussee/caveman#v4.1.0' --skill '*' -a codex --yes -g\n\n\u001b[38;5;250m\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557\u2588\u2588\u2557  \u2588\u2588\u2557\u2588\u2588\u2557\u2588\u2588\u2557     \u2588\u2588\u2557     \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557\u001b[0m\n\u001b[38;5;248m\u2588\u2588\u2554\u2550\u2550\u2550\u2550\u255d\u2588\u2588\u2551 \u2588\u2588\u2554\u255d\u2588\u2588\u2551\u2588\u2588\u2551     \u2588\u2588\u2551     \u2588\u2588\u2554\u2550\u2550\u2550\u2550\u255d\u001b[0m\n\u001b[38;5;245m\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557\u2588\u2588\u2588\u2588\u2588\u2554\u255d \u2588\u2588\u2551\u2588\u2588\u2551     \u2588\u2588\u2551     \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557\u001b[0m\n\u001b[38;5;243m\u255a\u2550\u2550\u2550\u2550\u2588\u2588\u2551\u2588\u2588\u2554\u2550\u2588\u2588\u2557 \u2588\u2588\u2551\u2588\u2588\u2551     \u2588\u2588\u2551     \u255a\u2550\u2550\u2550\u2550\u2588\u2588\u2551\u001b[0m\n\u001b[38;5;240m\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2551\u2588\u2588\u2551  \u2588\u2588\u2557\u2588\u2588\u2551\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2551\u001b[0m\n\u001b[38;5;238m\u255a\u2550\u2550\u2550\u2550\u2550\u2550\u255d\u255a\u2550\u255d  \u255a\u2550\u255d\u255a\u2550\u255d\u255a\u2550\u2550\u2550\u2550\u2550\u2550\u255d\u255a\u2550\u2550\u2550\u2550\u2550\u2550\u255d\u255a\u2550\u2550\u2550\u2550\u2550\u2550\u255d\u001b[0m\n\n\u250c  \u001b[46m\u001b[30m skills \u001b[39m\u001b[49m\n\u2502\n\u2502  \u001b[2mTip: use the --yes (-y) and --global (-g) flags to install without prompts.\u001b[22m\n\u001b[?25l\u2502\n\u25c7  Source: https://github.com/JuliusBrussee/caveman.git @ \u001b[33mv4.1.0\u001b[39m\n\u001b[?25h\u001b[?25l\u2502\n\u25d2  Cloning repository\u2026\u001b[1G\u001b[J\u25d0  Cloning repository\u2026\u001b[1G\u001b[J\u25d3  Cloning repository\u2026\u001b[1G\u001b[J\u25d1  Cloning repository\u2026\u001b[1G\u001b[J\u25d2  Cloning repository\u2026\u001b[1G\u001b[J\u25d0  Cloning repository\u2026\u001b[1G\u001b[J\u25d3  Cloning repository\u2026\u001b[1G\u001b[J\u25d1  Cloning repository\u2026\u001b[1G\u001b[J\u25d2  Cloning repository\u2026.\u001b[1G\u001b[J\u25d0  Cloning repository\u2026.\u001b[1G\u001b[J\u25d3  Cloning repository\u2026.\u001b[1G\u001b[J\u25d1  Cloning repository\u2026.\u001b[1G\u001b[J\u25d2  Cloning repository\u2026.\u001b[1G\u001b[J\u25c7  Repository cloned\n\u001b[?25h\u001b[?25l\u2502\n\u001b[1G\u001b[J\u25d2  Discovering skills\u2026\u001b[1G\u001b[J\u25c7  Found \u001b[32m22\u001b[39m skills\n\u001b[?25h\u2502\n\u25cf  Installing all 22 skills\n\n\u2502\n\u25c7  Installation Summary \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256e\n\u2502                                            \u2502\n\u2502  \u001b[36m~/.agents/skills/cavecrew\u001b[39m                 \u2502\n\u2502    \u001b[32muniversal:\u001b[39m Codex                        \u2502\n\u2502                                            \u2502\n\u2502  \u001b[36m~/.agents/skills/caveman\u001b[39m                  \u2502\n\u2502    \u001b[32muniversal:\u001b[39m Codex                        \u2502\n\u2502                                            \u2502\n\u2502  \u001b[36m~/.agents/skills/caveman-commit\u001b[39m           \u2502\n\u2502    \u001b[32muniversal:\u001b[39m Codex                        \u2502\n\u2502                                            \u2502\n\u2502  \u001b[36m~/.agents/skills/caveman-compress\u001b[39m         \u2502\n\u2502    \u001b[32muniversal:\u001b[39m Codex                        \u2502\n\u2502                                            \u2502\n\u2502  \u001b[36m~/.agents/skills/caveman-discover\u001b[39m         \u2502\n\u2502    \u001b[32muniversal:\u001b[39m Codex                        \u2502\n\u2502                                            \u2502\n\u2502  \u001b[36m~/.agents/skills/caveman-evidence-review\u001b[39m  \u2502\n\u2502    \u001b[32muniversal:\u001b[39m Codex                        \u2502\n\u2502                                            \u2502\n\u2502  \u001b[36m~/.agents/skills/caveman-explore\u001b[39m          \u2502\n\u2502    \u001b[32muniversal:\u001b[39m Codex                        \u2502\n\u2502                                            \u2502\n\u2502  \u001b[36m~/.agents/skills/caveman-help\u001b[39m             \u2502\n\u2502    \u001b[32muniversal:\u001b[39m Codex                        \u2502\n\u2502                                            \u2502\n\u2502  \u001b[36m~/.agents/skills/caveman-learn\u001b[39m            \u2502\n\u2502    \u001b[32muniversal:\u001b[39m Codex                        \u2502\n\u2502                                            \u2502\n\u2502  \u001b[36m~/.agents/skills/caveman-manage\u001b[39m           \u2502\n\u2502    \u001b[32muniversal:\u001b[39m Codex                        \u2502\n\u2502                                            \u2502\n\u2502  \u001b[36m~/.agents/skills/caveman-optimize\u001b[39m         \u2502\n\u2502    \u001b[32muniversal:\u001b[39m Codex                        \u2502\n\u2502                                            \u2502\n\u2502  \u001b[36m~/.agents/skills/caveman-review\u001b[39m           \u2502\n\u2502    \u001b[32muniversal:\u001b[39m Codex                        \u2502\n\u2502                                            \u2502\n\u2502  \u001b[36m~/.agents/skills/caveman-setup\u001b[39m            \u2502\n\u2502    \u001b[32muniversal:\u001b[39m Codex                        \u2502\n\u2502                                            \u2502\n\u2502  \u001b[36m~/.agents/skills/caveman-stats\u001b[39m            \u2502\n\u2502    \u001b[32muniversal:\u001b[39m Codex                        \u2502\n\u2502                                            \u2502\n\u2502  \u001b[36m~/.agents/skills/investigate-first\u001b[39m        \u2502\n\u2502    \u001b[32muniversal:\u001b[39m Codex                        \u2502\n\u2502                                            \u2502\n\u2502  \u001b[36m~/.agents/skills/lean-build\u001b[39m               \u2502\n\u2502    \u001b[32muniversal:\u001b[39m Codex                        \u2502\n\u2502                                            \u2502\n\u2502  \u001b[36m~/.agents/skills/megacave\u001b[39m                 \u2502\n\u2502    \u001b[32muniversal:\u001b[39m Codex                        \u2502\n\u2502                                            \u2502\n\u2502  \u001b[36m~/.agents/skills/migration\u001b[39m                \u2502\n\u2502    \u001b[32muniversal:\u001b[39m Codex                        \u2502\n\u2502                                            \u2502\n\u2502  \u001b[36m~/.agents/skills/safe-refactor\u001b[39m            \u2502\n\u2502    \u001b[32muniversal:\u001b[39m Codex                        \u2502\n\u2502                                            \u2502\n\u2502  \u001b[36m~/.agents/skills/surgical-patch\u001b[39m           \u2502\n\u2502    \u001b[32muniversal:\u001b[39m Codex                        \u2502\n\u2502                                            \u2502\n\u2502  \u001b[36m~/.agents/skills/ultracave\u001b[39m                \u2502\n\u2502    \u001b[32muniversal:\u001b[39m Codex                        \u2502\n\u2502                                            \u2502\n\u2502  \u001b[36m~/.agents/skills/verify-and-stop\u001b[39m          \u2502\n\u2502    \u001b[32muniversal:\u001b[39m Codex                        \u2502\n\u2502                                            \u2502\n\u251c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256f\n\u001b[?25l\u2502\n\u001b[1G\u001b[J\u25d2  Installing skills\u2026\u001b[1G\u001b[J\u25d0  Installing skills\u2026\u001b[1G\u001b[J\u25c7  Installation complete\n\u001b[?25h\n\u2502\n\u25c7  \u001b[32mInstalled 22 skills\u001b[39m \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256e\n\u2502                                                \u2502\n\u2502  \u001b[32m\u2713\u001b[39m cavecrew \u001b[2m(copied)\u001b[22m                           \u2502\n\u2502    \u001b[2m\u2192\u001b[22m ~/.agents/skills/cavecrew                 \u2502\n\u2502  \u001b[32m\u2713\u001b[39m caveman \u001b[2m(copied)\u001b[22m                            \u2502\n\u2502    \u001b[2m\u2192\u001b[22m ~/.agents/skills/caveman                  \u2502\n\u2502  \u001b[32m\u2713\u001b[39m caveman-commit \u001b[2m(copied)\u001b[22m                     \u2502\n\u2502    \u001b[2m\u2192\u001b[22m ~/.agents/skills/caveman-commit           \u2502\n\u2502  \u001b[32m\u2713\u001b[39m caveman-compress \u001b[2m(copied)\u001b[22m                   \u2502\n\u2502    \u001b[2m\u2192\u001b[22m ~/.agents/skills/caveman-compress         \u2502\n\u2502  \u001b[32m\u2713\u001b[39m caveman-discover \u001b[2m(copied)\u001b[22m                   \u2502\n\u2502    \u001b[2m\u2192\u001b[22m ~/.agents/skills/caveman-discover         \u2502\n\u2502  \u001b[32m\u2713\u001b[39m caveman-evidence-review \u001b[2m(copied)\u001b[22m            \u2502\n\u2502    \u001b[2m\u2192\u001b[22m ~/.agents/skills/caveman-evidence-review  \u2502\n\u2502  \u001b[32m\u2713\u001b[39m caveman-explore \u001b[2m(copied)\u001b[22m                    \u2502\n\u2502    \u001b[2m\u2192\u001b[22m ~/.agents/skills/caveman-explore          \u2502\n\u2502  \u001b[32m\u2713\u001b[39m caveman-help \u001b[2m(copied)\u001b[22m                       \u2502\n\u2502    \u001b[2m\u2192\u001b[22m ~/.agents/skills/caveman-help             \u2502\n\u2502  \u001b[32m\u2713\u001b[39m caveman-learn \u001b[2m(copied)\u001b[22m                      \u2502\n\u2502    \u001b[2m\u2192\u001b[22m ~/.agents/skills/caveman-learn            \u2502\n\u2502  \u001b[32m\u2713\u001b[39m caveman-manage \u001b[2m(copied)\u001b[22m                     \u2502\n\u2502    \u001b[2m\u2192\u001b[22m ~/.agents/skills/caveman-manage           \u2502\n\u2502  \u001b[32m\u2713\u001b[39m caveman-optimize \u001b[2m(copied)\u001b[22m                   \u2502\n\u2502    \u001b[2m\u2192\u001b[22m ~/.agents/skills/caveman-optimize         \u2502\n\u2502  \u001b[32m\u2713\u001b[39m caveman-review \u001b[2m(copied)\u001b[22m                     \u2502\n\u2502    \u001b[2m\u2192\u001b[22m ~/.agents/skills/caveman-review           \u2502\n\u2502  \u001b[32m\u2713\u001b[39m caveman-setup \u001b[2m(copied)\u001b[22m                      \u2502\n\u2502    \u001b[2m\u2192\u001b[22m ~/.agents/skills/caveman-setup            \u2502\n\u2502  \u001b[32m\u2713\u001b[39m caveman-stats \u001b[2m(copied)\u001b[22m                      \u2502\n\u2502    \u001b[2m\u2192\u001b[22m ~/.agents/skills/caveman-stats            \u2502\n\u2502  \u001b[32m\u2713\u001b[39m investigate-first \u001b[2m(copied)\u001b[22m                  \u2502\n\u2502    \u001b[2m\u2192\u001b[22m ~/.agents/skills/investigate-first        \u2502\n\u2502  \u001b[32m\u2713\u001b[39m lean-build \u001b[2m(copied)\u001b[22m                         \u2502\n\u2502    \u001b[2m\u2192\u001b[22m ~/.agents/skills/lean-build               \u2502\n\u2502  \u001b[32m\u2713\u001b[39m megacave \u001b[2m(copied)\u001b[22m                           \u2502\n\u2502    \u001b[2m\u2192\u001b[22m ~/.agents/skills/megacave                 \u2502\n\u2502  \u001b[32m\u2713\u001b[39m migration \u001b[2m(copied)\u001b[22m                          \u2502\n\u2502    \u001b[2m\u2192\u001b[22m ~/.agents/skills/migration                \u2502\n\u2502  \u001b[32m\u2713\u001b[39m safe-refactor \u001b[2m(copied)\u001b[22m                      \u2502\n\u2502    \u001b[2m\u2192\u001b[22m ~/.agents/skills/safe-refactor            \u2502\n\u2502  \u001b[32m\u2713\u001b[39m surgical-patch \u001b[2m(copied)\u001b[22m                     \u2502\n\u2502    \u001b[2m\u2192\u001b[22m ~/.agents/skills/surgical-patch           \u2502\n\u2502  \u001b[32m\u2713\u001b[39m ultracave \u001b[2m(copied)\u001b[22m                          \u2502\n\u2502    \u001b[2m\u2192\u001b[22m ~/.agents/skills/ultracave                \u2502\n\u2502  \u001b[32m\u2713\u001b[39m verify-and-stop \u001b[2m(copied)\u001b[22m                    \u2502\n\u2502    \u001b[2m\u2192\u001b[22m ~/.agents/skills/verify-and-stop          \u2502\n\u2502                                                \u2502\n\u251c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256f\n\n\u2502\n\u2514  \u001b[32mDone!\u001b[39m\u001b[2m  Review skills before use; they run with full agent permissions.\u001b[22m\n\n  installed owned /home/bench/free-qualification-cshyhefk/caveman/home/.codex/caveman\n  merged caveman SessionStart hook into /home/bench/free-qualification-cshyhefk/caveman/home/.codex/hooks.json\n  first Codex launch: run /hooks and trust the caveman hook so it can run\n\n\u2192 writing per-repo IDE rule files into /home/bench/free-qualification-cshyhefk/caveman/workspace (--with-init)\n  $ /usr/local/bin/node /opt/qualification-vendor/caveman/src/tools/caveman-init.js /home/bench/free-qualification-cshyhefk/caveman/workspace\n\ud83e\udea8 caveman init \u2014 /home/bench/free-qualification-cshyhefk/caveman/workspace\n\n  + .cursor/rules/caveman.mdc (added)\n  + .windsurf/rules/caveman.md (added)\n  + .clinerules/caveman.md (added)\n  + .github/copilot-instructions.md (added)\n  + .opencode/AGENTS.md (added)\n  + AGENTS.md (added)\n  ? /home/bench/free-qualification-cshyhefk/caveman/home/.openclaw/workspace (skipped-workspace missing)\n\n6 added, 0 appended, 0 refreshed, 0 overwritten, 1 skipped\n\n\n\ud83e\udea8 done\n  installed:\n    \u2022 codex\n    \u2022 codex-hooks\n    \u2022 caveman-init (/home/bench/free-qualification-cshyhefk/caveman/workspace)\n\n  start any session and say 'caveman mode', or run /caveman in Claude Code\n  measure what caveman save you: run /caveman-stats\n  verified team savings coming soon \u2014 join waitlist: https://caveman.so\n  uninstall: npx -y github:JuliusBrussee/caveman -- --uninstall\n",
+      "stderr": ""
+    }
+  ],
+  "paidCalls": 0
+}

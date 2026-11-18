@@ -1,0 +1,9 @@
+{
+  "task": "log-needle-zh",
+  "positiveScore": 1.0,
+  "negativeScore": 0.0,
+  "verifierSha256": "54a761e08fcb3cf864d602bbc78886902bd587ab85fa4f943c88375c3df4c10f",
+  "workspaceArchiveSha256": "ced16a77c23ad50ce68da1802df92f02a288ba17817a5a7fd7bf8985ed3523b2",
+  "modelCalls": 0,
+  "scope": "Oracle-derived grader QA only; not task quality or human validation"
+}
