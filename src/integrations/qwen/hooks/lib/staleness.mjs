@@ -55,7 +55,7 @@ import { createHash } from 'node:crypto';
 import { dirname, join } from 'node:path';
 import { putNode, putEdge, contentHash, nodeId, load } from './wiki.mjs';
 import { hasOutstandingContradiction } from './curate.mjs';
-import { extractSymbols, spanText, symbolKey, extractImports } from './symbols.mjs';
+import { extractSymbols, resolveSymbol, spanText, symbolKey, extractImports } from './symbols.mjs';
 import { canonicalPath, resolvableCandidates, isFsSafePath } from './paths.mjs';
 import { safeRecord } from './safe-text.mjs';
 
@@ -121,7 +121,7 @@ function symbolSnapshotLimit() {
  * bounded: only regions that findings actually anchor to are stored, and a
  * function is orders of magnitude smaller than the file containing it.
  */
-export function indexFile(dir, rawPath, text, { snapshots = true } = {}) {
+export function indexFile(dir, rawPath, text, { snapshots = true, requestedSymbols = [] } = {}) {
   // This reads rawPath through its own loop rather than readAnySpelling, so it
   // needs the same guard: an unsafe path aborts libuv instead of throwing, and
   // the per-candidate try/catch below cannot catch that.
@@ -181,6 +181,12 @@ export function indexFile(dir, rawPath, text, { snapshots = true } = {}) {
   });
 
   const symbols = extractSymbols(path, source);
+  // Materialize exact qualified aliases only when a caller requests them.
+  for (const name of new Set(requestedSymbols)) {
+    if (symbols.some((s) => s.name === name)) continue;
+    const resolved = resolveSymbol(path, source, name);
+    if (resolved) symbols.push(resolved);
+  }
   for (const symbol of symbols) {
     const body = spanText(source, symbol);
     const symbolNode = putNode(dir, {
@@ -359,7 +365,7 @@ export function checkAnchor(anchor) {
   // For a symbol, re-locate it by NAME rather than by line number. Line numbers
   // shift whenever anything above is edited, which would report every function
   // in a file as stale after an unrelated insert at the top.
-  const current = extractSymbols(path, source).find((s) => s.name === anchor.name);
+  const current = resolveSymbol(path, source, anchor.name);
   if (!current) {
     return { fresh: false, before: anchor.snapshot || '', hasBefore: Boolean(anchor.snapshot), after: '', reason: 'symbol no longer found' };
   }
@@ -1143,7 +1149,7 @@ function anchorContentNow(anchor) {
   // By NAME, like checkAnchor: line numbers shift whenever anything above is
   // edited, and re-locating by line would report a symbol as moved when only an
   // unrelated insert happened above it.
-  const current = extractSymbols(path, source).find((s) => s.name === anchor.name);
+  const current = resolveSymbol(path, source, anchor.name);
   if (!current) return null;
   return spanText(source, current);
 }
