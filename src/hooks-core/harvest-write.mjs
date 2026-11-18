@@ -424,7 +424,7 @@ function resolveAnchor(dir, anchor, projectRoot, storeFailures = null) {
   // Indexing creates the file node and its symbols with hashes and spans, which
   // is what makes the claim checkable later.
   const before = lastRejection();
-  indexFile(dir, path);
+  indexFile(dir, path, undefined, { requestedSymbols: symbol ? [symbol] : [] });
 
   if (load(dir).nodes.has(target)) return target;
   // A VALID ANCHOR THE STORE WOULD NOT TAKE (#542). The path passed every check

@@ -36,7 +36,7 @@ const PATTERNS = {
     /^\s{2,}(?:public\s+|private\s+|protected\s+|static\s+|async\s+|\*)*([A-Za-z_$][\w$]*)\s*\([^)]*\)\s*\{/,
   ],
   py: [
-    /^\s*def\s+([A-Za-z_]\w*)/,
+    /^\s*(?:async\s+)?def\s+([A-Za-z_]\w*)/,
     /^\s*class\s+([A-Za-z_]\w*)/,
   ],
   go: [
@@ -255,6 +255,36 @@ export function extractSymbols(path, text) {
 /** The source text of a symbol's span -- what gets snapshotted as its anchor. */
 export function spanText(text, symbol) {
   return String(text).split('\n').slice(symbol.line - 1, symbol.endLine).join('\n');
+}
+
+/**
+ * Resolve an exact indexed name or a qualified Python lexical scope.
+ * Keep legacy names/ordinal keys intact. Qualified names are added on request,
+ * never guessed from a matching final component, and ambiguity is refused.
+ */
+export function resolveSymbol(path, text, name, symbols = extractSymbols(path, text)) {
+  const direct = symbols.find((symbol) => symbol.name === name);
+  if (direct) return direct;
+  if (languageOf(path) !== 'py' || !String(name).includes('.')) return null;
+  const lines = String(text).split('\n');
+  const scopes = [];
+  const matches = [];
+  for (const symbol of symbols) {
+    const prefix = (lines[symbol.line - 1] || '').match(/^[\t ]*/)[0];
+    let indent = 0;
+    for (const c of prefix) indent = c === '\t' ? indent + 8 - indent % 8 : indent + 1;
+    while (scopes.length && scopes.at(-1).indent >= indent) scopes.pop();
+    const baseName = symbol.name.replace(/~\d+$/, '');
+    const qualified = [...scopes.map((s) => s.name), baseName].join('.');
+    if (qualified === name) matches.push(symbol);
+    scopes.push({ name: baseName, indent });
+  }
+  if (matches.length !== 1) return null;
+  const resolved = { ...matches[0], name };
+  // Moving a method to EOF must not change its hash solely by adding the
+  // file's trailing blank line. Keep legacy span semantics unchanged.
+  while (resolved.endLine > resolved.line && !lines[resolved.endLine - 1]?.trim()) resolved.endLine--;
+  return resolved;
 }
 
 /** Stable key for a symbol node, so the same function is one node across runs. */
