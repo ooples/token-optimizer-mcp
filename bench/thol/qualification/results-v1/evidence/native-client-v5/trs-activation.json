@@ -1,0 +1,58 @@
+{
+  "product": "trs",
+  "network": "none",
+  "providerCredentials": false,
+  "configurationFiles": [],
+  "sourceBuiltArtifacts": [
+    {
+      "name": "trs",
+      "file": "trs",
+      "sha256": "b6e4004d85c820d8d441e12c697697efddb16f39f0a4cad6b6b72083cc3e99cf",
+      "source": {
+        "name": "trs",
+        "url": "https://codeload.github.com/dPeluChe/trs/tar.gz/v0.10.3",
+        "sha256": "c1108484142e3cf10495046da446196df90df0816db37db6e0d52d1ed5e79ff6"
+      },
+      "variant": "unmodified official source, locally compiled; not the upstream prebuilt binary",
+      "buildRecipeSha256": "437b2529e996741e63d67c2dad74942eb97c35dbb146cbfccb012f4ab977a4f0",
+      "compiler": "rustc 1.100.0 (0ef1bc386 2026-11-09)",
+      "builderImage": "rust:1-bookworm@sha256:ade39a710ef85f3506cffcfec3e8a24ba090badef1dff2fb798f71d878833fea",
+      "buildNetwork": "none"
+    }
+  ],
+  "codexConfigs": [],
+  "hookCalls": [],
+  "mcpCalls": [],
+  "nativeClientSmoke": null,
+  "nativeHookReceipts": [],
+  "hookInstrumentation": [],
+  "legacyHookCalls": [],
+  "nativeConfigParse": {
+    "exit_code": 0,
+    "stderr": ""
+  },
+  "steps": [
+    {
+      "product": "trs",
+      "command": [
+        "trs",
+        "--version"
+      ],
+      "returncode": 0,
+      "stdout": "trs 0.10.3\n\ncheck for updates:  trs upgrade --check\nupgrade now:        trs upgrade\n",
+      "stderr": ""
+    },
+    {
+      "product": "trs",
+      "command": [
+        "trs",
+        "init",
+        "--help"
+      ],
+      "returncode": 0,
+      "stdout": "Install hooks for AI coding tools (claude, gemini, cursor, codex, opencode, kilo, antigravity, agy, droid, devin, pi, vscode, openclaw, hermes, trae, vibe, zed, devin-cli)\n\nUsage: trs init [OPTIONS] [TOOL]\n\nArguments:\n  [TOOL]  Tool to configure (claude, gemini, cursor, codex, opencode, kilo, antigravity, agy, droid, devin, pi, vscode, openclaw, hermes, trae, vibe, zed, devin-cli)\n\nOptions:\n  -g, --global   Install globally (user-level) instead of project-level\n      --show     Show current installation status\n      --all      Install hooks for all detected tools\n      --replace  Remove competing compressor hooks (rtk, token-optimizer) before installing trs. Required when a collision is detected\n      --force    Install trs even if a competing compressor is already configured. Risk: double-compression can corrupt command output\n      --dry-run  Preview the install without writing anything. Lists every file that would change and the action taken (create / merge / skip)\n      --agent    Output in agent-optimized format (structured for AI consumption)\n      --compact  Output in compact format (default for most commands)\n      --csv      Output in CSV format\n  -h, --help     Print help\n      --json     Output in JSON format\n      --raw      Output raw, unprocessed input\n      --stats    Show execution statistics (input/output size, token reduction)\n      --tsv      Output in TSV format\n  -V, --version  Print version\n",
+      "stderr": ""
+    }
+  ],
+  "paidCalls": 0
+}

@@ -1,0 +1,49 @@
+{
+  "product": "memphis",
+  "network": "none",
+  "providerCredentials": false,
+  "configurationFiles": [],
+  "codexConfigs": [],
+  "hookCalls": [],
+  "mcpCalls": [],
+  "legacyHookCalls": [],
+  "nativeConfigParse": {
+    "exit_code": 0,
+    "stderr": ""
+  },
+  "steps": [
+    {
+      "product": "memphis",
+      "command": [
+        "pyra",
+        "--version"
+      ],
+      "returncode": 0,
+      "stdout": "dev\n",
+      "stderr": ""
+    },
+    {
+      "product": "memphis",
+      "command": [
+        "pyra",
+        "init",
+        "--help"
+      ],
+      "returncode": 0,
+      "stdout": "Initialize a pyra store: write a self-documenting .okf/config.yaml and\ncreate the canon root directories, AGENTS.md authority workflow, selected agent\nMCP configuration, and applicable repository-local gate hooks.\n\nThe defaults match pyra's implicit configuration, so an initialized store and\na config-less store behave identically. init is safe by default: it refuses to\noverwrite an existing store unless --force is given. Use --agents-only to update\nonly AGENTS.md and selected MCP client configuration, without changing the store\nconfiguration, Canon directories, or hooks.\n\nUsage:\n  pyra init [path] [flags]\n\nFlags:\n      --agent stringArray        Agent tool to configure locally (repeatable; use --list-agents)\n      --agents-only              Only update AGENTS.md and selected agent MCP configurations; skip store config and hooks\n      --canon-root stringArray   Canon root directory (repeatable; default: canon)\n      --force                    Overwrite an existing .okf/config.yaml\n  -h, --help                     help for init\n      --intelligence             Initialize the repository intelligence snapshot\n      --kiro-agent string        Kiro CLI agent config to update when multiple agents exist\n      --list-agents              List supported agent identifiers without modifying the repository\n      --quiet                    Suppress success output\n      --repository-key string    Repository key for minted Canon IDs (default: OKF)\n      --ticketing string         Ticketing provider (github, jira, linear, azure-devops, servicenow, none) (default \"github\")\n",
+      "stderr": ""
+    },
+    {
+      "product": "memphis",
+      "command": [
+        "pyra",
+        "mcp",
+        "--help"
+      ],
+      "returncode": 1,
+      "stdout": "",
+      "stderr": "Error: unknown command \"mcp\" for \"pyra\"\n\nDid you mean this?\n\tmap\n\nRun 'pyra --help' for usage.\n"
+    }
+  ],
+  "paidCalls": 0
+}

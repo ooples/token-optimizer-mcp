@@ -1,0 +1,2102 @@
+{
+  "product": "code-review-graph",
+  "network": "none",
+  "providerCredentials": false,
+  "configurationFiles": [
+    {
+      "path": "home/.codex/hooks.json",
+      "sha256": "f49136cac7bcfb1f2137058764dc0a547441d73257f7151a3ae650efcea6126b"
+    },
+    {
+      "path": "home/.codex/config.toml",
+      "sha256": "ffef0d54e212f4db703e9f23f044351c92bab94d48688ccaafdb174610cd072e"
+    },
+    {
+      "path": "home/.codex/skills/code-review-graph/SKILL.md",
+      "sha256": "5996a800ee909d87ba25e9743af6fc183ea28add4dd988e31bff700129933ca3"
+    },
+    {
+      "path": "home/.codex/skills/code-review-graph/.code-review-graph-managed.json",
+      "sha256": "60d5d3a4029325394c60eae484fa2b89c001332443cf54bf4461738fc7b00324"
+    }
+  ],
+  "codexConfigs": [
+    {
+      "mcp_servers": {
+        "code-review-graph": {
+          "command": "uvx",
+          "args": [
+            "code-review-graph",
+            "serve"
+          ],
+          "cwd": "/home/bench/free-qualification-3w6e2jac/code-review-graph/workspace",
+          "type": "stdio"
+        }
+      }
+    }
+  ],
+  "hookCalls": [
+    {
+      "event": "SessionStart",
+      "exit_code": 0,
+      "stdout": "Nodes: 2\nEdges: 1\nFiles: 1\nLanguages: python\nLast updated: 2026-11-18T03:33:56\n",
+      "stderr": ""
+    }
+  ],
+  "mcpCalls": [
+    {
+      "name": "code-review-graph",
+      "command": [
+        "uvx",
+        "code-review-graph",
+        "serve"
+      ],
+      "initialize": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": {
+          "protocolVersion": "2024-11-05",
+          "capabilities": {
+            "logging": {},
+            "prompts": {
+              "listChanged": true
+            },
+            "resources": {
+              "subscribe": false,
+              "listChanged": true
+            },
+            "tools": {
+              "listChanged": true
+            }
+          },
+          "serverInfo": {
+            "name": "code-review-graph",
+            "version": "2.4.0"
+          },
+          "instructions": "Code knowledge graph of this repo (Tree-sitter AST + call / import / test edges). Use it whenever the question is about RELATIONSHIPS between pieces of code, in any phase of work - coding, debugging, planning, brainstorming, refactoring, review - not only code review:\n- who calls / references symbol X -> query_graph_tool pattern=callers_of / references_to\n- which files import module or file X -> query_graph_tool pattern=importers_of\n- which tests cover X -> query_graph_tool pattern=tests_for\n- what breaks if X changes (blast radius) -> get_impact_radius_tool\n- what a diff or branch touches -> detect_changes_tool, get_review_context_tool\n- how modules depend on each other -> get_architecture_overview_tool, list_communities_tool\n- follow an execution flow -> list_flows_tool, get_flow_tool\nGraph answers include dependents reached through re-exports and barrel files that never spell the name, which text search silently misses.\nFor plain text - string literals, log messages, env var names, comments, config keys - use Grep; the graph does not index text."
+        }
+      },
+      "tools": [
+        {
+          "_meta": {
+            "fastmcp": {
+              "tags": []
+            }
+          },
+          "annotations": {
+            "destructiveHint": true,
+            "idempotentHint": false,
+            "readOnlyHint": false
+          },
+          "description": "Build or incrementally update the code knowledge graph.\n\nCall this first to initialize the graph, or after making changes.\nBy default performs an incremental update (only changed files).\nSet full_rebuild=True to re-parse every file.\n\nOnly one build runs per repository at a time. When a commit hook or an\neditor-save hook is already building, this returns\nimmediately with ``status=\"contended\"``, ``skipped=true`` and the\n``holder_pid`` that owns the work, rather than queueing a second parse of\nthe same files behind it; retry once that build finishes. From a shell,\n``code-review-graph update --wait`` blocks instead of skipping.",
+          "inputSchema": {
+            "properties": {
+              "full_rebuild": {
+                "default": false,
+                "type": "boolean",
+                "description": "If True, re-parse all files. Default: False (incremental)."
+              },
+              "repo_root": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Repository root path. Auto-detected from current directory if omitted."
+              },
+              "base": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Git ref to diff against for incremental updates. When omitted,\nresolves automatically to the commit the graph was last built at,\nso one update catches everything since the last sync (not just the\nlatest commit). Pass an explicit ref to override."
+              },
+              "postprocess": {
+                "default": "full",
+                "type": "string",
+                "description": "Post-processing level: \"full\" (default), \"minimal\" (signatures+FTS only),\n         or \"none\" (skip all post-processing). Use \"minimal\" for faster builds."
+              },
+              "recurse_submodules": {
+                "anyOf": [
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "If True, include files from git submodules.\nWhen None (default), falls back to CRG_RECURSE_SUBMODULES env var."
+              },
+              "embedding_provider": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Exact provider for an explicit post-build embedding\nrefresh. Must be supplied with embedding_model. Default: disabled.\nRefreshes an existing index only: on a graph with no embeddings\nthe result sets embeddings_refresh_skipped; run embed_graph_tool first."
+              },
+              "embedding_model": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Exact model for an explicit post-build embedding\nrefresh. Must be supplied with embedding_provider. Default: disabled."
+              }
+            },
+            "type": "object",
+            "additionalProperties": false
+          },
+          "name": "build_or_update_graph_tool",
+          "outputSchema": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "title": "Build Or Update Graph Tool"
+        },
+        {
+          "_meta": {
+            "fastmcp": {
+              "tags": []
+            }
+          },
+          "annotations": {
+            "destructiveHint": true,
+            "idempotentHint": false,
+            "readOnlyHint": false
+          },
+          "description": "Run post-processing on existing graph (flows, communities, FTS index).\n\nUse after building with postprocess=\"none\" or \"minimal\", or to re-run\nexpensive steps independently. Signatures are always computed.\n\nTakes the same per-repository write lock as ``build_or_update_graph_tool``.\nWhen a build, update or another postprocess is already running, this\nreturns immediately with ``status=\"contended\"``, ``skipped=true`` and the\n``holder_pid``, instead of recomputing derived data for a graph that is\nstill being written; retry once that write finishes.",
+          "inputSchema": {
+            "properties": {
+              "flows": {
+                "default": true,
+                "type": "boolean",
+                "description": "Run flow detection. Default: True."
+              },
+              "communities": {
+                "default": true,
+                "type": "boolean",
+                "description": "Run community detection. Default: True."
+              },
+              "fts": {
+                "default": true,
+                "type": "boolean",
+                "description": "Rebuild FTS index. Default: True."
+              },
+              "repo_root": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Repository root path. Auto-detected if omitted."
+              },
+              "embedding_provider": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Exact provider for an explicit embedding refresh.\nMust be supplied with embedding_model. Default: disabled.\nRefreshes an existing index only: on a graph with no embeddings\nthe result sets embeddings_refresh_skipped; run embed_graph_tool first."
+              },
+              "embedding_model": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Exact model for an explicit embedding refresh.\nMust be supplied with embedding_provider. Default: disabled."
+              }
+            },
+            "type": "object",
+            "additionalProperties": false
+          },
+          "name": "run_postprocess_tool",
+          "outputSchema": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "title": "Run Postprocess Tool"
+        },
+        {
+          "_meta": {
+            "fastmcp": {
+              "tags": []
+            }
+          },
+          "annotations": {
+            "readOnlyHint": true
+          },
+          "description": "Get ultra-compact context for any task (~100 tokens). Always call this first.\n\nReturns graph stats, risk score, top communities/flows, and suggested\nnext tools in a single compact response. Use this as the entry point\nbefore any other graph tool to minimize token usage. Returns\n``status: not_ready`` with a build suggestion when the graph is missing,\nempty, or known to have been built at a different Git commit.",
+          "inputSchema": {
+            "properties": {
+              "task": {
+                "default": "",
+                "type": "string",
+                "description": "What you are doing (e.g. \"review PR #42\", \"debug login timeout\")."
+              },
+              "changed_files": {
+                "anyOf": [
+                  {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Explicit list of changed files. Auto-detected if omitted."
+              },
+              "repo_root": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Repository root path. Auto-detected if omitted."
+              },
+              "base": {
+                "default": "HEAD~1",
+                "type": "string",
+                "description": "Git ref for diff comparison. Default: HEAD~1."
+              }
+            },
+            "type": "object",
+            "additionalProperties": false
+          },
+          "name": "get_minimal_context_tool",
+          "outputSchema": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "title": "Get Minimal Context Tool"
+        },
+        {
+          "_meta": {
+            "fastmcp": {
+              "tags": []
+            }
+          },
+          "annotations": {
+            "readOnlyHint": true
+          },
+          "description": "Analyze the blast radius of changed files in the codebase.\n\nShows which functions, classes, and files are impacted by changes.\nAuto-detects changed files from git if not specified.\n\nAn impacted node that calls or references the changed code directly also\ncarries the ``call_site`` (file and line) it does so at, and\n``unresolved_call_sites`` counts call sites that name a changed symbol but\nwere never bound to it, so an empty radius is not mistaken for proof.",
+          "inputSchema": {
+            "properties": {
+              "changed_files": {
+                "anyOf": [
+                  {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "List of changed file paths (relative to repo root). Auto-detected if omitted."
+              },
+              "max_depth": {
+                "default": 2,
+                "type": "integer",
+                "description": "Number of hops to traverse in the dependency graph. Default: 2."
+              },
+              "max_results": {
+                "default": 500,
+                "type": "integer",
+                "description": "How many impacted nodes to traverse to. Default: the\nCRG_MAX_IMPACT_NODES setting, or 500. Each list in the response also\nhas a fixed ceiling (100 nodes, 150 edges, 200 files) so the response\nsize does not grow with the repository; the omitted counts report\nthe rest."
+              },
+              "repo_root": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Repository root path. Auto-detected if omitted."
+              },
+              "base": {
+                "default": "HEAD~1",
+                "type": "string",
+                "description": "Git ref for auto-detecting changes. Default: HEAD~1."
+              },
+              "detail_level": {
+                "default": "standard",
+                "type": "string",
+                "description": "\"standard\" for graph records, \"minimal\" for a summary,\n\"compact\" for ranked repo-relative file paths without node/edge records."
+              },
+              "resolution": {
+                "default": "all",
+                "type": "string",
+                "description": "\"all\" (default) or \"direct\" to traverse only calls bound to an indexed node."
+              },
+              "max_files": {
+                "default": 25,
+                "type": "integer",
+                "description": "File display limit in compact mode (default 25, maximum 200).\nDoes not reduce the graph traversal budget set by max_results."
+              }
+            },
+            "type": "object",
+            "additionalProperties": false
+          },
+          "name": "get_impact_radius_tool",
+          "outputSchema": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "title": "Get Impact Radius Tool"
+        },
+        {
+          "_meta": {
+            "fastmcp": {
+              "tags": []
+            }
+          },
+          "annotations": {
+            "readOnlyHint": true
+          },
+          "description": "Run a predefined graph query to explore code relationships.\n\nAvailable patterns:\n- callers_of: Find functions that call the target\n- references_to: Find nodes that reference the target\n- callees_of: Find functions called by the target\n- imports_of: Find what the target imports\n- importers_of: Find files that import the target\n- children_of: Find nodes contained in a file or class\n- tests_for: Find tests for the target\n- inheritors_of: Find classes inheriting from the target\n- triggers_of: Find methods invoked by a scheduler or other trigger\n- triggered_by: Find schedulers or other triggers that invoke the target\n- publishers_of: Find methods that publish an event\n- listeners_of: Find methods that listen for an event\n- advises: Find methods an AOP advice targets via its pointcut\n- advised_by: Find AOP advice methods that intercept the target\n- handlers_of: Find methods that handle an endpoint\n- endpoints_for: Find endpoints handled by a method\n- consumers_of: Find classes that consume a Spring configuration property\n- file_summary: Get all nodes in a file\n- path_to: Find how the target reaches ``to``, one row per hop\n\ncallers_of, callees_of and references_to return one row per call site, each\ncarrying the ``call_site`` (file and line) the call is written at, plus a\n``resolution_split`` saying how many of those call sites are bound to an\nindexed node and how many are bare-name matches. When some are bare-name\nmatches, ``confidence`` says so in one short sentence.\n\npath_to picks the route whose weakest hop is strongest. Each hop's\n``certainty`` says how it was bound: ``direct`` to that node, ``unique_name``\nthrough a bare name one symbol has, or ``shared_name`` through one several\nshare. ``weakest_hop`` names the hop to check first.",
+          "inputSchema": {
+            "properties": {
+              "pattern": {
+                "type": "string",
+                "description": "Query pattern name (see above)."
+              },
+              "target": {
+                "type": "string",
+                "description": "Node name, qualified name, or file path to query. A full name\nthat one non-test symbol has resolves to it; otherwise the answer\nis \"ambiguous\" and lists qualified names to choose from."
+              },
+              "repo_root": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Repository root path. Auto-detected if omitted."
+              },
+              "detail_level": {
+                "default": "standard",
+                "type": "string",
+                "description": "\"standard\" for full output, \"minimal\" for compact summary. Default: standard."
+              },
+              "max_results": {
+                "default": 100,
+                "type": "integer",
+                "description": "Maximum results to return. Default: 100."
+              },
+              "resolution": {
+                "default": "all",
+                "type": "string",
+                "description": "\"all\" (default), \"direct\" for only calls bound to an indexed\nnode, or \"unresolved\" for only the bare-name matches."
+              },
+              "to": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "For path_to, the node name, qualified name, or file path to reach."
+              }
+            },
+            "required": [
+              "pattern",
+              "target"
+            ],
+            "type": "object",
+            "additionalProperties": false
+          },
+          "name": "query_graph_tool",
+          "outputSchema": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "title": "Query Graph Tool"
+        },
+        {
+          "_meta": {
+            "fastmcp": {
+              "tags": []
+            }
+          },
+          "annotations": {
+            "readOnlyHint": true
+          },
+          "description": "Generate a focused, token-efficient review context for code changes.\n\nCombines impact analysis with source snippets and review guidance.\nUse this for comprehensive code reviews.",
+          "inputSchema": {
+            "properties": {
+              "changed_files": {
+                "anyOf": [
+                  {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Files to review. Auto-detected from git diff if omitted."
+              },
+              "max_depth": {
+                "default": 2,
+                "type": "integer",
+                "description": "Impact radius depth. Default: 2."
+              },
+              "include_source": {
+                "default": true,
+                "type": "boolean",
+                "description": "Include source code snippets. Default: True."
+              },
+              "max_lines_per_file": {
+                "default": 200,
+                "type": "integer",
+                "description": "Max source lines per file. Default: 200."
+              },
+              "repo_root": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Repository root path. Auto-detected if omitted."
+              },
+              "base": {
+                "default": "HEAD~1",
+                "type": "string",
+                "description": "Git ref for change detection. Default: HEAD~1."
+              },
+              "detail_level": {
+                "default": "standard",
+                "type": "string",
+                "description": "\"standard\" for full output, \"minimal\" for\ntoken-efficient summary. Default: standard."
+              },
+              "max_results": {
+                "default": 100,
+                "type": "integer",
+                "description": "Maximum graph nodes per list and edges to return.\nDefault: 50. Each list reports its untruncated ``*_total``."
+              },
+              "max_files": {
+                "default": 25,
+                "type": "integer",
+                "description": "Maximum files listed and given source snippets.\nDefault: 25. Snippets share an 800-line budget."
+              }
+            },
+            "type": "object",
+            "additionalProperties": false
+          },
+          "name": "get_review_context_tool",
+          "outputSchema": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "title": "Get Review Context Tool"
+        },
+        {
+          "_meta": {
+            "fastmcp": {
+              "tags": []
+            }
+          },
+          "annotations": {
+            "readOnlyHint": true
+          },
+          "description": "Search for code entities by name, keyword, or semantic similarity.\n\nUses vector embeddings for semantic search when available (run embed_graph_tool\nfirst, with a provider of your choice: \"local\" needs sentence-transformers,\n\"openai\" / \"google\" / \"minimax\" / \"voyage\" need their respective env vars).\nFalls back to FTS5 / keyword matching when no matching embeddings exist for\nthe given provider.",
+          "inputSchema": {
+            "properties": {
+              "query": {
+                "type": "string",
+                "description": "Search string to match against node names."
+              },
+              "kind": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Optional filter: File, Class, Function, Type, Test, YamlPath,\n  DocSection, Variable, Output, or JsonPath. Liquid Output nodes\n  are found only by asking for that kind."
+              },
+              "limit": {
+                "default": 20,
+                "type": "integer",
+                "description": "Maximum results. Default: 20. At most 100, or 5 with\n   detail_level \"minimal\". ``total`` counts the matches ranked."
+              },
+              "repo_root": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Repository root path. Auto-detected if omitted."
+              },
+              "model": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Embedding model for query vectors. Must match the model used\n   during embed_graph. Falls back to CRG_EMBEDDING_MODEL env var\n   (local), CRG_OPENAI_MODEL (openai), or CRG_VOYAGE_MODEL (voyage)."
+              },
+              "provider": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Embedding provider: \"local\" (default), \"openai\", \"google\",\n      \"minimax\", or \"voyage\". Must match the provider used during\n      embed_graph."
+              },
+              "detail_level": {
+                "default": "standard",
+                "type": "string",
+                "description": "\"standard\" for full output, \"minimal\" for compact summary. Default: standard."
+              },
+              "include_source": {
+                "default": false,
+                "type": "boolean",
+                "description": "Return the source of each hit alongside its location,\n            so you can answer without opening the files. Costs\n            tokens; leave off when you only need locations.\n            Ignored when detail_level is \"minimal\". Default: False."
+              },
+              "expand_neighbors": {
+                "default": false,
+                "type": "boolean",
+                "description": "With include_source, also return each top hit's direct\n              callers and callees with their source, so one call\n              answers \"how does X work\". Default: False."
+              },
+              "max_source_lines": {
+                "default": 60,
+                "type": "integer",
+                "description": "With include_source, the most lines per snippet\n              (1-60). Default: 60."
+              }
+            },
+            "required": [
+              "query"
+            ],
+            "type": "object",
+            "additionalProperties": false
+          },
+          "name": "semantic_search_nodes_tool",
+          "outputSchema": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "title": "Semantic Search Nodes Tool"
+        },
+        {
+          "_meta": {
+            "fastmcp": {
+              "tags": []
+            }
+          },
+          "annotations": {
+            "destructiveHint": true,
+            "idempotentHint": true,
+            "readOnlyHint": false
+          },
+          "description": "Compute vector embeddings for all graph nodes to enable semantic search.\n\nAfterwards semantic_search_nodes_tool ranks by vector similarity instead\nof keyword matching. Changing the model or provider re-embeds every node.\nThe local provider needs: pip install code-review-graph[embeddings].",
+          "inputSchema": {
+            "properties": {
+              "repo_root": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Repository root path. Auto-detected if omitted."
+              },
+              "model": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Embedding model. Local: a HuggingFace ID or path (default\n   all-MiniLM-L6-v2); openai / google / voyage: that provider's\n   model ID. Falls back to CRG_EMBEDDING_MODEL, CRG_OPENAI_MODEL\n   or CRG_VOYAGE_MODEL."
+              },
+              "provider": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "\"local\" (default), \"openai\", \"google\", \"minimax\", or\n      \"voyage\". \"openai\" accepts any OpenAI-compatible endpoint\n      and needs CRG_OPENAI_BASE_URL + CRG_OPENAI_API_KEY;\n      \"voyage\" needs VOYAGE_API_KEY."
+              }
+            },
+            "type": "object",
+            "additionalProperties": false
+          },
+          "name": "embed_graph_tool",
+          "outputSchema": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "title": "Embed Graph Tool"
+        },
+        {
+          "_meta": {
+            "fastmcp": {
+              "tags": []
+            }
+          },
+          "annotations": {
+            "readOnlyHint": true
+          },
+          "description": "Get aggregate statistics about the code knowledge graph.\n\nShows total nodes, edges, languages, files, and last update time.\nUseful for checking if the graph is built and up to date.",
+          "inputSchema": {
+            "properties": {
+              "repo_root": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Repository root path. Auto-detected if omitted."
+              }
+            },
+            "type": "object",
+            "additionalProperties": false
+          },
+          "name": "list_graph_stats_tool",
+          "outputSchema": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "title": "List Graph Stats Tool"
+        },
+        {
+          "_meta": {
+            "fastmcp": {
+              "tags": []
+            }
+          },
+          "annotations": {
+            "readOnlyHint": true
+          },
+          "description": "Get a specific section from the LLM-optimized documentation reference.\n\nReturns only the requested section content for minimal token usage.\nUse this before answering any user question about the plugin.\n\nOne of the two tools that stay synchronous: it reads one bundled\nMarkdown file and touches neither the graph database nor Git, so there\nis nothing here that can hold the event loop for seconds. See\n``_offload`` for the tools that do.\n\nAvailable sections: usage, review-delta, review-pr, commands, legal,\nwatch, embeddings, languages, troubleshooting.",
+          "inputSchema": {
+            "properties": {
+              "section_name": {
+                "type": "string",
+                "description": "The section to retrieve (e.g. \"review-delta\", \"usage\")."
+              },
+              "repo_root": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Repository root path. Auto-detected if omitted."
+              }
+            },
+            "required": [
+              "section_name"
+            ],
+            "type": "object",
+            "additionalProperties": false
+          },
+          "name": "get_docs_section_tool",
+          "outputSchema": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "title": "Get Docs Section Tool"
+        },
+        {
+          "_meta": {
+            "fastmcp": {
+              "tags": []
+            }
+          },
+          "annotations": {
+            "readOnlyHint": true
+          },
+          "description": "Find functions, classes, or files exceeding a line-count threshold.\n\nUseful for decomposition audits, code quality checks, and enforcing\nsize limits during code review. Results are ordered by line count.",
+          "inputSchema": {
+            "properties": {
+              "min_lines": {
+                "default": 50,
+                "type": "integer",
+                "description": "Minimum line count to flag. Default: 50."
+              },
+              "kind": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Optional filter: Function, Class, File, Test, YamlPath, DocSection,\nor JsonPath."
+              },
+              "file_path_pattern": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Filter by file path substring (e.g. \"components/\")."
+              },
+              "limit": {
+                "default": 50,
+                "type": "integer",
+                "description": "Maximum results. Default: 50. At most 100, or 25 with\ndetail_level \"minimal\". ``total`` always counts every match."
+              },
+              "repo_root": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Repository root path. Auto-detected if omitted."
+              },
+              "detail_level": {
+                "default": "standard",
+                "type": "string",
+                "description": "\"standard\" for full rows, \"minimal\" for fewer, smaller rows.\nDefault: standard."
+              }
+            },
+            "type": "object",
+            "additionalProperties": false
+          },
+          "name": "find_large_functions_tool",
+          "outputSchema": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "title": "Find Large Functions Tool"
+        },
+        {
+          "_meta": {
+            "fastmcp": {
+              "tags": []
+            }
+          },
+          "annotations": {
+            "readOnlyHint": true
+          },
+          "description": "List execution flows in the codebase, sorted by criticality.\n\nEach flow represents a call chain starting from an entry point\n(HTTP handler, CLI command, test function, etc.). Use this to\nunderstand the main execution paths through the codebase.",
+          "inputSchema": {
+            "properties": {
+              "sort_by": {
+                "default": "criticality",
+                "type": "string",
+                "description": "Sort column: criticality, depth, node_count, file_count, or name."
+              },
+              "limit": {
+                "default": 50,
+                "type": "integer",
+                "description": "Maximum flows to return. Default: 50."
+              },
+              "kind": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Optional filter by entry point kind (e.g. \"Test\", \"Function\")."
+              },
+              "detail_level": {
+                "default": "standard",
+                "type": "string",
+                "description": "\"standard\" (default) returns full flow data; \"minimal\"\n          returns only name, criticality, and node_count per flow."
+              },
+              "repo_root": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Repository root path. Auto-detected if omitted."
+              }
+            },
+            "type": "object",
+            "additionalProperties": false
+          },
+          "name": "list_flows_tool",
+          "outputSchema": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "title": "List Flows Tool"
+        },
+        {
+          "_meta": {
+            "fastmcp": {
+              "tags": []
+            }
+          },
+          "annotations": {
+            "readOnlyHint": true
+          },
+          "description": "Get detailed information about a single execution flow.\n\nReturns the full call path with each step's function name, file, and\nline numbers. Optionally includes source code snippets for each step.\n\nProvide either flow_id (from list_flows_tool) or flow_name to search by name.",
+          "inputSchema": {
+            "properties": {
+              "flow_id": {
+                "anyOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Database ID of the flow."
+              },
+              "flow_name": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Name to search for (partial match). Ignored if flow_id given."
+              },
+              "include_source": {
+                "default": false,
+                "type": "boolean",
+                "description": "Include source code snippets for each step. Default: False."
+              },
+              "repo_root": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Repository root path. Auto-detected if omitted."
+              },
+              "max_steps": {
+                "default": 50,
+                "type": "integer",
+                "description": "Maximum steps to return; flow.total_steps reports the\nfull count. Default: 50."
+              },
+              "max_source_lines": {
+                "default": 400,
+                "type": "integer",
+                "description": "Total source lines across all steps when\ninclude_source is set. Default: 400."
+              }
+            },
+            "type": "object",
+            "additionalProperties": false
+          },
+          "name": "get_flow_tool",
+          "outputSchema": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "title": "Get Flow Tool"
+        },
+        {
+          "_meta": {
+            "fastmcp": {
+              "tags": []
+            }
+          },
+          "annotations": {
+            "readOnlyHint": true
+          },
+          "description": "Find execution flows affected by changed files.\n\nIdentifies which execution flows pass through nodes in the changed files.\nUseful during code review to understand which user-facing or critical paths\nare impacted by a change. Auto-detects changed files from git if not specified.",
+          "inputSchema": {
+            "properties": {
+              "changed_files": {
+                "anyOf": [
+                  {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "List of changed file paths (relative to repo root). Auto-detected if omitted."
+              },
+              "base": {
+                "default": "HEAD~1",
+                "type": "string",
+                "description": "Git ref for auto-detecting changes. Default: HEAD~1."
+              },
+              "repo_root": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Repository root path. Auto-detected if omitted."
+              },
+              "detail_level": {
+                "default": "standard",
+                "type": "string",
+                "description": "\"standard\" for full step details, \"minimal\" for per-flow\nmetadata only. Default: standard."
+              },
+              "max_flows": {
+                "default": 50,
+                "type": "integer",
+                "description": "Maximum flows to return; total reports the full count.\nDefault: 50. Pass 0 for no caller limit. Standard mode\nadditionally caps visible flows at 25 and minimal mode at 500,\nbecause a standard flow costs ~980 tokens against ~18 minimal."
+              }
+            },
+            "type": "object",
+            "additionalProperties": false
+          },
+          "name": "get_affected_flows_tool",
+          "outputSchema": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "title": "Get Affected Flows Tool"
+        },
+        {
+          "_meta": {
+            "fastmcp": {
+              "tags": []
+            }
+          },
+          "annotations": {
+            "readOnlyHint": true
+          },
+          "description": "List detected code communities in the codebase.\n\nEach community represents a cluster of related code entities (functions,\nclasses) detected via the Leiden algorithm or file-based grouping.\nUse this to understand the high-level structure of the codebase.",
+          "inputSchema": {
+            "properties": {
+              "sort_by": {
+                "default": "size",
+                "type": "string",
+                "description": "Sort column: size, cohesion, or name."
+              },
+              "min_size": {
+                "default": 0,
+                "type": "integer",
+                "description": "Minimum community size to include. Default: 0."
+              },
+              "detail_level": {
+                "default": "standard",
+                "type": "string",
+                "description": "\"standard\" (default) returns full community data;\n          \"minimal\" returns only name, size, and cohesion\n          per community."
+              },
+              "repo_root": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Repository root path. Auto-detected if omitted."
+              },
+              "max_results": {
+                "default": 50,
+                "type": "integer",
+                "description": "Maximum communities to return; total reports the full\ncount. Default: 50."
+              },
+              "max_members": {
+                "default": 10,
+                "type": "integer",
+                "description": "Maximum member names listed per community in standard\nmode. Each community's size still reports its true member\ncount. Default: 10."
+              }
+            },
+            "type": "object",
+            "additionalProperties": false
+          },
+          "name": "list_communities_tool",
+          "outputSchema": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "title": "List Communities Tool"
+        },
+        {
+          "_meta": {
+            "fastmcp": {
+              "tags": []
+            }
+          },
+          "annotations": {
+            "readOnlyHint": true
+          },
+          "description": "Get detailed information about a single code community.\n\nReturns community metadata including size, cohesion, dominant language,\nand member list. Optionally includes full node details for each member.\n\nProvide either community_id (from list_communities_tool) or community_name\nto search by name.",
+          "inputSchema": {
+            "properties": {
+              "community_name": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Name to search for (partial match). Ignored if community_id given."
+              },
+              "community_id": {
+                "anyOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Database ID of the community."
+              },
+              "include_members": {
+                "default": false,
+                "type": "boolean",
+                "description": "Include full member node details. Default: False."
+              },
+              "repo_root": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Repository root path. Auto-detected if omitted."
+              },
+              "max_members": {
+                "default": 25,
+                "type": "integer",
+                "description": "Maximum member entries to include; the community's\nsize still reports its true member count and\nmembers_truncated marks the cut. Default: 25."
+              }
+            },
+            "type": "object",
+            "additionalProperties": false
+          },
+          "name": "get_community_tool",
+          "outputSchema": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "title": "Get Community Tool"
+        },
+        {
+          "_meta": {
+            "fastmcp": {
+              "tags": []
+            }
+          },
+          "annotations": {
+            "readOnlyHint": true
+          },
+          "description": "Generate an architecture overview based on community structure.\n\nBuilds a high-level view of the codebase architecture by analyzing\ncommunity boundaries and cross-community coupling. Includes warnings\nfor high coupling between communities.",
+          "inputSchema": {
+            "properties": {
+              "repo_root": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Repository root path. Auto-detected if omitted."
+              },
+              "detail_level": {
+                "default": "minimal",
+                "type": "string",
+                "description": "\"minimal\" (default) drops community member lists\n          and aggregates cross-community edges to one row per\n          community pair (typical reduction: 600KB -> <5KB);\n          \"standard\" returns full per-edge detail."
+              },
+              "max_results": {
+                "default": 100,
+                "type": "integer",
+                "description": "Maximum cross-community rows and warnings to return;\ncross_community_edges_total reports the full count. Default: 100."
+              },
+              "max_members": {
+                "default": 10,
+                "type": "integer",
+                "description": "Maximum member names per community in standard mode.\nDefault: 10."
+              }
+            },
+            "type": "object",
+            "additionalProperties": false
+          },
+          "name": "get_architecture_overview_tool",
+          "outputSchema": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "title": "Get Architecture Overview Tool"
+        },
+        {
+          "_meta": {
+            "fastmcp": {
+              "tags": []
+            }
+          },
+          "annotations": {
+            "readOnlyHint": true
+          },
+          "description": "Detect changes and produce risk-scored, priority-ordered review guidance.\n\nPrimary tool for code review. Maps git diffs to affected functions,\nYAML paths, flows, communities, and test coverage gaps. Returns risk\nscores and prioritized review items. Functions and classes the diff\ndeleted are listed in removed_symbols with what still uses them.\nReplaces get_review_context for change-aware reviews.",
+          "inputSchema": {
+            "properties": {
+              "base": {
+                "default": "HEAD~1",
+                "type": "string",
+                "description": "Git ref to diff against. Default: HEAD~1."
+              },
+              "changed_files": {
+                "anyOf": [
+                  {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "List of changed file paths (relative to repo root). Auto-detected if omitted."
+              },
+              "include_source": {
+                "default": false,
+                "type": "boolean",
+                "description": "Include source code snippets for changed functions. Default: False."
+              },
+              "max_depth": {
+                "default": 2,
+                "type": "integer",
+                "description": "Impact radius depth for BFS traversal. Default: 2."
+              },
+              "repo_root": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Repository root path. Auto-detected if omitted."
+              },
+              "detail_level": {
+                "default": "standard",
+                "type": "string",
+                "description": "\"standard\" for full output, \"minimal\" for\ntoken-efficient summary. Default: standard."
+              },
+              "max_results": {
+                "default": 25,
+                "type": "integer",
+                "description": "Maximum changed functions, YAML paths, test gaps, and changed files\nto return; the matching *_total fields report the full counts.\nDefault: 25."
+              },
+              "max_flows": {
+                "default": 20,
+                "type": "integer",
+                "description": "Maximum affected flows to embed. Embedded flows carry\nper-flow metadata only \u2014 use get_affected_flows_tool for step\ndetail. Default: 20."
+              }
+            },
+            "type": "object",
+            "additionalProperties": false
+          },
+          "name": "detect_changes_tool",
+          "outputSchema": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "title": "Detect Changes Tool"
+        },
+        {
+          "_meta": {
+            "fastmcp": {
+              "tags": []
+            }
+          },
+          "annotations": {
+            "readOnlyHint": true
+          },
+          "description": "Graph-powered refactoring operations.\n\nUnified entry point for rename previews, dead code detection, and\nrefactoring suggestions.\n\nModes:\n- rename: Preview renaming a symbol. Returns an edit list and a refactor_id\n  to pass to apply_refactor_tool. Requires old_name and new_name.\n- dead_code: Find unreferenced functions/classes (no callers, tests, or\n  importers, and not entry points).\n- suggest: Get community-driven refactoring suggestions (move misplaced\n  functions, remove dead code).",
+          "inputSchema": {
+            "properties": {
+              "mode": {
+                "default": "rename",
+                "type": "string",
+                "description": "Operation mode: \"rename\", \"dead_code\", or \"suggest\"."
+              },
+              "old_name": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "(rename) Current symbol name to rename."
+              },
+              "new_name": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "(rename) Desired new name for the symbol."
+              },
+              "kind": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "(dead_code) Optional filter: Function or Class."
+              },
+              "file_pattern": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "(dead_code) Filter by file path substring."
+              },
+              "repo_root": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Repository root path. Auto-detected if omitted."
+              },
+              "max_results": {
+                "default": 50,
+                "type": "integer",
+                "description": "Maximum edits/symbols/suggestions in the response;\ntotal reports the full count. The stored rename preview keeps\nevery edit, so apply_refactor_tool still applies them all.\nDefault: 50."
+              },
+              "detail_level": {
+                "default": "standard",
+                "type": "string",
+                "description": "\"standard\" for full records, \"minimal\" for\nidentifying fields only. Default: standard."
+              }
+            },
+            "type": "object",
+            "additionalProperties": false
+          },
+          "name": "refactor_tool",
+          "outputSchema": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "title": "Refactor Tool"
+        },
+        {
+          "_meta": {
+            "fastmcp": {
+              "tags": []
+            }
+          },
+          "annotations": {
+            "destructiveHint": true,
+            "readOnlyHint": false
+          },
+          "description": "Apply a previously previewed refactoring to source files.\n\nTakes a refactor_id from a prior refactor_tool(mode=\"rename\") call and\napplies the exact string replacements to the target files. Previews\nexpire after 10 minutes.\n\nSecurity: All edit paths are validated to be within the repo root.\nOnly exact string replacements are performed (no regex, no eval).",
+          "inputSchema": {
+            "properties": {
+              "refactor_id": {
+                "type": "string",
+                "description": "The refactor ID from refactor_tool's response."
+              },
+              "repo_root": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Repository root path. Auto-detected if omitted."
+              },
+              "dry_run": {
+                "default": false,
+                "type": "boolean",
+                "description": "If True, return a unified diff of what would change\nwithout touching any files. The refactor_id remains valid so\nthe same preview can be applied in a follow-up call without\ndry_run. Use this for a human-in-the-loop review before\ncommitting changes to disk. See: #176"
+              },
+              "max_diff_files": {
+                "default": 25,
+                "type": "integer",
+                "description": "Maximum per-file diffs to include in a dry run.\nwould_modify still lists every file. Default: 25."
+              }
+            },
+            "required": [
+              "refactor_id"
+            ],
+            "type": "object",
+            "additionalProperties": false
+          },
+          "name": "apply_refactor_tool",
+          "outputSchema": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "title": "Apply Refactor Tool"
+        },
+        {
+          "_meta": {
+            "fastmcp": {
+              "tags": []
+            }
+          },
+          "annotations": {
+            "destructiveHint": true,
+            "idempotentHint": true,
+            "readOnlyHint": false
+          },
+          "description": "Generate a markdown wiki from the code community structure.\n\nCreates a wiki page for each detected community and an index page.\nPages are written to .code-review-graph/wiki/ inside the repository.\nOnly regenerates pages whose content has changed unless force=True.",
+          "inputSchema": {
+            "properties": {
+              "repo_root": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Repository root path. Auto-detected if omitted."
+              },
+              "force": {
+                "default": false,
+                "type": "boolean",
+                "description": "If True, regenerate all pages even if content unchanged. Default: False."
+              }
+            },
+            "type": "object",
+            "additionalProperties": false
+          },
+          "name": "generate_wiki_tool",
+          "outputSchema": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "title": "Generate Wiki Tool"
+        },
+        {
+          "_meta": {
+            "fastmcp": {
+              "tags": []
+            }
+          },
+          "annotations": {
+            "readOnlyHint": true
+          },
+          "description": "Retrieve a specific wiki page by community name.\n\nReturns the markdown content of the wiki page for the given community.\nThe wiki must have been generated first via generate_wiki_tool.",
+          "inputSchema": {
+            "properties": {
+              "community_name": {
+                "type": "string",
+                "description": "Community name to look up."
+              },
+              "repo_root": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Repository root path. Auto-detected if omitted."
+              },
+              "max_chars": {
+                "default": 20000,
+                "type": "integer",
+                "description": "Maximum characters of page content to return;\ntotal_chars reports the real length. Default: 20000."
+              }
+            },
+            "required": [
+              "community_name"
+            ],
+            "type": "object",
+            "additionalProperties": false
+          },
+          "name": "get_wiki_page_tool",
+          "outputSchema": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "title": "Get Wiki Page Tool"
+        },
+        {
+          "_meta": {
+            "fastmcp": {
+              "tags": []
+            }
+          },
+          "annotations": {
+            "readOnlyHint": true
+          },
+          "description": "Find the most connected nodes in the codebase (architectural hotspots).\n\nHub nodes have the highest total degree (in + out edges). Changes to\nthem have disproportionate blast radius. Excludes File nodes.",
+          "inputSchema": {
+            "properties": {
+              "top_n": {
+                "default": 10,
+                "type": "integer",
+                "description": "Number of top hubs to return (capped at 100). Default: 10."
+              },
+              "repo_root": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Repository root path. Auto-detected if omitted."
+              },
+              "detail_level": {
+                "default": "standard",
+                "type": "string",
+                "description": "\"standard\" for full node data, \"minimal\" for name,\nkind, and total_degree only. Default: standard."
+              }
+            },
+            "type": "object",
+            "additionalProperties": false
+          },
+          "name": "get_hub_nodes_tool",
+          "outputSchema": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "title": "Get Hub Nodes Tool"
+        },
+        {
+          "_meta": {
+            "fastmcp": {
+              "tags": []
+            }
+          },
+          "annotations": {
+            "readOnlyHint": true
+          },
+          "description": "Find architectural chokepoints via betweenness centrality.\n\nBridge nodes sit on shortest paths between many node pairs.\nIf they break, multiple code regions lose connectivity.\nUses sampling approximation for graphs > 5000 nodes.",
+          "inputSchema": {
+            "properties": {
+              "top_n": {
+                "default": 10,
+                "type": "integer",
+                "description": "Number of top bridges to return (capped at 100). Default: 10."
+              },
+              "repo_root": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Repository root path. Auto-detected if omitted."
+              },
+              "detail_level": {
+                "default": "standard",
+                "type": "string",
+                "description": "\"standard\" for full node data, \"minimal\" for name,\nkind, and betweenness only. Default: standard."
+              }
+            },
+            "type": "object",
+            "additionalProperties": false
+          },
+          "name": "get_bridge_nodes_tool",
+          "outputSchema": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "title": "Get Bridge Nodes Tool"
+        },
+        {
+          "_meta": {
+            "fastmcp": {
+              "tags": []
+            }
+          },
+          "annotations": {
+            "readOnlyHint": true
+          },
+          "description": "Identify structural weaknesses in the codebase graph.\n\nFinds isolated nodes (disconnected), thin communities (< 3 members),\nuntested hotspots (high-degree nodes without test coverage), single-file\ncommunities, and import cycles (files that import each other; load_time\nsays whether a loop can fail as the files load).",
+          "inputSchema": {
+            "properties": {
+              "repo_root": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Repository root path. Auto-detected if omitted."
+              },
+              "max_per_category": {
+                "default": 15,
+                "type": "integer",
+                "description": "Maximum entries per gap category; summary and\ntotal_gaps still report the untruncated counts. Default: 15."
+              },
+              "detail_level": {
+                "default": "standard",
+                "type": "string",
+                "description": "\"standard\" for full gap records, \"minimal\" to drop\nfile paths. Default: standard."
+              }
+            },
+            "type": "object",
+            "additionalProperties": false
+          },
+          "name": "get_knowledge_gaps_tool",
+          "outputSchema": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "title": "Get Knowledge Gaps Tool"
+        },
+        {
+          "_meta": {
+            "fastmcp": {
+              "tags": []
+            }
+          },
+          "annotations": {
+            "readOnlyHint": true
+          },
+          "description": "Find unexpected architectural coupling via composite surprise scoring.\n\nScores edges by: cross-community (+0.3), cross-language (+0.2),\nperipheral-to-hub (+0.2), cross-test-boundary (+0.15), and\nunusual edge kinds (+0.15).",
+          "inputSchema": {
+            "properties": {
+              "top_n": {
+                "default": 15,
+                "type": "integer",
+                "description": "Number of top surprises to return (capped at 100). Default: 15."
+              },
+              "repo_root": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Repository root path. Auto-detected if omitted."
+              },
+              "detail_level": {
+                "default": "standard",
+                "type": "string",
+                "description": "\"standard\" for full edge records, \"minimal\" for\nsource, target, kind, and score only. Default: standard."
+              }
+            },
+            "type": "object",
+            "additionalProperties": false
+          },
+          "name": "get_surprising_connections_tool",
+          "outputSchema": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "title": "Get Surprising Connections Tool"
+        },
+        {
+          "_meta": {
+            "fastmcp": {
+              "tags": []
+            }
+          },
+          "annotations": {
+            "readOnlyHint": true
+          },
+          "description": "Auto-generate review questions from graph analysis.\n\nProduces prioritized questions about: bridge nodes needing tests,\nuntested hub nodes, surprising cross-community coupling, thin\ncommunities, and untested hotspots.",
+          "inputSchema": {
+            "properties": {
+              "repo_root": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Repository root path. Auto-detected if omitted."
+              }
+            },
+            "type": "object",
+            "additionalProperties": false
+          },
+          "name": "get_suggested_questions_tool",
+          "outputSchema": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "title": "Get Suggested Questions Tool"
+        },
+        {
+          "_meta": {
+            "fastmcp": {
+              "tags": []
+            }
+          },
+          "annotations": {
+            "readOnlyHint": true
+          },
+          "description": "BFS/DFS traversal from best-matching node with token budget.\n\nFree-form graph exploration: finds the node best matching your\nquery, then traverses outward via BFS or DFS up to the given\ndepth, collecting connected nodes within the token budget.",
+          "inputSchema": {
+            "properties": {
+              "query": {
+                "type": "string",
+                "description": "Search string to find the starting node."
+              },
+              "mode": {
+                "default": "bfs",
+                "type": "string",
+                "description": "Traversal mode: \"bfs\" (breadth-first) or \"dfs\"\n(depth-first). Default: bfs."
+              },
+              "depth": {
+                "default": 3,
+                "type": "integer",
+                "description": "Max traversal depth (1-6). Default: 3."
+              },
+              "token_budget": {
+                "default": 2000,
+                "type": "integer",
+                "description": "Approximate token limit for results, at most 10000.\nThe walk stops when it runs out. Default: 2000."
+              },
+              "repo_root": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Repository root path. Auto-detected if omitted."
+              }
+            },
+            "required": [
+              "query"
+            ],
+            "type": "object",
+            "additionalProperties": false
+          },
+          "name": "traverse_graph_tool",
+          "outputSchema": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "title": "Traverse Graph Tool"
+        },
+        {
+          "_meta": {
+            "fastmcp": {
+              "tags": []
+            }
+          },
+          "annotations": {
+            "readOnlyHint": true
+          },
+          "description": "List all registered repositories in the multi-repo registry.\n\nReturns the list of repos registered at ~/.code-review-graph/registry.json.\nUse the CLI 'register' command to add repos.\n\nStays synchronous: one small JSON read, no graph database and no Git.",
+          "inputSchema": {
+            "properties": {},
+            "type": "object",
+            "additionalProperties": false
+          },
+          "name": "list_repos_tool",
+          "outputSchema": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "title": "List Repos Tool"
+        },
+        {
+          "_meta": {
+            "fastmcp": {
+              "tags": []
+            }
+          },
+          "annotations": {
+            "readOnlyHint": true
+          },
+          "description": "Search for code entities across registered repositories.\n\nRuns hybrid search on each searched repo's graph database and interleaves\nresults by repository-local rank. Equal ranks follow registry order, and up\nto ``limit`` results per searched repo may be returned. Register repos first\nwith the CLI 'register' command.",
+          "inputSchema": {
+            "properties": {
+              "query": {
+                "type": "string",
+                "description": "Search string to match against node names."
+              },
+              "kind": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Optional filter: File, Class, Function, Type, Test, YamlPath,\nDocSection, or JsonPath."
+              },
+              "limit": {
+                "default": 20,
+                "type": "integer",
+                "description": "Maximum results per repo. Default: 20."
+              },
+              "max_results": {
+                "default": 50,
+                "type": "integer",
+                "description": "Maximum merged results across searched repos; total\nreports the untruncated merged count. Default: 50."
+              },
+              "repos": {
+                "anyOf": [
+                  {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Optional repo aliases or folder names to search. Default: every\nregistered repo. Use it when the registry spans unrelated products\nand only some of them can answer the question. Matching is exact\nand case-sensitive, and paths are not accepted. Names matching no\nregistry entry come back in ``unknown``; a name matching several\nentries selects all of them and is listed in ``ambiguous``."
+              }
+            },
+            "required": [
+              "query"
+            ],
+            "type": "object",
+            "additionalProperties": false
+          },
+          "name": "cross_repo_search_tool",
+          "outputSchema": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "title": "Cross Repo Search Tool"
+        }
+      ],
+      "error": null,
+      "knownAnswer": {
+        "jsonrpc": "2.0",
+        "id": 3,
+        "result": {
+          "content": [
+            {
+              "text": "{\"status\":\"ok\",\"pattern\":\"file_summary\",\"target\":\"fixture.py\",\"description\":\"Get a summary of all nodes in a file\",\"summary\":\"Found 2 result(s) for file_summary('fixture.py')\",\"result_count\":2,\"results_omitted\":0,\"results\":[{\"id\":1,\"kind\":\"File\",\"name\":\"/home/bench/free-qualification-3w6e2jac/code-review-graph/workspace/fixture.py\",\"qualified_name\":\"/home/bench/free-qualification-3w6e2jac/code-review-graph/workspace/fixture.py\",\"file_path\":\"/home/bench/free-qualification-3w6e2jac/code-review-graph/workspace/fixture.py\",\"line_start\":1,\"line_end\":3,\"language\":\"python\",\"parent_name\":null,\"is_test\":false},{\"id\":2,\"kind\":\"Function\",\"name\":\"add\",\"qualified_name\":\"/home/bench/free-qualification-3w6e2jac/code-review-graph/workspace/fixture.py::add\",\"file_path\":\"/home/bench/free-qualification-3w6e2jac/code-review-graph/workspace/fixture.py\",\"line_start\":1,\"line_end\":2,\"language\":\"python\",\"parent_name\":null,\"is_test\":false}],\"edges\":[],\"_graph\":{\"updated_at\":\"2026-11-18T03:33:56\",\"age_seconds\":5}}",
+              "type": "text"
+            }
+          ],
+          "isError": false,
+          "structuredContent": {
+            "status": "ok",
+            "pattern": "file_summary",
+            "target": "fixture.py",
+            "description": "Get a summary of all nodes in a file",
+            "summary": "Found 2 result(s) for file_summary('fixture.py')",
+            "result_count": 2,
+            "results_omitted": 0,
+            "results": [
+              {
+                "id": 1,
+                "kind": "File",
+                "name": "/home/bench/free-qualification-3w6e2jac/code-review-graph/workspace/fixture.py",
+                "qualified_name": "/home/bench/free-qualification-3w6e2jac/code-review-graph/workspace/fixture.py",
+                "file_path": "/home/bench/free-qualification-3w6e2jac/code-review-graph/workspace/fixture.py",
+                "line_start": 1,
+                "line_end": 3,
+                "language": "python",
+                "parent_name": null,
+                "is_test": false
+              },
+              {
+                "id": 2,
+                "kind": "Function",
+                "name": "add",
+                "qualified_name": "/home/bench/free-qualification-3w6e2jac/code-review-graph/workspace/fixture.py::add",
+                "file_path": "/home/bench/free-qualification-3w6e2jac/code-review-graph/workspace/fixture.py",
+                "line_start": 1,
+                "line_end": 2,
+                "language": "python",
+                "parent_name": null,
+                "is_test": false
+              }
+            ],
+            "edges": [],
+            "_graph": {
+              "updated_at": "2026-11-18T03:33:56",
+              "age_seconds": 5
+            }
+          }
+        }
+      },
+      "knownAnswerVerified": true,
+      "unknownToolReply": {
+        "jsonrpc": "2.0",
+        "id": 10,
+        "result": {
+          "content": [
+            {
+              "text": "Unknown tool: '__missing_qualification_tool__'",
+              "type": "text"
+            }
+          ],
+          "isError": true
+        }
+      },
+      "failedCallRecoveryVerified": true
+    }
+  ],
+  "nativeClientSmoke": {
+    "exit_code": 0,
+    "stdout": "{\"type\":\"thread.started\",\"thread_id\":\"01a1ecb7-f740-72f3-b1ed-83995153d274\"}\n{\"type\":\"item.completed\",\"item\":{\"id\":\"item_0\",\"type\":\"error\",\"message\":\"Codex is ignoring 1 unrecognized configuration setting. Check for typos or deprecated settings.\\n  user (/home/bench/free-qualification-3w6e2jac/code-review-graph/home/.codex/config.toml): `mcp_servers.code-review-graph.type` is ignored.\"}}\n{\"type\":\"item.completed\",\"item\":{\"id\":\"item_1\",\"type\":\"error\",\"message\":\"`--dangerously-bypass-hook-trust` is enabled. Enabled hooks may run without review for this invocation.\"}}\n{\"type\":\"item.completed\",\"item\":{\"id\":\"item_2\",\"type\":\"error\",\"message\":\"Codex is ignoring 1 unrecognized configuration setting. Check for typos or deprecated settings.\\n  user (/home/bench/free-qualification-3w6e2jac/code-review-graph/home/.codex/config.toml): `mcp_servers.code-review-graph.type` is ignored.\"}}\n{\"type\":\"item.completed\",\"item\":{\"id\":\"item_3\",\"type\":\"error\",\"message\":\"`--dangerously-bypass-hook-trust` is enabled. Enabled hooks may run without review for this invocation.\"}}\n{\"type\":\"turn.started\"}\n{\"type\":\"item.started\",\"item\":{\"id\":\"item_4\",\"type\":\"command_execution\",\"command\":\"/bin/bash -lc 'cat fixture.py'\",\"aggregated_output\":\"\",\"exit_code\":null,\"status\":\"in_progress\"}}\n{\"type\":\"item.completed\",\"item\":{\"id\":\"item_4\",\"type\":\"command_execution\",\"command\":\"/bin/bash -lc 'cat fixture.py'\",\"aggregated_output\":\"def add(a, b):\\n    return a + b\\n\",\"exit_code\":0,\"status\":\"completed\"}}\n{\"type\":\"item.completed\",\"item\":{\"id\":\"item_5\",\"type\":\"agent_message\",\"text\":\"Local qualification fixture complete.\"}}\n{\"type\":\"turn.completed\",\"usage\":{\"input_tokens\":20,\"cached_input_tokens\":0,\"cache_write_input_tokens\":0,\"output_tokens\":10,\"reasoning_output_tokens\":0}}\n",
+    "stderr": "Reading additional input from stdin...\n",
+    "requests": [
+      {
+        "path": "/v1/responses",
+        "model": "gpt-6.1-sol",
+        "reasoning": {
+          "effort": "high",
+          "context": "all_turns"
+        },
+        "tools": []
+      },
+      {
+        "path": "/v1/responses",
+        "model": "gpt-6.1-sol",
+        "reasoning": {
+          "effort": "high",
+          "context": "all_turns"
+        },
+        "tools": []
+      }
+    ],
+    "modelCalls": 0,
+    "syntheticUsage": true,
+    "network": "none",
+    "scope": "protocol fixture, not model evaluation"
+  },
+  "nativeHookReceipts": [
+    {
+      "command": "cat | { if command -v code-review-graph >/dev/null 2>&1; then code-review-graph hook-status; else cat >/dev/null; fi; }",
+      "input": "{\"session_id\":\"01a1ecb7-f740-72f3-b1ed-83995153d274\",\"transcript_path\":\"/home/bench/free-qualification-3w6e2jac/code-review-graph/home/.codex/sessions/2026/11/18/rollout-2026-11-18T03-34-01-01a1ecb7-f740-72f3-b1ed-83995153d274.jsonl\",\"cwd\":\"/home/bench/free-qualification-3w6e2jac/code-review-graph/workspace\",\"hook_event_name\":\"SessionStart\",\"model\":\"gpt-6.1-sol\",\"permission_mode\":\"bypassPermissions\",\"source\":\"startup\"}",
+      "exit_code": 0,
+      "stdout": "Nodes: 2\nEdges: 1\nFiles: 1\nLanguages: python\nLast updated: 2026-11-18T03:33:56\n",
+      "stderr": ""
+    },
+    {
+      "command": "cat | { if command -v code-review-graph >/dev/null 2>&1; then code-review-graph hook-update; else cat >/dev/null; fi; }",
+      "input": "{\"session_id\":\"01a1ecb7-f740-72f3-b1ed-83995153d274\",\"turn_id\":\"01a1ecb7-f761-7330-8927-070ebfaf763b\",\"transcript_path\":\"/home/bench/free-qualification-3w6e2jac/code-review-graph/home/.codex/sessions/2026/11/18/rollout-2026-11-18T03-34-01-01a1ecb7-f740-72f3-b1ed-83995153d274.jsonl\",\"cwd\":\"/home/bench/free-qualification-3w6e2jac/code-review-graph/workspace\",\"hook_event_name\":\"PostToolUse\",\"model\":\"gpt-6.1-sol\",\"permission_mode\":\"bypassPermissions\",\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"cat fixture.py\"},\"tool_response\":\"def add(a, b):\\n    return a + b\\n\",\"tool_use_id\":\"call_fixture\"}",
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    }
+  ],
+  "hookInstrumentation": [
+    {
+      "path": "home/.codex/hooks.json",
+      "originalSha256": "f49136cac7bcfb1f2137058764dc0a547441d73257f7151a3ae650efcea6126b",
+      "instrumentedSha256": "2676194625ce985d2c6d5cc6eab3f8e62a07669f105153945c6e5b525c77f488"
+    }
+  ],
+  "legacyHookCalls": [],
+  "nativeConfigParse": {
+    "exit_code": 0,
+    "stderr": ""
+  },
+  "steps": [
+    {
+      "product": "code-review-graph",
+      "command": [
+        "code-review-graph",
+        "--version"
+      ],
+      "returncode": 0,
+      "stdout": "code-review-graph 2.4.0\n",
+      "stderr": ""
+    },
+    {
+      "product": "code-review-graph",
+      "command": [
+        "code-review-graph",
+        "install",
+        "--help"
+      ],
+      "returncode": 0,
+      "stdout": "usage: code-review-graph install [-h] [--repo REPO] [--dry-run] [--no-skills]\n                                 [--no-hooks] [--steering | --no-steering]\n                                 [--no-instructions] [-y] [--gitignore]\n                                 [--platform {codex,claude,claude-code,cursor,windsurf,zed,continue,opencode,mimo,antigravity,gemini-cli,qwen,kiro,qoder,copilot,copilot-cli,codebuddy,hermes,dsh,all}]\n\noptions:\n  -h, --help            show this help message and exit\n  --repo REPO           Repository root (auto-detected)\n  --dry-run             Show each file install would change, as a diff, and\n                        write nothing\n  --no-skills           Skip generating platform-native skill files\n  --no-hooks            Skip installing platform-native hooks\n  --steering, --no-steering\n                        Claude Code only: add (or, with --no-steering, remove)\n                        a hook that puts graph context beside each search and\n                        read. Off unless asked for; it uses a few hundred\n                        tokens at most on each call\n  --no-instructions     Skip injecting graph instructions into CLAUDE.md /\n                        AGENTS.md / etc.\n  -y, --yes             Auto-confirm instruction injection without an\n                        interactive prompt\n  --gitignore           Also add the files and folders this run creates, and\n                        git does not track, to a marked block in .gitignore.\n                        Off by default; uninstall removes the block\n  --platform {codex,claude,claude-code,cursor,windsurf,zed,continue,opencode,mimo,antigravity,gemini-cli,qwen,kiro,qoder,copilot,copilot-cli,codebuddy,hermes,dsh,all}\n                        Target platform for MCP config (default: all detected)\n",
+      "stderr": ""
+    },
+    {
+      "product": "code-review-graph",
+      "command": [
+        "code-review-graph",
+        "install",
+        "--platform",
+        "codex",
+        "--yes"
+      ],
+      "returncode": 0,
+      "stdout": "\nInstall will change these files:\n  ~/.codex/config.toml (new)\n  .gitignore (new)\n  ~/.codex/skills/code-review-graph/SKILL.md (new)\n  ~/.codex/skills/code-review-graph/agents/openai.yaml (new)\n  ~/.codex/skills/code-review-graph/scripts/crg_readonly.py (new)\n  ~/.codex/skills/code-review-graph/.code-review-graph-managed.json (new)\n  ~/.codex/hooks.json (new)\n  .git/hooks/pre-commit (new)\n  .git/hooks/post-checkout (new)\n  .git/hooks/post-merge (new)\n  .git/hooks/post-rewrite (new)\nRun with --dry-run to see each change first.\n\nGraph instructions will be injected into:\n  AGENTS.md (new)\n\nInstalling MCP server config...\n  Codex: configured /home/bench/free-qualification-3w6e2jac/code-review-graph/home/.codex/config.toml\n\nConfigured 1 platform(s): Codex\nCreated .gitignore and added .code-review-graph/.\nInstalled Codex skill in /home/bench/free-qualification-3w6e2jac/code-review-graph/home/.codex/skills/code-review-graph\nInstalled Codex hooks in /home/bench/free-qualification-3w6e2jac/code-review-graph/home/.codex/hooks.json\nInstalled git pre-commit hook in /home/bench/free-qualification-3w6e2jac/code-review-graph/workspace/.git/hooks/pre-commit\nInstalled git post-checkout hook in /home/bench/free-qualification-3w6e2jac/code-review-graph/workspace/.git/hooks/post-checkout\nInstalled git post-merge hook in /home/bench/free-qualification-3w6e2jac/code-review-graph/workspace/.git/hooks/post-merge\nInstalled git post-rewrite hook in /home/bench/free-qualification-3w6e2jac/code-review-graph/workspace/.git/hooks/post-rewrite\nInjected graph instructions into: AGENTS.md\n\nNext steps:\n  1. code-review-graph build    # build the knowledge graph\n  2. Restart your AI coding tool to pick up the new config\n",
+      "stderr": ""
+    },
+    {
+      "product": "code-review-graph",
+      "command": [
+        "code-review-graph",
+        "build"
+      ],
+      "returncode": 0,
+      "stdout": "Full build: 1 files, 2 nodes, 1 edges (postprocess=full)\n",
+      "stderr": "INFO: Schema version 1 -> 15: running migrations\nINFO: Running migration v2\nINFO: Migration v2: added 'signature' column to nodes\nINFO: Running migration v3\nINFO: Migration v3: created flows and flow_memberships tables\nINFO: Running migration v4\nINFO: Migration v4: added 'community_id' column to nodes\nINFO: Migration v4: created communities table\nINFO: Running migration v5\nINFO: Migration v5: created nodes_fts FTS5 virtual table\nINFO: Running migration v6\nINFO: Migration v6: created summary tables (community_summaries, flow_snapshots, risk_index)\nINFO: Running migration v7\nINFO: Migration v7: added compound edge indexes\nINFO: Running migration v8\nINFO: Migration v8: created composite edge index\nINFO: Running migration v9\nINFO: Migration v9: added edge confidence columns\nINFO: Running migration v10\nINFO: Migration v10: added indexed nodes.symbol column\nINFO: Running migration v11\nINFO: Migration v11: added indexed edges.target_resolution column\nINFO: Running migration v12\nINFO: Migration v12: added nodes_fts_state index mirror\nINFO: Running migration v13\nINFO: Migration v13: indexed nodes.docstring and nodes.name_tokens\nINFO: Running migration v14\nINFO: Migration v14: invalidated 0 Ruby file(s) for re-keying on next update\nINFO: Running migration v15\nINFO: Migration v15: dropped unread tables and covered indexes\nINFO: Migrations complete, now at schema version 15\nINFO: Progress: 1/1 files parsed\nINFO: Python import resolution: {'files_indexed': 1, 'imports_updated': 0, 'imports_resolved': 0, 'imports_ambiguous': 0}\nINFO: Spring event resolver: indexed 0 events and emitted 0 CALLS edges\nINFO: FTS index rebuilt: 2 rows indexed\nINFO: Loaded 1 unique nodes, 1 edges\nINFO: igraph not available, using file-based community detection\n"
+    }
+  ],
+  "paidCalls": 0
+}

@@ -1,0 +1,34 @@
+{
+  "native-codex-review": {
+    "names": ["caveman", "claude-mem", "code-review-graph", "codegraph", "edgee", "graphify", "headroom", "lean-ctx", "lm-resizer", "memphis", "ponytail", "rtk", "squeez", "talk-tight", "token-optimizer", "token-saving-hooks-codex", "tokenade", "tokenjuice", "tokf", "trs"],
+    "disposition": "Candidate Codex cohort. Vendor integration and runtime evidence required per product; this is not paid admission."
+  },
+  "mcp-client-review": {
+    "names": ["claude-context", "copium", "token-smithers", "trimemh"],
+    "disposition": "MCP/library integration review. Preserve the complete vendor setup; account for indexing, embeddings, memory and upstream MCP costs. Mock providers before activation."
+  },
+  "opencode-cohort-review": {
+    "names": ["nim-guard", "opencode-context-filter", "opencode-ctx", "opencode-extreme-compress", "opencode-productivity-suite", "qtk"],
+    "disposition": "Documented OpenCode integration. Requires a separate supported-client cohort, including same-model availability and provider accounting. Do not silently port to Codex."
+  },
+  "claude-or-adapter-review": {
+    "names": ["cartoon", "claude-token-efficient", "cto", "justokenmax", "llm-token-optimization-stack"],
+    "disposition": "Documented Claude integration, with any explicit additional adapters reviewed individually. A Claude cohort or clearly labelled vendor-supported adapter needs its own admission."
+  },
+  "ide-extension-review": {
+    "names": ["ai-context-optimizer"],
+    "disposition": "VS Code/Cline extension distribution. IDE integration is a distinct cohort; source clients mentioned in prose do not prove CLI support."
+  },
+  "standalone-transform-review": {
+    "names": ["compactprompt", "lossless-prompt-compressor", "tokenoptimizer", "world-for-broes"],
+    "disposition": "Standalone library/pipeline. Review a fixed transformation or vendor SDK cohort; adapting it into an agent changes the treatment and must be explicit."
+  },
+  "research-observation-or-spec": {
+    "names": ["agent-integration-patterns", "agentgauge", "claude-restart-trajectory-analysis", "promptshrink", "tinker-experiments", "tokenlens"],
+    "disposition": "Not yet an admitted agent optimizer. Source shows a generic agent example, log analyzer, research artifact, specification, fine-tuning experiment, or compression evaluation tool. Preserve in the full field and review applicability explicitly."
+  },
+  "unresolved-upstream": {
+    "names": ["token-slayer"],
+    "disposition": "withmewtwo/token-slayer is unresolved. No identity evidence for substituting an unrelated repository with the same name."
+  }
+}

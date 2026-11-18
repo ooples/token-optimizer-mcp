@@ -1,0 +1,115 @@
+{
+  "product": "rtk",
+  "network": "none",
+  "providerCredentials": false,
+  "configurationFiles": [
+    {
+      "path": "home/.codex/RTK.md",
+      "sha256": "39ccf78247b5168fc938044b74c0f1789c87d8c7ff174e58a9fd787f2032d37e"
+    },
+    {
+      "path": "home/.codex/hooks.json",
+      "sha256": "b305e4924d8ad8a52e523ae3b4525a5783d9ea80648fac8f111f980cf758b94a"
+    },
+    {
+      "path": "home/.codex/AGENTS.md",
+      "sha256": "644ee678a3d5c209ced7b1ae831fdf45990d5b81d27fce93a00c6f47c536f030"
+    }
+  ],
+  "codexConfigs": [],
+  "hookCalls": [
+    {
+      "event": "PreToolUse",
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    }
+  ],
+  "mcpCalls": [],
+  "nativeClientSmoke": {
+    "exit_code": 0,
+    "stdout": "{\"type\":\"thread.started\",\"thread_id\":\"01a1ecb3-d523-7ad3-a30b-7146d1394ad0\"}\n{\"type\":\"item.completed\",\"item\":{\"id\":\"item_0\",\"type\":\"error\",\"message\":\"`--dangerously-bypass-hook-trust` is enabled. Enabled hooks may run without review for this invocation.\"}}\n{\"type\":\"item.completed\",\"item\":{\"id\":\"item_1\",\"type\":\"error\",\"message\":\"`--dangerously-bypass-hook-trust` is enabled. Enabled hooks may run without review for this invocation.\"}}\n{\"type\":\"turn.started\"}\n{\"type\":\"item.started\",\"item\":{\"id\":\"item_2\",\"type\":\"command_execution\",\"command\":\"/bin/bash -lc 'rtk read fixture.py'\",\"aggregated_output\":\"\",\"exit_code\":null,\"status\":\"in_progress\"}}\n{\"type\":\"item.completed\",\"item\":{\"id\":\"item_2\",\"type\":\"command_execution\",\"command\":\"/bin/bash -lc 'rtk read fixture.py'\",\"aggregated_output\":\"[rtk] /!\\\\ No hook installed \u2014 run `rtk init -g` for automatic token savings\\ndef add(a, b):\\n    return a + b\\n\",\"exit_code\":0,\"status\":\"completed\"}}\n{\"type\":\"item.completed\",\"item\":{\"id\":\"item_3\",\"type\":\"agent_message\",\"text\":\"Local qualification fixture complete.\"}}\n{\"type\":\"turn.completed\",\"usage\":{\"input_tokens\":20,\"cached_input_tokens\":0,\"cache_write_input_tokens\":0,\"output_tokens\":10,\"reasoning_output_tokens\":0}}\n",
+    "stderr": "Reading additional input from stdin...\n",
+    "requests": [
+      {
+        "path": "/v1/responses",
+        "model": "gpt-6.1-sol",
+        "reasoning": {
+          "effort": "high",
+          "context": "all_turns"
+        },
+        "tools": []
+      },
+      {
+        "path": "/v1/responses",
+        "model": "gpt-6.1-sol",
+        "reasoning": {
+          "effort": "high",
+          "context": "all_turns"
+        },
+        "tools": []
+      }
+    ],
+    "modelCalls": 0,
+    "syntheticUsage": true,
+    "network": "none",
+    "scope": "protocol fixture, not model evaluation"
+  },
+  "nativeHookReceipts": [
+    {
+      "command": "rtk hook codex",
+      "input": "{\"session_id\":\"01a1ecb3-d523-7ad3-a30b-7146d1394ad0\",\"turn_id\":\"01a1ecb3-d548-7c01-8ed0-b218fe871c96\",\"transcript_path\":\"/home/bench/free-qualification-hxw8xr2_/rtk/home/.codex/sessions/2026/11/18/rollout-2026-11-18T03-29-30-01a1ecb3-d523-7ad3-a30b-7146d1394ad0.jsonl\",\"cwd\":\"/home/bench/free-qualification-hxw8xr2_/rtk/workspace\",\"hook_event_name\":\"PreToolUse\",\"model\":\"gpt-6.1-sol\",\"permission_mode\":\"bypassPermissions\",\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"cat fixture.py\"},\"tool_use_id\":\"call_fixture\"}",
+      "exit_code": 0,
+      "stdout": "{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecisionReason\":\"RTK auto-rewrite\",\"updatedInput\":{\"command\":\"rtk read fixture.py\"},\"permissionDecision\":\"allow\"}}\n",
+      "stderr": ""
+    }
+  ],
+  "hookInstrumentation": [
+    {
+      "path": "home/.codex/hooks.json",
+      "originalSha256": "b305e4924d8ad8a52e523ae3b4525a5783d9ea80648fac8f111f980cf758b94a",
+      "instrumentedSha256": "8acac21cab4b4a098d61fcb7f7d021c2a821fcd82a891fe4912d189b1eef4e78"
+    }
+  ],
+  "legacyHookCalls": [],
+  "nativeConfigParse": {
+    "exit_code": 0,
+    "stderr": ""
+  },
+  "steps": [
+    {
+      "product": "rtk",
+      "command": [
+        "rtk",
+        "--version"
+      ],
+      "returncode": 0,
+      "stdout": "rtk 1.2.0\n",
+      "stderr": ""
+    },
+    {
+      "product": "rtk",
+      "command": [
+        "rtk",
+        "init",
+        "--help"
+      ],
+      "returncode": 0,
+      "stdout": "Initialize rtk instructions for assistant CLI usage\n\nUsage: rtk init [OPTIONS]\n\nOptions:\n  -g, --global\n          Add to global assistant config directory instead of local project file\n\n      --opencode\n          Install OpenCode plugin (in addition to Claude Code)\n\n      --gemini\n          Initialize for Gemini CLI instead of Claude Code\n\n      --agent <AGENT>\n          Target agent to install hooks for (default: claude)\n\n          Possible values:\n          - claude:      Claude Code (default)\n          - cursor:      Cursor Agent (editor and CLI)\n          - trae:        Trae IDE\n          - windsurf:    Windsurf IDE (Cascade)\n          - cline:       Cline / Roo Code (VS Code)\n          - kilocode:    Kilo Code\n          - antigravity: Google Antigravity\n          - kimi:        Kimi AI\n          - pi:          Pi coding agent\n          - hermes:      Hermes CLI\n          - droid:       Factory Droid CLI\n          - vibe:        Mistral Vibe CLI\n          - omp:         Oh My Pi (OMP)\n\n      --show\n          Show current configuration\n\n      --claude-md\n          Inject full instructions into CLAUDE.md (legacy mode)\n\n      --hook-only\n          Hook only, no RTK.md\n\n      --auto-patch\n          Apply supported init changes without prompting\n\n      --no-patch\n          Skip optional init prompts and leave protected content unchanged\n\n      --trust-filters\n          Trust and enable detected custom filters without prompting\n\n      --no-trust-filters\n          Leave detected custom filters disabled without prompting\n\n      --uninstall\n          Remove RTK artifacts for the selected assistant mode\n\n      --codex\n          Target Codex CLI (uses PreToolUse hook + AGENTS.md + RTK.md)\n\n      --copilot\n          Install GitHub Copilot integration (VS Code + CLI)\n\n      --dry-run\n          Preview changes without writing any files (combine with -v to show content)\n\n      --skip-env\n          Set SKIP_ENV_VALIDATION=1 for child processes (Next.js, tsc, lint, prisma)\n\n  -h, --help\n          Print help (see a summary with '-h')\n",
+      "stderr": ""
+    },
+    {
+      "product": "rtk",
+      "command": [
+        "rtk",
+        "init",
+        "-g",
+        "--codex"
+      ],
+      "returncode": 0,
+      "stdout": "\nRTK configured for Codex CLI.\n\n  RTK.md:    /home/bench/free-qualification-hxw8xr2_/rtk/home/.codex/RTK.md\n  Hook:      /home/bench/free-qualification-hxw8xr2_/rtk/home/.codex/hooks.json (registered)\n  AGENTS.md: @/home/bench/free-qualification-hxw8xr2_/rtk/home/.codex/RTK.md reference added\n\n  Codex global instructions path: /home/bench/free-qualification-hxw8xr2_/rtk/home/.codex/AGENTS.md\n\n  Restart Codex. For a project hook, approve it when Codex asks you to trust it.\n\n  Optional: if history recording fails with SQLITE_CANTOPEN in the\n  workspace-write sandbox, grant write access to the tracking directory:\n\nsandbox_mode = \"workspace-write\"\n\n[sandbox_workspace_write]\nwritable_roots = [\"/home/bench/free-qualification-hxw8xr2_/rtk/home/.local/share/rtk\"]\n\n  Merge this into Codex config.toml only if you want persistent history.\n  Keep existing writable_roots; do not add a duplicate table.\n  This grants access to the directory, including SQLite sidecar files.\n  No Codex permission settings have been changed.\n\n",
+      "stderr": ""
+    }
+  ],
+  "paidCalls": 0
+}

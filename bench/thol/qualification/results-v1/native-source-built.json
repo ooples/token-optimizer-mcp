@@ -1,0 +1,32 @@
+[
+  {
+    "name": "trs",
+    "file": "trs",
+    "sha256": "b6e4004d85c820d8d441e12c697697efddb16f39f0a4cad6b6b72083cc3e99cf",
+    "source": {
+      "name": "trs",
+      "url": "https://codeload.github.com/dPeluChe/trs/tar.gz/v0.10.3",
+      "sha256": "c1108484142e3cf10495046da446196df90df0816db37db6e0d52d1ed5e79ff6"
+    },
+    "variant": "unmodified official source, locally compiled; not the upstream prebuilt binary",
+    "buildRecipeSha256": "437b2529e996741e63d67c2dad74942eb97c35dbb146cbfccb012f4ab977a4f0",
+    "compiler": "rustc 1.100.0 (0ef1bc386 2026-11-09)",
+    "builderImage": "rust:1-bookworm@sha256:ade39a710ef85f3506cffcfec3e8a24ba090badef1dff2fb798f71d878833fea",
+    "buildNetwork": "none"
+  },
+  {
+    "name": "tokf",
+    "file": "tokf",
+    "sha256": "5989d4376888dbb5fb6ffafeed6dfc462207fda040b47641d8a600cc2e039aec",
+    "source": {
+      "name": "tokf",
+      "url": "https://codeload.github.com/mpecan/tokf/tar.gz/tokf-v0.2.54",
+      "sha256": "2c1a13cdc422eed7700f70c067c58afd7206e6036e47f2eb3b7f02a2a32143e3"
+    },
+    "variant": "unmodified official source, locally compiled; not the upstream prebuilt binary",
+    "buildRecipeSha256": "437b2529e996741e63d67c2dad74942eb97c35dbb146cbfccb012f4ab977a4f0",
+    "compiler": "rustc 1.100.0 (0ef1bc386 2026-11-09)",
+    "builderImage": "rust:1-bookworm@sha256:ade39a710ef85f3506cffcfec3e8a24ba090badef1dff2fb798f71d878833fea",
+    "buildNetwork": "none"
+  }
+]

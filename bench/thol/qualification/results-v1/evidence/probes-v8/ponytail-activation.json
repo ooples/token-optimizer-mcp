@@ -1,0 +1,58 @@
+{
+  "product": "ponytail",
+  "network": "none",
+  "providerCredentials": false,
+  "configurationFiles": [
+    {
+      "path": "home/.codex/config.toml",
+      "sha256": "d68fdca5f10883515cbd617879cb6e7ac6815e5dc4f8ce5c641a3777223b7c0e"
+    }
+  ],
+  "codexConfigs": [
+    {
+      "marketplaces": {
+        "ponytail": {
+          "source_type": "local",
+          "source": "/opt/qualification-vendor/ponytail"
+        }
+      }
+    }
+  ],
+  "hookCalls": [],
+  "mcpCalls": [],
+  "legacyHookCalls": [],
+  "nativeConfigParse": {
+    "exit_code": 0,
+    "stderr": ""
+  },
+  "steps": [
+    {
+      "product": "ponytail",
+      "command": [
+        "codex",
+        "plugin",
+        "marketplace",
+        "add",
+        "/opt/qualification-vendor/ponytail",
+        "--json"
+      ],
+      "returncode": 0,
+      "stdout": "{\n  \"marketplaceName\": \"ponytail\",\n  \"installedRoot\": \"/opt/qualification-vendor/ponytail\",\n  \"alreadyAdded\": false\n}\n",
+      "stderr": ""
+    },
+    {
+      "product": "ponytail",
+      "command": [
+        "codex",
+        "plugin",
+        "add",
+        "ponytail@ponytail",
+        "--json"
+      ],
+      "returncode": 1,
+      "stdout": "",
+      "stderr": "Error: git clone https://github.com/DietrichGebert/ponytail.git /home/bench/free-qualification-_86fb36f/ponytail/home/.codex/plugins/.marketplace-plugin-source-staging/marketplace-plugin-source-63r3kv failed with status exit status: 128\nstdout:\n\nstderr:\nCloning into '/home/bench/free-qualification-_86fb36f/ponytail/home/.codex/plugins/.marketplace-plugin-source-staging/marketplace-plugin-source-63r3kv'...\nfatal: detected dubious ownership in repository at '/opt/qualification-git/ponytail'\nTo add an exception for this directory, call:\n\n\tgit config --global --add safe.directory /opt/qualification-git/ponytail\nfatal: Could not read from remote repository.\n\nPlease make sure you have the correct access rights\nand the repository exists.\n\nCaused by:\n    git clone https://github.com/DietrichGebert/ponytail.git /home/bench/free-qualification-_86fb36f/ponytail/home/.codex/plugins/.marketplace-plugin-source-staging/marketplace-plugin-source-63r3kv failed with status exit status: 128\n    stdout:\n    \n    stderr:\n    Cloning into '/home/bench/free-qualification-_86fb36f/ponytail/home/.codex/plugins/.marketplace-plugin-source-staging/marketplace-plugin-source-63r3kv'...\n    fatal: detected dubious ownership in repository at '/opt/qualification-git/ponytail'\n    To add an exception for this directory, call:\n    \n    \tgit config --global --add safe.directory /opt/qualification-git/ponytail\n    fatal: Could not read from remote repository.\n    \n    Please make sure you have the correct access rights\n    and the repository exists.\n"
+    }
+  ],
+  "paidCalls": 0
+}

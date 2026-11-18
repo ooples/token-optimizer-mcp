@@ -25,3 +25,6 @@ bench/recall/fixtures/** text eol=lf
 # committed LF blob hashes ad54734b..., so a pre-registration could not be
 # checked against the repository on another platform.
 bench/thol/campaigns/**/arm-order*.json text eol=lf
+
+# Qualification receipts and build recipes carry byte hashes across platforms.
+bench/thol/qualification/** text eol=lf

@@ -1,0 +1,65 @@
+{
+  "returncode": 0,
+  "stdout": "  MCP retrieve tool: registered (restart OpenAI Codex CLI if it was already running)\n\n  \u2554\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2557\n  \u2551              HEADROOM WRAP: CODEX             \u2551\n  \u255a\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u255d\n\n  Starting Headroom proxy on port 49195...\n  Logs: /home/bench/headroom-free-m8346rmi/home/.headroom/logs/proxy-49195.log\n  Proxy ready \u2014 dashboard: http://127.0.0.1:49195/dashboard\n\n  Launching CODEX (API routed through Headroom)...\n  OPENAI_BASE_URL=http://127.0.0.1:49195/p/headroom-free-m8346rmi/v1\n  Note: session-scoped routing runs Codex without its shared background server (embedded mode). To keep the shared server, route through Codex config instead: run `headroom init codex` (or `headroom init -g codex`) once, then start `codex` directly.\n  Quiet CLI defaults: GIT_PAGER, PIP_QUIET, PIP_DISABLE_PIP_VERSION_CHECK, npm_config_fund, npm_config_audit, npm_config_progress, npm_config_update_notifier, DOTNET_CLI_TELEMETRY_OPTOUT, DOTNET_NOLOGO, NEXT_TELEMETRY_DISABLED, GATSBY_TELEMETRY_DISABLED, ASTRO_TELEMETRY_DISABLED, NG_CLI_ANALYTICS, HOMEBREW_NO_ENV_HINTS, PYTEST_ADDOPTS (opt out: HEADROOM_WRAP_QUIET=0)\n  Extra args: --config openai_base_url=\"http://127.0.0.1:49195/p/headroom-free-m8346rmi/v1\" -m gpt-6.1-sol\n\n",
+  "stderr": "",
+  "network": "none",
+  "providerCredentials": false,
+  "modelCalls": 0,
+  "upstreamRequests": [
+    {
+      "path": "/v1/responses",
+      "body": {
+        "model": "gpt-6.1-sol",
+        "reasoning": {
+          "effort": "high"
+        },
+        "input": [
+          {
+            "role": "user",
+            "content": "Fix the failing test; preserve ERROR sentinel-481."
+          }
+        ]
+      }
+    }
+  ],
+  "fakeCliReceipt": {
+    "argv": [
+      "/home/bench/headroom-free-m8346rmi/bin/codex",
+      "--config",
+      "openai_base_url=\"http://127.0.0.1:49195/p/headroom-free-m8346rmi/v1\"",
+      "-m",
+      "gpt-6.1-sol"
+    ],
+    "baseURL": "http://127.0.0.1:49195/p/headroom-free-m8346rmi/v1",
+    "request": {
+      "model": "gpt-6.1-sol",
+      "reasoning": {
+        "effort": "high"
+      },
+      "input": [
+        {
+          "role": "user",
+          "content": "Fix the failing test; preserve ERROR sentinel-481."
+        }
+      ]
+    },
+    "response": {
+      "id": "resp_local_fixture",
+      "object": "response",
+      "model": "gpt-6.1-sol",
+      "status": "completed",
+      "output": [],
+      "usage": {
+        "input_tokens": 10,
+        "output_tokens": 1,
+        "total_tokens": 11
+      }
+    },
+    "config": "model = \"gpt-6.1-sol\"\nmodel_reasoning_effort = \"high\"\n\n# --- Headroom MCP server ---\n[mcp_servers.headroom]\ncommand = \"/usr/local/bin/headroom\"\nargs = [\"mcp\", \"serve\"]\n\n[mcp_servers.headroom.env]\nHEADROOM_PROXY_URL = \"http://127.0.0.1:49195\"\n# --- end Headroom MCP server ---\n"
+  },
+  "unchangedModelRoutingVerified": true,
+  "proxyAliveAfterWrapper": true,
+  "configurationRestored": false,
+  "compressionVerified": false,
+  "scope": "wrapper/transport only; compression not yet qualified"
+}

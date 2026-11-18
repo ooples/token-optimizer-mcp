@@ -1,0 +1,1216 @@
+{
+  "product": "memphis",
+  "network": "none",
+  "providerCredentials": false,
+  "configurationFiles": [
+    {
+      "path": "workspace/.codex/hooks.json",
+      "sha256": "3eb17801d6ea9ea369e3ec920bfd999a9cea840603319ed31b1b6576b3829398"
+    },
+    {
+      "path": "workspace/.codex/config.toml",
+      "sha256": "f0a767bb1ff9d5e1913923aaa702763c310b672cd7f9c35376cb5d766cbc002d"
+    }
+  ],
+  "codexConfigs": [
+    {
+      "mcp_servers": {
+        "pyra": {
+          "command": "pyra",
+          "args": [
+            "serve",
+            "/home/bench/free-qualification-65s1ms7r/memphis/workspace",
+            "--mcp"
+          ],
+          "required": true
+        }
+      }
+    }
+  ],
+  "hookCalls": [],
+  "mcpCalls": [
+    {
+      "name": "pyra",
+      "command": [
+        "pyra",
+        "serve",
+        "/home/bench/free-qualification-65s1ms7r/memphis/workspace",
+        "--mcp"
+      ],
+      "initialize": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": {
+          "protocolVersion": "2024-11-05",
+          "capabilities": {
+            "tools": {
+              "listChanged": true
+            }
+          },
+          "serverInfo": {
+            "name": "pyra",
+            "version": "0.1.0"
+          }
+        }
+      },
+      "tools": [
+        {
+          "annotations": {
+            "readOnlyHint": false,
+            "destructiveHint": true,
+            "idempotentHint": false,
+            "openWorldHint": true
+          },
+          "description": "Apply pending updates to the bundle from its source.",
+          "inputSchema": {
+            "properties": {
+              "confirm": {
+                "description": "Must be true to apply changes",
+                "type": "boolean"
+              },
+              "dry_run": {
+                "description": "Preview changes without applying",
+                "type": "boolean"
+              }
+            },
+            "required": [],
+            "type": "object"
+          },
+          "name": "apply_updates"
+        },
+        {
+          "annotations": {
+            "readOnlyHint": false,
+            "destructiveHint": true,
+            "idempotentHint": false,
+            "openWorldHint": true
+          },
+          "description": "Find Canon artifacts (decisions/requirements/designs) that reference a code symbol-id or file path.",
+          "inputSchema": {
+            "properties": {
+              "id": {
+                "description": "A symbol-id or file path to search Canon for",
+                "type": "string"
+              }
+            },
+            "required": [],
+            "type": "object"
+          },
+          "name": "artifacts_for_symbol"
+        },
+        {
+          "annotations": {
+            "readOnlyHint": false,
+            "destructiveHint": true,
+            "idempotentHint": false,
+            "openWorldHint": true
+          },
+          "description": "Check bundle health: validation status, staleness, and source reachability.",
+          "inputSchema": {
+            "properties": {
+              "check_source": {
+                "description": "Check if source URL is reachable (default: true)",
+                "type": "boolean"
+              }
+            },
+            "required": [],
+            "type": "object"
+          },
+          "name": "bundle_health"
+        },
+        {
+          "annotations": {
+            "readOnlyHint": false,
+            "destructiveHint": true,
+            "idempotentHint": false,
+            "openWorldHint": true
+          },
+          "description": "Return bundle stats and validation status.",
+          "inputSchema": {
+            "properties": {},
+            "required": [],
+            "type": "object"
+          },
+          "name": "bundle_summary"
+        },
+        {
+          "annotations": {
+            "readOnlyHint": false,
+            "destructiveHint": true,
+            "idempotentHint": false,
+            "openWorldHint": true
+          },
+          "description": "Find every reference to a symbol by name across a directory, with enclosing function. Results are 'structural' (tree-sitter) or 'textual' (whole-word grep).",
+          "inputSchema": {
+            "properties": {
+              "dir": {
+                "description": "Directory to search (default: current)",
+                "type": "string"
+              },
+              "name": {
+                "description": "Function/method name to find references to",
+                "type": "string"
+              }
+            },
+            "required": [
+              "name"
+            ],
+            "type": "object"
+          },
+          "name": "callers"
+        },
+        {
+          "annotations": {
+            "readOnlyHint": false,
+            "destructiveHint": true,
+            "idempotentHint": false,
+            "openWorldHint": true
+          },
+          "description": "Parse a source file and report syntax errors (ERROR/MISSING nodes) with positions. Empty array means syntactically valid.",
+          "inputSchema": {
+            "properties": {
+              "file": {
+                "description": "Path to a source file",
+                "type": "string"
+              }
+            },
+            "required": [
+              "file"
+            ],
+            "type": "object"
+          },
+          "name": "check"
+        },
+        {
+          "annotations": {
+            "readOnlyHint": false,
+            "destructiveHint": true,
+            "idempotentHint": false,
+            "openWorldHint": true
+          },
+          "description": "Check if the bundle source has updates available.",
+          "inputSchema": {
+            "properties": {
+              "timeout_seconds": {
+                "description": "Timeout for fetching source (default: 30)",
+                "type": "number"
+              }
+            },
+            "required": [],
+            "type": "object"
+          },
+          "name": "check_updates"
+        },
+        {
+          "annotations": {
+            "readOnlyHint": false,
+            "destructiveHint": true,
+            "idempotentHint": false,
+            "openWorldHint": true
+          },
+          "description": "Resolve the code symbols a Canon artifact references. Scans the artifact body for symbol-ids and returns each symbol's source; unresolvable references are listed separately.",
+          "inputSchema": {
+            "properties": {
+              "id": {
+                "description": "Canon artifact ID",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id"
+            ],
+            "type": "object"
+          },
+          "name": "code_for_artifact"
+        },
+        {
+          "annotations": {
+            "readOnlyHint": false,
+            "destructiveHint": true,
+            "idempotentHint": false,
+            "openWorldHint": true
+          },
+          "description": "Return token compression statistics for this session.",
+          "inputSchema": {
+            "properties": {},
+            "required": [],
+            "type": "object"
+          },
+          "name": "compression_stats"
+        },
+        {
+          "annotations": {
+            "readOnlyHint": false,
+            "destructiveHint": true,
+            "idempotentHint": false,
+            "openWorldHint": true
+          },
+          "description": "Find where a symbol is defined. name: exact-name lookup. at (file:line:col, 1-based): scope-aware, cross-file resolution of the identifier under a usage site, falling back to name lookup.",
+          "inputSchema": {
+            "properties": {
+              "at": {
+                "description": "Usage site to resolve: file:line:col (1-based)",
+                "type": "string"
+              },
+              "dir": {
+                "description": "Directory to search (default: current)",
+                "type": "string"
+              },
+              "name": {
+                "description": "Exact symbol name to resolve (provide this or at)",
+                "type": "string"
+              }
+            },
+            "required": [],
+            "type": "object"
+          },
+          "name": "definition"
+        },
+        {
+          "annotations": {
+            "readOnlyHint": false,
+            "destructiveHint": true,
+            "idempotentHint": false,
+            "openWorldHint": true
+          },
+          "description": "Find Canon decisions related to a topic.",
+          "inputSchema": {
+            "properties": {
+              "limit": {
+                "description": "Maximum results (default 10)",
+                "type": "number"
+              },
+              "topic": {
+                "description": "Topic to search decisions for",
+                "type": "string"
+              }
+            },
+            "required": [
+              "topic"
+            ],
+            "type": "object"
+          },
+          "name": "find_decisions"
+        },
+        {
+          "annotations": {
+            "readOnlyHint": false,
+            "destructiveHint": true,
+            "idempotentHint": false,
+            "openWorldHint": true
+          },
+          "description": "Query repository intelligence: generate_refactoring_code",
+          "inputSchema": {
+            "properties": {
+              "query": {
+                "type": "string"
+              },
+              "text": {
+                "type": "string"
+              }
+            },
+            "required": [],
+            "type": "object"
+          },
+          "name": "generate_refactoring_code"
+        },
+        {
+          "annotations": {
+            "readOnlyHint": false,
+            "destructiveHint": true,
+            "idempotentHint": false,
+            "openWorldHint": true
+          },
+          "description": "Query repository intelligence: get_answer",
+          "inputSchema": {
+            "properties": {
+              "query": {
+                "type": "string"
+              },
+              "text": {
+                "type": "string"
+              }
+            },
+            "required": [],
+            "type": "object"
+          },
+          "name": "get_answer"
+        },
+        {
+          "annotations": {
+            "readOnlyHint": false,
+            "destructiveHint": true,
+            "idempotentHint": false,
+            "openWorldHint": true
+          },
+          "description": "Query repository intelligence: get_architecture",
+          "inputSchema": {
+            "properties": {
+              "query": {
+                "type": "string"
+              },
+              "text": {
+                "type": "string"
+              }
+            },
+            "required": [],
+            "type": "object"
+          },
+          "name": "get_architecture"
+        },
+        {
+          "annotations": {
+            "readOnlyHint": false,
+            "destructiveHint": true,
+            "idempotentHint": false,
+            "openWorldHint": true
+          },
+          "description": "Read one authoritative Canon artifact by id, with its type, status, relationships, and citation.",
+          "inputSchema": {
+            "properties": {
+              "id": {
+                "description": "Canon artifact ID",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id"
+            ],
+            "type": "object"
+          },
+          "name": "get_artifact"
+        },
+        {
+          "annotations": {
+            "readOnlyHint": false,
+            "destructiveHint": true,
+            "idempotentHint": false,
+            "openWorldHint": true
+          },
+          "description": "Query repository intelligence: get_blast_radius",
+          "inputSchema": {
+            "properties": {
+              "query": {
+                "type": "string"
+              },
+              "text": {
+                "type": "string"
+              }
+            },
+            "required": [],
+            "type": "object"
+          },
+          "name": "get_blast_radius"
+        },
+        {
+          "annotations": {
+            "readOnlyHint": false,
+            "destructiveHint": true,
+            "idempotentHint": false,
+            "openWorldHint": true
+          },
+          "description": "Query repository intelligence: get_change_risk",
+          "inputSchema": {
+            "properties": {
+              "query": {
+                "type": "string"
+              },
+              "text": {
+                "type": "string"
+              }
+            },
+            "required": [],
+            "type": "object"
+          },
+          "name": "get_change_risk"
+        },
+        {
+          "annotations": {
+            "readOnlyHint": false,
+            "destructiveHint": true,
+            "idempotentHint": false,
+            "openWorldHint": true
+          },
+          "description": "Partition the code dependency graph into communities (logical modules) via deterministic label propagation.",
+          "inputSchema": {
+            "properties": {},
+            "required": [],
+            "type": "object"
+          },
+          "name": "get_communities"
+        },
+        {
+          "annotations": {
+            "readOnlyHint": false,
+            "destructiveHint": true,
+            "idempotentHint": false,
+            "openWorldHint": true
+          },
+          "description": "Query repository intelligence: get_conformance",
+          "inputSchema": {
+            "properties": {
+              "query": {
+                "type": "string"
+              },
+              "text": {
+                "type": "string"
+              }
+            },
+            "required": [],
+            "type": "object"
+          },
+          "name": "get_conformance"
+        },
+        {
+          "annotations": {
+            "readOnlyHint": false,
+            "destructiveHint": true,
+            "idempotentHint": false,
+            "openWorldHint": true
+          },
+          "description": "Assemble relevant context for a query within a token budget.",
+          "inputSchema": {
+            "properties": {
+              "compression": {
+                "description": "Compression level: none, light, medium, aggressive (default: light)",
+                "type": "string"
+              },
+              "depth": {
+                "description": "Neighbor traversal depth (default: 1, max: 2)",
+                "type": "number"
+              },
+              "include_neighbors": {
+                "description": "Include linked concepts (default: true)",
+                "type": "boolean"
+              },
+              "query": {
+                "description": "The query to find relevant context for",
+                "type": "string"
+              },
+              "token_budget": {
+                "description": "Maximum tokens to return (default: 4000)",
+                "type": "number"
+              }
+            },
+            "required": [
+              "query"
+            ],
+            "type": "object"
+          },
+          "name": "get_context"
+        },
+        {
+          "annotations": {
+            "readOnlyHint": false,
+            "destructiveHint": true,
+            "idempotentHint": false,
+            "openWorldHint": true
+          },
+          "description": "Report dependency cycles (strongly-connected components) in the code dependency graph.",
+          "inputSchema": {
+            "properties": {},
+            "required": [],
+            "type": "object"
+          },
+          "name": "get_cycles"
+        },
+        {
+          "annotations": {
+            "readOnlyHint": false,
+            "destructiveHint": true,
+            "idempotentHint": false,
+            "openWorldHint": true
+          },
+          "description": "Report likely-unreachable definitions (no path from entry points) ranked by cleanup impact, each with a confidence tier (high/medium/low) and a governed flag (Canon still cites it). Deterministic and offline.",
+          "inputSchema": {
+            "properties": {
+              "limit": {
+                "description": "Maximum candidates to return (0 = all)",
+                "type": "number"
+              },
+              "tier": {
+                "description": "Only this tier: high, medium, or low",
+                "type": "string"
+              }
+            },
+            "required": [],
+            "type": "object"
+          },
+          "name": "get_dead_code"
+        },
+        {
+          "annotations": {
+            "readOnlyHint": false,
+            "destructiveHint": true,
+            "idempotentHint": false,
+            "openWorldHint": true
+          },
+          "description": "Query repository intelligence: get_dependency_path",
+          "inputSchema": {
+            "properties": {
+              "query": {
+                "type": "string"
+              },
+              "text": {
+                "type": "string"
+              }
+            },
+            "required": [],
+            "type": "object"
+          },
+          "name": "get_dependency_path"
+        },
+        {
+          "annotations": {
+            "readOnlyHint": false,
+            "destructiveHint": true,
+            "idempotentHint": false,
+            "openWorldHint": true
+          },
+          "description": "Query repository intelligence: get_execution_flows",
+          "inputSchema": {
+            "properties": {
+              "query": {
+                "type": "string"
+              },
+              "text": {
+                "type": "string"
+              }
+            },
+            "required": [],
+            "type": "object"
+          },
+          "name": "get_execution_flows"
+        },
+        {
+          "annotations": {
+            "readOnlyHint": false,
+            "destructiveHint": true,
+            "idempotentHint": false,
+            "openWorldHint": true
+          },
+          "description": "Rank symbols by PageRank over the code dependency graph \u2014 the codebase's hubs. Deterministic and offline.",
+          "inputSchema": {
+            "properties": {
+              "limit": {
+                "description": "Maximum symbols to return (default 20)",
+                "type": "number"
+              }
+            },
+            "required": [],
+            "type": "object"
+          },
+          "name": "get_graph_centrality"
+        },
+        {
+          "annotations": {
+            "readOnlyHint": false,
+            "destructiveHint": true,
+            "idempotentHint": false,
+            "openWorldHint": true
+          },
+          "description": "Score files for code health across three signals (defect / maintainability / performance) from deterministic biomarkers. Returns repo KPIs and the lowest-scoring files with their top marker and refactoring suggestion. Deterministic and offline.",
+          "inputSchema": {
+            "properties": {
+              "limit": {
+                "description": "Maximum lowest-scoring files to return (default 15)",
+                "type": "number"
+              }
+            },
+            "required": [],
+            "type": "object"
+          },
+          "name": "get_health"
+        },
+        {
+          "annotations": {
+            "readOnlyHint": false,
+            "destructiveHint": true,
+            "idempotentHint": false,
+            "openWorldHint": true
+          },
+          "description": "Rank files by git churn: the repository's hotspots (top-quartile temporally-decayed churn that also clears activity floors), each with churn percentile, commit counts, primary owner, and bus factor. Deterministic and offline.",
+          "inputSchema": {
+            "properties": {
+              "limit": {
+                "description": "Maximum hotspots to return (default 20)",
+                "type": "number"
+              }
+            },
+            "required": [],
+            "type": "object"
+          },
+          "name": "get_hotspots"
+        },
+        {
+          "annotations": {
+            "readOnlyHint": false,
+            "destructiveHint": true,
+            "idempotentHint": false,
+            "openWorldHint": true
+          },
+          "description": "Return outbound links and backlinks for a concept.",
+          "inputSchema": {
+            "properties": {
+              "depth": {
+                "description": "Traversal depth (1 or 2, default 1)",
+                "type": "number"
+              },
+              "id": {
+                "description": "Concept ID or path",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id"
+            ],
+            "type": "object"
+          },
+          "name": "get_neighbors"
+        },
+        {
+          "annotations": {
+            "readOnlyHint": false,
+            "destructiveHint": true,
+            "idempotentHint": false,
+            "openWorldHint": true
+          },
+          "description": "Query repository intelligence: get_overview",
+          "inputSchema": {
+            "properties": {
+              "query": {
+                "type": "string"
+              },
+              "text": {
+                "type": "string"
+              }
+            },
+            "required": [],
+            "type": "object"
+          },
+          "name": "get_overview"
+        },
+        {
+          "annotations": {
+            "readOnlyHint": false,
+            "destructiveHint": true,
+            "idempotentHint": false,
+            "openWorldHint": true
+          },
+          "description": "Git ownership for a file (primary owner + commit share, recent owner, contributor count, bus factor) or, for a directory or empty path, the top-level module rollups. Deterministic and offline.",
+          "inputSchema": {
+            "properties": {
+              "path": {
+                "description": "A file or directory path; empty returns the module rollups",
+                "type": "string"
+              }
+            },
+            "required": [],
+            "type": "object"
+          },
+          "name": "get_ownership"
+        },
+        {
+          "annotations": {
+            "readOnlyHint": false,
+            "destructiveHint": true,
+            "idempotentHint": false,
+            "openWorldHint": true
+          },
+          "description": "Return typed relationships for a Canon artifact, traversed to a depth.",
+          "inputSchema": {
+            "properties": {
+              "depth": {
+                "description": "Traversal depth (default 1)",
+                "type": "number"
+              },
+              "id": {
+                "description": "Canon artifact ID",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id"
+            ],
+            "type": "object"
+          },
+          "name": "get_related"
+        },
+        {
+          "annotations": {
+            "readOnlyHint": false,
+            "destructiveHint": true,
+            "idempotentHint": false,
+            "openWorldHint": true
+          },
+          "description": "Query repository intelligence: get_risk",
+          "inputSchema": {
+            "properties": {
+              "query": {
+                "type": "string"
+              },
+              "text": {
+                "type": "string"
+              }
+            },
+            "required": [],
+            "type": "object"
+          },
+          "name": "get_risk"
+        },
+        {
+          "annotations": {
+            "readOnlyHint": false,
+            "destructiveHint": true,
+            "idempotentHint": false,
+            "openWorldHint": true
+          },
+          "description": "Summarize the Canon corpus: counts by type and lifecycle status.",
+          "inputSchema": {
+            "properties": {},
+            "required": [],
+            "type": "object"
+          },
+          "name": "get_summary"
+        },
+        {
+          "annotations": {
+            "readOnlyHint": false,
+            "destructiveHint": true,
+            "idempotentHint": false,
+            "openWorldHint": true
+          },
+          "description": "Query repository intelligence: get_symbol",
+          "inputSchema": {
+            "properties": {
+              "query": {
+                "type": "string"
+              },
+              "text": {
+                "type": "string"
+              }
+            },
+            "required": [],
+            "type": "object"
+          },
+          "name": "get_symbol"
+        },
+        {
+          "annotations": {
+            "readOnlyHint": false,
+            "destructiveHint": true,
+            "idempotentHint": false,
+            "openWorldHint": true
+          },
+          "description": "Query repository intelligence: get_why",
+          "inputSchema": {
+            "properties": {
+              "query": {
+                "type": "string"
+              },
+              "text": {
+                "type": "string"
+              }
+            },
+            "required": [],
+            "type": "object"
+          },
+          "name": "get_why"
+        },
+        {
+          "annotations": {
+            "readOnlyHint": false,
+            "destructiveHint": true,
+            "idempotentHint": false,
+            "openWorldHint": true
+          },
+          "description": "Query repository intelligence: list_repos",
+          "inputSchema": {
+            "properties": {
+              "query": {
+                "type": "string"
+              },
+              "text": {
+                "type": "string"
+              }
+            },
+            "required": [],
+            "type": "object"
+          },
+          "name": "list_repos"
+        },
+        {
+          "annotations": {
+            "readOnlyHint": false,
+            "destructiveHint": true,
+            "idempotentHint": false,
+            "openWorldHint": true
+          },
+          "description": "List concept tags and counts.",
+          "inputSchema": {
+            "properties": {},
+            "required": [],
+            "type": "object"
+          },
+          "name": "list_tags"
+        },
+        {
+          "annotations": {
+            "readOnlyHint": false,
+            "destructiveHint": true,
+            "idempotentHint": false,
+            "openWorldHint": true
+          },
+          "description": "List concept types and counts.",
+          "inputSchema": {
+            "properties": {},
+            "required": [],
+            "type": "object"
+          },
+          "name": "list_types"
+        },
+        {
+          "annotations": {
+            "readOnlyHint": false,
+            "destructiveHint": true,
+            "idempotentHint": false,
+            "openWorldHint": true
+          },
+          "description": "Compact structural map of a directory: every definition grouped by file, with each definition's outgoing references. No source bodies.",
+          "inputSchema": {
+            "properties": {
+              "dir": {
+                "description": "Directory to map",
+                "type": "string"
+              },
+              "kind": {
+                "description": "Only definitions of this kind",
+                "type": "string"
+              },
+              "name": {
+                "description": "Only definitions whose name equals this",
+                "type": "string"
+              },
+              "nameContains": {
+                "description": "Substring matching for name",
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "dir"
+            ],
+            "type": "object"
+          },
+          "name": "map"
+        },
+        {
+          "annotations": {
+            "readOnlyHint": false,
+            "destructiveHint": true,
+            "idempotentHint": false,
+            "openWorldHint": true
+          },
+          "description": "List the definitions in one source file as a compact skeleton (kind, name, parent container, signature, position, and a stable symbol-id). Use this instead of reading a whole file.",
+          "inputSchema": {
+            "properties": {
+              "detail": {
+                "description": "0 terse \u00b7 1 default \u00b7 2 full. Default 1.",
+                "type": "number"
+              },
+              "file": {
+                "description": "Path to a source file",
+                "type": "string"
+              },
+              "kind": {
+                "description": "Only this kind, e.g. class, function, method",
+                "type": "string"
+              }
+            },
+            "required": [
+              "file"
+            ],
+            "type": "object"
+          },
+          "name": "outline"
+        },
+        {
+          "annotations": {
+            "readOnlyHint": false,
+            "destructiveHint": true,
+            "idempotentHint": false,
+            "openWorldHint": true
+          },
+          "description": "Read one OKF concept by id or path.",
+          "inputSchema": {
+            "properties": {
+              "compression": {
+                "description": "Compression level: none, light, medium, aggressive",
+                "type": "string"
+              },
+              "detail_level": {
+                "description": "Detail level 0-3",
+                "type": "number"
+              },
+              "id": {
+                "description": "Concept ID or path",
+                "type": "string"
+              },
+              "max_chars": {
+                "description": "Maximum characters to return",
+                "type": "number"
+              },
+              "token_budget": {
+                "description": "Maximum tokens to return",
+                "type": "number"
+              }
+            },
+            "required": [
+              "id"
+            ],
+            "type": "object"
+          },
+          "name": "read_concept"
+        },
+        {
+          "annotations": {
+            "readOnlyHint": false,
+            "destructiveHint": true,
+            "idempotentHint": false,
+            "openWorldHint": true
+          },
+          "description": "Query repository intelligence: search_codebase",
+          "inputSchema": {
+            "properties": {
+              "query": {
+                "type": "string"
+              },
+              "text": {
+                "type": "string"
+              }
+            },
+            "required": [],
+            "type": "object"
+          },
+          "name": "search_codebase"
+        },
+        {
+          "annotations": {
+            "readOnlyHint": false,
+            "destructiveHint": true,
+            "idempotentHint": false,
+            "openWorldHint": true
+          },
+          "description": "Search OKF concepts by query, type, and tags.",
+          "inputSchema": {
+            "properties": {
+              "compression": {
+                "description": "Compression level: none, light, medium, aggressive (default: light)",
+                "type": "string"
+              },
+              "detail_level": {
+                "description": "Detail level 0-3 (default: 1)",
+                "type": "number"
+              },
+              "limit": {
+                "description": "Maximum results (default 10, max 50)",
+                "type": "number"
+              },
+              "query": {
+                "description": "Search query",
+                "type": "string"
+              },
+              "tags": {
+                "description": "Comma-separated tags to filter by",
+                "type": "string"
+              },
+              "token_budget": {
+                "description": "Maximum tokens for all results combined",
+                "type": "number"
+              },
+              "type": {
+                "description": "Filter by concept type",
+                "type": "string"
+              }
+            },
+            "required": [
+              "query"
+            ],
+            "type": "object"
+          },
+          "name": "search_concepts"
+        },
+        {
+          "annotations": {
+            "readOnlyHint": false,
+            "destructiveHint": true,
+            "idempotentHint": false,
+            "openWorldHint": true
+          },
+          "description": "Return the exact full source of one symbol \u2014 by its symbol-id, or by file + name. Returns { id, source, other_candidates? }.",
+          "inputSchema": {
+            "properties": {
+              "file": {
+                "description": "Alternatively, the source file (with name)",
+                "type": "string"
+              },
+              "id": {
+                "description": "A symbol-id like <lang>:<relpath>#<name>@<line> (line 1-based)",
+                "type": "string"
+              },
+              "name": {
+                "description": "...and the symbol name to find in it",
+                "type": "string"
+              }
+            },
+            "required": [],
+            "type": "object"
+          },
+          "name": "source"
+        },
+        {
+          "annotations": {
+            "readOnlyHint": false,
+            "destructiveHint": true,
+            "idempotentHint": false,
+            "openWorldHint": true
+          },
+          "description": "Find symbols across a directory (gitignore-aware). name matches exactly (case-insensitive); set nameContains for substring. Returns stable symbol-ids.",
+          "inputSchema": {
+            "properties": {
+              "dir": {
+                "description": "Directory to search",
+                "type": "string"
+              },
+              "kind": {
+                "description": "Only this kind",
+                "type": "string"
+              },
+              "name": {
+                "description": "Only definitions whose name equals this (case-insensitive)",
+                "type": "string"
+              },
+              "nameContains": {
+                "description": "Substring matching for name",
+                "type": "boolean"
+              },
+              "refs": {
+                "description": "Include references, not just definitions",
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "dir"
+            ],
+            "type": "object"
+          },
+          "name": "symbols"
+        }
+      ],
+      "error": null,
+      "knownAnswer": {
+        "jsonrpc": "2.0",
+        "id": 3,
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "{\n  \"id\": \"python:fixture.py#add@1\",\n  \"source\": \"def add(a, b):\\n    return a + b\"\n}"
+            }
+          ]
+        }
+      },
+      "knownAnswerVerified": true,
+      "unknownToolReply": {
+        "jsonrpc": "2.0",
+        "id": 10,
+        "error": {
+          "code": -32602,
+          "message": "tool '__missing_qualification_tool__' not found: tool not found"
+        }
+      },
+      "failedCallRecoveryVerified": true
+    }
+  ],
+  "nativeClientSmoke": {
+    "exit_code": 0,
+    "stdout": "{\"type\":\"thread.started\",\"thread_id\":\"01a1ecbd-6050-7b70-be0f-a495eae19f6b\"}\n{\"type\":\"item.completed\",\"item\":{\"id\":\"item_0\",\"type\":\"error\",\"message\":\"`--dangerously-bypass-hook-trust` is enabled. Enabled hooks may run without review for this invocation.\"}}\n{\"type\":\"item.completed\",\"item\":{\"id\":\"item_1\",\"type\":\"error\",\"message\":\"`--dangerously-bypass-hook-trust` is enabled. Enabled hooks may run without review for this invocation.\"}}\n{\"type\":\"turn.started\"}\n{\"type\":\"item.started\",\"item\":{\"id\":\"item_2\",\"type\":\"command_execution\",\"command\":\"/bin/bash -lc 'cat fixture.py'\",\"aggregated_output\":\"\",\"exit_code\":null,\"status\":\"in_progress\"}}\n{\"type\":\"item.completed\",\"item\":{\"id\":\"item_2\",\"type\":\"command_execution\",\"command\":\"/bin/bash -lc 'cat fixture.py'\",\"aggregated_output\":\"def add(a, b):\\n    return a + b\\n\",\"exit_code\":0,\"status\":\"completed\"}}\n{\"type\":\"item.completed\",\"item\":{\"id\":\"item_3\",\"type\":\"agent_message\",\"text\":\"Local qualification fixture complete.\"}}\n{\"type\":\"turn.completed\",\"usage\":{\"input_tokens\":20,\"cached_input_tokens\":0,\"cache_write_input_tokens\":0,\"output_tokens\":10,\"reasoning_output_tokens\":0}}\n",
+    "stderr": "Reading additional input from stdin...\n",
+    "requests": [
+      {
+        "path": "/v1/responses",
+        "model": "gpt-6.1-sol",
+        "reasoning": {
+          "effort": "high",
+          "context": "all_turns"
+        },
+        "tools": []
+      },
+      {
+        "path": "/v1/responses",
+        "model": "gpt-6.1-sol",
+        "reasoning": {
+          "effort": "high",
+          "context": "all_turns"
+        },
+        "tools": []
+      }
+    ],
+    "modelCalls": 0,
+    "syntheticUsage": true,
+    "network": "none",
+    "scope": "protocol fixture, not model evaluation",
+    "verified": true
+  },
+  "nativeHookReceipts": [],
+  "hookInstrumentation": [
+    {
+      "path": "workspace/.codex/hooks.json",
+      "originalSha256": "3eb17801d6ea9ea369e3ec920bfd999a9cea840603319ed31b1b6576b3829398",
+      "instrumentedSha256": "af344aa1d4acdb35f591a31bb007d3681ecb9a4849e5cecf0f991b2ec5433109"
+    }
+  ],
+  "legacyHookCalls": [],
+  "nativeConfigParse": {
+    "exit_code": 0,
+    "stderr": ""
+  },
+  "steps": [
+    {
+      "product": "memphis",
+      "command": [
+        "pyra",
+        "--version"
+      ],
+      "returncode": 0,
+      "stdout": "dev\n",
+      "stderr": ""
+    },
+    {
+      "product": "memphis",
+      "command": [
+        "pyra",
+        "init",
+        "--help"
+      ],
+      "returncode": 0,
+      "stdout": "Initialize a pyra store: write a self-documenting .okf/config.yaml and\ncreate the canon root directories, AGENTS.md authority workflow, selected agent\nMCP configuration, and applicable repository-local gate hooks.\n\nThe defaults match pyra's implicit configuration, so an initialized store and\na config-less store behave identically. init is safe by default: it refuses to\noverwrite an existing store unless --force is given. Use --agents-only to update\nonly AGENTS.md and selected MCP client configuration, without changing the store\nconfiguration, Canon directories, or hooks.\n\nUsage:\n  pyra init [path] [flags]\n\nFlags:\n      --agent stringArray        Agent tool to configure locally (repeatable; use --list-agents)\n      --agents-only              Only update AGENTS.md and selected agent MCP configurations; skip store config and hooks\n      --canon-root stringArray   Canon root directory (repeatable; default: canon)\n      --force                    Overwrite an existing .okf/config.yaml\n  -h, --help                     help for init\n      --intelligence             Initialize the repository intelligence snapshot\n      --kiro-agent string        Kiro CLI agent config to update when multiple agents exist\n      --list-agents              List supported agent identifiers without modifying the repository\n      --quiet                    Suppress success output\n      --repository-key string    Repository key for minted Canon IDs (default: OKF)\n      --ticketing string         Ticketing provider (github, jira, linear, azure-devops, servicenow, none) (default \"github\")\n",
+      "stderr": ""
+    },
+    {
+      "product": "memphis",
+      "command": [
+        "pyra",
+        "init",
+        ".",
+        "--agent",
+        "codex",
+        "--ticketing",
+        "none"
+      ],
+      "returncode": 0,
+      "stdout": "Initialized pyra store at .\n  Config: .okf/config.yaml\n  Canon root: canon\n  Agent setup: /home/bench/free-qualification-65s1ms7r/memphis/workspace/.codex/config.toml (create)\n  Agent setup: /home/bench/free-qualification-65s1ms7r/memphis/workspace/AGENTS.md (create)\n  MCP tool: codex (Codex)\n  Hook: git (created)\n    .git/hooks/pre-commit\n    .git/hooks/post-merge\n  Hook: codex (created)\n    .codex/hooks.json\n  Codex: trust this project and review the Pyra hook with /hooks.\n\nNext: author your first Canon artifact\n  pyra new decision canon/adr-001-example.md --title \"My first decision\"\n",
+      "stderr": ""
+    }
+  ],
+  "paidCalls": 0
+}

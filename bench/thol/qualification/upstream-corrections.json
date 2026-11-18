@@ -1,0 +1,12 @@
+{
+  "researchSource": {
+    "repo": "ejc3/claude-restart-trajectory-analysis",
+    "head": "09d83ffd4e3d4dfd585cb8a80714440b7a5d527f",
+    "date": "2026-10-04T18:54:12Z"
+  },
+  "tokenSlayerSearch": {
+    "repo": "ilhamimert/token-slayer",
+    "fork": false,
+    "description": null
+  }
+}

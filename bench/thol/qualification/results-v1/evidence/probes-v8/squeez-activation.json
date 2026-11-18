@@ -1,0 +1,75 @@
+{
+  "product": "squeez",
+  "network": "none",
+  "providerCredentials": false,
+  "configurationFiles": [
+    {
+      "path": "home/.codex/hooks.json",
+      "sha256": "5cb454250f76da49bb29787dc15c4708be8231fcfbfcf51749e62605eb6bd8b6"
+    },
+    {
+      "path": "home/.codex/squeez/sessions/current.json",
+      "sha256": "e2728765fc1fa2ab0f01e4ec3d3b1856bb6008b92d605c1321837cfe17c83f43"
+    },
+    {
+      "path": "home/.codex/squeez/sessions/context.json",
+      "sha256": "f4273931fc6c02626a999e42dc16686d6c8ebfd08f5e9f26c2869afae323ef2b"
+    }
+  ],
+  "codexConfigs": [],
+  "hookCalls": [
+    {
+      "event": "SessionStart",
+      "exit_code": 0,
+      "stdout": "{\"hookSpecificOutput\":{\"hookEventName\":\"SessionStart\",\"additionalContext\":\"\u2500\u2500\u2500 squeez active \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\\nContext budget: ~200K tokens | Compression: ON | Memory: ON | Persona: ultra\\n\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\"}}\n",
+      "stderr": ""
+    },
+    {
+      "event": "PreToolUse",
+      "exit_code": 0,
+      "stdout": "{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"allow\",\"updatedInput\":{\"command\":\"/home/bench/free-qualification-_86fb36f/bin/squeez wrap 'ls -la'\"}}}\n",
+      "stderr": ""
+    }
+  ],
+  "mcpCalls": [],
+  "legacyHookCalls": [],
+  "nativeConfigParse": {
+    "exit_code": 0,
+    "stderr": ""
+  },
+  "steps": [
+    {
+      "product": "squeez",
+      "command": [
+        "squeez",
+        "--version"
+      ],
+      "returncode": 0,
+      "stdout": "squeez 1.49.3\n",
+      "stderr": ""
+    },
+    {
+      "product": "squeez",
+      "command": [
+        "squeez",
+        "setup",
+        "--help"
+      ],
+      "returncode": 0,
+      "stdout": "squeez setup \u2014 register squeez into every detected host CLI\n\nUsage:\n  squeez setup                 Install into every detected host\n  squeez setup --host=<slug>   Install into one host\n\nSupported hosts: claude-code, copilot, opencode, gemini, codex\n",
+      "stderr": ""
+    },
+    {
+      "product": "squeez",
+      "command": [
+        "squeez",
+        "setup",
+        "--host=codex"
+      ],
+      "returncode": 0,
+      "stdout": "squeez setup: codex  \u2713 installed (new config.ini)\nsqueez setup: done \u2014 squeez 1.49.3 installed. Restart the host CLI to activate.\n",
+      "stderr": ""
+    }
+  ],
+  "paidCalls": 0
+}

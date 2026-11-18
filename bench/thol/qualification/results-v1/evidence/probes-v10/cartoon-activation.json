@@ -1,0 +1,48 @@
+{
+  "product": "cartoon",
+  "network": "none",
+  "providerCredentials": false,
+  "configurationFiles": [],
+  "codexConfigs": [],
+  "hookCalls": [],
+  "mcpCalls": [],
+  "legacyHookCalls": [],
+  "nativeConfigParse": {
+    "exit_code": 0,
+    "stderr": ""
+  },
+  "steps": [
+    {
+      "product": "cartoon",
+      "command": [
+        "cartoon",
+        "--version"
+      ],
+      "returncode": 0,
+      "stdout": "cartoon 0.8.0\n",
+      "stderr": ""
+    },
+    {
+      "product": "cartoon",
+      "command": [
+        "cartoon",
+        "--help"
+      ],
+      "returncode": 0,
+      "stdout": "Compact dev-tool output for coding agents\n\nUsage: cartoon [OPTIONS] [COMMAND]...\n\nArguments:\n  [COMMAND]...  Command to wrap plus its args (or a reserved subcommand: stats | adapters | doctor | init | logs | learn | hook | instructions | setup | ingest | mcp). Unknown `--flags` before the command are an error, not a command name; use `--` to run a binary whose name starts with `-`\n\nOptions:\n      --compress <LEVEL>  Compression level for non-adapter output: safe (default) | aggressive\n      --raw               Bypass cartoon entirely; run the command untouched. (v1 limitation: output is still UTF-8-lossy converted, so non-UTF-8 bytes become U+FFFD even in raw mode.)\n  -c, --shell <STRING>    Wrap a shell command string (like sh -c). Simple commands are adapter-detected; strings with shell operators run via the shell and compress through the generic ladder. `<adapter cmd> [2>&1] | head|tail|xcbeautify|xcpretty \u2026` runs the adapter and drops the filter (disclosed; with no report, a `head`/`tail` line count is applied in process). `grep` and `wc` pipes run natively\n      --junit <PATH>      JUnit XML file (or directory of them) the command writes; rendered as a test report after the run. Works for any runner (gradle, mvn, dotnet --logger junit, phpunit --log-junit, \u2026)\n      --max-tokens <N>    Hard ceiling on emitted tokens: head + tail kept, middle replaced by one disclosed marker. Also: CARTOON_MAX_TOKENS env, `max_tokens` config\n      --merge-streams     Compress stdout and stderr together in arrival order (as `2>&1` shows them) and write the result to stdout only. Also: `[compress]` or `[command.X]` `merge_streams = true` in config\n  -h, --help              Print help\n  -V, --version           Print version\n\nSubcommands:\n  stats [--since <7d|24h|30m>]               tokens saved, per adapter\n  adapters                                   list built-in adapters\n  doctor                                     health report: hook, config,\n                                             allowlist gaps, ledger damage\n  init                                        scan for wrapper scripts (e.g.\n                                             build.sh) and suggest a\n                                             .cartoon.toml wrap_scripts pin\n  logs                                       list archived raw runs\n  logs (<id> | --last) [--stdout|--stderr]   print a run's full raw output\n  logs grep <pattern> [<id>|--last] [-C n]   search a run's raw output\n  learn [--since <7d|24h|30m>]               config suggestions from your runs\n  last [--cmd <substring>]                   re-show the newest run's report\n  diff [<id-a> <id-b>] [--cmd <substring>]   fixed / still failing / new\n                                             failures vs the previous run\n  setup [--project] [--no-instructions]      hook + instructions block + doctor,\n                                             in one idempotent step\n  hook (install|uninstall|status|rewrite)    Claude Code auto-wrap hook\n  instructions (install|uninstall|status|print)\n                                             write the wrap/never-pipe directive\n                                             (CLAUDE.md if present, else AGENTS.md;\n                                             --copilot/--claude/--agents force one)\n                                             \u2014 covers the pipes the hook skips\n  ingest (<file> | -)                        compress an existing log file\n                                             (or stdin: some-cmd | cartoon -)\n  mcp                                        MCP server on stdio (run, logs,\n                                             stats tools) for hookless agents\n\nEvery wrapped run archives its complete raw stdout/stderr and prints the\nlocation as a `raw_log:` footer \u2014 `cartoon logs grep` that instead of\nrerunning unwrapped.\n\nNon-adapter output compresses through the safe tier by default (ANSI,\nprogress, duplicate and blank collapse \u2014 non-lossy in practice);\n--compress=aggressive adds lossy rules with the raw log as escape hatch.\n\n`stats`, `adapters`, `doctor`, `init`, `logs`, `learn`, `hook`, `instructions`, `setup`, `ingest`, and `mcp` are reserved words (each takes --help); to wrap a binary literally named `stats`, use: cartoon env stats. `shim` (removed in 0.8.0) is reserved too. `last` and `diff` are reserved only in the forms above (`cartoon diff a.txt b.txt` wraps diff). A command whose name starts with `-` goes after `--`: cartoon -- --weird-bin\n",
+      "stderr": ""
+    },
+    {
+      "product": "cartoon",
+      "command": [
+        "cartoon",
+        "setup",
+        "--help"
+      ],
+      "returncode": 0,
+      "stdout": "usage: cartoon setup [--project] [--no-instructions]\n\nInstall the Claude Code hook (user scope, or this project's\n.claude/settings.json with --project), write the instructions block\ninto CLAUDE.md if present, else AGENTS.md (skip with --no-instructions),\nthen print the doctor report. Idempotent; never prompts.\n",
+      "stderr": ""
+    }
+  ],
+  "paidCalls": 0
+}

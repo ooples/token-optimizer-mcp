@@ -1,0 +1,76 @@
+{
+  "product": "talk-tight",
+  "network": "none",
+  "providerCredentials": false,
+  "configurationFiles": [
+    {
+      "path": "home/.agents/.skill-lock.json",
+      "sha256": "cc2c22ff0ae6ad18e2c6962a18ddee419baaa28a9b9d13567c2e8de0f32b7f1e"
+    },
+    {
+      "path": "home/.agents/skills/talk-tight/SKILL.md",
+      "sha256": "bfd3c7663935d6702d547785426892356385af289ff22fc7b08b28d81e45261b"
+    }
+  ],
+  "sourceBuiltArtifacts": [],
+  "codexConfigs": [],
+  "hookCalls": [],
+  "mcpCalls": [],
+  "nativeClientSmoke": {
+    "exit_code": 0,
+    "stdout": "{\"type\":\"thread.started\",\"thread_id\":\"01a1ecc8-fbd4-7391-ab07-74f77bd7560b\"}\n{\"type\":\"item.completed\",\"item\":{\"id\":\"item_0\",\"type\":\"error\",\"message\":\"`--dangerously-bypass-hook-trust` is enabled. Enabled hooks may run without review for this invocation.\"}}\n{\"type\":\"item.completed\",\"item\":{\"id\":\"item_1\",\"type\":\"error\",\"message\":\"`--dangerously-bypass-hook-trust` is enabled. Enabled hooks may run without review for this invocation.\"}}\n{\"type\":\"turn.started\"}\n{\"type\":\"item.started\",\"item\":{\"id\":\"item_2\",\"type\":\"command_execution\",\"command\":\"/bin/bash -lc 'cat fixture.py'\",\"aggregated_output\":\"\",\"exit_code\":null,\"status\":\"in_progress\"}}\n{\"type\":\"item.completed\",\"item\":{\"id\":\"item_2\",\"type\":\"command_execution\",\"command\":\"/bin/bash -lc 'cat fixture.py'\",\"aggregated_output\":\"def add(a, b):\\n    return a + b\\n\",\"exit_code\":0,\"status\":\"completed\"}}\n{\"type\":\"item.completed\",\"item\":{\"id\":\"item_3\",\"type\":\"agent_message\",\"text\":\"Local qualification fixture complete.\"}}\n{\"type\":\"turn.completed\",\"usage\":{\"input_tokens\":20,\"cached_input_tokens\":0,\"cache_write_input_tokens\":0,\"output_tokens\":10,\"reasoning_output_tokens\":0}}\n",
+    "stderr": "Reading additional input from stdin...\n",
+    "requests": [
+      {
+        "path": "/v1/responses",
+        "model": "gpt-6.1-sol",
+        "reasoning": {
+          "effort": "high",
+          "context": "all_turns"
+        },
+        "tools": []
+      },
+      {
+        "path": "/v1/responses",
+        "model": "gpt-6.1-sol",
+        "reasoning": {
+          "effort": "high",
+          "context": "all_turns"
+        },
+        "tools": []
+      }
+    ],
+    "modelCalls": 0,
+    "syntheticUsage": true,
+    "network": "none",
+    "scope": "protocol fixture, not model evaluation",
+    "verified": true
+  },
+  "nativeHookReceipts": [],
+  "hookInstrumentation": [],
+  "legacyHookCalls": [],
+  "nativeConfigParse": {
+    "exit_code": 0,
+    "stderr": ""
+  },
+  "steps": [
+    {
+      "product": "talk-tight",
+      "command": [
+        "skills",
+        "add",
+        "/opt/qualification-vendor/talk-tight",
+        "--skill",
+        "talk-tight",
+        "-a",
+        "codex",
+        "--yes",
+        "-g"
+      ],
+      "returncode": 0,
+      "stdout": "\n\u001b[38;5;250m\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557\u2588\u2588\u2557  \u2588\u2588\u2557\u2588\u2588\u2557\u2588\u2588\u2557     \u2588\u2588\u2557     \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557\u001b[0m\n\u001b[38;5;248m\u2588\u2588\u2554\u2550\u2550\u2550\u2550\u255d\u2588\u2588\u2551 \u2588\u2588\u2554\u255d\u2588\u2588\u2551\u2588\u2588\u2551     \u2588\u2588\u2551     \u2588\u2588\u2554\u2550\u2550\u2550\u2550\u255d\u001b[0m\n\u001b[38;5;245m\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557\u2588\u2588\u2588\u2588\u2588\u2554\u255d \u2588\u2588\u2551\u2588\u2588\u2551     \u2588\u2588\u2551     \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557\u001b[0m\n\u001b[38;5;243m\u255a\u2550\u2550\u2550\u2550\u2588\u2588\u2551\u2588\u2588\u2554\u2550\u2588\u2588\u2557 \u2588\u2588\u2551\u2588\u2588\u2551     \u2588\u2588\u2551     \u255a\u2550\u2550\u2550\u2550\u2588\u2588\u2551\u001b[0m\n\u001b[38;5;240m\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2551\u2588\u2588\u2551  \u2588\u2588\u2557\u2588\u2588\u2551\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2551\u001b[0m\n\u001b[38;5;238m\u255a\u2550\u2550\u2550\u2550\u2550\u2550\u255d\u255a\u2550\u255d  \u255a\u2550\u255d\u255a\u2550\u255d\u255a\u2550\u2550\u2550\u2550\u2550\u2550\u255d\u255a\u2550\u2550\u2550\u2550\u2550\u2550\u255d\u255a\u2550\u2550\u2550\u2550\u2550\u2550\u255d\u001b[0m\n\n\u250c  \u001b[46m\u001b[30m skills \u001b[39m\u001b[49m\n\u2502\n\u2502  \u001b[2mTip: use the --yes (-y) and --global (-g) flags to install without prompts.\u001b[22m\n\u001b[?25l\u2502\n\u25c7  Source: /opt/qualification-vendor/talk-tight\n\u001b[?25h\u001b[?25l\u2502\n\u25c7  Local path validated\n\u001b[?25h\u001b[?25l\u2502\n\u25c7  Found \u001b[32m3\u001b[39m skills\n\u001b[?25h\u2502\n\u25cf  Selected 1 skill: \u001b[36mtalk-tight\u001b[39m\n\n\u2502\n\u25c7  Installation Summary \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256e\n\u2502                               \u2502\n\u2502  \u001b[36m~/.agents/skills/talk-tight\u001b[39m  \u2502\n\u2502    \u001b[32muniversal:\u001b[39m Codex           \u2502\n\u2502                               \u2502\n\u251c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256f\n\u001b[?25l\u2502\n\u25c7  Installation complete\n\u001b[?25h\n\u2502\n\u25c7  \u001b[32mInstalled 1 skill\u001b[39m \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256e\n\u2502                                   \u2502\n\u2502  \u001b[32m\u2713\u001b[39m talk-tight \u001b[2m(copied)\u001b[22m            \u2502\n\u2502    \u001b[2m\u2192\u001b[22m ~/.agents/skills/talk-tight  \u2502\n\u2502                                   \u2502\n\u251c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256f\n\n\u2502\n\u2514  \u001b[32mDone!\u001b[39m\u001b[2m  Review skills before use; they run with full agent permissions.\u001b[22m\n\n",
+      "stderr": ""
+    }
+  ],
+  "paidCalls": 0
+}

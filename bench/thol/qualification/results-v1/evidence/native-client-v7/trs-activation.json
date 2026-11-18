@@ -1,0 +1,129 @@
+{
+  "product": "trs",
+  "network": "none",
+  "providerCredentials": false,
+  "configurationFiles": [
+    {
+      "path": "home/.codex/hooks.json",
+      "sha256": "4d075e609ba244f4a8a214080409670737259272a68f1e497e63016d85cf7090"
+    },
+    {
+      "path": "home/.codex/AGENTS.md",
+      "sha256": "d38382500be8ace15ca100e751151f3c363df94ab5110657632ee1816b1ca61e"
+    }
+  ],
+  "sourceBuiltArtifacts": [
+    {
+      "name": "trs",
+      "file": "trs",
+      "sha256": "b6e4004d85c820d8d441e12c697697efddb16f39f0a4cad6b6b72083cc3e99cf",
+      "source": {
+        "name": "trs",
+        "url": "https://codeload.github.com/dPeluChe/trs/tar.gz/v0.10.3",
+        "sha256": "c1108484142e3cf10495046da446196df90df0816db37db6e0d52d1ed5e79ff6"
+      },
+      "variant": "unmodified official source, locally compiled; not the upstream prebuilt binary",
+      "buildRecipeSha256": "437b2529e996741e63d67c2dad74942eb97c35dbb146cbfccb012f4ab977a4f0",
+      "compiler": "rustc 1.100.0 (0ef1bc386 2026-11-09)",
+      "builderImage": "rust:1-bookworm@sha256:ade39a710ef85f3506cffcfec3e8a24ba090badef1dff2fb798f71d878833fea",
+      "buildNetwork": "none"
+    }
+  ],
+  "codexConfigs": [],
+  "hookCalls": [
+    {
+      "event": "PreToolUse",
+      "exit_code": 0,
+      "stdout": "{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"allow\",\"permissionDecisionReason\":\"trs auto-rewrite\",\"updatedInput\":{\"command\":\"TRS_AGENT=codex trs ls -la\"}}}\n",
+      "stderr": ""
+    }
+  ],
+  "mcpCalls": [],
+  "nativeClientSmoke": {
+    "exit_code": 0,
+    "stdout": "{\"type\":\"thread.started\",\"thread_id\":\"01a1ecc5-2cbc-7860-af4d-e30b209b8ca3\"}\n{\"type\":\"item.completed\",\"item\":{\"id\":\"item_0\",\"type\":\"error\",\"message\":\"`--dangerously-bypass-hook-trust` is enabled. Enabled hooks may run without review for this invocation.\"}}\n{\"type\":\"item.completed\",\"item\":{\"id\":\"item_1\",\"type\":\"error\",\"message\":\"`--dangerously-bypass-hook-trust` is enabled. Enabled hooks may run without review for this invocation.\"}}\n{\"type\":\"turn.started\"}\n{\"type\":\"item.started\",\"item\":{\"id\":\"item_2\",\"type\":\"command_execution\",\"command\":\"/bin/bash -lc 'cat fixture.py'\",\"aggregated_output\":\"\",\"exit_code\":null,\"status\":\"in_progress\"}}\n{\"type\":\"item.completed\",\"item\":{\"id\":\"item_2\",\"type\":\"command_execution\",\"command\":\"/bin/bash -lc 'cat fixture.py'\",\"aggregated_output\":\"def add(a, b):\\n    return a + b\\n\",\"exit_code\":0,\"status\":\"completed\"}}\n{\"type\":\"item.completed\",\"item\":{\"id\":\"item_3\",\"type\":\"agent_message\",\"text\":\"Local qualification fixture complete.\"}}\n{\"type\":\"turn.completed\",\"usage\":{\"input_tokens\":20,\"cached_input_tokens\":0,\"cache_write_input_tokens\":0,\"output_tokens\":10,\"reasoning_output_tokens\":0}}\n",
+    "stderr": "Reading additional input from stdin...\n",
+    "requests": [
+      {
+        "path": "/v1/responses",
+        "model": "gpt-6.1-sol",
+        "reasoning": {
+          "effort": "high",
+          "context": "all_turns"
+        },
+        "tools": []
+      },
+      {
+        "path": "/v1/responses",
+        "model": "gpt-6.1-sol",
+        "reasoning": {
+          "effort": "high",
+          "context": "all_turns"
+        },
+        "tools": []
+      }
+    ],
+    "modelCalls": 0,
+    "syntheticUsage": true,
+    "network": "none",
+    "scope": "protocol fixture, not model evaluation",
+    "verified": true
+  },
+  "nativeHookReceipts": [
+    {
+      "command": "trs rewrite --caller codex",
+      "input": "{\"session_id\":\"01a1ecc5-2cbc-7860-af4d-e30b209b8ca3\",\"turn_id\":\"01a1ecc5-2ce1-78a3-ae5f-23c103d0b129\",\"transcript_path\":\"/home/bench/free-qualification-9h2cep0c/trs/home/.codex/sessions/2026/11/18/rollout-2026-11-18T03-48-27-01a1ecc5-2cbc-7860-af4d-e30b209b8ca3.jsonl\",\"cwd\":\"/home/bench/free-qualification-9h2cep0c/trs/workspace\",\"hook_event_name\":\"PreToolUse\",\"model\":\"gpt-6.1-sol\",\"permission_mode\":\"bypassPermissions\",\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"cat fixture.py\"},\"tool_use_id\":\"call_fixture\"}",
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    }
+  ],
+  "hookInstrumentation": [
+    {
+      "path": "home/.codex/hooks.json",
+      "originalSha256": "4d075e609ba244f4a8a214080409670737259272a68f1e497e63016d85cf7090",
+      "instrumentedSha256": "da27c314de9cb90441c147d82ac5fde48190f7808c867d367b6aef390151a545"
+    }
+  ],
+  "legacyHookCalls": [],
+  "nativeConfigParse": {
+    "exit_code": 0,
+    "stderr": ""
+  },
+  "steps": [
+    {
+      "product": "trs",
+      "command": [
+        "trs",
+        "--version"
+      ],
+      "returncode": 0,
+      "stdout": "trs 0.10.3\n\ncheck for updates:  trs upgrade --check\nupgrade now:        trs upgrade\n",
+      "stderr": ""
+    },
+    {
+      "product": "trs",
+      "command": [
+        "trs",
+        "init",
+        "--help"
+      ],
+      "returncode": 0,
+      "stdout": "Install hooks for AI coding tools (claude, gemini, cursor, codex, opencode, kilo, antigravity, agy, droid, devin, pi, vscode, openclaw, hermes, trae, vibe, zed, devin-cli)\n\nUsage: trs init [OPTIONS] [TOOL]\n\nArguments:\n  [TOOL]  Tool to configure (claude, gemini, cursor, codex, opencode, kilo, antigravity, agy, droid, devin, pi, vscode, openclaw, hermes, trae, vibe, zed, devin-cli)\n\nOptions:\n  -g, --global   Install globally (user-level) instead of project-level\n      --show     Show current installation status\n      --all      Install hooks for all detected tools\n      --replace  Remove competing compressor hooks (rtk, token-optimizer) before installing trs. Required when a collision is detected\n      --force    Install trs even if a competing compressor is already configured. Risk: double-compression can corrupt command output\n      --dry-run  Preview the install without writing anything. Lists every file that would change and the action taken (create / merge / skip)\n      --agent    Output in agent-optimized format (structured for AI consumption)\n      --compact  Output in compact format (default for most commands)\n      --csv      Output in CSV format\n  -h, --help     Print help\n      --json     Output in JSON format\n      --raw      Output raw, unprocessed input\n      --stats    Show execution statistics (input/output size, token reduction)\n      --tsv      Output in TSV format\n  -V, --version  Print version\n",
+      "stderr": ""
+    },
+    {
+      "product": "trs",
+      "command": [
+        "trs",
+        "init",
+        "codex",
+        "--global"
+      ],
+      "returncode": 0,
+      "stdout": "  codex hook: /home/bench/free-qualification-9h2cep0c/trs/home/.codex/hooks.json\ntrs hook installed for Codex at ~/.codex/AGENTS.md\n\nHelp improve trs (both show the full report and ask before sending):\n  trs report coverage   after a week of use: commands trs does not compress yet\n  trs report bug        when something misbehaves: a diagnostic for a maintainer\n",
+      "stderr": "note: restart any open Codex sessions for the hook to take effect\n"
+    }
+  ],
+  "paidCalls": 0
+}

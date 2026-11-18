@@ -1,0 +1,40 @@
+{
+  "token-optimizer": {
+    "version": "0.2.2",
+    "repository": {
+      "url": "git+https://github.com/edisonaugusthy/token-optimizer.git",
+      "type": "git"
+    },
+    "dist": {
+      "shasum": "164e4621d0795187dab67726b262cff88e6546a5",
+      "tarball": "https://registry.npmjs.org/token-optimizer/-/token-optimizer-0.2.2.tgz",
+      "fileCount": 44,
+      "integrity": "sha512-evvvScIbNcLTtol7u4SRPl6MV0IMosZrw/+UfCFI4vNGM1vz6HbT2uhxmRfW/D1JqjKw1PaqFz6FDS3XQdmfyg==",
+      "signatures": [
+        {
+          "sig": "MEQCIEncOmEvjKnf6IXITCSbI0TDZBsMbfq/og8pXA7xpHvdAiBeRWSBmMfgu7Ib2bWwyHh17XSPEsb/cs1iWGXLlRIo7g==",
+          "keyid": "SHA256:DhQ8wR5APBvFHLF/+Tc+AYvPOdTpcIDqOhxsBHRwC7U"
+        }
+      ],
+      "unpackedSize": 363315
+    }
+  },
+  "trimemh": {
+    "npm": "404"
+  },
+  "token-smithers": {
+    "pypi": "404"
+  },
+  "justokenmax": {
+    "pypi": "404"
+  },
+  "copium-pypi": {
+    "version": "0.1.0",
+    "project_urls": {
+      "Homepage": "https://github.com/Bobronium/copium",
+      "Issues": "https://github.com/Bobronium/copium/issues",
+      "Source": "https://github.com/Bobronium/copium"
+    },
+    "authors": null
+  }
+}

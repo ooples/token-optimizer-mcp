@@ -1,0 +1,50 @@
+{
+  "product": "token-optimizer",
+  "network": "none",
+  "providerCredentials": false,
+  "configurationFiles": [],
+  "codexConfigs": [],
+  "hookCalls": [],
+  "mcpCalls": [],
+  "nativeClientSmoke": null,
+  "nativeHookReceipts": [],
+  "hookInstrumentation": [],
+  "legacyHookCalls": [],
+  "nativeConfigParse": {
+    "exit_code": 0,
+    "stderr": ""
+  },
+  "steps": [
+    {
+      "product": "token-optimizer",
+      "command": [
+        "token-optimizer",
+        "--version"
+      ],
+      "returncode": 0,
+      "stdout": "token-optimizer v0.2.1\n\nUsage:\n  token-optimizer            Show install status and token totals\n  token-optimizer status     Show install status and token totals\n  token-optimizer install    Auto-detect agents and wire MCP config\n  token-optimizer update     Pull latest changes and reinstall\n  token-optimizer uninstall  Remove injected configs\n  token-optimizer stats      Show token savings stats\n\nGlobal command:\n  npm install -g token-optimizer\n  npx token-optimizer status\n\nIf the global command is not found, add your npm global bin directory to PATH.\n\n",
+      "stderr": ""
+    },
+    {
+      "product": "token-optimizer",
+      "command": [
+        "token-optimizer",
+        "--help"
+      ],
+      "returncode": 0,
+      "stdout": "token-optimizer v0.2.1\n\nUsage:\n  token-optimizer            Show install status and token totals\n  token-optimizer status     Show install status and token totals\n  token-optimizer install    Auto-detect agents and wire MCP config\n  token-optimizer update     Pull latest changes and reinstall\n  token-optimizer uninstall  Remove injected configs\n  token-optimizer stats      Show token savings stats\n\nGlobal command:\n  npm install -g token-optimizer\n  npx token-optimizer status\n\nIf the global command is not found, add your npm global bin directory to PATH.\n\n",
+      "stderr": ""
+    },
+    {
+      "product": "token-optimizer",
+      "command": [
+        "token-optimizer",
+        "install"
+      ],
+      "returncode": 0,
+      "stdout": "\ntoken-optimizer \u2014 install\n\nServer path: /usr/local/lib/node_modules/token-optimizer/dist/src/mcp-server.js\n\nDetected agents:\n  \u25cb OpenCode (not found)\n  \u25cb Cursor (not found)\n  \u25cb Claude Desktop (macOS) (not found)\n  \u25cb Claude Desktop (Linux) (not found)\n  \u25cb Claude Desktop (Windows) (not found)\n  \u25cb Windsurf (not found)\n  \u25cb Codex (global AGENTS.md) (not found)\n\nPatching configs...\n\nNo agent config files found. Nothing to patch.\nInstall an agent first, then re-run: token-optimizer install\n",
+      "stderr": ""
+    }
+  ],
+  "paidCalls": 0
+}

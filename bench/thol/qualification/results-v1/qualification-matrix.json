@@ -1,0 +1,1674 @@
+{
+  "checkedAt": "2026-11-18T03:57:13.101188+00:00",
+  "products": 47,
+  "sourceVerified": 46,
+  "activationAttempted": 22,
+  "realClientMockSmokePassed": 16,
+  "paidAdmitted": 0,
+  "paidModelCallsDuringQualification": 0,
+  "entries": [
+    {
+      "name": "agent-integration-patterns",
+      "latestObserved": "source HEAD f573701288f8",
+      "cohort": {
+        "name": "research-observation-or-spec",
+        "review": "Not yet an admitted agent optimizer. Source shows a generic agent example, log analyzer, research artifact, specification, fine-tuning experiment, or compression evaluation tool. Preserve in the full field and review applicability explicitly."
+      },
+      "source": {
+        "status": "source_verified",
+        "repository": "Sh0rtC1rcu1t/agent-integration-patterns",
+        "ref": "f573701288f884e58d6a1a9d20fa4f6c2c84f500",
+        "source": "https://codeload.github.com/Sh0rtC1rcu1t/agent-integration-patterns/tar.gz/f573701288f884e58d6a1a9d20fa4f6c2c84f500",
+        "sha256": "42b1e433ed55e15ff168cca383edc96dcd0fd9d0846ce3471c338ad3200dccd2"
+      },
+      "sourceVerified": true,
+      "activationAttempted": false,
+      "evidence": [],
+      "configurationFiles": 0,
+      "runtimeVersionOutputs": [],
+      "sourceBuiltArtifacts": [],
+      "mcpKnownAnswersPassed": 0,
+      "realClientMockSmokePassed": false,
+      "realClientNativeHookCalls": 0,
+      "realClientHookFailures": 0,
+      "issues": [],
+      "paidAdmitted": false,
+      "pending": "Complete product-specific known-answer, failure recovery, teardown, provider-routing and accounting review; then review paid cohort scope/budget."
+    },
+    {
+      "name": "agentgauge",
+      "latestObserved": "source HEAD b109ef0f7f72",
+      "cohort": {
+        "name": "research-observation-or-spec",
+        "review": "Not yet an admitted agent optimizer. Source shows a generic agent example, log analyzer, research artifact, specification, fine-tuning experiment, or compression evaluation tool. Preserve in the full field and review applicability explicitly."
+      },
+      "source": {
+        "status": "source_verified",
+        "repository": "synrouter/agentgauge",
+        "ref": "b109ef0f7f726cb16b9c5c77276694dfd19cfa57",
+        "source": "https://codeload.github.com/synrouter/agentgauge/tar.gz/b109ef0f7f726cb16b9c5c77276694dfd19cfa57",
+        "sha256": "1e8a583583a89e2412260075fdcc00912f7fdad047b7e6f464f7ff3d152dbc8e"
+      },
+      "sourceVerified": true,
+      "activationAttempted": false,
+      "evidence": [],
+      "configurationFiles": 0,
+      "runtimeVersionOutputs": [],
+      "sourceBuiltArtifacts": [],
+      "mcpKnownAnswersPassed": 0,
+      "realClientMockSmokePassed": false,
+      "realClientNativeHookCalls": 0,
+      "realClientHookFailures": 0,
+      "issues": [],
+      "paidAdmitted": false,
+      "pending": "Complete product-specific known-answer, failure recovery, teardown, provider-routing and accounting review; then review paid cohort scope/budget."
+    },
+    {
+      "name": "ai-context-optimizer",
+      "latestObserved": "v1.2.0",
+      "cohort": {
+        "name": "ide-extension-review",
+        "review": "VS Code/Cline extension distribution. IDE integration is a distinct cohort; source clients mentioned in prose do not prove CLI support."
+      },
+      "source": {
+        "status": "source_verified",
+        "repository": "web-werkstatt/ai-context-optimizer",
+        "ref": "v1.2.0",
+        "source": "https://codeload.github.com/web-werkstatt/ai-context-optimizer/tar.gz/v1.2.0",
+        "sha256": "9ee8e06ccd15cf3067e729ea627034e0a4e05c84f43951fb5526614b6e4260ee"
+      },
+      "sourceVerified": true,
+      "activationAttempted": false,
+      "evidence": [],
+      "configurationFiles": 0,
+      "runtimeVersionOutputs": [],
+      "sourceBuiltArtifacts": [],
+      "mcpKnownAnswersPassed": 0,
+      "realClientMockSmokePassed": false,
+      "realClientNativeHookCalls": 0,
+      "realClientHookFailures": 0,
+      "issues": [],
+      "paidAdmitted": false,
+      "pending": "Complete product-specific known-answer, failure recovery, teardown, provider-routing and accounting review; then review paid cohort scope/budget."
+    },
+    {
+      "name": "cartoon",
+      "latestObserved": "v0.8.0",
+      "cohort": {
+        "name": "claude-or-adapter-review",
+        "review": "Documented Claude integration, with any explicit additional adapters reviewed individually. A Claude cohort or clearly labelled vendor-supported adapter needs its own admission."
+      },
+      "source": {
+        "status": "source_verified",
+        "repository": "abhijitbansal/cartoon",
+        "ref": "v0.8.0",
+        "source": "https://codeload.github.com/abhijitbansal/cartoon/tar.gz/v0.8.0",
+        "sha256": "3edf4d9618f9edd73df47c85be53066d9ca5b5488c250747ccd390f4b41b96f9"
+      },
+      "sourceVerified": true,
+      "activationAttempted": true,
+      "evidence": [
+        {
+          "path": "evidence/probes-v10/cartoon-activation.json",
+          "sha256": "89c28f658f1f92e791482f1f98ccc284f9a0d4383804be6966814180e1317cb6"
+        }
+      ],
+      "configurationFiles": 0,
+      "runtimeVersionOutputs": [
+        "cartoon 0.8.0\n"
+      ],
+      "sourceBuiltArtifacts": [],
+      "mcpKnownAnswersPassed": 0,
+      "realClientMockSmokePassed": false,
+      "realClientNativeHookCalls": 0,
+      "realClientHookFailures": 0,
+      "issues": [],
+      "paidAdmitted": false,
+      "pending": "Complete product-specific known-answer, failure recovery, teardown, provider-routing and accounting review; then review paid cohort scope/budget."
+    },
+    {
+      "name": "caveman",
+      "latestObserved": "v4.1.0",
+      "cohort": {
+        "name": "native-codex-review",
+        "review": "Candidate Codex cohort. Vendor integration and runtime evidence required per product; this is not paid admission."
+      },
+      "source": {
+        "status": "source_verified",
+        "repository": "JuliusBrussee/caveman",
+        "ref": "v4.1.0",
+        "source": "https://codeload.github.com/JuliusBrussee/caveman/tar.gz/v4.1.0",
+        "sha256": "f0e69649ed920d5e98cc4decf7f3943f9bc3926384cfa5426872447cc0a5fb42"
+      },
+      "sourceVerified": true,
+      "activationAttempted": true,
+      "evidence": [
+        {
+          "path": "evidence/probes-v8/caveman-activation.json",
+          "sha256": "36e6aa43c69bceae6baf61ee512b775f30b7b40fe79701916e14690a5fb1d730"
+        },
+        {
+          "path": "evidence/probes-v9/caveman-activation.json",
+          "sha256": "ba55b9eae5131cf901251602b62cbec9a87bec2568df35d87e9542f4c4531210"
+        },
+        {
+          "path": "evidence/probes-v7/caveman-activation.json",
+          "sha256": "93720dc67449529842d434313500a221b03a93af8138435b707858a2dbd43ea2"
+        },
+        {
+          "path": "evidence/native-client-v1/caveman-activation.json",
+          "sha256": "1eccb522a37a7799a8225c666d68eacd9c6715cacfa5a2cd559e15e2a6c171e1"
+        }
+      ],
+      "configurationFiles": 43,
+      "runtimeVersionOutputs": [],
+      "sourceBuiltArtifacts": [],
+      "mcpKnownAnswersPassed": 0,
+      "realClientMockSmokePassed": true,
+      "realClientNativeHookCalls": 1,
+      "realClientHookFailures": 0,
+      "issues": [],
+      "paidAdmitted": false,
+      "pending": "Complete product-specific known-answer, failure recovery, teardown, provider-routing and accounting review; then review paid cohort scope/budget."
+    },
+    {
+      "name": "claude-context",
+      "latestObserved": "0.1.16",
+      "cohort": {
+        "name": "mcp-client-review",
+        "review": "MCP/library integration review. Preserve the complete vendor setup; account for indexing, embeddings, memory and upstream MCP costs. Mock providers before activation."
+      },
+      "source": {
+        "status": "source_verified",
+        "repository": "zilliztech/claude-context",
+        "ref": "64a87f9b31b0c983f731c91242322562ffd91c7d",
+        "source": "https://codeload.github.com/zilliztech/claude-context/tar.gz/64a87f9b31b0c983f731c91242322562ffd91c7d",
+        "sha256": "e20de82f108daec2bbb5a306d3bca52409d9540b843298f36840146851377901"
+      },
+      "sourceVerified": true,
+      "activationAttempted": false,
+      "evidence": [],
+      "configurationFiles": 0,
+      "runtimeVersionOutputs": [],
+      "sourceBuiltArtifacts": [],
+      "mcpKnownAnswersPassed": 0,
+      "realClientMockSmokePassed": false,
+      "realClientNativeHookCalls": 0,
+      "realClientHookFailures": 0,
+      "issues": [],
+      "paidAdmitted": false,
+      "pending": "Complete product-specific known-answer, failure recovery, teardown, provider-routing and accounting review; then review paid cohort scope/budget."
+    },
+    {
+      "name": "claude-mem",
+      "latestObserved": "15.21.0",
+      "cohort": {
+        "name": "native-codex-review",
+        "review": "Candidate Codex cohort. Vendor integration and runtime evidence required per product; this is not paid admission."
+      },
+      "source": {
+        "status": "source_verified",
+        "package": "claude-mem",
+        "version": "15.21.0",
+        "source": "https://registry.npmjs.org/claude-mem/-/claude-mem-15.21.0.tgz",
+        "sha256": "898b808979a950ce27dd2e9e4fb7115a87422c3b468e094b95871d511710f151",
+        "integrity": "sha512-9BAzOj6lw1WEbNwLCf+3XpehqQvlvO8KpNfILpa+kysZGT1xgvo7pzRKGJI25y6OTllUevZqJVKyfwE9Gs/1SA=="
+      },
+      "sourceVerified": true,
+      "activationAttempted": true,
+      "evidence": [
+        {
+          "path": "evidence/probes-v8/claude-mem-activation.json",
+          "sha256": "4263d96be3b7e40c6e5ab5264c18855026eba1cf010dd294077f5731c5b00591"
+        },
+        {
+          "path": "evidence/probes-v7/claude-mem-activation.json",
+          "sha256": "c1ad9376c7475ba3280772e23ba1c2b2a6d8e322aa0adf8a4490e42afab48c5a"
+        }
+      ],
+      "configurationFiles": 0,
+      "runtimeVersionOutputs": [],
+      "sourceBuiltArtifacts": [],
+      "mcpKnownAnswersPassed": 0,
+      "realClientMockSmokePassed": false,
+      "realClientNativeHookCalls": 0,
+      "realClientHookFailures": 0,
+      "issues": [
+        "claude-mem install --ide codex-cli --setup defer --no-auto-start: IN github.com\n    at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:122:26)\nEmitted 'error' event on ClientRequest instance at:\n    at emitErrorEvent (node:_http_client:108:11)\n    at TLSSocket.socketErrorListener (node:_http_client:575:5)\n    at TLSSocket.emit (node:events:519:28)\n    at emitErrorNT (node:internal/streams/destroy:170:8)\n    at emitErrorCloseNT (node:internal/streams/destroy:129:3)\n    at process.processTicksAndRejections (node:internal/process/task_queues:89:21) {\n  errno: -3001,\n  code: 'EAI_AGAIN',\n  syscall: 'getaddrinfo',\n  hostname: 'github.com'\n}\n\nNode.js v22.23.5\nstdout: Downloading https://github.com/tree-sitter/tree-sitter/releases/download/v0.26.9/tree-sitter-linux-x64.gz\n      \u2192 smart_search and smart_outline stay disabled until the tree-sitter CLI is provisioned: run `npx claude-mem repair`.\n\n  Installation Aborted: unknown-install-error\n  An unexpected installer error occurred. Capture /home/bench/free-qualification-_86fb36f/claude-mem/home/.claude-mem/last-install-error.json and open an issue at https://github.com/thedotmack/claude-mem/issues.\n  marketplace-npm-install failed during marketplace-deps: npm install failed (exit 1): ENOTCACHED"
+      ],
+      "paidAdmitted": false,
+      "pending": "Complete product-specific known-answer, failure recovery, teardown, provider-routing and accounting review; then review paid cohort scope/budget."
+    },
+    {
+      "name": "claude-restart-trajectory-analysis",
+      "latestObserved": "source HEAD 09d83ffd4e3d",
+      "cohort": {
+        "name": "research-observation-or-spec",
+        "review": "Not yet an admitted agent optimizer. Source shows a generic agent example, log analyzer, research artifact, specification, fine-tuning experiment, or compression evaluation tool. Preserve in the full field and review applicability explicitly."
+      },
+      "source": {
+        "status": "source_verified",
+        "repository": "ejc3/claude-restart-trajectory-analysis",
+        "ref": "09d83ffd4e3d4dfd585cb8a80714440b7a5d527f",
+        "source": "https://codeload.github.com/ejc3/claude-restart-trajectory-analysis/tar.gz/09d83ffd4e3d4dfd585cb8a80714440b7a5d527f",
+        "sha256": "ee8269bb7e8f0189711e09a1e3769ac46df4e34a0061a5e4838a636d6db19abf"
+      },
+      "sourceVerified": true,
+      "activationAttempted": false,
+      "evidence": [],
+      "configurationFiles": 0,
+      "runtimeVersionOutputs": [],
+      "sourceBuiltArtifacts": [],
+      "mcpKnownAnswersPassed": 0,
+      "realClientMockSmokePassed": false,
+      "realClientNativeHookCalls": 0,
+      "realClientHookFailures": 0,
+      "issues": [],
+      "paidAdmitted": false,
+      "pending": "Complete product-specific known-answer, failure recovery, teardown, provider-routing and accounting review; then review paid cohort scope/budget."
+    },
+    {
+      "name": "claude-token-efficient",
+      "latestObserved": "source HEAD 0d30a6db75af",
+      "cohort": {
+        "name": "claude-or-adapter-review",
+        "review": "Documented Claude integration, with any explicit additional adapters reviewed individually. A Claude cohort or clearly labelled vendor-supported adapter needs its own admission."
+      },
+      "source": {
+        "status": "source_verified",
+        "repository": "drona23/claude-token-efficient",
+        "ref": "0d30a6db75af983b8ababf585f28faefdfc87895",
+        "source": "https://codeload.github.com/drona23/claude-token-efficient/tar.gz/0d30a6db75af983b8ababf585f28faefdfc87895",
+        "sha256": "da4bd4447e4a23377f026c81d034ab648d58b09f14ba91f2ebc8e59937d6afeb"
+      },
+      "sourceVerified": true,
+      "activationAttempted": false,
+      "evidence": [],
+      "configurationFiles": 0,
+      "runtimeVersionOutputs": [],
+      "sourceBuiltArtifacts": [],
+      "mcpKnownAnswersPassed": 0,
+      "realClientMockSmokePassed": false,
+      "realClientNativeHookCalls": 0,
+      "realClientHookFailures": 0,
+      "issues": [],
+      "paidAdmitted": false,
+      "pending": "Complete product-specific known-answer, failure recovery, teardown, provider-routing and accounting review; then review paid cohort scope/budget."
+    },
+    {
+      "name": "code-review-graph",
+      "latestObserved": "2.4.0",
+      "cohort": {
+        "name": "native-codex-review",
+        "review": "Candidate Codex cohort. Vendor integration and runtime evidence required per product; this is not paid admission."
+      },
+      "source": {
+        "status": "source_verified",
+        "repository": "tirth8205/code-review-graph",
+        "ref": "v2.4.0",
+        "source": "https://codeload.github.com/tirth8205/code-review-graph/tar.gz/v2.4.0",
+        "sha256": "3b2c0c95793368e6fe4ccc9472e0cedb542f18848436d189cfa1492963fe4326"
+      },
+      "sourceVerified": true,
+      "activationAttempted": true,
+      "evidence": [
+        {
+          "path": "evidence/probes-v8/code-review-graph-activation.json",
+          "sha256": "d15cc4f0ef3cfe1368b7823a34b68eb43d1bd4740bb3fffa19222a38bdc2ac86"
+        },
+        {
+          "path": "evidence/probes-v7/code-review-graph-activation.json",
+          "sha256": "d621234c3aa0fb36ee17f936c09805c84a58af98cf98ff0da2a437713d57c41b"
+        },
+        {
+          "path": "evidence/native-client-v1/code-review-graph-activation.json",
+          "sha256": "f207a8e2ea96eccec8204f47de5a6f45ef5345d66f5d11dd5f09c11baf0eb447"
+        },
+        {
+          "path": "evidence/native-client-v2/code-review-graph-activation.json",
+          "sha256": "f4326f3f63bb9ac5f5dcfd5157841e4b643097f2343ee97e1ce6e8cfdfd69cd1"
+        }
+      ],
+      "configurationFiles": 4,
+      "runtimeVersionOutputs": [
+        "code-review-graph 2.4.0\n"
+      ],
+      "sourceBuiltArtifacts": [],
+      "mcpKnownAnswersPassed": 1,
+      "realClientMockSmokePassed": true,
+      "realClientNativeHookCalls": 2,
+      "realClientHookFailures": 0,
+      "issues": [],
+      "paidAdmitted": false,
+      "pending": "Complete product-specific known-answer, failure recovery, teardown, provider-routing and accounting review; then review paid cohort scope/budget."
+    },
+    {
+      "name": "codegraph",
+      "latestObserved": "1.6.3",
+      "cohort": {
+        "name": "native-codex-review",
+        "review": "Candidate Codex cohort. Vendor integration and runtime evidence required per product; this is not paid admission."
+      },
+      "source": {
+        "status": "source_verified",
+        "repository": "colbymchenry/codegraph",
+        "ref": "v1.6.3",
+        "source": "https://codeload.github.com/colbymchenry/codegraph/tar.gz/v1.6.3",
+        "sha256": "368bccdb29f1e2c71e22e0492788b37b75bbf44e8f3767c70c4c6f5b25355d6e"
+      },
+      "sourceVerified": true,
+      "activationAttempted": true,
+      "evidence": [
+        {
+          "path": "evidence/probes-v8/codegraph-activation.json",
+          "sha256": "e2923f77157b446089e163cf95ecd150d1617509d2d17b22971f0796f78ef859"
+        },
+        {
+          "path": "evidence/probes-v7/codegraph-activation.json",
+          "sha256": "399e81b7516345c3452889ff29bd65000146b9f1a14ffeadaf3a2fefb8c5e758"
+        },
+        {
+          "path": "evidence/native-client-v1/codegraph-activation.json",
+          "sha256": "0268ee86ce464b67830a55f18e42ca772b67f0d90045548ce72085aca9a3ce20"
+        },
+        {
+          "path": "evidence/native-client-v2/codegraph-activation.json",
+          "sha256": "7a71f6f56be995b6ef140ea6de0ac59f6f62a0ae6d0fdbb13a4ba4e4a112a734"
+        }
+      ],
+      "configurationFiles": 2,
+      "runtimeVersionOutputs": [
+        "1.6.3\n"
+      ],
+      "sourceBuiltArtifacts": [],
+      "mcpKnownAnswersPassed": 1,
+      "realClientMockSmokePassed": true,
+      "realClientNativeHookCalls": 0,
+      "realClientHookFailures": 0,
+      "issues": [],
+      "paidAdmitted": false,
+      "pending": "Complete product-specific known-answer, failure recovery, teardown, provider-routing and accounting review; then review paid cohort scope/budget."
+    },
+    {
+      "name": "compactprompt",
+      "latestObserved": "source HEAD c273d584190e",
+      "cohort": {
+        "name": "standalone-transform-review",
+        "review": "Standalone library/pipeline. Review a fixed transformation or vendor SDK cohort; adapting it into an agent changes the treatment and must be explicit."
+      },
+      "source": {
+        "status": "source_verified",
+        "repository": "chirindaopensource/compact_prompt_unified_pipeline_prompt_data_compression_LLM_workflows",
+        "ref": "c273d584190e8207f39c6bf378d319ed3ea5f3a0",
+        "source": "https://codeload.github.com/chirindaopensource/compact_prompt_unified_pipeline_prompt_data_compression_LLM_workflows/tar.gz/c273d584190e8207f39c6bf378d319ed3ea5f3a0",
+        "sha256": "df5ef3bf15487d47145c416b8912372cb54657fc16a4b0e7591d5801b57a9270"
+      },
+      "sourceVerified": true,
+      "activationAttempted": false,
+      "evidence": [],
+      "configurationFiles": 0,
+      "runtimeVersionOutputs": [],
+      "sourceBuiltArtifacts": [],
+      "mcpKnownAnswersPassed": 0,
+      "realClientMockSmokePassed": false,
+      "realClientNativeHookCalls": 0,
+      "realClientHookFailures": 0,
+      "issues": [],
+      "paidAdmitted": false,
+      "pending": "Complete product-specific known-answer, failure recovery, teardown, provider-routing and accounting review; then review paid cohort scope/budget."
+    },
+    {
+      "name": "copium",
+      "latestObserved": "v0.26.8",
+      "cohort": {
+        "name": "mcp-client-review",
+        "review": "MCP/library integration review. Preserve the complete vendor setup; account for indexing, embeddings, memory and upstream MCP costs. Mock providers before activation."
+      },
+      "source": {
+        "status": "source_verified",
+        "repository": "iKislay/copium",
+        "ref": "v0.26.8",
+        "source": "https://codeload.github.com/iKislay/copium/tar.gz/v0.26.8",
+        "sha256": "477a76778b33daefcadbbc0602ec9e1d9fe8f9d6119c8aa246400598421162df"
+      },
+      "sourceVerified": true,
+      "activationAttempted": false,
+      "evidence": [],
+      "configurationFiles": 0,
+      "runtimeVersionOutputs": [],
+      "sourceBuiltArtifacts": [],
+      "mcpKnownAnswersPassed": 0,
+      "realClientMockSmokePassed": false,
+      "realClientNativeHookCalls": 0,
+      "realClientHookFailures": 0,
+      "issues": [],
+      "paidAdmitted": false,
+      "pending": "Complete product-specific known-answer, failure recovery, teardown, provider-routing and accounting review; then review paid cohort scope/budget."
+    },
+    {
+      "name": "cto",
+      "latestObserved": "2.3.20",
+      "cohort": {
+        "name": "claude-or-adapter-review",
+        "review": "Documented Claude integration, with any explicit additional adapters reviewed individually. A Claude cohort or clearly labelled vendor-supported adapter needs its own admission."
+      },
+      "source": {
+        "status": "source_verified",
+        "package": "claude-token-optimizer",
+        "version": "2.3.20",
+        "source": "https://registry.npmjs.org/claude-token-optimizer/-/claude-token-optimizer-2.3.20.tgz",
+        "sha256": "889d2786e472c215c3ccdbacd75bc0e56106b45c20a95dbb8c75b6fb4957cb61",
+        "integrity": "sha512-XiKK0j0qZKBRtapmCvZ7s0fZRT2LVybbf6Sl9rfZeW7NsHggjtQ8SzZtX3NQ6FtAW0jZ//vq1YVavi5Bk5P35g=="
+      },
+      "sourceVerified": true,
+      "activationAttempted": true,
+      "evidence": [
+        {
+          "path": "evidence/probes-v8/cto-activation.json",
+          "sha256": "8b249f5c3e1a6395d9ac67ed18280aeb976ce8cd477ab44b1f2c54bf8c4f5895"
+        },
+        {
+          "path": "evidence/probes-v7/cto-activation.json",
+          "sha256": "8b249f5c3e1a6395d9ac67ed18280aeb976ce8cd477ab44b1f2c54bf8c4f5895"
+        }
+      ],
+      "configurationFiles": 3,
+      "runtimeVersionOutputs": [
+        "2.3.20\n"
+      ],
+      "sourceBuiltArtifacts": [],
+      "mcpKnownAnswersPassed": 0,
+      "realClientMockSmokePassed": false,
+      "realClientNativeHookCalls": 0,
+      "realClientHookFailures": 0,
+      "issues": [],
+      "paidAdmitted": false,
+      "pending": "Complete product-specific known-answer, failure recovery, teardown, provider-routing and accounting review; then review paid cohort scope/budget."
+    },
+    {
+      "name": "edgee",
+      "latestObserved": "v0.18.1",
+      "cohort": {
+        "name": "native-codex-review",
+        "review": "Candidate Codex cohort. Vendor integration and runtime evidence required per product; this is not paid admission."
+      },
+      "source": {
+        "status": "source_verified",
+        "repository": "edgee-ai/edgee",
+        "ref": "v0.18.1",
+        "source": "https://codeload.github.com/edgee-ai/edgee/tar.gz/v0.18.1",
+        "sha256": "5cc6b543a02eeaa7b7ffaf0b3ac47b26c4af5e0ece0632c0c15a102ce059bd46"
+      },
+      "sourceVerified": true,
+      "activationAttempted": true,
+      "evidence": [
+        {
+          "path": "evidence/probes-v8/edgee-activation.json",
+          "sha256": "1fb127d0f8be38316a9313d0a5c74d581e529813f7b794b13a50b93bcaf0581b"
+        },
+        {
+          "path": "evidence/probes-v7/edgee-activation.json",
+          "sha256": "1fb127d0f8be38316a9313d0a5c74d581e529813f7b794b13a50b93bcaf0581b"
+        }
+      ],
+      "configurationFiles": 0,
+      "runtimeVersionOutputs": [
+        "edgee 0.18.1\n"
+      ],
+      "sourceBuiltArtifacts": [],
+      "mcpKnownAnswersPassed": 0,
+      "realClientMockSmokePassed": false,
+      "realClientNativeHookCalls": 0,
+      "realClientHookFailures": 0,
+      "issues": [],
+      "paidAdmitted": false,
+      "pending": "Complete product-specific known-answer, failure recovery, teardown, provider-routing and accounting review; then review paid cohort scope/budget."
+    },
+    {
+      "name": "graphify",
+      "latestObserved": "0.9.112",
+      "cohort": {
+        "name": "native-codex-review",
+        "review": "Candidate Codex cohort. Vendor integration and runtime evidence required per product; this is not paid admission."
+      },
+      "source": {
+        "status": "source_verified",
+        "repository": "Graphify-Labs/graphify",
+        "ref": "v0.9.112",
+        "source": "https://codeload.github.com/Graphify-Labs/graphify/tar.gz/v0.9.112",
+        "sha256": "144a89e79d27a466674a681698f248316bd5887fc6ee7b96eb05e9a9919ab128"
+      },
+      "sourceVerified": true,
+      "activationAttempted": true,
+      "evidence": [
+        {
+          "path": "evidence/probes-v8/graphify-activation.json",
+          "sha256": "5b37dca01681287b405ddda3c00913affbc94ed148a929c4737bc812979e5c5b"
+        },
+        {
+          "path": "evidence/probes-v7/graphify-activation.json",
+          "sha256": "c5c5097dcfd71269bc8a4845a04402baea925c231414a07da2ac82433cf4a24d"
+        },
+        {
+          "path": "evidence/native-client-v1/graphify-activation.json",
+          "sha256": "ec8c6f253e08bf70cfc51b1c863e81058ee4da96ff78fc04c66a894eb4d96a2e"
+        },
+        {
+          "path": "evidence/native-client-v2/graphify-activation.json",
+          "sha256": "951294d4c894754217bf90c5fcc019543fbdaf8dacaaea5ccbc565312d3b8241"
+        }
+      ],
+      "configurationFiles": 10,
+      "runtimeVersionOutputs": [
+        "graphify 0.9.112\n"
+      ],
+      "sourceBuiltArtifacts": [],
+      "mcpKnownAnswersPassed": 0,
+      "realClientMockSmokePassed": true,
+      "realClientNativeHookCalls": 1,
+      "realClientHookFailures": 0,
+      "issues": [],
+      "paidAdmitted": false,
+      "pending": "Complete product-specific known-answer, failure recovery, teardown, provider-routing and accounting review; then review paid cohort scope/budget."
+    },
+    {
+      "name": "headroom",
+      "latestObserved": "0.44.0",
+      "cohort": {
+        "name": "native-codex-review",
+        "review": "Candidate Codex cohort. Vendor integration and runtime evidence required per product; this is not paid admission."
+      },
+      "source": {
+        "status": "source_verified",
+        "package": "headroom-ai",
+        "version": "0.44.0",
+        "source": "https://files.pythonhosted.org/packages/0e/4e/7d86706ccca125d01ccf2ca903ebeca9f131d8b9149ebaa9e3f3a90acc0e/headroom_ai-0.44.0.tar.gz",
+        "sha256": "4fa74895947905acc54564c1a24f67adefc71c2e4d1b599d723db46177f02e42",
+        "integrity": "sha256-T6dIlZR5BazFRWTBok9nre/HHC5NG1mdcj20YXfwLkI="
+      },
+      "sourceVerified": true,
+      "activationAttempted": true,
+      "evidence": [
+        {
+          "path": "evidence/probes-v8/headroom-activation.json",
+          "sha256": "9d9a4b1167c875c0d4a7833146d9334014064b9c35a982a8d433640bba253a44"
+        },
+        {
+          "path": "evidence/probes-v7/headroom-activation.json",
+          "sha256": "9d9a4b1167c875c0d4a7833146d9334014064b9c35a982a8d433640bba253a44"
+        }
+      ],
+      "configurationFiles": 0,
+      "runtimeVersionOutputs": [
+        "headroom, version 0.44.0\n"
+      ],
+      "sourceBuiltArtifacts": [],
+      "mcpKnownAnswersPassed": 0,
+      "realClientMockSmokePassed": false,
+      "realClientNativeHookCalls": 0,
+      "realClientHookFailures": 0,
+      "issues": [],
+      "paidAdmitted": false,
+      "pending": "Complete product-specific known-answer, failure recovery, teardown, provider-routing and accounting review; then review paid cohort scope/budget."
+    },
+    {
+      "name": "justokenmax",
+      "latestObserved": "v0.4.0",
+      "cohort": {
+        "name": "claude-or-adapter-review",
+        "review": "Documented Claude integration, with any explicit additional adapters reviewed individually. A Claude cohort or clearly labelled vendor-supported adapter needs its own admission."
+      },
+      "source": {
+        "status": "source_verified",
+        "repository": "Kalmantic/jusTokenMax",
+        "ref": "v0.4.0",
+        "source": "https://codeload.github.com/Kalmantic/jusTokenMax/tar.gz/v0.4.0",
+        "sha256": "4f28bd66c8d01b1d56dfacaa6e5382751979da04b68d7f66a92b0a5fea9ab714"
+      },
+      "sourceVerified": true,
+      "activationAttempted": false,
+      "evidence": [],
+      "configurationFiles": 0,
+      "runtimeVersionOutputs": [],
+      "sourceBuiltArtifacts": [],
+      "mcpKnownAnswersPassed": 0,
+      "realClientMockSmokePassed": false,
+      "realClientNativeHookCalls": 0,
+      "realClientHookFailures": 0,
+      "issues": [],
+      "paidAdmitted": false,
+      "pending": "Complete product-specific known-answer, failure recovery, teardown, provider-routing and accounting review; then review paid cohort scope/budget."
+    },
+    {
+      "name": "lean-ctx",
+      "latestObserved": "3.12.6",
+      "cohort": {
+        "name": "native-codex-review",
+        "review": "Candidate Codex cohort. Vendor integration and runtime evidence required per product; this is not paid admission."
+      },
+      "source": {
+        "status": "source_verified",
+        "repository": "yvgude/lean-ctx",
+        "ref": "v3.12.6",
+        "source": "https://codeload.github.com/yvgude/lean-ctx/tar.gz/v3.12.6",
+        "sha256": "41110196de9e9e74d9820ce1df5c8406993f79d8205a53455ac885ca454f13d0"
+      },
+      "sourceVerified": true,
+      "activationAttempted": true,
+      "evidence": [
+        {
+          "path": "evidence/probes-v8/lean-ctx-activation.json",
+          "sha256": "6fce200b6e9cbd08b656fff160a373adc92fbdb02ed8478c777252cd654423c2"
+        },
+        {
+          "path": "evidence/probes-v7/lean-ctx-activation.json",
+          "sha256": "96fe605d5416159b806b2e951fa25f49f2c275fcb75ea552391e0729db742b10"
+        },
+        {
+          "path": "evidence/native-client-v1/lean-ctx-activation.json",
+          "sha256": "34a7f1dbf6962437d8f7ab9cf4e618617a4e55b4fa3d568bbf62212cc8275f62"
+        },
+        {
+          "path": "evidence/native-client-v2/lean-ctx-activation.json",
+          "sha256": "4912da88f65dc664d4bf7b0d0dbf23dcbce2dbbc3625ab0f1f27ff62ba2bb355"
+        }
+      ],
+      "configurationFiles": 5,
+      "runtimeVersionOutputs": [
+        "lean-ctx 3.12.6 (official, https://github.com/yvgude/lean-ctx)\n"
+      ],
+      "sourceBuiltArtifacts": [],
+      "mcpKnownAnswersPassed": 1,
+      "realClientMockSmokePassed": true,
+      "realClientNativeHookCalls": 4,
+      "realClientHookFailures": 0,
+      "issues": [],
+      "paidAdmitted": false,
+      "pending": "Complete product-specific known-answer, failure recovery, teardown, provider-routing and accounting review; then review paid cohort scope/budget."
+    },
+    {
+      "name": "llm-token-optimization-stack",
+      "latestObserved": "source HEAD a30406387d7b",
+      "cohort": {
+        "name": "claude-or-adapter-review",
+        "review": "Documented Claude integration, with any explicit additional adapters reviewed individually. A Claude cohort or clearly labelled vendor-supported adapter needs its own admission."
+      },
+      "source": {
+        "status": "source_verified",
+        "repository": "dinoudon/llm-token-optimization-stack",
+        "ref": "a30406387d7b7cfbcd494b2edcea21998f443de3",
+        "source": "https://codeload.github.com/dinoudon/llm-token-optimization-stack/tar.gz/a30406387d7b7cfbcd494b2edcea21998f443de3",
+        "sha256": "843fa730ff1c9838c4136e0e051a5cede4413736ce7bdda9a315267a24c991ea"
+      },
+      "sourceVerified": true,
+      "activationAttempted": false,
+      "evidence": [],
+      "configurationFiles": 0,
+      "runtimeVersionOutputs": [],
+      "sourceBuiltArtifacts": [],
+      "mcpKnownAnswersPassed": 0,
+      "realClientMockSmokePassed": false,
+      "realClientNativeHookCalls": 0,
+      "realClientHookFailures": 0,
+      "issues": [],
+      "paidAdmitted": false,
+      "pending": "Complete product-specific known-answer, failure recovery, teardown, provider-routing and accounting review; then review paid cohort scope/budget."
+    },
+    {
+      "name": "lm-resizer",
+      "latestObserved": "v0.2.6",
+      "cohort": {
+        "name": "native-codex-review",
+        "review": "Candidate Codex cohort. Vendor integration and runtime evidence required per product; this is not paid admission."
+      },
+      "source": {
+        "status": "source_verified",
+        "repository": "phuetz/lm-resizer",
+        "ref": "v0.2.6",
+        "source": "https://codeload.github.com/phuetz/lm-resizer/tar.gz/v0.2.6",
+        "sha256": "ad65f61e54f15dee26a04e808f6d3b785f21b8b39b5e262e0c9098705e59ae67"
+      },
+      "sourceVerified": true,
+      "activationAttempted": true,
+      "evidence": [
+        {
+          "path": "evidence/probes-v10/lm-resizer-activation.json",
+          "sha256": "a16ca6aa4945fc66fe3d8e8feb089db5ab8d01851241d33ad2717ed19c63058a"
+        },
+        {
+          "path": "evidence/native-client-v4/lm-resizer-activation.json",
+          "sha256": "93551338abaee7a543630c9b2a8b1bead5ea2b1deda9d6b079aa2251401e73c2"
+        },
+        {
+          "path": "evidence/native-client-v6/lm-resizer-activation.json",
+          "sha256": "0567f433aa471c7bfcea8d0cff1c477144f0f95b680d0d1bf20ffff30814065c"
+        }
+      ],
+      "configurationFiles": 2,
+      "runtimeVersionOutputs": [
+        "lm-resizer 0.2.6\n"
+      ],
+      "sourceBuiltArtifacts": [],
+      "mcpKnownAnswersPassed": 1,
+      "realClientMockSmokePassed": true,
+      "realClientNativeHookCalls": 2,
+      "realClientHookFailures": 0,
+      "issues": [],
+      "paidAdmitted": false,
+      "pending": "Complete product-specific known-answer, failure recovery, teardown, provider-routing and accounting review; then review paid cohort scope/budget."
+    },
+    {
+      "name": "lossless-prompt-compressor",
+      "latestObserved": "source HEAD 24fc54b76cd2",
+      "cohort": {
+        "name": "standalone-transform-review",
+        "review": "Standalone library/pipeline. Review a fixed transformation or vendor SDK cohort; adapting it into an agent changes the treatment and must be explicit."
+      },
+      "source": {
+        "status": "source_verified",
+        "repository": "wallmage/lossless-prompt-compressor",
+        "ref": "24fc54b76cd284688ae5ce3b8815d911cf36b06e",
+        "source": "https://codeload.github.com/wallmage/lossless-prompt-compressor/tar.gz/24fc54b76cd284688ae5ce3b8815d911cf36b06e",
+        "sha256": "c46032098f07ca5662083bec226cb9852aefa5c616d063e72274e52b467685fc"
+      },
+      "sourceVerified": true,
+      "activationAttempted": false,
+      "evidence": [],
+      "configurationFiles": 0,
+      "runtimeVersionOutputs": [],
+      "sourceBuiltArtifacts": [],
+      "mcpKnownAnswersPassed": 0,
+      "realClientMockSmokePassed": false,
+      "realClientNativeHookCalls": 0,
+      "realClientHookFailures": 0,
+      "issues": [],
+      "paidAdmitted": false,
+      "pending": "Complete product-specific known-answer, failure recovery, teardown, provider-routing and accounting review; then review paid cohort scope/budget."
+    },
+    {
+      "name": "memphis",
+      "latestObserved": "v1.1.0",
+      "cohort": {
+        "name": "native-codex-review",
+        "review": "Candidate Codex cohort. Vendor integration and runtime evidence required per product; this is not paid admission."
+      },
+      "source": {
+        "status": "source_verified",
+        "repository": "path-warden/pyra",
+        "ref": "v1.1.0",
+        "source": "https://codeload.github.com/path-warden/pyra/tar.gz/v1.1.0",
+        "sha256": "3aad0dd12c0f74b873f47385bb2ac4d7749630e4536e56a14ca6082e9e91fdf4"
+      },
+      "sourceVerified": true,
+      "activationAttempted": true,
+      "evidence": [
+        {
+          "path": "evidence/probes-v10/memphis-activation.json",
+          "sha256": "6196e37829ef9058079abdf16349ce741ca3ea5f3426f119d8f0dd093ce9c09a"
+        },
+        {
+          "path": "evidence/native-client-v2/memphis-activation.json",
+          "sha256": "24bdc27bceb1ec66cde14e4772b5c7c737e5a1e33f793c5fdd3c669b4d826a01"
+        },
+        {
+          "path": "evidence/native-client-v3/memphis-activation.json",
+          "sha256": "3fe136a26a3e30c593bb8bdc7f61569649a9f0276b727ddb094e76c86c6c1407"
+        }
+      ],
+      "configurationFiles": 2,
+      "runtimeVersionOutputs": [
+        "dev\n"
+      ],
+      "sourceBuiltArtifacts": [],
+      "mcpKnownAnswersPassed": 1,
+      "realClientMockSmokePassed": true,
+      "realClientNativeHookCalls": 0,
+      "realClientHookFailures": 0,
+      "issues": [
+        "Official v1.1.0 release binary reports version \"dev\". Archive provenance is pinned; semantic runtime version is not corroborated."
+      ],
+      "paidAdmitted": false,
+      "pending": "Complete product-specific known-answer, failure recovery, teardown, provider-routing and accounting review; then review paid cohort scope/budget."
+    },
+    {
+      "name": "nim-guard",
+      "latestObserved": "v1.0.0",
+      "cohort": {
+        "name": "opencode-cohort-review",
+        "review": "Documented OpenCode integration. Requires a separate supported-client cohort, including same-model availability and provider accounting. Do not silently port to Codex."
+      },
+      "source": {
+        "status": "source_verified",
+        "repository": "sakthiaswin/nim-guard",
+        "ref": "v1.0.0",
+        "source": "https://codeload.github.com/sakthiaswin/nim-guard/tar.gz/v1.0.0",
+        "sha256": "fc6a9ae58f1a243a5e77170433bc8efd8286e6998a148dd9b5f74ecf3ea94a24"
+      },
+      "sourceVerified": true,
+      "activationAttempted": false,
+      "evidence": [],
+      "configurationFiles": 0,
+      "runtimeVersionOutputs": [],
+      "sourceBuiltArtifacts": [],
+      "mcpKnownAnswersPassed": 0,
+      "realClientMockSmokePassed": false,
+      "realClientNativeHookCalls": 0,
+      "realClientHookFailures": 0,
+      "issues": [],
+      "paidAdmitted": false,
+      "pending": "Complete product-specific known-answer, failure recovery, teardown, provider-routing and accounting review; then review paid cohort scope/budget."
+    },
+    {
+      "name": "opencode-context-filter",
+      "latestObserved": "source HEAD 02bfb52febbb",
+      "cohort": {
+        "name": "opencode-cohort-review",
+        "review": "Documented OpenCode integration. Requires a separate supported-client cohort, including same-model availability and provider accounting. Do not silently port to Codex."
+      },
+      "source": {
+        "status": "source_verified",
+        "repository": "gunnarnordqvist/opencode-context-filter",
+        "ref": "02bfb52febbb0893e348ca8f034ac35398c989cc",
+        "source": "https://codeload.github.com/gunnarnordqvist/opencode-context-filter/tar.gz/02bfb52febbb0893e348ca8f034ac35398c989cc",
+        "sha256": "78907b9772694f0f09b0aca4833ce24847776224c1f65088aaa71d531e704b2a"
+      },
+      "sourceVerified": true,
+      "activationAttempted": false,
+      "evidence": [],
+      "configurationFiles": 0,
+      "runtimeVersionOutputs": [],
+      "sourceBuiltArtifacts": [],
+      "mcpKnownAnswersPassed": 0,
+      "realClientMockSmokePassed": false,
+      "realClientNativeHookCalls": 0,
+      "realClientHookFailures": 0,
+      "issues": [],
+      "paidAdmitted": false,
+      "pending": "Complete product-specific known-answer, failure recovery, teardown, provider-routing and accounting review; then review paid cohort scope/budget."
+    },
+    {
+      "name": "opencode-ctx",
+      "latestObserved": "v0.5.1",
+      "cohort": {
+        "name": "opencode-cohort-review",
+        "review": "Documented OpenCode integration. Requires a separate supported-client cohort, including same-model availability and provider accounting. Do not silently port to Codex."
+      },
+      "source": {
+        "status": "source_verified",
+        "repository": "iamtheavoc1/opencode-ctx",
+        "ref": "v0.5.1",
+        "source": "https://codeload.github.com/iamtheavoc1/opencode-ctx/tar.gz/v0.5.1",
+        "sha256": "2adff816905772da7f379543e58679213159a25c677ce5131bd0cfef5b982ed5"
+      },
+      "sourceVerified": true,
+      "activationAttempted": false,
+      "evidence": [],
+      "configurationFiles": 0,
+      "runtimeVersionOutputs": [],
+      "sourceBuiltArtifacts": [],
+      "mcpKnownAnswersPassed": 0,
+      "realClientMockSmokePassed": false,
+      "realClientNativeHookCalls": 0,
+      "realClientHookFailures": 0,
+      "issues": [],
+      "paidAdmitted": false,
+      "pending": "Complete product-specific known-answer, failure recovery, teardown, provider-routing and accounting review; then review paid cohort scope/budget."
+    },
+    {
+      "name": "opencode-extreme-compress",
+      "latestObserved": "source HEAD 382152d2872a",
+      "cohort": {
+        "name": "opencode-cohort-review",
+        "review": "Documented OpenCode integration. Requires a separate supported-client cohort, including same-model availability and provider accounting. Do not silently port to Codex."
+      },
+      "source": {
+        "status": "source_verified",
+        "repository": "mifdlaldev/opencode-extreme-compress",
+        "ref": "382152d2872a5242b88e13b7015319abcc940baf",
+        "source": "https://codeload.github.com/mifdlaldev/opencode-extreme-compress/tar.gz/382152d2872a5242b88e13b7015319abcc940baf",
+        "sha256": "6eee87480e761fe678d6611674291e55cd6cca231ea6f2e540d9dcec9d936f04"
+      },
+      "sourceVerified": true,
+      "activationAttempted": false,
+      "evidence": [],
+      "configurationFiles": 0,
+      "runtimeVersionOutputs": [],
+      "sourceBuiltArtifacts": [],
+      "mcpKnownAnswersPassed": 0,
+      "realClientMockSmokePassed": false,
+      "realClientNativeHookCalls": 0,
+      "realClientHookFailures": 0,
+      "issues": [],
+      "paidAdmitted": false,
+      "pending": "Complete product-specific known-answer, failure recovery, teardown, provider-routing and accounting review; then review paid cohort scope/budget."
+    },
+    {
+      "name": "opencode-productivity-suite",
+      "latestObserved": "source HEAD 0a0ccca6d557",
+      "cohort": {
+        "name": "opencode-cohort-review",
+        "review": "Documented OpenCode integration. Requires a separate supported-client cohort, including same-model availability and provider accounting. Do not silently port to Codex."
+      },
+      "source": {
+        "status": "source_verified",
+        "repository": "Rene-Kuhm/opencode-productivity-suite",
+        "ref": "0a0ccca6d557b9de57dc4765d53f8722c8a19d15",
+        "source": "https://codeload.github.com/Rene-Kuhm/opencode-productivity-suite/tar.gz/0a0ccca6d557b9de57dc4765d53f8722c8a19d15",
+        "sha256": "9b5bd3afdcab0642fb77876e67ed6f441d9db9f3cfe02aa5c280b1e92a357a7e"
+      },
+      "sourceVerified": true,
+      "activationAttempted": false,
+      "evidence": [],
+      "configurationFiles": 0,
+      "runtimeVersionOutputs": [],
+      "sourceBuiltArtifacts": [],
+      "mcpKnownAnswersPassed": 0,
+      "realClientMockSmokePassed": false,
+      "realClientNativeHookCalls": 0,
+      "realClientHookFailures": 0,
+      "issues": [],
+      "paidAdmitted": false,
+      "pending": "Complete product-specific known-answer, failure recovery, teardown, provider-routing and accounting review; then review paid cohort scope/budget."
+    },
+    {
+      "name": "ponytail",
+      "latestObserved": "v5.3.3",
+      "cohort": {
+        "name": "native-codex-review",
+        "review": "Candidate Codex cohort. Vendor integration and runtime evidence required per product; this is not paid admission."
+      },
+      "source": {
+        "status": "source_verified",
+        "repository": "DietrichGebert/ponytail",
+        "ref": "v5.3.3",
+        "source": "https://codeload.github.com/DietrichGebert/ponytail/tar.gz/v5.3.3",
+        "sha256": "a1409db9ef8ba2556aed6aa3766c381cd633c9f2f9d1c4515fec44df5bb446a3"
+      },
+      "sourceVerified": true,
+      "activationAttempted": true,
+      "evidence": [
+        {
+          "path": "evidence/probes-v8/ponytail-activation.json",
+          "sha256": "58ea3af997d9dd40d0ba7abe81ae9488d94897a3c78b9b9fc6b4d9da24426e98"
+        },
+        {
+          "path": "evidence/probes-v9/ponytail-activation.json",
+          "sha256": "65ce3727b2bee5ed523ce331c7ecb6d2518284bddfa21c559a0868010c10ba63"
+        },
+        {
+          "path": "evidence/probes-v7/ponytail-activation.json",
+          "sha256": "39a64febb9a14c56ea343577c4781a2299aa7a70dcbc930268aaf23dfe572c8e"
+        },
+        {
+          "path": "evidence/native-client-v1/ponytail-activation.json",
+          "sha256": "93fbde4fd42b6c9c8071c3107e9bba544b562a902c1c9c18ebac44534157d6ef"
+        }
+      ],
+      "configurationFiles": 88,
+      "runtimeVersionOutputs": [],
+      "sourceBuiltArtifacts": [],
+      "mcpKnownAnswersPassed": 0,
+      "realClientMockSmokePassed": true,
+      "realClientNativeHookCalls": 2,
+      "realClientHookFailures": 0,
+      "issues": [],
+      "paidAdmitted": false,
+      "pending": "Complete product-specific known-answer, failure recovery, teardown, provider-routing and accounting review; then review paid cohort scope/budget."
+    },
+    {
+      "name": "promptshrink",
+      "latestObserved": "source HEAD 32c87306c3b8",
+      "cohort": {
+        "name": "research-observation-or-spec",
+        "review": "Not yet an admitted agent optimizer. Source shows a generic agent example, log analyzer, research artifact, specification, fine-tuning experiment, or compression evaluation tool. Preserve in the full field and review applicability explicitly."
+      },
+      "source": {
+        "status": "source_verified",
+        "repository": "civitas-io/promptshrink",
+        "ref": "32c87306c3b8eacd85214af3efbc8ec63d700fb5",
+        "source": "https://codeload.github.com/civitas-io/promptshrink/tar.gz/32c87306c3b8eacd85214af3efbc8ec63d700fb5",
+        "sha256": "2582630c9fa79e13d08827bb6f671a30927687fb611881ec73d792d9a85908da"
+      },
+      "sourceVerified": true,
+      "activationAttempted": false,
+      "evidence": [],
+      "configurationFiles": 0,
+      "runtimeVersionOutputs": [],
+      "sourceBuiltArtifacts": [],
+      "mcpKnownAnswersPassed": 0,
+      "realClientMockSmokePassed": false,
+      "realClientNativeHookCalls": 0,
+      "realClientHookFailures": 0,
+      "issues": [],
+      "paidAdmitted": false,
+      "pending": "Complete product-specific known-answer, failure recovery, teardown, provider-routing and accounting review; then review paid cohort scope/budget."
+    },
+    {
+      "name": "qtk",
+      "latestObserved": "v0.3.1",
+      "cohort": {
+        "name": "opencode-cohort-review",
+        "review": "Documented OpenCode integration. Requires a separate supported-client cohort, including same-model availability and provider accounting. Do not silently port to Codex."
+      },
+      "source": {
+        "status": "source_verified",
+        "repository": "qalarc/QTK",
+        "ref": "v0.3.1",
+        "source": "https://codeload.github.com/qalarc/QTK/tar.gz/v0.3.1",
+        "sha256": "b4e54314083fc9f5df4de014507db6b99be043e590e13e2d4b31f4a031283001"
+      },
+      "sourceVerified": true,
+      "activationAttempted": false,
+      "evidence": [],
+      "configurationFiles": 0,
+      "runtimeVersionOutputs": [],
+      "sourceBuiltArtifacts": [],
+      "mcpKnownAnswersPassed": 0,
+      "realClientMockSmokePassed": false,
+      "realClientNativeHookCalls": 0,
+      "realClientHookFailures": 0,
+      "issues": [],
+      "paidAdmitted": false,
+      "pending": "Complete product-specific known-answer, failure recovery, teardown, provider-routing and accounting review; then review paid cohort scope/budget."
+    },
+    {
+      "name": "rtk",
+      "latestObserved": "v1.2.0",
+      "cohort": {
+        "name": "native-codex-review",
+        "review": "Candidate Codex cohort. Vendor integration and runtime evidence required per product; this is not paid admission."
+      },
+      "source": {
+        "status": "source_verified",
+        "repository": "rtk-ai/rtk",
+        "ref": "v1.2.0",
+        "source": "https://codeload.github.com/rtk-ai/rtk/tar.gz/v1.2.0",
+        "sha256": "a0959b8749c9b7872b56c63515736ae0b9e460de06f502ac12ae2052f8f59a01"
+      },
+      "sourceVerified": true,
+      "activationAttempted": true,
+      "evidence": [
+        {
+          "path": "evidence/probes-v8/rtk-activation.json",
+          "sha256": "38c28e9fdc4e428684ccb75076dfb5c67e59cef8d9a3bae2e0cc78ad66a8ea49"
+        },
+        {
+          "path": "evidence/probes-v7/rtk-activation.json",
+          "sha256": "bf0a5fa2fb93cccde6d9097dbe8872c5851e129f270c5bb68bdb67ee97c7a9f4"
+        },
+        {
+          "path": "evidence/native-client-v1/rtk-activation.json",
+          "sha256": "f2a3ab1a07c68e027b5cadac88e3647fe7180cdc78f487a107eaf52afdb2329f"
+        }
+      ],
+      "configurationFiles": 3,
+      "runtimeVersionOutputs": [
+        "rtk 1.2.0\n"
+      ],
+      "sourceBuiltArtifacts": [],
+      "mcpKnownAnswersPassed": 0,
+      "realClientMockSmokePassed": true,
+      "realClientNativeHookCalls": 1,
+      "realClientHookFailures": 0,
+      "issues": [],
+      "paidAdmitted": false,
+      "pending": "Complete product-specific known-answer, failure recovery, teardown, provider-routing and accounting review; then review paid cohort scope/budget."
+    },
+    {
+      "name": "squeez",
+      "latestObserved": "GitHub v1.49.3; crates.io 1.48.18",
+      "cohort": {
+        "name": "native-codex-review",
+        "review": "Candidate Codex cohort. Vendor integration and runtime evidence required per product; this is not paid admission."
+      },
+      "source": {
+        "status": "source_verified",
+        "repository": "claudioemmanuel/squeez",
+        "ref": "v1.49.3",
+        "source": "https://codeload.github.com/claudioemmanuel/squeez/tar.gz/v1.49.3",
+        "sha256": "1fc60e2b46a96b0deb8ae9537beeddd1d68a2ace75efba56bb93a5d3c521e74d"
+      },
+      "sourceVerified": true,
+      "activationAttempted": true,
+      "evidence": [
+        {
+          "path": "evidence/probes-v8/squeez-activation.json",
+          "sha256": "1bb16d56fd4c51208f8af3c406b84735b3bb27fc356602ad9ddb3f39897e8b5c"
+        },
+        {
+          "path": "evidence/probes-v7/squeez-activation.json",
+          "sha256": "fd930c576dd22aeb834640d3158426cf21ae431f8311338b2f0aacf4440ea8c4"
+        },
+        {
+          "path": "evidence/native-client-v1/squeez-activation.json",
+          "sha256": "f9229cc71ee0a36b8fe5a009bd284203af3cdf18c12028dd4a8d484a0978a064"
+        }
+      ],
+      "configurationFiles": 3,
+      "runtimeVersionOutputs": [
+        "squeez 1.49.3\n"
+      ],
+      "sourceBuiltArtifacts": [],
+      "mcpKnownAnswersPassed": 0,
+      "realClientMockSmokePassed": true,
+      "realClientNativeHookCalls": 3,
+      "realClientHookFailures": 0,
+      "issues": [],
+      "paidAdmitted": false,
+      "pending": "Complete product-specific known-answer, failure recovery, teardown, provider-routing and accounting review; then review paid cohort scope/budget."
+    },
+    {
+      "name": "talk-tight",
+      "latestObserved": "source HEAD 6d34c5d25e78",
+      "cohort": {
+        "name": "native-codex-review",
+        "review": "Candidate Codex cohort. Vendor integration and runtime evidence required per product; this is not paid admission."
+      },
+      "source": {
+        "status": "source_verified",
+        "repository": "williamrthomas/talk-tight",
+        "ref": "6d34c5d25e7867bff59ab47a59f11b80cf4bbbad",
+        "source": "https://codeload.github.com/williamrthomas/talk-tight/tar.gz/6d34c5d25e7867bff59ab47a59f11b80cf4bbbad",
+        "sha256": "2c631292a4dc04807ce82dd14dab374b4426db3699275f37d7d45704bc36c938"
+      },
+      "sourceVerified": true,
+      "activationAttempted": true,
+      "evidence": [
+        {
+          "path": "evidence/native-client-v8/talk-tight-activation.json",
+          "sha256": "9d5b531802bf8aea7e864d8be1ff979ff4949dc15856e5c8e1f4cb075d5d1491"
+        }
+      ],
+      "configurationFiles": 2,
+      "runtimeVersionOutputs": [],
+      "sourceBuiltArtifacts": [],
+      "mcpKnownAnswersPassed": 0,
+      "realClientMockSmokePassed": true,
+      "realClientNativeHookCalls": 0,
+      "realClientHookFailures": 0,
+      "issues": [],
+      "paidAdmitted": false,
+      "pending": "Complete product-specific known-answer, failure recovery, teardown, provider-routing and accounting review; then review paid cohort scope/budget."
+    },
+    {
+      "name": "tinker-experiments",
+      "latestObserved": "source HEAD f794838d8e4a",
+      "cohort": {
+        "name": "research-observation-or-spec",
+        "review": "Not yet an admitted agent optimizer. Source shows a generic agent example, log analyzer, research artifact, specification, fine-tuning experiment, or compression evaluation tool. Preserve in the full field and review applicability explicitly."
+      },
+      "source": {
+        "status": "source_verified",
+        "repository": "mayank-ketkar-sf/tinker-experiments",
+        "ref": "f794838d8e4a195067c021528c622911531cc1a2",
+        "source": "https://codeload.github.com/mayank-ketkar-sf/tinker-experiments/tar.gz/f794838d8e4a195067c021528c622911531cc1a2",
+        "sha256": "b0ddaf391edb5fc8b2b721d568f17400085e7e65046c26d5600cb892017304a3"
+      },
+      "sourceVerified": true,
+      "activationAttempted": false,
+      "evidence": [],
+      "configurationFiles": 0,
+      "runtimeVersionOutputs": [],
+      "sourceBuiltArtifacts": [],
+      "mcpKnownAnswersPassed": 0,
+      "realClientMockSmokePassed": false,
+      "realClientNativeHookCalls": 0,
+      "realClientHookFailures": 0,
+      "issues": [],
+      "paidAdmitted": false,
+      "pending": "Complete product-specific known-answer, failure recovery, teardown, provider-routing and accounting review; then review paid cohort scope/budget."
+    },
+    {
+      "name": "token-optimizer",
+      "latestObserved": "npm 0.2.2",
+      "cohort": {
+        "name": "native-codex-review",
+        "review": "Candidate Codex cohort. Vendor integration and runtime evidence required per product; this is not paid admission."
+      },
+      "source": {
+        "status": "source_verified",
+        "package": "token-optimizer",
+        "version": "0.2.2",
+        "source": "https://registry.npmjs.org/token-optimizer/-/token-optimizer-0.2.2.tgz",
+        "sha256": "bc879b10c074b6f9d14be0243bb6d875e59f6829726ae68c9387590b75f580e4",
+        "integrity": "sha512-evvvScIbNcLTtol7u4SRPl6MV0IMosZrw/+UfCFI4vNGM1vz6HbT2uhxmRfW/D1JqjKw1PaqFz6FDS3XQdmfyg=="
+      },
+      "sourceVerified": true,
+      "activationAttempted": true,
+      "evidence": [
+        {
+          "path": "evidence/native-client-v3/token-optimizer-activation.json",
+          "sha256": "f48878debb2f83298562c3b75a6e66aa875d6af46121991ec810d39267ac97e0"
+        },
+        {
+          "path": "evidence/native-client-v4/token-optimizer-activation.json",
+          "sha256": "9974d815bc942f70bc2fd644fc13165cab066384f115a46555d57c403f973a46"
+        },
+        {
+          "path": "evidence/native-client-v6/token-optimizer-activation.json",
+          "sha256": "f35ef106ff8475b202993d0332985f9238504f5a5738be60bad3b2e52aaea218"
+        }
+      ],
+      "configurationFiles": 1,
+      "runtimeVersionOutputs": [
+        "token-optimizer v0.2.1\n\nUsage:\n  token-optimizer            Show install status and token totals\n  token-optimizer status     Show install status and token totals\n  token-optimizer install    Auto-detect agents and wire MCP config\n  token-optimizer update     Pull latest changes and reinstall\n  token-optimizer uninstall  Remove injected configs\n  token-optimizer stats      Show token savings stats\n\nGlobal command:\n  npm install -g token-optimizer\n  npx token-optimizer status\n\nIf the global comma"
+      ],
+      "sourceBuiltArtifacts": [],
+      "mcpKnownAnswersPassed": 0,
+      "realClientMockSmokePassed": true,
+      "realClientNativeHookCalls": 0,
+      "realClientHookFailures": 0,
+      "issues": [
+        "Official npm package 0.2.2 CLI help reports v0.2.1. Preserve both identities; do not silently call this a verified runtime version match."
+      ],
+      "paidAdmitted": false,
+      "pending": "Complete product-specific known-answer, failure recovery, teardown, provider-routing and accounting review; then review paid cohort scope/budget."
+    },
+    {
+      "name": "token-saving-hooks-codex",
+      "latestObserved": "source HEAD c19b2af811a6",
+      "cohort": {
+        "name": "native-codex-review",
+        "review": "Candidate Codex cohort. Vendor integration and runtime evidence required per product; this is not paid admission."
+      },
+      "source": {
+        "status": "source_verified",
+        "repository": "aaron-for-value/token-saving-hooks-codex",
+        "ref": "c19b2af811a6f20197ba0759470e9e5c8262e4b9",
+        "source": "https://codeload.github.com/aaron-for-value/token-saving-hooks-codex/tar.gz/c19b2af811a6f20197ba0759470e9e5c8262e4b9",
+        "sha256": "a1d18bdbfdb1118e26329ad0057f08393c355cdbd77aa21a99ad2ecb76939273"
+      },
+      "sourceVerified": true,
+      "activationAttempted": true,
+      "evidence": [
+        {
+          "path": "evidence/probes-v8/token-saving-hooks-codex-activation.json",
+          "sha256": "046a4e67e30ef4b5efb5672729562974e28c72528826f164a90960ee1f6332b8"
+        },
+        {
+          "path": "evidence/probes-v7/token-saving-hooks-codex-activation.json",
+          "sha256": "655627fcd85e54458376a328c7127b405461dec63259d3f374490257c15e4cf1"
+        }
+      ],
+      "configurationFiles": 1,
+      "runtimeVersionOutputs": [],
+      "sourceBuiltArtifacts": [],
+      "mcpKnownAnswersPassed": 0,
+      "realClientMockSmokePassed": false,
+      "realClientNativeHookCalls": 0,
+      "realClientHookFailures": 0,
+      "issues": [
+        "Native Codex configuration fails to load: Error: failed to load bootstrap configuration\n\nCaused by:\n    invalid type: sequence, expected struct HooksToml\n    in `hooks`"
+      ],
+      "paidAdmitted": false,
+      "pending": "Complete product-specific known-answer, failure recovery, teardown, provider-routing and accounting review; then review paid cohort scope/budget."
+    },
+    {
+      "name": "token-slayer",
+      "latestObserved": "UNRESOLVED",
+      "cohort": {
+        "name": "unresolved-upstream",
+        "review": "withmewtwo/token-slayer is unresolved. No identity evidence for substituting an unrelated repository with the same name."
+      },
+      "source": {
+        "status": "source_blocked",
+        "error": "Canonical upstream unresolved; no artifact downloaded"
+      },
+      "sourceVerified": false,
+      "activationAttempted": false,
+      "evidence": [],
+      "configurationFiles": 0,
+      "runtimeVersionOutputs": [],
+      "sourceBuiltArtifacts": [],
+      "mcpKnownAnswersPassed": 0,
+      "realClientMockSmokePassed": false,
+      "realClientNativeHookCalls": 0,
+      "realClientHookFailures": 0,
+      "issues": [],
+      "paidAdmitted": false,
+      "pending": "Complete product-specific known-answer, failure recovery, teardown, provider-routing and accounting review; then review paid cohort scope/budget."
+    },
+    {
+      "name": "token-smithers",
+      "latestObserved": "v0.0.1",
+      "cohort": {
+        "name": "mcp-client-review",
+        "review": "MCP/library integration review. Preserve the complete vendor setup; account for indexing, embeddings, memory and upstream MCP costs. Mock providers before activation."
+      },
+      "source": {
+        "status": "source_verified",
+        "repository": "shacharbard/token-smithers",
+        "ref": "v0.0.1",
+        "source": "https://codeload.github.com/shacharbard/token-smithers/tar.gz/v0.0.1",
+        "sha256": "7341ab75a97d24af2deee2cc29cd6f3f9185f865699eaf0cbea34620d827e487"
+      },
+      "sourceVerified": true,
+      "activationAttempted": false,
+      "evidence": [],
+      "configurationFiles": 0,
+      "runtimeVersionOutputs": [],
+      "sourceBuiltArtifacts": [],
+      "mcpKnownAnswersPassed": 0,
+      "realClientMockSmokePassed": false,
+      "realClientNativeHookCalls": 0,
+      "realClientHookFailures": 0,
+      "issues": [],
+      "paidAdmitted": false,
+      "pending": "Complete product-specific known-answer, failure recovery, teardown, provider-routing and accounting review; then review paid cohort scope/budget."
+    },
+    {
+      "name": "tokenade",
+      "latestObserved": "2.0.9",
+      "cohort": {
+        "name": "native-codex-review",
+        "review": "Candidate Codex cohort. Vendor integration and runtime evidence required per product; this is not paid admission."
+      },
+      "source": {
+        "status": "source_verified",
+        "package": "@tokenade/cli",
+        "version": "2.0.9",
+        "source": "https://registry.npmjs.org/@tokenade/cli/-/cli-2.0.9.tgz",
+        "sha256": "8d3ddfdb2d22859b1fa4b182ecc6b34aa03a0c8100b88ceee55560559b0fc4db",
+        "integrity": "sha512-zH1hi1JZwM9BZmcD0mVD16cMyIo+vMG2z8xgJjVTcPpl6hqrKWGV+jt8jVp4DCOqjMWjrBZ1JMyPm0bGHK3Cdw=="
+      },
+      "sourceVerified": true,
+      "activationAttempted": true,
+      "evidence": [
+        {
+          "path": "evidence/probes-v8/tokenade-activation.json",
+          "sha256": "84f3dbb1c408ac72cb3ac4fed5464f535f6cbb5f1887cf84db1b60d2453e5212"
+        },
+        {
+          "path": "evidence/probes-v7/tokenade-activation.json",
+          "sha256": "8fc1792ed378a4034cfa8054e9417efd71c7191a1bee0c887899b9a1c0667c18"
+        },
+        {
+          "path": "evidence/native-client-v1/tokenade-activation.json",
+          "sha256": "c8cd837085abc0f5defe179b34ee6b3004bc12ca5b6c142515cf7f7494ddd816"
+        }
+      ],
+      "configurationFiles": 3,
+      "runtimeVersionOutputs": [
+        "tokenade 2.0.9\n"
+      ],
+      "sourceBuiltArtifacts": [],
+      "mcpKnownAnswersPassed": 0,
+      "realClientMockSmokePassed": true,
+      "realClientNativeHookCalls": 4,
+      "realClientHookFailures": 0,
+      "issues": [],
+      "paidAdmitted": false,
+      "pending": "Complete product-specific known-answer, failure recovery, teardown, provider-routing and accounting review; then review paid cohort scope/budget."
+    },
+    {
+      "name": "tokenjuice",
+      "latestObserved": "0.11.0",
+      "cohort": {
+        "name": "native-codex-review",
+        "review": "Candidate Codex cohort. Vendor integration and runtime evidence required per product; this is not paid admission."
+      },
+      "source": {
+        "status": "source_verified",
+        "package": "tokenjuice",
+        "version": "0.11.0",
+        "source": "https://registry.npmjs.org/tokenjuice/-/tokenjuice-0.11.0.tgz",
+        "sha256": "3f5dd69df16321037176f9d9d0184f2b91948fb14f192cd9d6d3d33279064f25",
+        "integrity": "sha512-B6CoA36FwvPDunC9b2hI8Eqc7eZdhEMGDMiKEQGOj9LHPV0R1pQSTClT5qRV5xn8tu3Iwa66ezPCPkn70M7OYQ=="
+      },
+      "sourceVerified": true,
+      "activationAttempted": true,
+      "evidence": [
+        {
+          "path": "evidence/probes-v8/tokenjuice-activation.json",
+          "sha256": "7ec50ad126b7c5475aab89fd02ce999f901812664daf8ab27be471648ce65880"
+        },
+        {
+          "path": "evidence/probes-v7/tokenjuice-activation.json",
+          "sha256": "b24354bbfdc006b5e5fbd9521fe5e335ab95021cdc32276431010027269c89e7"
+        },
+        {
+          "path": "evidence/native-client-v1/tokenjuice-activation.json",
+          "sha256": "36bbbf54324a117dda01602128cb9ce746818cdb942ffc39feeb92fb82d98ba8"
+        }
+      ],
+      "configurationFiles": 1,
+      "runtimeVersionOutputs": [
+        "0.11.0\n"
+      ],
+      "sourceBuiltArtifacts": [],
+      "mcpKnownAnswersPassed": 0,
+      "realClientMockSmokePassed": true,
+      "realClientNativeHookCalls": 1,
+      "realClientHookFailures": 0,
+      "issues": [],
+      "paidAdmitted": false,
+      "pending": "Complete product-specific known-answer, failure recovery, teardown, provider-routing and accounting review; then review paid cohort scope/budget."
+    },
+    {
+      "name": "tokenlens",
+      "latestObserved": "source HEAD 19321e4202ff",
+      "cohort": {
+        "name": "research-observation-or-spec",
+        "review": "Not yet an admitted agent optimizer. Source shows a generic agent example, log analyzer, research artifact, specification, fine-tuning experiment, or compression evaluation tool. Preserve in the full field and review applicability explicitly."
+      },
+      "source": {
+        "status": "source_verified",
+        "repository": "lavanyaashri/TokenLens",
+        "ref": "19321e4202ffb6bf2db654c78283c803e7bdea08",
+        "source": "https://codeload.github.com/lavanyaashri/TokenLens/tar.gz/19321e4202ffb6bf2db654c78283c803e7bdea08",
+        "sha256": "98b18a8da6972a0499a9387f44b9e8c4cb95b22219f7cda659975b943783eea2"
+      },
+      "sourceVerified": true,
+      "activationAttempted": false,
+      "evidence": [],
+      "configurationFiles": 0,
+      "runtimeVersionOutputs": [],
+      "sourceBuiltArtifacts": [],
+      "mcpKnownAnswersPassed": 0,
+      "realClientMockSmokePassed": false,
+      "realClientNativeHookCalls": 0,
+      "realClientHookFailures": 0,
+      "issues": [],
+      "paidAdmitted": false,
+      "pending": "Complete product-specific known-answer, failure recovery, teardown, provider-routing and accounting review; then review paid cohort scope/budget."
+    },
+    {
+      "name": "tokenoptimizer",
+      "latestObserved": "source HEAD 584179eef86b",
+      "cohort": {
+        "name": "standalone-transform-review",
+        "review": "Standalone library/pipeline. Review a fixed transformation or vendor SDK cohort; adapting it into an agent changes the treatment and must be explicit."
+      },
+      "source": {
+        "status": "source_verified",
+        "repository": "Aarav74/tokenOptimizer",
+        "ref": "584179eef86b66e86224036258c3f968e5c31843",
+        "source": "https://codeload.github.com/Aarav74/tokenOptimizer/tar.gz/584179eef86b66e86224036258c3f968e5c31843",
+        "sha256": "3c61a15201cebc5ec2b57169fab0c8da2a55224ae063d2133f2800b6661bd960"
+      },
+      "sourceVerified": true,
+      "activationAttempted": false,
+      "evidence": [],
+      "configurationFiles": 0,
+      "runtimeVersionOutputs": [],
+      "sourceBuiltArtifacts": [],
+      "mcpKnownAnswersPassed": 0,
+      "realClientMockSmokePassed": false,
+      "realClientNativeHookCalls": 0,
+      "realClientHookFailures": 0,
+      "issues": [],
+      "paidAdmitted": false,
+      "pending": "Complete product-specific known-answer, failure recovery, teardown, provider-routing and accounting review; then review paid cohort scope/budget."
+    },
+    {
+      "name": "tokf",
+      "latestObserved": "tokf CLI 0.2.54",
+      "cohort": {
+        "name": "native-codex-review",
+        "review": "Candidate Codex cohort. Vendor integration and runtime evidence required per product; this is not paid admission."
+      },
+      "source": {
+        "status": "source_verified",
+        "repository": "mpecan/tokf",
+        "ref": "tokf-v0.2.54",
+        "source": "https://codeload.github.com/mpecan/tokf/tar.gz/tokf-v0.2.54",
+        "sha256": "2c1a13cdc422eed7700f70c067c58afd7206e6036e47f2eb3b7f02a2a32143e3"
+      },
+      "sourceVerified": true,
+      "activationAttempted": true,
+      "evidence": [
+        {
+          "path": "evidence/probes-v10/tokf-activation.json",
+          "sha256": "59e26076d2f21702f3a533d7cf5505123e89e4c38cf700a70e6900d48d67eed8"
+        },
+        {
+          "path": "evidence/native-client-v5/tokf-activation.json",
+          "sha256": "39f4aa622fa8fdd35d3be378b7e5fdd63154fc9f346fb2327d0dfb1259a800a9"
+        }
+      ],
+      "configurationFiles": 5,
+      "runtimeVersionOutputs": [
+        "tokf 0.2.54\n"
+      ],
+      "sourceBuiltArtifacts": [
+        {
+          "name": "tokf",
+          "file": "tokf",
+          "sha256": "5989d4376888dbb5fb6ffafeed6dfc462207fda040b47641d8a600cc2e039aec",
+          "source": {
+            "name": "tokf",
+            "url": "https://codeload.github.com/mpecan/tokf/tar.gz/tokf-v0.2.54",
+            "sha256": "2c1a13cdc422eed7700f70c067c58afd7206e6036e47f2eb3b7f02a2a32143e3"
+          },
+          "variant": "unmodified official source, locally compiled; not the upstream prebuilt binary",
+          "buildRecipeSha256": "437b2529e996741e63d67c2dad74942eb97c35dbb146cbfccb012f4ab977a4f0",
+          "compiler": "rustc 1.100.0 (0ef1bc386 2026-11-09)",
+          "builderImage": "rust:1-bookworm@sha256:ade39a710ef85f3506cffcfec3e8a24ba090badef1dff2fb798f71d878833fea",
+          "buildNetwork": "none"
+        }
+      ],
+      "mcpKnownAnswersPassed": 0,
+      "realClientMockSmokePassed": true,
+      "realClientNativeHookCalls": 1,
+      "realClientHookFailures": 0,
+      "issues": [],
+      "paidAdmitted": false,
+      "pending": "Complete product-specific known-answer, failure recovery, teardown, provider-routing and accounting review; then review paid cohort scope/budget."
+    },
+    {
+      "name": "trimemh",
+      "latestObserved": "source HEAD c51f223358e5",
+      "cohort": {
+        "name": "mcp-client-review",
+        "review": "MCP/library integration review. Preserve the complete vendor setup; account for indexing, embeddings, memory and upstream MCP costs. Mock providers before activation."
+      },
+      "source": {
+        "status": "source_verified",
+        "repository": "justonemorenight/trimemh",
+        "ref": "c51f223358e552077e6ce50ffd9c565799e81f06",
+        "source": "https://codeload.github.com/justonemorenight/trimemh/tar.gz/c51f223358e552077e6ce50ffd9c565799e81f06",
+        "sha256": "d295a1c940b524c938cfde05c5bc93be0fec5835688f021c8a1dfe7b30f1b424"
+      },
+      "sourceVerified": true,
+      "activationAttempted": false,
+      "evidence": [],
+      "configurationFiles": 0,
+      "runtimeVersionOutputs": [],
+      "sourceBuiltArtifacts": [],
+      "mcpKnownAnswersPassed": 0,
+      "realClientMockSmokePassed": false,
+      "realClientNativeHookCalls": 0,
+      "realClientHookFailures": 0,
+      "issues": [],
+      "paidAdmitted": false,
+      "pending": "Complete product-specific known-answer, failure recovery, teardown, provider-routing and accounting review; then review paid cohort scope/budget."
+    },
+    {
+      "name": "trs",
+      "latestObserved": "v0.10.3",
+      "cohort": {
+        "name": "native-codex-review",
+        "review": "Candidate Codex cohort. Vendor integration and runtime evidence required per product; this is not paid admission."
+      },
+      "source": {
+        "status": "source_verified",
+        "repository": "dPeluChe/trs",
+        "ref": "v0.10.3",
+        "source": "https://codeload.github.com/dPeluChe/trs/tar.gz/v0.10.3",
+        "sha256": "c1108484142e3cf10495046da446196df90df0816db37db6e0d52d1ed5e79ff6"
+      },
+      "sourceVerified": true,
+      "activationAttempted": true,
+      "evidence": [
+        {
+          "path": "evidence/probes-v10/trs-activation.json",
+          "sha256": "d6735685b069e1a10cf17b5dbbc1ed0378c23b3d3c5905b791a9768f7b9365ac"
+        },
+        {
+          "path": "evidence/native-client-v5/trs-activation.json",
+          "sha256": "b1258e31a5de90c93fa2b89a788d00c47f8e3a31f3267e247119ba2f3495d5b6"
+        },
+        {
+          "path": "evidence/native-client-v7/trs-activation.json",
+          "sha256": "53a6caa6d050f0efb5ac607687f91399b2e2a9d1b53607ca20d7cb6c3b6a7449"
+        }
+      ],
+      "configurationFiles": 2,
+      "runtimeVersionOutputs": [
+        "trs 0.10.3\n\ncheck for updates:  trs upgrade --check\nupgrade now:        trs upgrade\n"
+      ],
+      "sourceBuiltArtifacts": [
+        {
+          "name": "trs",
+          "file": "trs",
+          "sha256": "b6e4004d85c820d8d441e12c697697efddb16f39f0a4cad6b6b72083cc3e99cf",
+          "source": {
+            "name": "trs",
+            "url": "https://codeload.github.com/dPeluChe/trs/tar.gz/v0.10.3",
+            "sha256": "c1108484142e3cf10495046da446196df90df0816db37db6e0d52d1ed5e79ff6"
+          },
+          "variant": "unmodified official source, locally compiled; not the upstream prebuilt binary",
+          "buildRecipeSha256": "437b2529e996741e63d67c2dad74942eb97c35dbb146cbfccb012f4ab977a4f0",
+          "compiler": "rustc 1.100.0 (0ef1bc386 2026-11-09)",
+          "builderImage": "rust:1-bookworm@sha256:ade39a710ef85f3506cffcfec3e8a24ba090badef1dff2fb798f71d878833fea",
+          "buildNetwork": "none"
+        }
+      ],
+      "mcpKnownAnswersPassed": 0,
+      "realClientMockSmokePassed": true,
+      "realClientNativeHookCalls": 1,
+      "realClientHookFailures": 0,
+      "issues": [],
+      "paidAdmitted": false,
+      "pending": "Complete product-specific known-answer, failure recovery, teardown, provider-routing and accounting review; then review paid cohort scope/budget."
+    },
+    {
+      "name": "world-for-broes",
+      "latestObserved": "source HEAD fca5566920a5",
+      "cohort": {
+        "name": "standalone-transform-review",
+        "review": "Standalone library/pipeline. Review a fixed transformation or vendor SDK cohort; adapting it into an agent changes the treatment and must be explicit."
+      },
+      "source": {
+        "status": "source_verified",
+        "repository": "Jarandjar/world-for-broes",
+        "ref": "fca5566920a5a50b4ac85edb3bf5ef58f6980b5f",
+        "source": "https://codeload.github.com/Jarandjar/world-for-broes/tar.gz/fca5566920a5a50b4ac85edb3bf5ef58f6980b5f",
+        "sha256": "c3dc17e438dcc875808f68e9031ceae7cf86cc4513dbf9d31888b68ef9b40835"
+      },
+      "sourceVerified": true,
+      "activationAttempted": false,
+      "evidence": [],
+      "configurationFiles": 0,
+      "runtimeVersionOutputs": [],
+      "sourceBuiltArtifacts": [],
+      "mcpKnownAnswersPassed": 0,
+      "realClientMockSmokePassed": false,
+      "realClientNativeHookCalls": 0,
+      "realClientHookFailures": 0,
+      "issues": [],
+      "paidAdmitted": false,
+      "pending": "Complete product-specific known-answer, failure recovery, teardown, provider-routing and accounting review; then review paid cohort scope/budget."
+    }
+  ]
+}

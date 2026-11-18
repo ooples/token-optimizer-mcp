@@ -1,0 +1,476 @@
+{
+  "product": "ponytail",
+  "network": "none",
+  "providerCredentials": false,
+  "configurationFiles": [
+    {
+      "path": "home/.codex/config.toml",
+      "sha256": "1bf37736046a44167668f6c8edaf8c7a8080e5d061d26b039438fbbaec545766"
+    },
+    {
+      "path": "home/.codex/plugins/cache/ponytail/ponytail/5.3.3/package.json",
+      "sha256": "797154b6e029a9a70816a4dc9b5618a18cfe07f1798041fc131f45974737a01b"
+    },
+    {
+      "path": "home/.codex/plugins/cache/ponytail/ponytail/5.3.3/after-install.md",
+      "sha256": "accef47b5faf1d41519f05eddc93d47cf41671f86426d3e6127998df749b4293"
+    },
+    {
+      "path": "home/.codex/plugins/cache/ponytail/ponytail/5.3.3/README.md",
+      "sha256": "9608191c42ef942138857c44b54037fff7606cfda205d7320f4a3c82a7d8d41e"
+    },
+    {
+      "path": "home/.codex/plugins/cache/ponytail/ponytail/5.3.3/AGENTS.md",
+      "sha256": "b98b15e1d683ee205e124b52b8d330128593f4a87b545cf8185e2712cd1bb25f"
+    },
+    {
+      "path": "home/.codex/plugins/cache/ponytail/ponytail/5.3.3/opencode.json",
+      "sha256": "3a1689520689222b217d5107e8e7becc3fbbd2aae41dc086435cd6a941b650c1"
+    },
+    {
+      "path": "home/.codex/plugins/cache/ponytail/ponytail/5.3.3/INSTALL.md",
+      "sha256": "b5f6a44439dc84fa099f3e461fca20068561fc618d0864a78b96ce4c97c5b051"
+    },
+    {
+      "path": "home/.codex/plugins/cache/ponytail/ponytail/5.3.3/plugin.json",
+      "sha256": "6efc6b6c8e6e33625f9a27574f27a4d453179bcf534b09c430b00814ecbc98f3"
+    },
+    {
+      "path": "home/.codex/plugins/cache/ponytail/ponytail/5.3.3/gemini-extension.json",
+      "sha256": "d1f2e13fa0f34e51805937739510717cb8f1b4971c349cda6aeb74acbe3be360"
+    },
+    {
+      "path": "home/.codex/plugins/cache/ponytail/ponytail/5.3.3/.qoder/rules/ponytail.md",
+      "sha256": "ca99e5958383063029b206c7c50a0eaad1c29914a362bedd46033ec16b537e1e"
+    },
+    {
+      "path": "home/.codex/plugins/cache/ponytail/ponytail/5.3.3/skills/plugin.json",
+      "sha256": "b1db7be1404a84ebf992a2fb7a5a9296adb17b0fc63a14856e2028f0d1d16051"
+    },
+    {
+      "path": "home/.codex/plugins/cache/ponytail/ponytail/5.3.3/skills/ponytail-help/SKILL.md",
+      "sha256": "86ab0ce0af70cbeeeef499d5c884873b393f87f86401dcc45553662ce2c1eff9"
+    },
+    {
+      "path": "home/.codex/plugins/cache/ponytail/ponytail/5.3.3/skills/ponytail-gain/SKILL.md",
+      "sha256": "231034a896d6762e4b5c8468287083422c56b499119976ec9f76821f7d083090"
+    },
+    {
+      "path": "home/.codex/plugins/cache/ponytail/ponytail/5.3.3/skills/ponytail-review/SKILL.md",
+      "sha256": "33fe4ebe22a460924e5d4a261e223df22e409cc94ab76182bee9fb91a3ef022e"
+    },
+    {
+      "path": "home/.codex/plugins/cache/ponytail/ponytail/5.3.3/skills/ponytail-debt/SKILL.md",
+      "sha256": "b5ec2762f6ba8c4af9ea7173aa6c9f91b88655a25e43f9de0264f6ce8722b25f"
+    },
+    {
+      "path": "home/.codex/plugins/cache/ponytail/ponytail/5.3.3/skills/ponytail-audit/SKILL.md",
+      "sha256": "2b3223a02c386d1263e1b08343cb8eb3a53e444cdafb1d79e26c8ec2a8fcad28"
+    },
+    {
+      "path": "home/.codex/plugins/cache/ponytail/ponytail/5.3.3/skills/ponytail/SKILL.md",
+      "sha256": "9badd22a32e19cb884e46dfa8d3aae82bb81dfa5484105b8b4f0262df823a509"
+    },
+    {
+      "path": "home/.codex/plugins/cache/ponytail/ponytail/5.3.3/.qoder-plugin/plugin.json",
+      "sha256": "3f9fefeec2cebd2c5d11cccc3d8e8f2fc64e5ee0d719c222b8bf8f2de189845d"
+    },
+    {
+      "path": "home/.codex/plugins/cache/ponytail/ponytail/5.3.3/.devin-plugin/plugin.json",
+      "sha256": "c62fbb104bd10278bc740173d3d59b217a253b38f44995501527f7339e2d43c9"
+    },
+    {
+      "path": "home/.codex/plugins/cache/ponytail/ponytail/5.3.3/.clinerules/ponytail.md",
+      "sha256": "ca99e5958383063029b206c7c50a0eaad1c29914a362bedd46033ec16b537e1e"
+    },
+    {
+      "path": "home/.codex/plugins/cache/ponytail/ponytail/5.3.3/.kimi-plugin/plugin.json",
+      "sha256": "541406469062495921a9d59e995fa73990bbd809b2d082e7690580b46ecb7f47"
+    },
+    {
+      "path": "home/.codex/plugins/cache/ponytail/ponytail/5.3.3/.windsurf/rules/ponytail.md",
+      "sha256": "ca99e5958383063029b206c7c50a0eaad1c29914a362bedd46033ec16b537e1e"
+    },
+    {
+      "path": "home/.codex/plugins/cache/ponytail/ponytail/5.3.3/i18n/README.zh-CN.md",
+      "sha256": "da8bbd099e3b3a2111bcb76ac52febadd7bb0d65a86ab5d7d69a623d2a620ff8"
+    },
+    {
+      "path": "home/.codex/plugins/cache/ponytail/ponytail/5.3.3/i18n/README.ja.md",
+      "sha256": "f4b0c90d7fc83932c85f38a8621491db39f0c8933e7da2f8885307223f732517"
+    },
+    {
+      "path": "home/.codex/plugins/cache/ponytail/ponytail/5.3.3/i18n/README.ko.md",
+      "sha256": "52f4fa2cd5e509c8e0d923161eb089f0ada2ced41f983e1bd3f82ca74d700d58"
+    },
+    {
+      "path": "home/.codex/plugins/cache/ponytail/ponytail/5.3.3/i18n/README.es.md",
+      "sha256": "9548007e3cad9356006bdc25b250431801f4001ba5a5059b85715476f4a01ebd"
+    },
+    {
+      "path": "home/.codex/plugins/cache/ponytail/ponytail/5.3.3/.claude-plugin/marketplace.json",
+      "sha256": "5c17acc0d30732735a7bf725214b8db9f8a1bb3485233744c7a5e0ca1d7434e8"
+    },
+    {
+      "path": "home/.codex/plugins/cache/ponytail/ponytail/5.3.3/.claude-plugin/plugin.json",
+      "sha256": "82f8b30ea6d2cfe195a90aba5763c615828d794cc3111d1623717bd8b4a5fd45"
+    },
+    {
+      "path": "home/.codex/plugins/cache/ponytail/ponytail/5.3.3/.codex-plugin/plugin.json",
+      "sha256": "303ccd35b858b17f4b33080f89a015b40b80629f2015f049902ffc5520aba434"
+    },
+    {
+      "path": "home/.codex/plugins/cache/ponytail/ponytail/5.3.3/benchmarks/README.md",
+      "sha256": "6ffe9a80889c82f161b3f395a028dea1dec0ec5805e3320899e3b05f35ef613f"
+    },
+    {
+      "path": "home/.codex/plugins/cache/ponytail/ponytail/5.3.3/benchmarks/arms/caveman-SKILL.md",
+      "sha256": "09ebdef35a85d058f8eba04c6a3d91079ac8dabc3d45d265694f128c808f7648"
+    },
+    {
+      "path": "home/.codex/plugins/cache/ponytail/ponytail/5.3.3/benchmarks/results/2026-06-16-correctness-gate-fix.md",
+      "sha256": "9631b5096186db625f0146df14f7b0383e389407dca7c11dd326c3627c539c5f"
+    },
+    {
+      "path": "home/.codex/plugins/cache/ponytail/ponytail/5.3.3/benchmarks/results/2026-10-07-agentic.md",
+      "sha256": "a985555ce1835e82c17aa425f2d3743e0373345c8e73ad761923a700dcc341e0"
+    },
+    {
+      "path": "home/.codex/plugins/cache/ponytail/ponytail/5.3.3/benchmarks/results/2026-06-16-robustness-audit.md",
+      "sha256": "32436f8323a2fb89246a436d07ed9fc6eab780ca0eb93c3937a08747c57f2dd3"
+    },
+    {
+      "path": "home/.codex/plugins/cache/ponytail/ponytail/5.3.3/benchmarks/results/2026-06-15-llama3.2-local.md",
+      "sha256": "6cc3cef8ae70d148063b3cae4e7cf2c46624037c291ff4d6011ef1125e3edbe5"
+    },
+    {
+      "path": "home/.codex/plugins/cache/ponytail/ponytail/5.3.3/benchmarks/results/2026-06-12-v4-hardening-vs-caveman.md",
+      "sha256": "d7792afb3d61ae7ca33113782263a208095895af8e2e9499031a2647a031cd22"
+    },
+    {
+      "path": "home/.codex/plugins/cache/ponytail/ponytail/5.3.3/benchmarks/results/2026-06-22-issue-245-217-comprehension.md",
+      "sha256": "0ae799564d9a63576701e1b875682b482d8644c2eb713e8ff68602d99d55e86f"
+    },
+    {
+      "path": "home/.codex/plugins/cache/ponytail/ponytail/5.3.3/benchmarks/results/2026-06-17-cost-verification.md",
+      "sha256": "bb32d42e5879bd0eace8169136814fe1fed0cbfb517698e6c845cb22229b0c21"
+    },
+    {
+      "path": "home/.codex/plugins/cache/ponytail/ponytail/5.3.3/benchmarks/results/2026-06-12-caveman-vs-ponytail.md",
+      "sha256": "ce2e88d119f89d6f815349d60c48750c99f58b3df0a0b29adca60b07d1a9b319"
+    },
+    {
+      "path": "home/.codex/plugins/cache/ponytail/ponytail/5.3.3/benchmarks/results/2026-06-18-agentic.md",
+      "sha256": "fe274964a4f2b9801e67ba956eef3a029c472aa5693b7e0643c83bd406f9ee6f"
+    },
+    {
+      "path": "home/.codex/plugins/cache/ponytail/ponytail/5.3.3/benchmarks/results/2026-06-17-agentic-safety.md",
+      "sha256": "57006a1f5ead7a2fb1c4c8edc83c6ec38ae20dbd9616fb9d4ac4f1515d24d920"
+    },
+    {
+      "path": "home/.codex/plugins/cache/ponytail/ponytail/5.3.3/benchmarks/agentic/README.md",
+      "sha256": "abf4e5e49487dc4eb1b6c4aaac03d3aa12fde159cbb10f5af9237d96eaaa9d38"
+    },
+    {
+      "path": "home/.codex/plugins/cache/ponytail/ponytail/5.3.3/examples/deep-clone.md",
+      "sha256": "ad4757547d5cb547d14398e150217b751a7601ef1d6298c1ba20327299d80eac"
+    },
+    {
+      "path": "home/.codex/plugins/cache/ponytail/ponytail/5.3.3/examples/react-countdown.md",
+      "sha256": "1109af1dfba055d6a4e9538f90be1d5c204d601389e4148717af705c941ca3b9"
+    },
+    {
+      "path": "home/.codex/plugins/cache/ponytail/ponytail/5.3.3/examples/infinite-scroll.md",
+      "sha256": "38f6586e18dab81988346c31555a31dc8044c9171da0e79c548f778acf7d245f"
+    },
+    {
+      "path": "home/.codex/plugins/cache/ponytail/ponytail/5.3.3/examples/url-params.md",
+      "sha256": "c6e6fdd2cc625fdd77c1140beea706f6c60fa638f14b9052fb02ac5890ca503b"
+    },
+    {
+      "path": "home/.codex/plugins/cache/ponytail/ponytail/5.3.3/examples/group-by.md",
+      "sha256": "6a9484027698d3eef9fc383942c1b57635f607e6b4df6c877dca5556ad2df6b4"
+    },
+    {
+      "path": "home/.codex/plugins/cache/ponytail/ponytail/5.3.3/examples/README.md",
+      "sha256": "7ddc7d14b398b9e6cdfb34e3e7f69d9e51cbd7cea8902c6a7c5857af10161a07"
+    },
+    {
+      "path": "home/.codex/plugins/cache/ponytail/ponytail/5.3.3/examples/rate-limit.md",
+      "sha256": "4231ef65b39752973b0d9d3fb1f49877527545a7eac01ee77c3a47808404ce85"
+    },
+    {
+      "path": "home/.codex/plugins/cache/ponytail/ponytail/5.3.3/examples/email-validation.md",
+      "sha256": "b8467925f6db86c9d8a4038ea4148b7ff882fc77f2597d7310075c22669f3485"
+    },
+    {
+      "path": "home/.codex/plugins/cache/ponytail/ponytail/5.3.3/examples/debounce.md",
+      "sha256": "1474e43fa0912bd019cea93139bdabdbbb8da969759e1940fa392ada947a553f"
+    },
+    {
+      "path": "home/.codex/plugins/cache/ponytail/ponytail/5.3.3/examples/number-formatting.md",
+      "sha256": "599a9d2f5af00489fd7cbed813b429a7ff43abaac433c9db48495c6f457cc203"
+    },
+    {
+      "path": "home/.codex/plugins/cache/ponytail/ponytail/5.3.3/examples/modal-dialog.md",
+      "sha256": "b182573461392884c71ffec530c219808f5a0cd13bb0395b7b23c31d8d2a855c"
+    },
+    {
+      "path": "home/.codex/plugins/cache/ponytail/ponytail/5.3.3/examples/csv-sum.md",
+      "sha256": "3e0ba36601b03f6d26b9afafe791d9332d4159ac865e345840d9b187bd823f78"
+    },
+    {
+      "path": "home/.codex/plugins/cache/ponytail/ponytail/5.3.3/.kiro/steering/ponytail.md",
+      "sha256": "bbd1c60ea71dac352cc46f47476a9b8a75793af5a31f9df93c92a944dc7b0bbd"
+    },
+    {
+      "path": "home/.codex/plugins/cache/ponytail/ponytail/5.3.3/pi-extension/package.json",
+      "sha256": "376677d0d7d7846e7e521fc14f129e41cdbb60f0018834f34d3ef638f30e4be0"
+    },
+    {
+      "path": "home/.codex/plugins/cache/ponytail/ponytail/5.3.3/hooks/copilot-hooks.json",
+      "sha256": "692b5148c3605d2ece2f081834b650c3c43d75cb272a7884dc40e9ce4425ef79"
+    },
+    {
+      "path": "home/.codex/plugins/cache/ponytail/ponytail/5.3.3/hooks/claude-codex-hooks.json",
+      "sha256": "3320ac7fae9bdded7fab83b62017db55c01b25af3f5896a518a5cf911072f54a"
+    },
+    {
+      "path": "home/.codex/plugins/cache/ponytail/ponytail/5.3.3/hooks/claude-band.json",
+      "sha256": "8316581f357f5481dbf26077d118ca9ee03bcd14166e4da1bcd878ab723884c3"
+    },
+    {
+      "path": "home/.codex/plugins/cache/ponytail/ponytail/5.3.3/hooks/qoder-hooks.json",
+      "sha256": "3831c8e496b2c6f85bbe0ee36482e34855905d03bfb39e027562dfbe3d4ed0d8"
+    },
+    {
+      "path": "home/.codex/plugins/cache/ponytail/ponytail/5.3.3/hooks/cursor-hooks.json",
+      "sha256": "0b9f026058ad3209fd27a212881fd43a7d824a3a3405fdecf446e2f8c8647c65"
+    },
+    {
+      "path": "home/.codex/plugins/cache/ponytail/ponytail/5.3.3/docs/agent-portability.md",
+      "sha256": "e75c14482302710bba6a2cf96afe4e2a10710d031a64648866c94c40bb35b6dc"
+    },
+    {
+      "path": "home/.codex/plugins/cache/ponytail/ponytail/5.3.3/docs/cursor-hooks.md",
+      "sha256": "5c7f2e225570fedcf3f9be166aaea9035eec495d2183f3d65dbc40638c276a10"
+    },
+    {
+      "path": "home/.codex/plugins/cache/ponytail/ponytail/5.3.3/.opencode/command/ponytail-help.md",
+      "sha256": "8d29017fc8634459843fa25f73aa727caa0c5f3c76d5a9bb202a943b162cb7f6"
+    },
+    {
+      "path": "home/.codex/plugins/cache/ponytail/ponytail/5.3.3/.opencode/command/ponytail-review.md",
+      "sha256": "444d0b0a94e7a7d312a2c7ef906adbc3009ef0d00927d25d4e7ad4e944555e3d"
+    },
+    {
+      "path": "home/.codex/plugins/cache/ponytail/ponytail/5.3.3/.opencode/command/ponytail-debt.md",
+      "sha256": "349b857a8435b22aa0f612e098835d8d67dd8f82842a1dbdc29261b0483f6a36"
+    },
+    {
+      "path": "home/.codex/plugins/cache/ponytail/ponytail/5.3.3/.opencode/command/ponytail-audit.md",
+      "sha256": "f40cb014b74bf5e944b4d21b2e300c0aa818e1b9cd8d6cf829ee4f7feaa37bfd"
+    },
+    {
+      "path": "home/.codex/plugins/cache/ponytail/ponytail/5.3.3/.opencode/command/ponytail.md",
+      "sha256": "0024380fdac3c40a0fc4d185a745074117262feb03297ad1facbc7df43201969"
+    },
+    {
+      "path": "home/.codex/plugins/cache/ponytail/ponytail/5.3.3/.opencode/command/ponytail-gain.md",
+      "sha256": "fb3eae02ae264cfdde78a132bab60f7b92f4d16a60812a8dddc5278a8dd92165"
+    },
+    {
+      "path": "home/.codex/plugins/cache/ponytail/ponytail/5.3.3/.grok-plugin/marketplace.json",
+      "sha256": "99c22650e22ca25e5a8b4328ef6574a5ac19f214273249ae0ede2b5a919a8fa6"
+    },
+    {
+      "path": "home/.codex/plugins/cache/ponytail/ponytail/5.3.3/.github/copilot-instructions.md",
+      "sha256": "ca99e5958383063029b206c7c50a0eaad1c29914a362bedd46033ec16b537e1e"
+    },
+    {
+      "path": "home/.codex/plugins/cache/ponytail/ponytail/5.3.3/.github/CONTRIBUTING.md",
+      "sha256": "699132e8f07a5b2594095eef3b9e61101c896c711b4d7a2b62394c517bb60d5d"
+    },
+    {
+      "path": "home/.codex/plugins/cache/ponytail/ponytail/5.3.3/.github/plugin/marketplace.json",
+      "sha256": "97b047d980151edf9cb556d0d33a8ac7958f1c676b959756e90ba088e92dcbdd"
+    },
+    {
+      "path": "home/.codex/plugins/cache/ponytail/ponytail/5.3.3/.github/plugin/plugin.json",
+      "sha256": "d935104a6845bfcc955aa9de9bf93e9d7eb9d7f42914c93b4c2c0b4e40e825ac"
+    },
+    {
+      "path": "home/.codex/plugins/cache/ponytail/ponytail/5.3.3/commands/ponytail-audit.toml",
+      "sha256": "eec7971e361d2f0796bda3d2d7895b5c110ab49949c0e288a559c6cc1319c50f"
+    },
+    {
+      "path": "home/.codex/plugins/cache/ponytail/ponytail/5.3.3/commands/ponytail.toml",
+      "sha256": "ecb6a232d49aa3de0d43c3e514f0b1b3755e9657f8703756148f67f42750b495"
+    },
+    {
+      "path": "home/.codex/plugins/cache/ponytail/ponytail/5.3.3/commands/ponytail-help.toml",
+      "sha256": "7d47b79ff6f5afcb8972beac1a956d6c76ff35cf9e6ecfa6986a466489866af5"
+    },
+    {
+      "path": "home/.codex/plugins/cache/ponytail/ponytail/5.3.3/commands/ponytail-gain.toml",
+      "sha256": "faffa8be16687e519d6a175e93800de8507929509d0c0751c61c46365f38b086"
+    },
+    {
+      "path": "home/.codex/plugins/cache/ponytail/ponytail/5.3.3/commands/ponytail-debt.toml",
+      "sha256": "a537eaafad70f105952301875128363d33dc3a2f1342cd0dc2cada51feaf2eff"
+    },
+    {
+      "path": "home/.codex/plugins/cache/ponytail/ponytail/5.3.3/commands/ponytail-review.toml",
+      "sha256": "a7f57fd8b951991dc46a064b45ac4f93d5455e61489af613803d24774c9746e2"
+    },
+    {
+      "path": "home/.codex/plugins/cache/ponytail/ponytail/5.3.3/.agents/plugins/marketplace.json",
+      "sha256": "429fd8844db68d98bde0316f0328458dc8169d2fd9740e59f84b5bdf827421f4"
+    },
+    {
+      "path": "home/.codex/plugins/cache/ponytail/ponytail/5.3.3/.agents/rules/ponytail.md",
+      "sha256": "ca99e5958383063029b206c7c50a0eaad1c29914a362bedd46033ec16b537e1e"
+    },
+    {
+      "path": "home/.codex/plugins/cache/ponytail/ponytail/5.3.3/.openclaw/skills/ponytail-help/SKILL.md",
+      "sha256": "3a267f1c71058854b608c4eebcf2291a90c1a25972cbdd52fef777d6a2c60945"
+    },
+    {
+      "path": "home/.codex/plugins/cache/ponytail/ponytail/5.3.3/.openclaw/skills/ponytail-gain/SKILL.md",
+      "sha256": "40efb084e29bfaaa85a0807ec3a88d5c85897a7bf751985496295e541dea937b"
+    },
+    {
+      "path": "home/.codex/plugins/cache/ponytail/ponytail/5.3.3/.openclaw/skills/ponytail-review/SKILL.md",
+      "sha256": "1f010d87a90d9e801f5634e3b863510b40121608f6e980f20bb3db8b2d165299"
+    },
+    {
+      "path": "home/.codex/plugins/cache/ponytail/ponytail/5.3.3/.openclaw/skills/ponytail-debt/SKILL.md",
+      "sha256": "d55354743bf344611907bbcda8da105abe4d3eec4696b80099eb9b6c02029c40"
+    },
+    {
+      "path": "home/.codex/plugins/cache/ponytail/ponytail/5.3.3/.openclaw/skills/ponytail-audit/SKILL.md",
+      "sha256": "3dc1c18ec325632db297f2c34d03e6f4b3fe5f50a8eaee727f02d223b1ee3d4b"
+    },
+    {
+      "path": "home/.codex/plugins/cache/ponytail/ponytail/5.3.3/.openclaw/skills/ponytail/SKILL.md",
+      "sha256": "3868c7aa7cc721b7391a6a136ce609bc1e08a2b29d393fe2e637297d8d45f379"
+    }
+  ],
+  "codexConfigs": [
+    {
+      "marketplaces": {
+        "ponytail": {
+          "source_type": "local",
+          "source": "/opt/qualification-vendor/ponytail"
+        }
+      },
+      "plugins": {
+        "ponytail@ponytail": {
+          "enabled": true
+        }
+      }
+    }
+  ],
+  "hookCalls": [
+    {
+      "event": "SessionStart",
+      "exit_code": 0,
+      "stdout": "PONYTAIL MODE ACTIVE \u2014 level: full\n\n# Ponytail\n\nYou are a lazy senior developer. The best code is the code never written. You solve the whole problem with the least new code. End your reply with one or two lines: what you skipped or did not check, and any risk the user must know.\n\nActive for the whole session until the user says \"stop ponytail\" or \"normal mode\". Switch level: `/ponytail lite|full|ultra`.\n\n## Before you write\n\nRead the task and the code it touches. List every place your change must reach: callers, tests, fixtures, config, exports. Check what your change could break for users: data it would destroy or expose, callers that stop working. That is scope. Extra features are not.\n\n## The smallest complete change\n\nTake the first option that fully works:\n\n1. Does it need to exist? Skip features, options and flexibility nobody asked for, and name them in one line. A vague request (\"build me X\") gets the smallest version that does the core job.\n2. Already in this codebase (a helper, component, service, pattern)? Use it the way the surrounding code does.\n3. Standard library or a platform feature? Use it, unless the project has its own. A house component beats a native widget.\n4. An installed dependency? Use it. Never add a dependency for a few lines.\n5. Can it be one line a reader gets at a glance? One line.\n6. Otherwise: the minimum code that works.\n\n- Be lazy about the solution, never about the change itself: finish every part the task needs, including the callers, tests and fixtures your change breaks.\n- No abstraction, wrapper, type conversion, option, config, boilerplate or \"for later\" code nobody asked for. Keep values in the form the platform already gives you. Deletion beats addition. Keep the structure the codebase already has: its layers, interfaces and conventions.\n- The shortest working diff wins, once you know everything it must touch. A one-liner that needs decoding is not short.\n- Comment only the why the code cannot show, in one line.\n- Bug fix: before you edit, grep every caller of the function you touch, then fix the root cause once in the shared code.\n- Code you move or merge keeps its error handling and validation.\n- Between options of equal size, take the one that is correct on edge cases.\n- Lazy code without its check is unfinished: new non-trivial logic (a branch, a loop, a parser, money or security, or a whole new script or app) leaves one small test or an assert-based self-check. Trivial changes need none.\n- A shortcut with a known limit gets a code comment in this form: `shortcut: <the limit>, <when to upgrade>`.\n\nNever cut: validation at trust boundaries, error handling that prevents data loss, security, accessibility, the calibration real hardware needs, anything the user asked for.\n\n## Levels\n\n| Level | Behavior |\n|-------|----------|\n| **full** | The rules above. Default. |\n\n\nCodebase map (what already exists; reuse it, read a file only when you need its details):\n./: add\n\nSTATUSLINE SETUP NEEDED: The ponytail plugin includes a statusline badge showing active mode (e.g. [PONYTAIL], [PONYTAIL:ULTRA]). It is not configured yet. To enable, add this to /home/bench/free-qualification-hxw8xr2_/ponytail/home/.claude/settings.json: \"statusLine\": { \"type\": \"command\", \"command\": \"bash \\\"/home/bench/free-qualification-hxw8xr2_/ponytail/home/.claude/ponytail-statusline.sh\\\"\" } Proactively offer to set this up for the user on first interaction.",
+      "stderr": ""
+    },
+    {
+      "event": "UserPromptSubmit",
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    }
+  ],
+  "mcpCalls": [],
+  "nativeClientSmoke": {
+    "exit_code": 0,
+    "stdout": "{\"type\":\"thread.started\",\"thread_id\":\"01a1ecb5-40c8-7072-afaa-37ca30b6d3c1\"}\n{\"type\":\"item.completed\",\"item\":{\"id\":\"item_0\",\"type\":\"error\",\"message\":\"`--dangerously-bypass-hook-trust` is enabled. Enabled hooks may run without review for this invocation.\"}}\n{\"type\":\"item.completed\",\"item\":{\"id\":\"item_1\",\"type\":\"error\",\"message\":\"`--dangerously-bypass-hook-trust` is enabled. Enabled hooks may run without review for this invocation.\"}}\n{\"type\":\"turn.started\"}\n{\"type\":\"item.started\",\"item\":{\"id\":\"item_2\",\"type\":\"command_execution\",\"command\":\"/bin/bash -lc 'cat fixture.py'\",\"aggregated_output\":\"\",\"exit_code\":null,\"status\":\"in_progress\"}}\n{\"type\":\"item.completed\",\"item\":{\"id\":\"item_2\",\"type\":\"command_execution\",\"command\":\"/bin/bash -lc 'cat fixture.py'\",\"aggregated_output\":\"def add(a, b):\\n    return a + b\\n\",\"exit_code\":0,\"status\":\"completed\"}}\n{\"type\":\"item.completed\",\"item\":{\"id\":\"item_3\",\"type\":\"agent_message\",\"text\":\"Local qualification fixture complete.\"}}\n{\"type\":\"turn.completed\",\"usage\":{\"input_tokens\":20,\"cached_input_tokens\":0,\"cache_write_input_tokens\":0,\"output_tokens\":10,\"reasoning_output_tokens\":0}}\n",
+    "stderr": "Reading additional input from stdin...\n",
+    "requests": [
+      {
+        "path": "/v1/responses",
+        "model": "gpt-6.1-sol",
+        "reasoning": {
+          "effort": "high",
+          "context": "all_turns"
+        },
+        "tools": []
+      },
+      {
+        "path": "/v1/responses",
+        "model": "gpt-6.1-sol",
+        "reasoning": {
+          "effort": "high",
+          "context": "all_turns"
+        },
+        "tools": []
+      }
+    ],
+    "modelCalls": 0,
+    "syntheticUsage": true,
+    "network": "none",
+    "scope": "protocol fixture, not model evaluation"
+  },
+  "nativeHookReceipts": [
+    {
+      "command": "node -e \"require(require('path').join(process.env.CLAUDE_PLUGIN_ROOT.split(String.fromCharCode(92)).join('/'), 'hooks/ponytail-activate.js'))\"",
+      "input": "{\"session_id\":\"01a1ecb5-40c8-7072-afaa-37ca30b6d3c1\",\"transcript_path\":\"/home/bench/free-qualification-hxw8xr2_/ponytail/home/.codex/sessions/2026/11/18/rollout-2026-11-18T03-31-04-01a1ecb5-40c8-7072-afaa-37ca30b6d3c1.jsonl\",\"cwd\":\"/home/bench/free-qualification-hxw8xr2_/ponytail/workspace\",\"hook_event_name\":\"SessionStart\",\"model\":\"gpt-6.1-sol\",\"permission_mode\":\"bypassPermissions\",\"source\":\"startup\"}",
+      "exit_code": 0,
+      "stdout": "{\"hookSpecificOutput\":{\"hookEventName\":\"SessionStart\",\"additionalContext\":\"PONYTAIL MODE ACTIVE \u2014 level: full\\n\\n# Ponytail\\n\\nYou are a lazy senior developer. The best code is the code never written. You solve the whole problem with the least new code. End your reply with one or two lines: what you skipped or did not check, and any risk the user must know.\\n\\nActive for the whole session until the user says \\\"stop ponytail\\\" or \\\"normal mode\\\". Switch level: `/ponytail lite|full|ultra`.\\n\\n## Before you write\\n\\nRead the task and the code it touches. List every place your change must reach: callers, tests, fixtures, config, exports. Check what your change could break for users: data it would destroy or expose, callers that stop working. That is scope. Extra features are not.\\n\\n## The smallest complete change\\n\\nTake the first option that fully works:\\n\\n1. Does it need to exist? Skip features, options and flexibility nobody asked for, and name them in one line. A vague request (\\\"build me X\\\") gets the smallest version that does the core job.\\n2. Already in this codebase (a helper, component, service, pattern)? Use it the way the surrounding code does.\\n3. Standard library or a platform feature? Use it, unless the project has its own. A house component beats a native widget.\\n4. An installed dependency? Use it. Never add a dependency for a few lines.\\n5. Can it be one line a reader gets at a glance? One line.\\n6. Otherwise: the minimum code that works.\\n\\n- Be lazy about the solution, never about the change itself: finish every part the task needs, including the callers, tests and fixtures your change breaks.\\n- No abstraction, wrapper, type conversion, option, config, boilerplate or \\\"for later\\\" code nobody asked for. Keep values in the form the platform already gives you. Deletion beats addition. Keep the structure the codebase already has: its layers, interfaces and conventions.\\n- The shortest working diff wins, once you know everything it must touch. A one-liner that needs decoding is not short.\\n- Comment only the why the code cannot show, in one line.\\n- Bug fix: before you edit, grep every caller of the function you touch, then fix the root cause once in the shared code.\\n- Code you move or merge keeps its error handling and validation.\\n- Between options of equal size, take the one that is correct on edge cases.\\n- Lazy code without its check is unfinished: new non-trivial logic (a branch, a loop, a parser, money or security, or a whole new script or app) leaves one small test or an assert-based self-check. Trivial changes need none.\\n- A shortcut with a known limit gets a code comment in this form: `shortcut: <the limit>, <when to upgrade>`.\\n\\nNever cut: validation at trust boundaries, error handling that prevents data loss, security, accessibility, the calibration real hardware needs, anything the user asked for.\\n\\n## Levels\\n\\n| Level | Behavior |\\n|-------|----------|\\n| **full** | The rules above. Default. |\\n\\n\\nCodebase map (what already exists; reuse it, read a file only when you need its details):\\n./: add\"}}",
+      "stderr": ""
+    },
+    {
+      "command": "node -e \"require(require('path').join(process.env.CLAUDE_PLUGIN_ROOT.split(String.fromCharCode(92)).join('/'), 'hooks/ponytail-mode-tracker.js'))\"",
+      "input": "{\"session_id\":\"01a1ecb5-40c8-7072-afaa-37ca30b6d3c1\",\"turn_id\":\"01a1ecb5-40ec-7272-b2f7-267b8ceff40a\",\"transcript_path\":\"/home/bench/free-qualification-hxw8xr2_/ponytail/home/.codex/sessions/2026/11/18/rollout-2026-11-18T03-31-04-01a1ecb5-40c8-7072-afaa-37ca30b6d3c1.jsonl\",\"cwd\":\"/home/bench/free-qualification-hxw8xr2_/ponytail/workspace\",\"hook_event_name\":\"UserPromptSubmit\",\"model\":\"gpt-6.1-sol\",\"permission_mode\":\"bypassPermissions\",\"prompt\":\"Inspect fixture.py to fix its tests.\"}",
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    }
+  ],
+  "hookInstrumentation": [
+    {
+      "path": "home/.codex/plugins/cache/ponytail/ponytail/5.3.3/hooks/claude-codex-hooks.json",
+      "originalSha256": "3320ac7fae9bdded7fab83b62017db55c01b25af3f5896a518a5cf911072f54a",
+      "instrumentedSha256": "af157d31dd7518cfc0ec35db45e6f63821d02eb0fcfe69fc2d1ce27296719493"
+    }
+  ],
+  "legacyHookCalls": [],
+  "nativeConfigParse": {
+    "exit_code": 0,
+    "stderr": ""
+  },
+  "steps": [
+    {
+      "product": "ponytail",
+      "command": [
+        "codex",
+        "plugin",
+        "marketplace",
+        "add",
+        "/opt/qualification-vendor/ponytail",
+        "--json"
+      ],
+      "returncode": 0,
+      "stdout": "{\n  \"marketplaceName\": \"ponytail\",\n  \"installedRoot\": \"/opt/qualification-vendor/ponytail\",\n  \"alreadyAdded\": false\n}\n",
+      "stderr": ""
+    },
+    {
+      "product": "ponytail",
+      "command": [
+        "codex",
+        "plugin",
+        "add",
+        "ponytail@ponytail",
+        "--json"
+      ],
+      "returncode": 0,
+      "stdout": "{\n  \"pluginId\": \"ponytail@ponytail\",\n  \"name\": \"ponytail\",\n  \"marketplaceName\": \"ponytail\",\n  \"version\": \"5.3.3\",\n  \"installedPath\": \"/home/bench/free-qualification-hxw8xr2_/ponytail/home/.codex/plugins/cache/ponytail/ponytail/5.3.3\",\n  \"authPolicy\": \"ON_INSTALL\"\n}\n",
+      "stderr": ""
+    }
+  ],
+  "paidCalls": 0
+}

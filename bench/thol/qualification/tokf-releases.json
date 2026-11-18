@@ -1,0 +1,1131 @@
+[
+  {
+    "tag": "tokf-v0.2.54",
+    "publishedAt": "2026-09-06T22:02:59Z",
+    "assets": [
+      {
+        "name": "tokf-v0.2.54-aarch64-apple-darwin.tar.gz",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.54/tokf-v0.2.54-aarch64-apple-darwin.tar.gz",
+        "digest": "sha256:17b1118e726de0adafc2534fce10b36e157db9ba037eee59e29c2fd26df433d9",
+        "size": 6898076
+      },
+      {
+        "name": "tokf-v0.2.54-aarch64-apple-darwin.tar.gz.sha256",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.54/tokf-v0.2.54-aarch64-apple-darwin.tar.gz.sha256",
+        "digest": "sha256:d4b4ec0504a897cc12e92ae4a97edce0df0eec76a40322772c6ee2156c6b69cb",
+        "size": 65
+      },
+      {
+        "name": "tokf-v0.2.54-x86_64-apple-darwin.tar.gz",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.54/tokf-v0.2.54-x86_64-apple-darwin.tar.gz",
+        "digest": "sha256:09eb422adcb4c467c6b510b98131187e1cd4ca3074ef5e0d05568f65dd515f16",
+        "size": 7351297
+      },
+      {
+        "name": "tokf-v0.2.54-x86_64-apple-darwin.tar.gz.sha256",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.54/tokf-v0.2.54-x86_64-apple-darwin.tar.gz.sha256",
+        "digest": "sha256:7dfb1a8204d5baaf5d06904c77dba34f373266fc002fd7bae00a3bacbe2d4842",
+        "size": 65
+      },
+      {
+        "name": "tokf-v0.2.54-x86_64-unknown-linux-gnu.tar.gz",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.54/tokf-v0.2.54-x86_64-unknown-linux-gnu.tar.gz",
+        "digest": "sha256:50484ad571ef4a7b36386469bb2d07b7f019db1cc22e3895cc9ae8410f8c01f4",
+        "size": 8959847
+      },
+      {
+        "name": "tokf-v0.2.54-x86_64-unknown-linux-gnu.tar.gz.sha256",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.54/tokf-v0.2.54-x86_64-unknown-linux-gnu.tar.gz.sha256",
+        "digest": "sha256:a106158bb75bf31544819b90187a9c8aaf55a97775c71f16aca213b6ea6055b7",
+        "size": 65
+      }
+    ]
+  },
+  {
+    "tag": "tokf-server-v0.2.54",
+    "publishedAt": "2026-09-06T22:02:59Z",
+    "assets": []
+  },
+  {
+    "tag": "tokf-hook-types-v0.2.54",
+    "publishedAt": "2026-09-06T22:02:57Z",
+    "assets": []
+  },
+  {
+    "tag": "tokf-filter-v0.2.54",
+    "publishedAt": "2026-09-06T22:02:58Z",
+    "assets": []
+  },
+  {
+    "tag": "tokf-common-v0.2.54",
+    "publishedAt": "2026-09-06T22:02:56Z",
+    "assets": []
+  },
+  {
+    "tag": "catalog-types-v0.2.54",
+    "publishedAt": "2026-09-06T22:03:00Z",
+    "assets": []
+  },
+  {
+    "tag": "tokf-v0.2.53",
+    "publishedAt": "2026-08-28T15:11:08Z",
+    "assets": [
+      {
+        "name": "tokf-v0.2.53-aarch64-apple-darwin.tar.gz",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.53/tokf-v0.2.53-aarch64-apple-darwin.tar.gz",
+        "digest": "sha256:d1687b01a69e85221f598ef06bd224b49225846a2b76e87c20f47a08d58bbe8d",
+        "size": 6849794
+      },
+      {
+        "name": "tokf-v0.2.53-aarch64-apple-darwin.tar.gz.sha256",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.53/tokf-v0.2.53-aarch64-apple-darwin.tar.gz.sha256",
+        "digest": "sha256:e0ebe73f2cf80519604b6641d2128a60eb6707b95225a150bf1f77ed8df53040",
+        "size": 65
+      },
+      {
+        "name": "tokf-v0.2.53-x86_64-apple-darwin.tar.gz",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.53/tokf-v0.2.53-x86_64-apple-darwin.tar.gz",
+        "digest": "sha256:8f6193547d67ba3bd1b51a90ea4618b0282a32fa29fba1b70ebb2d8487d34b14",
+        "size": 7314434
+      },
+      {
+        "name": "tokf-v0.2.53-x86_64-apple-darwin.tar.gz.sha256",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.53/tokf-v0.2.53-x86_64-apple-darwin.tar.gz.sha256",
+        "digest": "sha256:e0a39b5e5f48c5d9a56829e4602249945c42512bb61033566e50fcad60fce6a0",
+        "size": 65
+      },
+      {
+        "name": "tokf-v0.2.53-x86_64-unknown-linux-gnu.tar.gz",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.53/tokf-v0.2.53-x86_64-unknown-linux-gnu.tar.gz",
+        "digest": "sha256:65db22c562b03929f613f6474e4aea892ab5270dd43dd25ce5f1fe66eb5ca126",
+        "size": 8920279
+      },
+      {
+        "name": "tokf-v0.2.53-x86_64-unknown-linux-gnu.tar.gz.sha256",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.53/tokf-v0.2.53-x86_64-unknown-linux-gnu.tar.gz.sha256",
+        "digest": "sha256:1d18c761ba9ff4537c807d516294c7db685fcee1bd39729ce285138b185490f0",
+        "size": 65
+      }
+    ]
+  },
+  {
+    "tag": "tokf-server-v0.2.53",
+    "publishedAt": "2026-08-28T15:11:09Z",
+    "assets": []
+  },
+  {
+    "tag": "tokf-hook-types-v0.2.53",
+    "publishedAt": "2026-08-28T15:11:06Z",
+    "assets": []
+  },
+  {
+    "tag": "tokf-filter-v0.2.53",
+    "publishedAt": "2026-08-28T15:11:07Z",
+    "assets": []
+  },
+  {
+    "tag": "tokf-common-v0.2.53",
+    "publishedAt": "2026-08-28T15:11:05Z",
+    "assets": []
+  },
+  {
+    "tag": "catalog-types-v0.2.53",
+    "publishedAt": "2026-08-28T15:11:09Z",
+    "assets": []
+  },
+  {
+    "tag": "tokf-v0.2.52",
+    "publishedAt": "2026-07-23T09:49:20Z",
+    "assets": [
+      {
+        "name": "tokf-v0.2.52-aarch64-apple-darwin.tar.gz",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.52/tokf-v0.2.52-aarch64-apple-darwin.tar.gz",
+        "digest": "sha256:74ad628f88ddfedefffc99e3d9850d17bfced94f68422ef3507bf92416720e33",
+        "size": 6961395
+      },
+      {
+        "name": "tokf-v0.2.52-aarch64-apple-darwin.tar.gz.sha256",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.52/tokf-v0.2.52-aarch64-apple-darwin.tar.gz.sha256",
+        "digest": "sha256:e7a47dd6af7527d1e2e3c3bdf50ef4c2f4c9e6304cb22632236c18782a1adc5a",
+        "size": 65
+      },
+      {
+        "name": "tokf-v0.2.52-x86_64-apple-darwin.tar.gz",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.52/tokf-v0.2.52-x86_64-apple-darwin.tar.gz",
+        "digest": "sha256:85a3ad664fc6c109468aa06aea676a089a5345e23b2e369b59b8cce912b77046",
+        "size": 7454309
+      },
+      {
+        "name": "tokf-v0.2.52-x86_64-apple-darwin.tar.gz.sha256",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.52/tokf-v0.2.52-x86_64-apple-darwin.tar.gz.sha256",
+        "digest": "sha256:ad12377fc7bf7f69b2560a29fcfb9320138ae3b8f089d4f7b31e305c81bed697",
+        "size": 65
+      },
+      {
+        "name": "tokf-v0.2.52-x86_64-unknown-linux-gnu.tar.gz",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.52/tokf-v0.2.52-x86_64-unknown-linux-gnu.tar.gz",
+        "digest": "sha256:304b1eb45050f357c6cc2f4d593f12036311866d0216e9ae284d9ee963b16e9d",
+        "size": 9056853
+      },
+      {
+        "name": "tokf-v0.2.52-x86_64-unknown-linux-gnu.tar.gz.sha256",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.52/tokf-v0.2.52-x86_64-unknown-linux-gnu.tar.gz.sha256",
+        "digest": "sha256:f2f1b39d7737b3efc4c26a3a3da8740a87c07daab65df1f7c78ab036a8c33634",
+        "size": 65
+      }
+    ]
+  },
+  {
+    "tag": "tokf-server-v0.2.52",
+    "publishedAt": "2026-07-23T09:49:21Z",
+    "assets": []
+  },
+  {
+    "tag": "tokf-hook-types-v0.2.52",
+    "publishedAt": "2026-07-23T09:49:18Z",
+    "assets": []
+  },
+  {
+    "tag": "tokf-filter-v0.2.52",
+    "publishedAt": "2026-07-23T09:49:19Z",
+    "assets": []
+  },
+  {
+    "tag": "tokf-common-v0.2.52",
+    "publishedAt": "2026-07-23T09:49:18Z",
+    "assets": []
+  },
+  {
+    "tag": "catalog-types-v0.2.52",
+    "publishedAt": "2026-07-23T09:49:22Z",
+    "assets": []
+  },
+  {
+    "tag": "tokf-v0.2.51",
+    "publishedAt": "2026-07-22T18:01:31Z",
+    "assets": [
+      {
+        "name": "tokf-v0.2.51-aarch64-apple-darwin.tar.gz",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.51/tokf-v0.2.51-aarch64-apple-darwin.tar.gz",
+        "digest": "sha256:f7543900235ce6848fd5feb91aa3fef6ca1366c3d9870f61d05efcc4e9dfaa22",
+        "size": 6955748
+      },
+      {
+        "name": "tokf-v0.2.51-aarch64-apple-darwin.tar.gz.sha256",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.51/tokf-v0.2.51-aarch64-apple-darwin.tar.gz.sha256",
+        "digest": "sha256:9c8f9464cb2b6f95f69a113fea9db2fdf1e92a7d9c257e0b6d3a5fb9fd032fb0",
+        "size": 65
+      },
+      {
+        "name": "tokf-v0.2.51-x86_64-apple-darwin.tar.gz",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.51/tokf-v0.2.51-x86_64-apple-darwin.tar.gz",
+        "digest": "sha256:a07a024763901a4d7b762b82e8dc6c9e9518c356da0437be8cd516913c92aa68",
+        "size": 7441609
+      },
+      {
+        "name": "tokf-v0.2.51-x86_64-apple-darwin.tar.gz.sha256",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.51/tokf-v0.2.51-x86_64-apple-darwin.tar.gz.sha256",
+        "digest": "sha256:498cf46bb936fcc643a5f61ed75980994ae07c44ee6e5adfcd3a36d124d2a974",
+        "size": 65
+      },
+      {
+        "name": "tokf-v0.2.51-x86_64-unknown-linux-gnu.tar.gz",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.51/tokf-v0.2.51-x86_64-unknown-linux-gnu.tar.gz",
+        "digest": "sha256:23d606d98d99166ecf4064b0b9ddf1b7c55729fd78f2a776f8d028a1887b409e",
+        "size": 9046850
+      },
+      {
+        "name": "tokf-v0.2.51-x86_64-unknown-linux-gnu.tar.gz.sha256",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.51/tokf-v0.2.51-x86_64-unknown-linux-gnu.tar.gz.sha256",
+        "digest": "sha256:f09a51d0f6753f1ef19f0e99d655fcc8a7b88d958b1030574cce5669f6a6b186",
+        "size": 65
+      }
+    ]
+  },
+  {
+    "tag": "tokf-server-v0.2.51",
+    "publishedAt": "2026-07-22T18:01:32Z",
+    "assets": []
+  },
+  {
+    "tag": "tokf-hook-types-v0.2.51",
+    "publishedAt": "2026-07-22T18:01:29Z",
+    "assets": []
+  },
+  {
+    "tag": "tokf-filter-v0.2.51",
+    "publishedAt": "2026-07-22T18:01:30Z",
+    "assets": []
+  },
+  {
+    "tag": "tokf-common-v0.2.51",
+    "publishedAt": "2026-07-22T18:01:27Z",
+    "assets": []
+  },
+  {
+    "tag": "catalog-types-v0.2.51",
+    "publishedAt": "2026-07-22T18:01:33Z",
+    "assets": []
+  },
+  {
+    "tag": "tokf-v0.2.50",
+    "publishedAt": "2026-07-04T11:32:18Z",
+    "assets": [
+      {
+        "name": "tokf-v0.2.50-aarch64-apple-darwin.tar.gz",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.50/tokf-v0.2.50-aarch64-apple-darwin.tar.gz",
+        "digest": "sha256:085afae41f123eb5929b1478a8dd2fc9d51fa3401ebd368b69e3755440ce295b",
+        "size": 6853448
+      },
+      {
+        "name": "tokf-v0.2.50-aarch64-apple-darwin.tar.gz.sha256",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.50/tokf-v0.2.50-aarch64-apple-darwin.tar.gz.sha256",
+        "digest": "sha256:886e8322bc5b6886d76f2acf07ead9d47be6e81028c02b1a2940ddd5ad97ea38",
+        "size": 65
+      },
+      {
+        "name": "tokf-v0.2.50-x86_64-apple-darwin.tar.gz",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.50/tokf-v0.2.50-x86_64-apple-darwin.tar.gz",
+        "digest": "sha256:c9d86664a92a73d8a89b1a703e488732974699bb3dbb6718eab48513c67795a8",
+        "size": 7325613
+      },
+      {
+        "name": "tokf-v0.2.50-x86_64-apple-darwin.tar.gz.sha256",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.50/tokf-v0.2.50-x86_64-apple-darwin.tar.gz.sha256",
+        "digest": "sha256:21bdf88b5eab255c24da3db6d0ea5423ed8e25b680e924ac9d680971cd60a841",
+        "size": 65
+      },
+      {
+        "name": "tokf-v0.2.50-x86_64-unknown-linux-gnu.tar.gz",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.50/tokf-v0.2.50-x86_64-unknown-linux-gnu.tar.gz",
+        "digest": "sha256:4ade19a8e184add4cfea54e0fb52e378fd07204ee0068900d8ac8b06a7fc8bb3",
+        "size": 8914066
+      },
+      {
+        "name": "tokf-v0.2.50-x86_64-unknown-linux-gnu.tar.gz.sha256",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.50/tokf-v0.2.50-x86_64-unknown-linux-gnu.tar.gz.sha256",
+        "digest": "sha256:47849b7f9edc0c47e8684a838354154812d9b03ee9cc0ca2fdc0452d3cc13fee",
+        "size": 65
+      }
+    ]
+  },
+  {
+    "tag": "tokf-server-v0.2.50",
+    "publishedAt": "2026-07-04T11:32:18Z",
+    "assets": []
+  },
+  {
+    "tag": "tokf-hook-types-v0.2.50",
+    "publishedAt": "2026-07-04T11:32:16Z",
+    "assets": []
+  },
+  {
+    "tag": "tokf-filter-v0.2.50",
+    "publishedAt": "2026-07-04T11:32:17Z",
+    "assets": []
+  },
+  {
+    "tag": "tokf-common-v0.2.50",
+    "publishedAt": "2026-07-04T11:32:15Z",
+    "assets": []
+  },
+  {
+    "tag": "catalog-types-v0.2.50",
+    "publishedAt": "2026-07-04T11:32:19Z",
+    "assets": []
+  },
+  {
+    "tag": "tokf-v0.2.49",
+    "publishedAt": "2026-06-20T09:27:25Z",
+    "assets": [
+      {
+        "name": "tokf-v0.2.49-aarch64-apple-darwin.tar.gz",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.49/tokf-v0.2.49-aarch64-apple-darwin.tar.gz",
+        "digest": "sha256:a9f4cfa3517e5e9c6e947e033edff47a6f37e6b5fc24088110cc05f8324e8185",
+        "size": 6836436
+      },
+      {
+        "name": "tokf-v0.2.49-aarch64-apple-darwin.tar.gz.sha256",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.49/tokf-v0.2.49-aarch64-apple-darwin.tar.gz.sha256",
+        "digest": "sha256:1ee3aa9cda6d1b2251a9cb8c4bc3a74430c540c260cb391f2f053b3cba7a3014",
+        "size": 65
+      },
+      {
+        "name": "tokf-v0.2.49-x86_64-apple-darwin.tar.gz",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.49/tokf-v0.2.49-x86_64-apple-darwin.tar.gz",
+        "digest": "sha256:89e72661171d8be856a4edac49505835b6b4e4bf45060f00ecdb42338ae5552e",
+        "size": 7325689
+      },
+      {
+        "name": "tokf-v0.2.49-x86_64-apple-darwin.tar.gz.sha256",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.49/tokf-v0.2.49-x86_64-apple-darwin.tar.gz.sha256",
+        "digest": "sha256:f291f8b10203c5bacd7af9868fa75ec401337e3a15aca940bfc4cbbafda65cf2",
+        "size": 65
+      },
+      {
+        "name": "tokf-v0.2.49-x86_64-unknown-linux-gnu.tar.gz",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.49/tokf-v0.2.49-x86_64-unknown-linux-gnu.tar.gz",
+        "digest": "sha256:06813f3d26963adfc705ab6111e5c86fdf48b0ae583043e5851b51a35c7b6445",
+        "size": 7653318
+      },
+      {
+        "name": "tokf-v0.2.49-x86_64-unknown-linux-gnu.tar.gz.sha256",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.49/tokf-v0.2.49-x86_64-unknown-linux-gnu.tar.gz.sha256",
+        "digest": "sha256:3f650e4be8628e5f3cfd7cd3a006c5ac250fded0d25fd377235c51cb5d375155",
+        "size": 65
+      }
+    ]
+  },
+  {
+    "tag": "tokf-server-v0.2.49",
+    "publishedAt": "2026-06-20T09:27:25Z",
+    "assets": []
+  },
+  {
+    "tag": "tokf-hook-types-v0.2.49",
+    "publishedAt": "2026-06-20T09:27:23Z",
+    "assets": []
+  },
+  {
+    "tag": "tokf-filter-v0.2.49",
+    "publishedAt": "2026-06-20T09:27:24Z",
+    "assets": []
+  },
+  {
+    "tag": "tokf-common-v0.2.49",
+    "publishedAt": "2026-06-20T09:27:23Z",
+    "assets": []
+  },
+  {
+    "tag": "catalog-types-v0.2.49",
+    "publishedAt": "2026-06-20T09:27:26Z",
+    "assets": []
+  },
+  {
+    "tag": "tokf-v0.2.48",
+    "publishedAt": "2026-06-18T15:56:07Z",
+    "assets": [
+      {
+        "name": "tokf-v0.2.48-aarch64-apple-darwin.tar.gz",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.48/tokf-v0.2.48-aarch64-apple-darwin.tar.gz",
+        "digest": "sha256:55f7c3cd90c47a69b6b6be085ce469be35da510a05c1a112a714d7bfd67adfc9",
+        "size": 6831613
+      },
+      {
+        "name": "tokf-v0.2.48-aarch64-apple-darwin.tar.gz.sha256",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.48/tokf-v0.2.48-aarch64-apple-darwin.tar.gz.sha256",
+        "digest": "sha256:3cf86ca30633c872b11f95bd1b4f871a544ea6feb2e4c4724fb3328753e45a03",
+        "size": 65
+      },
+      {
+        "name": "tokf-v0.2.48-x86_64-apple-darwin.tar.gz",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.48/tokf-v0.2.48-x86_64-apple-darwin.tar.gz",
+        "digest": "sha256:ce544a7fe133b03db325b833fb6b843d98249606081b6df9ac9fd0bc590dec55",
+        "size": 7325325
+      },
+      {
+        "name": "tokf-v0.2.48-x86_64-apple-darwin.tar.gz.sha256",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.48/tokf-v0.2.48-x86_64-apple-darwin.tar.gz.sha256",
+        "digest": "sha256:3eb1492358a32c9547680c8266bc214e0940468befdaeb7c45995e0772c112fe",
+        "size": 65
+      },
+      {
+        "name": "tokf-v0.2.48-x86_64-unknown-linux-gnu.tar.gz",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.48/tokf-v0.2.48-x86_64-unknown-linux-gnu.tar.gz",
+        "digest": "sha256:155dff72ca435ce862dec5ccdd874149b6ce294a4d7b85cd7766d4a00f3bb410",
+        "size": 7660497
+      },
+      {
+        "name": "tokf-v0.2.48-x86_64-unknown-linux-gnu.tar.gz.sha256",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.48/tokf-v0.2.48-x86_64-unknown-linux-gnu.tar.gz.sha256",
+        "digest": "sha256:d63a7dda92a02155b86ed7451ec17b9377d6a0b5968e4c1cec2124a55efe3bce",
+        "size": 65
+      }
+    ]
+  },
+  {
+    "tag": "tokf-server-v0.2.48",
+    "publishedAt": "2026-06-18T15:56:08Z",
+    "assets": []
+  },
+  {
+    "tag": "tokf-hook-types-v0.2.48",
+    "publishedAt": "2026-06-18T15:56:05Z",
+    "assets": []
+  },
+  {
+    "tag": "tokf-filter-v0.2.48",
+    "publishedAt": "2026-06-18T15:56:06Z",
+    "assets": []
+  },
+  {
+    "tag": "tokf-common-v0.2.48",
+    "publishedAt": "2026-06-18T15:56:04Z",
+    "assets": []
+  },
+  {
+    "tag": "catalog-types-v0.2.48",
+    "publishedAt": "2026-06-18T15:56:10Z",
+    "assets": []
+  },
+  {
+    "tag": "tokf-v0.2.47",
+    "publishedAt": "2026-06-14T11:03:40Z",
+    "assets": [
+      {
+        "name": "tokf-v0.2.47-aarch64-apple-darwin.tar.gz",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.47/tokf-v0.2.47-aarch64-apple-darwin.tar.gz",
+        "digest": "sha256:610291c6a46dd9b4c4ecd4f93b1d2434cb451187b41f4248965a636f49de9664",
+        "size": 6833794
+      },
+      {
+        "name": "tokf-v0.2.47-aarch64-apple-darwin.tar.gz.sha256",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.47/tokf-v0.2.47-aarch64-apple-darwin.tar.gz.sha256",
+        "digest": "sha256:4fbef7bc06cbbedb81a124405a2a8e40b94247087fbfc9280497bfbec6836552",
+        "size": 65
+      },
+      {
+        "name": "tokf-v0.2.47-x86_64-apple-darwin.tar.gz",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.47/tokf-v0.2.47-x86_64-apple-darwin.tar.gz",
+        "digest": "sha256:3a8834e907bd2a4e2ea102b39f866aa91e0cd9304a4255ce396fee91d720b759",
+        "size": 7322792
+      },
+      {
+        "name": "tokf-v0.2.47-x86_64-apple-darwin.tar.gz.sha256",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.47/tokf-v0.2.47-x86_64-apple-darwin.tar.gz.sha256",
+        "digest": "sha256:0dd6b022b4984e29684a7186e83bb84a8279bc615480fea6c6adde1d46578df0",
+        "size": 65
+      },
+      {
+        "name": "tokf-v0.2.47-x86_64-unknown-linux-gnu.tar.gz",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.47/tokf-v0.2.47-x86_64-unknown-linux-gnu.tar.gz",
+        "digest": "sha256:7e3741956d61a2fe7a833cc35dca7d975a94524aa4bb049642c842acf963fff0",
+        "size": 7649793
+      },
+      {
+        "name": "tokf-v0.2.47-x86_64-unknown-linux-gnu.tar.gz.sha256",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.47/tokf-v0.2.47-x86_64-unknown-linux-gnu.tar.gz.sha256",
+        "digest": "sha256:04bb2811847231f5a2ecefacdc937a7febbe85db597bc8d251de79df18cf3b04",
+        "size": 65
+      }
+    ]
+  },
+  {
+    "tag": "tokf-v0.2.46",
+    "publishedAt": "2026-06-14T10:53:43Z",
+    "assets": [
+      {
+        "name": "tokf-v0.2.46-aarch64-apple-darwin.tar.gz",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.46/tokf-v0.2.46-aarch64-apple-darwin.tar.gz",
+        "digest": "sha256:26f0fcebe34c1662b0459b693c36a776f08615dc1dee7f5bf9462e15b47e1ff5",
+        "size": 6833364
+      },
+      {
+        "name": "tokf-v0.2.46-aarch64-apple-darwin.tar.gz.sha256",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.46/tokf-v0.2.46-aarch64-apple-darwin.tar.gz.sha256",
+        "digest": "sha256:41bf5db8bc1a9d2c31acc4289d669bf11d943b2ee6bd19ac4f481cd3c8592d58",
+        "size": 65
+      },
+      {
+        "name": "tokf-v0.2.46-x86_64-apple-darwin.tar.gz",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.46/tokf-v0.2.46-x86_64-apple-darwin.tar.gz",
+        "digest": "sha256:59e83711e16fd345e82017df6c74527d5fede085bb198556f5ec560699f48b65",
+        "size": 7322827
+      },
+      {
+        "name": "tokf-v0.2.46-x86_64-apple-darwin.tar.gz.sha256",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.46/tokf-v0.2.46-x86_64-apple-darwin.tar.gz.sha256",
+        "digest": "sha256:3474197e9e7e8b12ec56b2311cc4d91dc0cfda0f19503e6619c85dd40612111e",
+        "size": 65
+      },
+      {
+        "name": "tokf-v0.2.46-x86_64-unknown-linux-gnu.tar.gz",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.46/tokf-v0.2.46-x86_64-unknown-linux-gnu.tar.gz",
+        "digest": "sha256:6b0ad0aa9646a25f37feb9d1464c39df8e4d010824fa80515997e3327ecc9383",
+        "size": 7653022
+      },
+      {
+        "name": "tokf-v0.2.46-x86_64-unknown-linux-gnu.tar.gz.sha256",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.46/tokf-v0.2.46-x86_64-unknown-linux-gnu.tar.gz.sha256",
+        "digest": "sha256:1e868297ec888835fa300e1a8a95764ff90134b93c54cd588cf180d01eb160b7",
+        "size": 65
+      }
+    ]
+  },
+  {
+    "tag": "tokf-server-v0.2.47",
+    "publishedAt": "2026-06-14T11:03:40Z",
+    "assets": []
+  },
+  {
+    "tag": "tokf-server-v0.2.46",
+    "publishedAt": "2026-06-14T10:53:44Z",
+    "assets": []
+  },
+  {
+    "tag": "tokf-hook-types-v0.2.47",
+    "publishedAt": "2026-06-14T11:03:38Z",
+    "assets": []
+  },
+  {
+    "tag": "tokf-hook-types-v0.2.46",
+    "publishedAt": "2026-06-14T10:53:42Z",
+    "assets": []
+  },
+  {
+    "tag": "tokf-filter-v0.2.47",
+    "publishedAt": "2026-06-14T11:03:39Z",
+    "assets": []
+  },
+  {
+    "tag": "tokf-filter-v0.2.46",
+    "publishedAt": "2026-06-14T10:53:43Z",
+    "assets": []
+  },
+  {
+    "tag": "tokf-common-v0.2.47",
+    "publishedAt": "2026-06-14T11:03:37Z",
+    "assets": []
+  },
+  {
+    "tag": "tokf-common-v0.2.46",
+    "publishedAt": "2026-06-14T10:53:41Z",
+    "assets": []
+  },
+  {
+    "tag": "catalog-types-v0.2.47",
+    "publishedAt": "2026-06-14T11:03:41Z",
+    "assets": []
+  },
+  {
+    "tag": "catalog-types-v0.2.46",
+    "publishedAt": "2026-06-14T10:53:45Z",
+    "assets": []
+  },
+  {
+    "tag": "tokf-v0.2.45",
+    "publishedAt": "2026-05-12T16:35:55Z",
+    "assets": [
+      {
+        "name": "tokf-v0.2.45-aarch64-apple-darwin.tar.gz",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.45/tokf-v0.2.45-aarch64-apple-darwin.tar.gz",
+        "digest": "sha256:887eb2412d97c4416f0f3ac6f0f53df30cfd96d3ba2eb17065fbe1ee4653a7c8",
+        "size": 6814649
+      },
+      {
+        "name": "tokf-v0.2.45-aarch64-apple-darwin.tar.gz.sha256",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.45/tokf-v0.2.45-aarch64-apple-darwin.tar.gz.sha256",
+        "digest": "sha256:0a88ba7c69e64b9e1549659a81273be904af8495f29bbc4a425fb79a37028f55",
+        "size": 65
+      },
+      {
+        "name": "tokf-v0.2.45-x86_64-apple-darwin.tar.gz",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.45/tokf-v0.2.45-x86_64-apple-darwin.tar.gz",
+        "digest": "sha256:f96eb790b4ff1e6f46adc3ffae94d134cafa3760f3c74a0fa06821a8155c2610",
+        "size": 7308186
+      },
+      {
+        "name": "tokf-v0.2.45-x86_64-apple-darwin.tar.gz.sha256",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.45/tokf-v0.2.45-x86_64-apple-darwin.tar.gz.sha256",
+        "digest": "sha256:20267e7c95ee5448aae2fdd461fa8d94e4a6aa0efb08fd0a9d7a4fd12eafb45e",
+        "size": 65
+      },
+      {
+        "name": "tokf-v0.2.45-x86_64-unknown-linux-gnu.tar.gz",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.45/tokf-v0.2.45-x86_64-unknown-linux-gnu.tar.gz",
+        "digest": "sha256:203d761cf6917385f2e07ca8c88389789a3ed6279817dd60750965c12e7b79a0",
+        "size": 7638027
+      },
+      {
+        "name": "tokf-v0.2.45-x86_64-unknown-linux-gnu.tar.gz.sha256",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.45/tokf-v0.2.45-x86_64-unknown-linux-gnu.tar.gz.sha256",
+        "digest": "sha256:9f0f6c6feeaf30413d4832391c127806df7b053f3f4ddddae5dc9dccf820c275",
+        "size": 65
+      }
+    ]
+  },
+  {
+    "tag": "tokf-server-v0.2.45",
+    "publishedAt": "2026-05-12T16:35:56Z",
+    "assets": []
+  },
+  {
+    "tag": "tokf-hook-types-v0.2.45",
+    "publishedAt": "2026-05-12T16:35:52Z",
+    "assets": []
+  },
+  {
+    "tag": "tokf-filter-v0.2.45",
+    "publishedAt": "2026-05-12T16:35:53Z",
+    "assets": []
+  },
+  {
+    "tag": "tokf-common-v0.2.45",
+    "publishedAt": "2026-05-12T16:35:51Z",
+    "assets": []
+  },
+  {
+    "tag": "catalog-types-v0.2.45",
+    "publishedAt": "2026-05-12T16:35:57Z",
+    "assets": []
+  },
+  {
+    "tag": "tokf-v0.2.44",
+    "publishedAt": "2026-05-07T05:52:27Z",
+    "assets": [
+      {
+        "name": "tokf-v0.2.44-aarch64-apple-darwin.tar.gz",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.44/tokf-v0.2.44-aarch64-apple-darwin.tar.gz",
+        "digest": "sha256:8309667227822cbc3fdce34abd85ae4b5d7df383f9c20cbf1e1d0e33126ea29e",
+        "size": 6827532
+      },
+      {
+        "name": "tokf-v0.2.44-aarch64-apple-darwin.tar.gz.sha256",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.44/tokf-v0.2.44-aarch64-apple-darwin.tar.gz.sha256",
+        "digest": "sha256:26c645656d8706ce87b2ebc85863e721d4782f586ae9dee41329ad6568dcd3ae",
+        "size": 65
+      },
+      {
+        "name": "tokf-v0.2.44-x86_64-apple-darwin.tar.gz",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.44/tokf-v0.2.44-x86_64-apple-darwin.tar.gz",
+        "digest": "sha256:f9c1e80faed4be8544841f9caab911ae3f028988a4689e7d0e55af33c86f729a",
+        "size": 7316578
+      },
+      {
+        "name": "tokf-v0.2.44-x86_64-apple-darwin.tar.gz.sha256",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.44/tokf-v0.2.44-x86_64-apple-darwin.tar.gz.sha256",
+        "digest": "sha256:6812de0cfd619c99c3c3168777841f215ead0a239d7b7a95ca39448c6ac7a857",
+        "size": 65
+      },
+      {
+        "name": "tokf-v0.2.44-x86_64-unknown-linux-gnu.tar.gz",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.44/tokf-v0.2.44-x86_64-unknown-linux-gnu.tar.gz",
+        "digest": "sha256:3a33b4f02779f908937ad7eab9505009d72fe09398b7c2b14b1598df426f0d09",
+        "size": 7639636
+      },
+      {
+        "name": "tokf-v0.2.44-x86_64-unknown-linux-gnu.tar.gz.sha256",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.44/tokf-v0.2.44-x86_64-unknown-linux-gnu.tar.gz.sha256",
+        "digest": "sha256:e8da626f189edd1992487f819fe89ff44085e780e8621094126dddae52fc1cb8",
+        "size": 65
+      }
+    ]
+  },
+  {
+    "tag": "tokf-server-v0.2.44",
+    "publishedAt": "2026-05-07T05:52:28Z",
+    "assets": []
+  },
+  {
+    "tag": "tokf-hook-types-v0.2.44",
+    "publishedAt": "2026-05-07T05:52:25Z",
+    "assets": []
+  },
+  {
+    "tag": "tokf-filter-v0.2.44",
+    "publishedAt": "2026-05-07T05:52:26Z",
+    "assets": []
+  },
+  {
+    "tag": "tokf-common-v0.2.44",
+    "publishedAt": "2026-05-07T05:52:24Z",
+    "assets": []
+  },
+  {
+    "tag": "catalog-types-v0.2.44",
+    "publishedAt": "2026-05-07T05:52:29Z",
+    "assets": []
+  },
+  {
+    "tag": "tokf-v0.2.43",
+    "publishedAt": "2026-05-03T06:18:55Z",
+    "assets": [
+      {
+        "name": "tokf-v0.2.43-aarch64-apple-darwin.tar.gz",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.43/tokf-v0.2.43-aarch64-apple-darwin.tar.gz",
+        "digest": "sha256:64602bde75c35e2148557c810eee05cab424a591c805757d5b546c8ac7d5f313",
+        "size": 6823462
+      },
+      {
+        "name": "tokf-v0.2.43-aarch64-apple-darwin.tar.gz.sha256",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.43/tokf-v0.2.43-aarch64-apple-darwin.tar.gz.sha256",
+        "digest": "sha256:84b0b0ebaaea5b56ded7955d6dd4f45034d9a6bc8ef581df96aed2f26e1d60e5",
+        "size": 65
+      },
+      {
+        "name": "tokf-v0.2.43-x86_64-apple-darwin.tar.gz",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.43/tokf-v0.2.43-x86_64-apple-darwin.tar.gz",
+        "digest": "sha256:dd29be18a92884e381d17fba4410fe54bc1cdc362276e00c8d33965730596366",
+        "size": 7314180
+      },
+      {
+        "name": "tokf-v0.2.43-x86_64-apple-darwin.tar.gz.sha256",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.43/tokf-v0.2.43-x86_64-apple-darwin.tar.gz.sha256",
+        "digest": "sha256:533432afb9cb7e1293008fd3f8f7df4a941b8d590a3c27b3b40182a914402835",
+        "size": 65
+      },
+      {
+        "name": "tokf-v0.2.43-x86_64-unknown-linux-gnu.tar.gz",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.43/tokf-v0.2.43-x86_64-unknown-linux-gnu.tar.gz",
+        "digest": "sha256:e8fb5ae6664e997b2404dfdffc39b6db9171a5ea3d05f770406c60131c81987b",
+        "size": 7644886
+      },
+      {
+        "name": "tokf-v0.2.43-x86_64-unknown-linux-gnu.tar.gz.sha256",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.43/tokf-v0.2.43-x86_64-unknown-linux-gnu.tar.gz.sha256",
+        "digest": "sha256:04959972f2decc71446c9caba6e2b7a0b6fcaedb4fbcc985c31547f56a22125e",
+        "size": 65
+      }
+    ]
+  },
+  {
+    "tag": "tokf-server-v0.2.43",
+    "publishedAt": "2026-05-03T06:18:55Z",
+    "assets": []
+  },
+  {
+    "tag": "tokf-hook-types-v0.2.43",
+    "publishedAt": "2026-05-03T06:18:53Z",
+    "assets": []
+  },
+  {
+    "tag": "tokf-filter-v0.2.43",
+    "publishedAt": "2026-05-03T06:18:54Z",
+    "assets": []
+  },
+  {
+    "tag": "tokf-common-v0.2.43",
+    "publishedAt": "2026-05-03T06:18:52Z",
+    "assets": []
+  },
+  {
+    "tag": "catalog-types-v0.2.43",
+    "publishedAt": "2026-05-03T06:18:56Z",
+    "assets": []
+  },
+  {
+    "tag": "tokf-v0.2.42",
+    "publishedAt": "2026-04-27T16:05:53Z",
+    "assets": [
+      {
+        "name": "tokf-v0.2.42-aarch64-apple-darwin.tar.gz",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.42/tokf-v0.2.42-aarch64-apple-darwin.tar.gz",
+        "digest": "sha256:ec1fe30593d4e1f9074ba54e57947b7a9956c91ae37fe5aadd26492ad22f555c",
+        "size": 6817723
+      },
+      {
+        "name": "tokf-v0.2.42-aarch64-apple-darwin.tar.gz.sha256",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.42/tokf-v0.2.42-aarch64-apple-darwin.tar.gz.sha256",
+        "digest": "sha256:5415fc9e5d9c2e082c3ee026f864084ef7e946280cc4aeb380656135788ee6a3",
+        "size": 65
+      },
+      {
+        "name": "tokf-v0.2.42-x86_64-apple-darwin.tar.gz",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.42/tokf-v0.2.42-x86_64-apple-darwin.tar.gz",
+        "digest": "sha256:403361fb1f36fe985d1a54033bcb75965b212767bac778a9edc6247901f34a0e",
+        "size": 7304687
+      },
+      {
+        "name": "tokf-v0.2.42-x86_64-apple-darwin.tar.gz.sha256",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.42/tokf-v0.2.42-x86_64-apple-darwin.tar.gz.sha256",
+        "digest": "sha256:10075a09ef70e29c7710f8d3eaa11831dbad36d88403bfb19774a13cfe2dc9a3",
+        "size": 65
+      },
+      {
+        "name": "tokf-v0.2.42-x86_64-unknown-linux-gnu.tar.gz",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.42/tokf-v0.2.42-x86_64-unknown-linux-gnu.tar.gz",
+        "digest": "sha256:5f22f456b78f7b22fdbe967bfb7b2dc33c8587e6e00fa6f30de72746ba3f53f3",
+        "size": 7640124
+      },
+      {
+        "name": "tokf-v0.2.42-x86_64-unknown-linux-gnu.tar.gz.sha256",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.42/tokf-v0.2.42-x86_64-unknown-linux-gnu.tar.gz.sha256",
+        "digest": "sha256:10c5fc62ad6bfe829d3a898b76d12abfad564dbbe4fba41f13df8267667445be",
+        "size": 65
+      }
+    ]
+  },
+  {
+    "tag": "tokf-server-v0.2.42",
+    "publishedAt": "2026-04-27T16:05:55Z",
+    "assets": []
+  },
+  {
+    "tag": "tokf-hook-types-v0.2.42",
+    "publishedAt": "2026-04-27T16:05:51Z",
+    "assets": []
+  },
+  {
+    "tag": "tokf-filter-v0.2.42",
+    "publishedAt": "2026-04-27T16:05:52Z",
+    "assets": []
+  },
+  {
+    "tag": "tokf-common-v0.2.42",
+    "publishedAt": "2026-04-27T16:05:50Z",
+    "assets": []
+  },
+  {
+    "tag": "catalog-types-v0.2.42",
+    "publishedAt": "2026-04-27T16:05:56Z",
+    "assets": []
+  },
+  {
+    "tag": "tokf-v0.2.41",
+    "publishedAt": "2026-04-18T09:14:04Z",
+    "assets": [
+      {
+        "name": "tokf-v0.2.41-aarch64-apple-darwin.tar.gz",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.41/tokf-v0.2.41-aarch64-apple-darwin.tar.gz",
+        "digest": "sha256:b76f1aecae3cc7b7a577b6a95ac3d495349d99a5684ff276ccd5c5f2ba253028",
+        "size": 6781284
+      },
+      {
+        "name": "tokf-v0.2.41-aarch64-apple-darwin.tar.gz.sha256",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.41/tokf-v0.2.41-aarch64-apple-darwin.tar.gz.sha256",
+        "digest": "sha256:612443032080ce58fbdba4acac833431e738d88afd25f3a1bfeec73714bc6b89",
+        "size": 65
+      },
+      {
+        "name": "tokf-v0.2.41-x86_64-apple-darwin.tar.gz",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.41/tokf-v0.2.41-x86_64-apple-darwin.tar.gz",
+        "digest": "sha256:fc037541a8052bd8a07f2a06a1d04444e206f1508578ee383f97c680fbffda8e",
+        "size": 7250994
+      },
+      {
+        "name": "tokf-v0.2.41-x86_64-apple-darwin.tar.gz.sha256",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.41/tokf-v0.2.41-x86_64-apple-darwin.tar.gz.sha256",
+        "digest": "sha256:252789dbc7dd065f08d2d82260ba2166685f881c41730d1e3111f541b8960b2b",
+        "size": 65
+      },
+      {
+        "name": "tokf-v0.2.41-x86_64-unknown-linux-gnu.tar.gz",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.41/tokf-v0.2.41-x86_64-unknown-linux-gnu.tar.gz",
+        "digest": "sha256:3582a930f4ebd6694e847d1fb510df4f53c9beafd7135df247b5549f941a6c34",
+        "size": 7589232
+      },
+      {
+        "name": "tokf-v0.2.41-x86_64-unknown-linux-gnu.tar.gz.sha256",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.41/tokf-v0.2.41-x86_64-unknown-linux-gnu.tar.gz.sha256",
+        "digest": "sha256:6a6cba5c6a95fedcc7ccb9c7d8bc7521badcfeeec1bdcbbc77204779f00bf341",
+        "size": 65
+      }
+    ]
+  },
+  {
+    "tag": "tokf-server-v0.2.41",
+    "publishedAt": "2026-04-18T09:14:04Z",
+    "assets": []
+  },
+  {
+    "tag": "tokf-hook-types-v0.2.41",
+    "publishedAt": "2026-04-18T09:14:02Z",
+    "assets": []
+  },
+  {
+    "tag": "tokf-filter-v0.2.41",
+    "publishedAt": "2026-04-18T09:14:03Z",
+    "assets": []
+  },
+  {
+    "tag": "tokf-common-v0.2.41",
+    "publishedAt": "2026-04-18T09:14:01Z",
+    "assets": []
+  },
+  {
+    "tag": "catalog-types-v0.2.41",
+    "publishedAt": "2026-04-18T09:14:05Z",
+    "assets": []
+  },
+  {
+    "tag": "tokf-v0.2.40",
+    "publishedAt": "2026-04-13T10:03:02Z",
+    "assets": [
+      {
+        "name": "tokf-v0.2.40-aarch64-apple-darwin.tar.gz",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.40/tokf-v0.2.40-aarch64-apple-darwin.tar.gz",
+        "digest": "sha256:d1d6460d5b029fe316f560d95b6d9aeacc83ffc2508d564c51085b64fbc7f6ec",
+        "size": 6777156
+      },
+      {
+        "name": "tokf-v0.2.40-aarch64-apple-darwin.tar.gz.sha256",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.40/tokf-v0.2.40-aarch64-apple-darwin.tar.gz.sha256",
+        "digest": "sha256:06114e40c3ac80c188345afe7b13174a7b2a11ad8b50ce502d6261920409d5c8",
+        "size": 65
+      },
+      {
+        "name": "tokf-v0.2.40-x86_64-apple-darwin.tar.gz",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.40/tokf-v0.2.40-x86_64-apple-darwin.tar.gz",
+        "digest": "sha256:2e593e4a858abac0344fe6fcdd42197d80034d39e9645a3d1a2f34576c01eb3c",
+        "size": 7255546
+      },
+      {
+        "name": "tokf-v0.2.40-x86_64-apple-darwin.tar.gz.sha256",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.40/tokf-v0.2.40-x86_64-apple-darwin.tar.gz.sha256",
+        "digest": "sha256:a6da6e27c99cd7d0ec951148f46aca58a0f2201bdd7bf850b6471e92ed062021",
+        "size": 65
+      },
+      {
+        "name": "tokf-v0.2.40-x86_64-unknown-linux-gnu.tar.gz",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.40/tokf-v0.2.40-x86_64-unknown-linux-gnu.tar.gz",
+        "digest": "sha256:9d30d2f92002663c2d4c85f50dffc92fd34c3eeced67781f01122d83f9732638",
+        "size": 7580360
+      },
+      {
+        "name": "tokf-v0.2.40-x86_64-unknown-linux-gnu.tar.gz.sha256",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.40/tokf-v0.2.40-x86_64-unknown-linux-gnu.tar.gz.sha256",
+        "digest": "sha256:2047805089a90602a6900d0f9dcf5aeb3a076e0c2d921344ff4cb172dc4a338a",
+        "size": 65
+      }
+    ]
+  },
+  {
+    "tag": "tokf-server-v0.2.40",
+    "publishedAt": "2026-04-13T10:03:03Z",
+    "assets": []
+  },
+  {
+    "tag": "tokf-hook-types-v0.2.40",
+    "publishedAt": "2026-04-13T10:03:01Z",
+    "assets": []
+  },
+  {
+    "tag": "tokf-filter-v0.2.40",
+    "publishedAt": "2026-04-13T10:03:02Z",
+    "assets": []
+  },
+  {
+    "tag": "tokf-common-v0.2.40",
+    "publishedAt": "2026-04-13T10:03:00Z",
+    "assets": []
+  },
+  {
+    "tag": "catalog-types-v0.2.40",
+    "publishedAt": "2026-04-13T10:03:04Z",
+    "assets": []
+  },
+  {
+    "tag": "tokf-v0.2.39",
+    "publishedAt": "2026-03-26T12:50:44Z",
+    "assets": [
+      {
+        "name": "tokf-v0.2.39-aarch64-apple-darwin.tar.gz",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.39/tokf-v0.2.39-aarch64-apple-darwin.tar.gz",
+        "digest": "sha256:e7f0d811304caad9cd2f593e562c74fc45f5444357fc3e55ed12245c81e27e59",
+        "size": 6619484
+      },
+      {
+        "name": "tokf-v0.2.39-aarch64-apple-darwin.tar.gz.sha256",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.39/tokf-v0.2.39-aarch64-apple-darwin.tar.gz.sha256",
+        "digest": "sha256:1ab638d4fbae148a100b61de717e7cc61a30546cedd1a748241d81b47ae4b0d9",
+        "size": 65
+      },
+      {
+        "name": "tokf-v0.2.39-x86_64-apple-darwin.tar.gz",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.39/tokf-v0.2.39-x86_64-apple-darwin.tar.gz",
+        "digest": "sha256:3c6632349c0566c0e695dffe385b1d894a8c75c0a12bd18d05711e14c7a192ca",
+        "size": 7091567
+      },
+      {
+        "name": "tokf-v0.2.39-x86_64-apple-darwin.tar.gz.sha256",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.39/tokf-v0.2.39-x86_64-apple-darwin.tar.gz.sha256",
+        "digest": "sha256:4a7ce49b250ac943eaea7ee35fdd20493351927bd46dbad548cbb09455726e8e",
+        "size": 65
+      },
+      {
+        "name": "tokf-v0.2.39-x86_64-unknown-linux-gnu.tar.gz",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.39/tokf-v0.2.39-x86_64-unknown-linux-gnu.tar.gz",
+        "digest": "sha256:c2b7510651344bf790807aada4d83f790cdf2a19c3ef3d4fe86dfedcc9926e05",
+        "size": 7408084
+      },
+      {
+        "name": "tokf-v0.2.39-x86_64-unknown-linux-gnu.tar.gz.sha256",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.39/tokf-v0.2.39-x86_64-unknown-linux-gnu.tar.gz.sha256",
+        "digest": "sha256:fe851b905c22ac1e160b8acd51b382df6c4a715a1028ff30ecca0f8b5084de88",
+        "size": 65
+      }
+    ]
+  },
+  {
+    "tag": "tokf-server-v0.2.39",
+    "publishedAt": "2026-03-26T12:50:45Z",
+    "assets": []
+  },
+  {
+    "tag": "tokf-hook-types-v0.2.39",
+    "publishedAt": "2026-03-26T12:50:43Z",
+    "assets": []
+  },
+  {
+    "tag": "tokf-filter-v0.2.39",
+    "publishedAt": "2026-03-26T12:50:43Z",
+    "assets": []
+  },
+  {
+    "tag": "tokf-common-v0.2.39",
+    "publishedAt": "2026-03-26T12:50:42Z",
+    "assets": []
+  },
+  {
+    "tag": "catalog-types-v0.2.39",
+    "publishedAt": "2026-03-26T12:50:46Z",
+    "assets": []
+  },
+  {
+    "tag": "tokf-v0.2.38",
+    "publishedAt": "2026-03-25T18:44:37Z",
+    "assets": [
+      {
+        "name": "tokf-v0.2.38-aarch64-apple-darwin.tar.gz",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.38/tokf-v0.2.38-aarch64-apple-darwin.tar.gz",
+        "digest": "sha256:e9ceb7ab31e45e161980d8ae0fb71c500055509ad64942ecf4a35713b38dc40e",
+        "size": 6618171
+      },
+      {
+        "name": "tokf-v0.2.38-aarch64-apple-darwin.tar.gz.sha256",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.38/tokf-v0.2.38-aarch64-apple-darwin.tar.gz.sha256",
+        "digest": "sha256:040618e4fbbd9bb89de246efc90e685dfe7374e98710001a3f8fe36d43a911d3",
+        "size": 65
+      },
+      {
+        "name": "tokf-v0.2.38-x86_64-apple-darwin.tar.gz",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.38/tokf-v0.2.38-x86_64-apple-darwin.tar.gz",
+        "digest": "sha256:b558a874c39b7525a76857aea7286f14a0a873a15f21acbc1a35bffdde0e051a",
+        "size": 7083405
+      },
+      {
+        "name": "tokf-v0.2.38-x86_64-apple-darwin.tar.gz.sha256",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.38/tokf-v0.2.38-x86_64-apple-darwin.tar.gz.sha256",
+        "digest": "sha256:167995392c937e0fcae60293bdca12621c3bf1b6b658ad1bc861f4696a7a9dd8",
+        "size": 65
+      },
+      {
+        "name": "tokf-v0.2.38-x86_64-unknown-linux-gnu.tar.gz",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.38/tokf-v0.2.38-x86_64-unknown-linux-gnu.tar.gz",
+        "digest": "sha256:7456dde57ecdec42dacf6b08651ddd967f54df612b210b3fa1d07bd81702b06a",
+        "size": 7406829
+      },
+      {
+        "name": "tokf-v0.2.38-x86_64-unknown-linux-gnu.tar.gz.sha256",
+        "url": "https://github.com/mpecan/tokf/releases/download/tokf-v0.2.38/tokf-v0.2.38-x86_64-unknown-linux-gnu.tar.gz.sha256",
+        "digest": "sha256:00aa74fac0ce646cc4fcc88815b40d8532c52b0fdc4f486b239ab4af883c208a",
+        "size": 65
+      }
+    ]
+  },
+  {
+    "tag": "tokf-server-v0.2.38",
+    "publishedAt": "2026-03-25T18:44:38Z",
+    "assets": []
+  },
+  {
+    "tag": "tokf-filter-v0.2.38",
+    "publishedAt": "2026-03-25T18:44:36Z",
+    "assets": []
+  },
+  {
+    "tag": "tokf-common-v0.2.38",
+    "publishedAt": "2026-03-25T18:44:35Z",
+    "assets": []
+  }
+]
