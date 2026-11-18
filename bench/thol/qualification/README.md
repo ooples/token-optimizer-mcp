@@ -36,10 +36,19 @@ are available separately. Historical Claude results cannot be pooled with Codex.
   delivery still need integration and rehearsal. A local status file is not a
   delivered chat notification; a reservation is not a provider-enforced cap.
 - `workspace_evidence.py` retains final workspace bytes with per-file and archive
-  hashes. `isolation_dry_run.py` used a clean Python image: its agent could not see
-  truth/grader files, and two separate grading runs agreed on the retained output.
-  This is an architecture rehearsal on a tiny fixture. **The actual 17 tasks and
-  production agent image still need the same separation and free regrading.**
+  hashes, preserving internal relative symlinks and rejecting escaping chains.
+  `full_suite_isolation.py` prepares the actual 17 fixtures in isolated Docker
+  volumes, mounts only their workspace subdirectory into a clean Python agent,
+  and grades retained archives in separate containers. All 17 regraded identically
+  twice. A separate oracle-derived QA control scored 1 for known-correct content
+  and 0 for an empty answer. These are synthetic-agent pipeline checks, not
+  model-quality results; production client images and further grader controls
+  still require qualification. [Evidence](results-v1/full-suite-isolation.json).
+- `docker_stage.py` supplies heartbeat/status updates, an operator STOP marker,
+  owned-container cleanup and deadline handling for the network-denied rehearsal.
+  Its tests check UTF-8/CRLF input bytes, timeout cleanup and default-network
+  rejection. A paid provider transport, external watchdog and exposure limits are
+  deliberately not enabled by this controller.
 - `mock_codex.py` runs the actual pinned Codex CLI against a loopback Responses
   fixture. It requires an executed known-answer tool, completed turn, unchanged
   requested model/effort and multiple local protocol exchanges. Fake usage is

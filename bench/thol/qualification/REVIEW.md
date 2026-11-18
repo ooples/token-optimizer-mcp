@@ -20,10 +20,12 @@ have not acquired a passing cost measurement from this work.
    on resume and prevents further dispatch after a failure or interruption.
    This is tested groundwork; it is not yet an integrated paid supervisor.
 3. **Final workspaces were lost and graders were visible to the agent.** Retained
-   archives have per-file/archive hashes and corruption detection. A separate
-   no-model Docker rehearsal proved a clean agent could not read its truth and
-   that retained bytes can be graded twice independently. The real task suite
-   still needs this implementation; the old THOL image contains grader material.
+   archives have per-file/archive hashes and corruption detection. The actual
+   17 frozen task fixtures now prepare and regrade identically twice with a clean
+   synthetic agent unable to see truth. A known-positive/negative grader control
+   also discriminates 1 from 0. The production client image still needs this
+   boundary; the old THOL image contains grader material and is used only for
+   preparation/grading, never as the isolated agent in this rehearsal.
 4. **Installer exit status overstates activation.** Caveman returned exit zero
    after a skills-install failure. Codex parsed empty homes successfully even
    when no integration had been installed. The other token-optimizer installer
@@ -66,10 +68,11 @@ have not acquired a passing cost measurement from this work.
   installer writes a legacy `[[hooks]]` format rejected by Codex 0.169.0. Preserve
   this failure until a supported configuration is established; do not silently
   patch it and describe the result as the unmodified latest product.
-- Complete the real task preparer/agent/grader separation, archive every actual
-  final workspace and verify free regrading across the full task set. Initialize
-  git for fixtures and preserve project containment; do not weaken wiki security
-  to accommodate unrooted benchmark workspaces.
+- Carry the now-tested full-suite preparation/archival/regrading boundary into
+  the model-equipped production agent image and replacement runner. Extend
+  known-positive/negative grader controls beyond the single calibrated task.
+  Git initialization and containment are preserved. Relative project symlinks
+  are archived as links; external/absolute/cyclic links remain rejected.
 - Integrate the lifecycle ledger, strict reporter, live usage accounting,
   process/container shutdown, provider hard limits and real progress/terminal
   delivery into a replacement runner. Rehearse interruption, unknown exposure,

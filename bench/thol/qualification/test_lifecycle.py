@@ -1,6 +1,9 @@
 import json
+import hashlib
+import io
 from pathlib import Path
 import tempfile
+import tarfile
 import unittest
 
 from lifecycle import Lifecycle
@@ -85,6 +88,33 @@ class GuardTests(unittest.TestCase):
     def test_evidence_cannot_archive_itself(self):
         with self.assertRaises(ValueError):
             retain(self.root, self.root / 'evidence')
+
+    def link_archive(self, links):
+        destination = self.root / 'links'
+        destination.mkdir()
+        content = b'answer = 42\n'
+        with tarfile.open(destination / 'workspace.tar', 'w') as archive:
+            file = tarfile.TarInfo('lib/source.py')
+            file.size = len(content)
+            archive.addfile(file, io.BytesIO(content))
+            for name, target in links.items():
+                info = tarfile.TarInfo(name)
+                info.type = tarfile.SYMTYPE
+                info.linkname = target
+                archive.addfile(info)
+        receipt = {'archiveSha256': hashlib.sha256((destination / 'workspace.tar').read_bytes()).hexdigest(),
+                   'files': {'lib/source.py': hashlib.sha256(content).hexdigest()}, 'links': links}
+        (destination / 'workspace.json').write_text(json.dumps(receipt))
+        return destination
+
+    def test_relative_links_within_the_archived_project_are_supported(self):
+        directory = self.link_archive({'alias.py': 'lib/source.py'})
+        self.assertEqual(verify_archive(directory)['links']['alias.py'], 'lib/source.py')
+
+    def test_chained_links_cannot_escape_the_archived_project(self):
+        directory = self.link_archive({'alias': 'target', 'target': '../outside'})
+        with self.assertRaisesRegex(ValueError, 'escapes'):
+            verify_archive(directory)
 
 
 if __name__ == '__main__':
