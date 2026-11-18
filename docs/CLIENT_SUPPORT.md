@@ -118,9 +118,11 @@ quietly turn the product off.
 
 Some settings help one kind of task and cost another. Outlining a large file
 helps a model find something in it and costs 1.36x when the model is about to
-rewrite the whole file. The output-discipline block saves 10-12% on fix and
-build tasks and costs 8% on surveys, where the report has to be written in full.
-So each session gets a task category, and each category has its own defaults
+rewrite the whole file. Earlier Claude measurements supported turning output
+discipline off for surveys, but the full Codex comparison measured that category
+at 1.0556x baseline and failed its fixed 1.03 limit. The survey override was
+removed; output discipline stays on for every category. Rewrites still skip
+outline substitution. Each session gets a task category and measured defaults
 (`src/hooks-core/task-settings.mjs`).
 
 - **When the prompt arrives**, an explicit request selects fix, build, rewrite,
@@ -138,9 +140,10 @@ So each session gets a task category, and each category has its own defaults
 - **The first six tool calls can settle `unknown`.** A whole-file read over
   256 KB suggests `locate`; a failing test run suggests `fix`. Tool use cannot
   replace a known task, and overwriting a read file does not establish `rewrite`.
-- **Task changes update delivered instructions.** On prompt-context clients,
-  moving from fix/build to survey explicitly releases an earlier output-discipline
-  block; moving back delivers it again. Repeated continuations add no duplicate.
+- **Delivered instructions follow explicit switches.** On prompt-context clients,
+  turning output discipline off releases an earlier block; turning it back on
+  delivers it again. Task changes and continuations add no duplicate while the
+  selected setting stays the same.
 - **`unknown` runs with the defaults the product had before categories.** A
   category only differs where a measurement says so, and the table names it.
 - **The output-discipline block comes with the prompt** on clients whose prompt

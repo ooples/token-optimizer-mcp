@@ -116,15 +116,15 @@ describe('ledger', () => {
 describe('the holdout runs the UNKNOWN row', () => {
   test('sessionSettings for a held-out session ignores its category; a classified one keeps it', () => {
     const env = holdoutOn(0.5);
-    const state = { taskClass: { category: TaskCategory.SURVEY, source: 'prompt', calls: 0, gen: 1 } };
+    const state = { taskClass: { category: TaskCategory.REWRITE, source: 'prompt', calls: 0, gen: 1 } };
     const held = sessionIn(ARM_HOLDOUT, env);
     const kept = sessionIn(ARM_CLASSIFIED, env);
-    expect(settingsFor(TaskCategory.SURVEY, env)).not.toEqual(settingsFor(TaskCategory.UNKNOWN, env));
+    expect(settingsFor(TaskCategory.REWRITE, env)).not.toEqual(settingsFor(TaskCategory.UNKNOWN, env));
     expect(sessionSettings(state, env, { sessionId: held })).toEqual(settingsFor(TaskCategory.UNKNOWN, env));
-    expect(sessionSettings(state, env, { sessionId: kept })).toEqual(settingsFor(TaskCategory.SURVEY, env));
+    expect(sessionSettings(state, env, { sessionId: kept })).toEqual(settingsFor(TaskCategory.REWRITE, env));
   });
 
-  test('promptSubmitted records the category, the client and the arm, and a held-out survey still gets discipline', () => {
+  test('promptSubmitted records both arms, and holdout retains default rewrite settings', () => {
     const stateDir = fresh('state');
     const env = { ...homeEnv(), ...holdoutOn(0.5), TOKEN_OPTIMIZER_STATE_DIR: stateDir, TOKEN_OPTIMIZER_OUTPUT_DISCIPLINE: '' };
     const saved = process.env.TOKEN_OPTIMIZER_STATE_DIR;
@@ -132,16 +132,18 @@ describe('the holdout runs the UNKNOWN row', () => {
     try {
       const held = sessionIn(ARM_HOLDOUT, env);
       const kept = sessionIn(ARM_CLASSIFIED, env);
-      const survey = 'give me an overview of how this repository is structured';
-      const heldText = promptSubmitted({ sessionId: held, prompt: survey, cwd: work, agent: null, client: 'claude-code', env });
-      const keptText = promptSubmitted({ sessionId: kept, prompt: survey, cwd: work, agent: null, client: 'claude-code', env });
-      // Survey turns discipline off; the UNKNOWN row keeps it on.
+      const rewrite = 'Rewrite the whole file in modern Python.';
+      const heldText = promptSubmitted({ sessionId: held, prompt: rewrite, cwd: work, agent: null, client: 'claude-code', env });
+      const keptText = promptSubmitted({ sessionId: kept, prompt: rewrite, cwd: work, agent: null, client: 'claude-code', env });
+      // Both arms keep discipline; only the classified rewrite disables outlines.
       expect(heldText.context).toMatch(/\S/);
-      expect(keptText.context).toBe('');
+      expect(keptText.context).toMatch(/\S/);
+      expect(sessionSettings({ taskClass: { category: heldText.category } }, env, { sessionId: held }).outlineSubstitution).toBe(true);
+      expect(sessionSettings({ taskClass: { category: keptText.category } }, env, { sessionId: kept }).outlineSubstitution).toBe(false);
       const rows = readTaskEvents(env).filter((r) => r.k === 'classified');
       expect(rows).toEqual([
-        expect.objectContaining({ s: held, c: 'survey', client: 'claude-code', arm: ARM_HOLDOUT }),
-        expect.objectContaining({ s: kept, c: 'survey', client: 'claude-code', arm: ARM_CLASSIFIED }),
+        expect.objectContaining({ s: held, c: 'rewrite', client: 'claude-code', arm: ARM_HOLDOUT }),
+        expect.objectContaining({ s: kept, c: 'rewrite', client: 'claude-code', arm: ARM_CLASSIFIED }),
       ]);
     } finally {
       if (saved === undefined) delete process.env.TOKEN_OPTIMIZER_STATE_DIR;

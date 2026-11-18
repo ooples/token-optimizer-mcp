@@ -291,7 +291,7 @@ describe('the doctor (probeTaskSettings)', () => {
   test('names the differing cells and the evidence behind them', () => {
     const [check] = probeTaskSettings({});
     expect(check.warn).toBeFalsy();
-    expect(check.detail).toContain('survey.outputDiscipline=false');
+    expect(check.detail).not.toContain('survey.outputDiscipline=false');
     expect(check.detail).toContain('rewrite.outlineSubstitution=false');
   });
 
@@ -326,9 +326,8 @@ describe('the settings table', () => {
       expect(settingsFor(c, {}).outlineSubstitution).toBe(true);
   });
 
-  test('a survey writes without the block; every other category keeps it', () => {
-    expect(settingsFor(TaskCategory.SURVEY, {}).outputDiscipline).toBe(false);
-    for (const c of Object.values(TaskCategory).filter((c) => c !== TaskCategory.SURVEY))
+  test('every category keeps output discipline after the survey rollback', () => {
+    for (const c of Object.values(TaskCategory))
       expect(settingsFor(c, {}).outputDiscipline).toBe(true);
   });
 
@@ -391,11 +390,11 @@ describe('through the Claude Code hooks', () => {
     });
     expect(storedCategory(session)).toBe(TaskCategory.FIX);
     const second = prompt('Now write `NOTES.md` summarising the audit.');
-    expect(second.stdout).toContain('inactive');
+    expect(second.stdout.trim()).toBe('');
     expect(storedCategory(session)).toBe(TaskCategory.SURVEY);
   });
 
-  test('a survey prompt adds nothing; a later fix prompt then carries the block', () => {
+  test('a survey receives the block; switching to fix does not duplicate it', () => {
     const session = `v${++seq}`;
     const prompt = (text) =>
       run('user-prompt-submit.mjs', {
@@ -406,10 +405,10 @@ describe('through the Claude Code hooks', () => {
       });
     const survey = prompt('Perform a complete on-page SEO audit and write your findings to `seo_report.md`.');
     expect(survey.status).toBe(0);
-    expect(survey.stdout.trim()).toBe('');
+    expect(JSON.parse(survey.stdout).hookSpecificOutput.additionalContext).toBe(OUTPUT_DISCIPLINE);
     expect(storedCategory(session)).toBe(TaskCategory.SURVEY);
     const fix = prompt('The project has failing tests. Find the root cause and fix the bug.');
-    expect(JSON.parse(fix.stdout).hookSpecificOutput.additionalContext).toBe(OUTPUT_DISCIPLINE);
+    expect(fix.stdout.trim()).toBe('');
     expect(storedCategory(session)).toBe(TaskCategory.FIX);
   });
 

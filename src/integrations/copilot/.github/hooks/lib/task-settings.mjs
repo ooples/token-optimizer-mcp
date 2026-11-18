@@ -42,6 +42,11 @@ import { ARM_HOLDOUT, taskArm } from './task-ledger.mjs';
  * build (0.877) and losing on survey (1.084: seo-audit 1.23x, settings-inventory
  * 1.18x, cobra overview 0.88x). Survey's report has to be written in full, and
  * under the block the model packed it into fewer, longer, output-billed turns.
+ * That earlier Claude-only result did not transfer to the full Codex board:
+ * 610-codex-board/results-v1 measured survey at 1.055629x master without the
+ * block (five tasks, five reps per product). The fixed 1.03 removal rule
+ * therefore restores the default for survey; the old candidate failed its
+ * overall gate. A fresh comparison is required for this amended table.
  */
 export const OUTPUT_DISCIPLINE = [
   '## Keep output lean',
@@ -67,7 +72,6 @@ const DEFAULTS = Object.freeze({
 /** Only the cells that differ from DEFAULTS. Every one needs an EVIDENCE entry. */
 const OVERRIDES = Object.freeze({
   [TaskCategory.REWRITE]: Object.freeze({ outlineSubstitution: false }),
-  [TaskCategory.SURVEY]: Object.freeze({ outputDiscipline: false }),
 });
 
 /**
@@ -81,11 +85,6 @@ export const EVIDENCE = Object.freeze({
     'bench/ledger/RESULTS-LARGECONTEXT.md: on whole-file-transform, hooks with outlining cost ' +
     '1.356x [1.125, 1.642] the same text without them, n=30; the model paid for the outline, ' +
     'then read the whole file anyway.',
-  'survey.outputDiscipline':
-    'te-bench bench/thol/campaigns/594-discipline-bycat/RESULTS.md: with the block, survey tasks ' +
-    'cost a geometric mean 1.084x without it (seo-audit 1.229, code-settings-inventory-django ' +
-    '1.179, code-overview-cobra 0.880; median $, 5 reps); the pre-registered rule turns it off ' +
-    'above 1.03.',
 });
 
 const ON = new Set(['1', 'on', 'true', 'yes']);

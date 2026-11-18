@@ -189,7 +189,7 @@ describe('bounded transcript context', () => {
     const ledger = readFileSync(join(dir, 'home', 'task-classes.jsonl'), 'utf8');
     expect(ledger).not.toContain('PRIVATE-MARKER');
     expect(ledger).toContain('context:accepted-proposal');
-    expect(result.stdout).not.toContain('Keep output lean');
+    expect(result.stdout).toContain('Keep output lean');
   });
 
   test('a follow-up starts a new correction window and old tool evidence cannot replace it', () => {
@@ -224,12 +224,12 @@ describe('bounded transcript context', () => {
     expect(loadState(sessionId).taskClass.gen).toBe(3003);
   });
 
-  test('fix to survey to fix releases and reactivates instructions already delivered', () => {
+  test('an explicit switch releases and reactivates instructions already delivered', () => {
     const sessionId = 'context-instructions';
-    const submit = (prompt, now) => promptSubmitted({ sessionId, prompt, cwd: dir, env: {}, now });
+    const submit = (prompt, now, env = {}) => promptSubmitted({ sessionId, prompt, cwd: dir, env, now });
     expect(submit('Fix the failing tests', 1000).context).toContain('Keep output lean');
-    expect(submit('now write a report about the fix', 2000).context).toContain('inactive');
-    expect(submit('continue', 3000).context).toBe('');
+    expect(submit('now write a report about the fix', 2000, { TOKEN_OPTIMIZER_OUTPUT_DISCIPLINE: 'off' }).context).toContain('inactive');
+    expect(submit('continue', 3000, { TOKEN_OPTIMIZER_OUTPUT_DISCIPLINE: 'off' }).context).toBe('');
     expect(submit('Fix the failing tests', 4000).context).toContain('Keep output lean');
     expect(submit('continue', 5000).context).toBe('');
     expect(loadState(sessionId).disciplineReleasedAt).toBe(2000);
