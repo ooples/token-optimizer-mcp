@@ -1,0 +1,60 @@
+{
+  "checkedAt": "2026-11-18T01:03:02.910108+00:00",
+  "records": [
+    {
+      "name": "codegraph",
+      "source": "https://registry.npmjs.org/@colbymchenry%2fcodegraph/latest",
+      "latest": "1.6.3"
+    },
+    {
+      "name": "lean-ctx",
+      "source": "https://registry.npmjs.org/lean-ctx-bin/latest",
+      "latest": "3.12.6"
+    },
+    {
+      "name": "tokenade-product",
+      "source": "https://registry.npmjs.org/@tokenade%2fcli/latest",
+      "latest": "2.0.9"
+    },
+    {
+      "name": "cto",
+      "source": "https://registry.npmjs.org/claude-token-optimizer/latest",
+      "latest": "2.3.20"
+    },
+    {
+      "name": "tokenjuice",
+      "source": "https://registry.npmjs.org/tokenjuice/latest",
+      "latest": "0.11.0"
+    },
+    {
+      "name": "graphify",
+      "source": "https://pypi.org/pypi/graphifyy/json",
+      "latest": "0.9.112"
+    },
+    {
+      "name": "headroom",
+      "source": "https://pypi.org/pypi/headroom-ai/json",
+      "latest": "0.44.0"
+    },
+    {
+      "name": "code-review-graph",
+      "source": "https://pypi.org/pypi/code-review-graph/json",
+      "latest": "2.4.0"
+    },
+    {
+      "name": "squeez",
+      "source": "https://crates.io/api/v1/crates/squeez",
+      "latest": "1.48.18"
+    },
+    {
+      "name": "claude-mem",
+      "source": "https://registry.npmjs.org/claude-mem/latest",
+      "latest": "15.21.0"
+    },
+    {
+      "name": "claude-context",
+      "source": "https://registry.npmjs.org/@zilliz%2fclaude-context-mcp/latest",
+      "latest": "0.1.16"
+    }
+  ]
+}

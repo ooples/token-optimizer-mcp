@@ -1,0 +1,58 @@
+{
+  "scoredRuns": 170,
+  "checks": {
+    "publishedSummaryReproduces": true,
+    "allOriginalArtifactChecksPass": true,
+    "noRecordedProtectedPathMentions": true
+  },
+  "failures": [],
+  "failedMcpCalls": {
+    "master:wiki_write": 13,
+    "master:smart_edit": 1,
+    "pr610:wiki_write": 10
+  },
+  "protectedPathMentions": [],
+  "itemTypes": {
+    "error": 340,
+    "command_execution": 855,
+    "mcp_tool_call": 604,
+    "file_change": 142,
+    "agent_message": 393,
+    "web_search": 2
+  },
+  "holdoutByCategory": {
+    "fix": 2,
+    "survey": 5,
+    "build": 5,
+    "rewrite": 0,
+    "locate": 1
+  },
+  "completedMcpCalls": 580,
+  "informationalHookTrustWarningItems": 340,
+  "unexpectedErrorItems": [],
+  "webSearches": [
+    {
+      "run": "pr610__seo-audit__r4",
+      "query": "https://developers.google.com/search/docs/crawling-indexing/block-indexing"
+    },
+    {
+      "run": "pr610__seo-audit__r4",
+      "query": "'drop'"
+    }
+  ],
+  "scoredCredits": 379.14152,
+  "recordedSetupCredits": 3.3105100000000003,
+  "negativeControls": {
+    "missingHookEvidenceAcceptedByOriginalReporter": true,
+    "score99AcceptedByOriginalReporter": true
+  },
+  "exploratoryPairedBootstrap": {
+    "draws": 10000,
+    "seed": 20261118,
+    "ratio95": [
+      0.9428931569763399,
+      1.1259929390002912
+    ],
+    "scope": "Fixed 17 tasks; paired within-task repetition resampling; does not replace gate or prove population performance."
+  }
+}
