@@ -20,6 +20,7 @@ import { join } from 'node:path';
 import { substitutionFor } from './substitute.mjs';
 import { wholeFileDump } from './decide.mjs';
 import { canonicalPath } from './paths.mjs';
+import { sessionSettings } from './task-settings.mjs';
 
 /** Where served outlines are written; a file's presence is the once-per-file record. */
 export function outlineDir() {
@@ -98,6 +99,12 @@ export function outlineRead({ sessionId, filePath, offset, limit, state }) {
     }
     return null;
   }
+  // PER-TASK, and below the paged-read record on purpose: a rewrite session that
+  // pages through a file it was outlined earlier must still end outlining for
+  // the session, as a ranged shell read does. A session about to rewrite the
+  // whole file pays for an outline and then reads the file anyway
+  // (task-settings.mjs, rewrite.outlineSubstitution).
+  if (!sessionSettings(state, process.env, { sessionId }).outlineSubstitution) return null;
   if (missed && existsSync(missed)) return null;
   const found = substitutionFor(filePath, {
     turnsSoFar: turnsSoFar(state),

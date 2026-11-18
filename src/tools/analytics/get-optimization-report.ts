@@ -385,6 +385,31 @@ async function agentSection(args: {
   }
 }
 
+/**
+ * Task classification's own report (task-report.mjs): category mix, how often
+ * tool calls corrected the prompt's category, and cost per prompt by arm.
+ * Fails open like graphSection, and is scoped like agentSection.
+ */
+async function taskSection(args: {
+  startDate?: string;
+  endDate?: string;
+  sessionId?: string;
+}): Promise<{ report: unknown; lines: string[] } | null> {
+  try {
+    const mod = await import(coreUrl('task-report.mjs'));
+    const since = args.startDate ? Date.parse(args.startDate) : 0;
+    const until = args.endDate ? Date.parse(args.endDate) : Infinity;
+    const result = mod.taskReportFromLedger({
+      since: Number.isFinite(since) ? since : 0,
+      until: Number.isFinite(until) ? until : Infinity,
+      sessionId: args.sessionId || null,
+    });
+    return result.lines.length ? result : null;
+  } catch {
+    return null;
+  }
+}
+
 export function getOptimizationReportTool(analyticsManager: AnalyticsManager) {
   return async (args: {
     startDate?: string;
@@ -427,6 +452,7 @@ export function getOptimizationReportTool(analyticsManager: AnalyticsManager) {
       const cost = directPrice(scopedEntries);
       const graph = await graphSection();
       const agents = await agentSection(args);
+      const tasks = await taskSection(args);
 
       const formatted = [
         '╔══ Token Optimizer — Verified Savings Report ══╗',
@@ -449,6 +475,7 @@ export function getOptimizationReportTool(analyticsManager: AnalyticsManager) {
         renderTable('▸ By MCP server', server.byServer, topN),
         ...(graph ? graph.lines : []),
         ...(agents ? agents.lines : []),
+        ...(tasks ? tasks.lines : []),
       ].join('\n');
 
       return JSON.stringify(
@@ -472,6 +499,7 @@ export function getOptimizationReportTool(analyticsManager: AnalyticsManager) {
           },
           graph: graph ? graph.sheet : null,
           agents: agents ? { ...agents.overhead, ttl: agents.ttl } : null,
+          taskClassification: tasks ? tasks.report : null,
           byAction,
           byHook: hook.byHook,
           byServer: server.byServer,

@@ -873,6 +873,9 @@ export function harvestCliFor(client, env = process.env) {
 }
 export const CLIENT_CAPABILITIES = Object.freeze({
   'claude-code': native({
+    // A prompt hook that adds context to the model (task-class.mjs): the
+    // task's own settings decide prompt-time text instead of SessionStart.
+    promptContext: true,
     name: 'Claude Code',
     tier: CAPABILITY_TIERS.CONTINUATION,
     semanticHarvest: 'stop-continuation',
@@ -881,6 +884,9 @@ export const CLIENT_CAPABILITIES = Object.freeze({
     stopDecision: 'block',
   }),
   codex: native({
+    // A prompt hook that adds context to the model (task-class.mjs): the
+    // task's own settings decide prompt-time text instead of SessionStart.
+    promptContext: true,
     name: 'Codex',
     tier: CAPABILITY_TIERS.CONTINUATION,
     semanticHarvest: 'stop-continuation',
@@ -893,6 +899,13 @@ export const CLIENT_CAPABILITIES = Object.freeze({
     stopDecision: 'block',
   }),
   copilot: native({
+    // NOT a prompt-context client, though its prompt hook is registered. The
+    // hooks reference says a config-file userPromptSubmitted hook's output is
+    // dropped; the CLI changelog says its additionalContext reaches the model
+    // since 1.0.65. Unverified on a live CLI, so the block stays at
+    // SessionStart -- delivered either way -- and the prompt hook only
+    // classifies, which the per-call settings still use.
+    promptContext: false,
     name: 'GitHub Copilot CLI',
     tier: CAPABILITY_TIERS.CONTINUATION,
     semanticHarvest: 'agent-stop-continuation',
@@ -902,6 +915,9 @@ export const CLIENT_CAPABILITIES = Object.freeze({
     stopDecision: 'block',
   }),
   gemini: native({
+    // A prompt hook that adds context to the model (task-class.mjs): the
+    // task's own settings decide prompt-time text instead of SessionStart.
+    promptContext: true,
     name: 'Gemini CLI',
     tier: CAPABILITY_TIERS.CONTINUATION,
     semanticHarvest: 'after-agent-retry',
@@ -910,6 +926,9 @@ export const CLIENT_CAPABILITIES = Object.freeze({
     stopDecision: 'deny',
   }),
   qwen: native({
+    // A prompt hook that adds context to the model (task-class.mjs): the
+    // task's own settings decide prompt-time text instead of SessionStart.
+    promptContext: true,
     name: 'Qwen Code',
     tier: CAPABILITY_TIERS.CONTINUATION,
     semanticHarvest: 'stop-continuation',
@@ -932,6 +951,9 @@ export const CLIENT_CAPABILITIES = Object.freeze({
     stopDecision: 'block',
   }),
   cline: native({
+    // A prompt hook that adds context to the model (task-class.mjs): the
+    // task's own settings decide prompt-time text instead of SessionStart.
+    promptContext: true,
     name: 'Cline',
     tier: CAPABILITY_TIERS.OBSERVATION,
     semanticHarvest: 'active-model-rule',

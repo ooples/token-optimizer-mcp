@@ -13,6 +13,19 @@
         ]
       }
     ],
+    "BeforeAgent": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "name": "token-optimizer-task-settings",
+            "command": "node \"${extensionPath}${/}src${/}integrations${/}gemini${/}hooks${/}prompt.mjs\"",
+            "timeout": 5000,
+            "description": "Classify the prompt and apply that task's settings."
+          }
+        ]
+      }
+    ],
     "BeforeTool": [
       {
         "matcher": "read_file|search_file_content|glob|replace|write_file|run_shell_command",

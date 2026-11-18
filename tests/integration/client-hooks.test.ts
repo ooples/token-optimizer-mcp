@@ -283,7 +283,10 @@ describe('native CLI hook integrations', () => {
       (groups: any) => groups.flatMap((group: any) => group.hooks)
     ) as Array<{ command: string; commandWindows: string }>;
 
-    expect(pluginHooks).toHaveLength(4);
+    // SessionStart, UserPromptSubmit (per-task settings), PreToolUse, PostToolUse, Stop.
+    expect(pluginHooks).toHaveLength(5);
+    expect(pluginManifest.hooks.UserPromptSubmit).toBeDefined();
+    expect(standaloneManifest.hooks.UserPromptSubmit).toBeDefined();
     expect(pluginManifest.hooks.SessionStart[0].matcher).toBe(
       standaloneManifest.hooks.SessionStart[0].matcher
     );
@@ -308,13 +311,15 @@ describe('native CLI hook integrations', () => {
     );
     expect(geminiExtensionManifest.hooks.BeforeTool).toBeDefined();
     expect(geminiExtensionManifest.hooks.AfterAgent).toBeDefined();
+    // Gemini's prompt hook: where the task's category and settings are set.
+    expect(geminiExtensionManifest.hooks.BeforeAgent).toBeDefined();
     const geminiCommands = Object.values(geminiExtensionManifest.hooks).flatMap(
       (groups: any) =>
         groups.flatMap((group: any) =>
           group.hooks.map((hook: any) => hook.command as string)
         )
     );
-    expect(geminiCommands).toHaveLength(4);
+    expect(geminiCommands).toHaveLength(5);
     expect(geminiCommands.join('\n')).not.toContain(
       'gemini-token-optimizer-advisor.mjs'
     );

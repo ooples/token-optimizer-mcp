@@ -89,6 +89,15 @@ function unit(sessionId, salt) {
 }
 
 /**
+ * A uniform draw in [0, 1) for this session, independent per salt. Shared so a
+ * second experiment (task-ledger.mjs) uses the same knob and the same hashing
+ * with its own salt, instead of reusing this module's enrolment.
+ */
+export function holdoutUnit(sessionId, salt) {
+  return unit(sessionId, salt);
+}
+
+/**
  * The class this session is the experiment for, or null for an ordinary session.
  * Deterministic in the session id, so every hook process of one session agrees
  * without sharing any state.

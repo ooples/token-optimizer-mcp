@@ -26,6 +26,7 @@ import {
   saveState,
 } from './lib/policy.mjs';
 import { policyText, sessionTaskContext } from './lib/adapter.mjs';
+import { contextStarted } from './lib/task-session.mjs';
 import {
   HOOK_MCP_TOOLS,
   optimizerToolEvidence,
@@ -58,6 +59,10 @@ import {
   writeHookEvent,
 } from './lib/observability.mjs';
 import { resolveHook } from './lib/runtime-switch.mjs';
+import { learnedLocation, scheduleFold } from './lib/toolprune.mjs';
+
+/** Compaction and its SessionStart are back to back; anything older is stale. */
+const COMPACTION_ANCHOR_TTL_MS = 10 * 60 * 1000;
 
 // THE BUNDLED INVENTORY IS ASSERTED ONLY FOR AN ACTUAL PLUGIN INSTALL.
 //
@@ -117,8 +122,17 @@ async function restoration(parsed) {
   // against elsewhere.
   if (parsed.source !== 'compact') return null;
 
-  const state = loadState(parsed.session_id);
-  const seen = Object.keys(state.seen || {});
+  // THE ROUTER'S SCOPE. It records `seen` under the transcript path (see
+  // pretooluse-router.mjs, agentScope), and every real SessionStart payload
+  // carries one, so an unscoped read here found an empty state and the
+  // restoration never fired outside the tests, whose payloads had no path.
+  const state = loadState(parsed.session_id, parsed.transcript_path || null);
+  // PreCompact emptied `seen` (the read cache must not outlive the context) and
+  // kept the list as compactionAnchors; nothing runs between it and this hook.
+  // A set older than a few minutes belongs to an earlier compaction.
+  const anchors = state.compactionAnchors;
+  const fresh = anchors && Date.now() - anchors.at < COMPACTION_ANCHOR_TTL_MS ? anchors.paths : [];
+  const seen = [...new Set([...fresh, ...Object.keys(state.seen || {})])];
   if (!seen.length) return null;
 
   // The graph belongs to the project the FILES are in, not to wherever the
@@ -201,10 +215,36 @@ if (input.payload) invocation.bind(payload, null, input.bytes);
 else invocation.noteInput(input.status, input.bytes);
 const features = featuresForArm();
 const toolEvidence = optimizerToolEvidence(payload);
-if (payload.session_id && toolEvidence.proven) {
-  const state = loadState(payload.session_id);
-  rememberOptimizerTools(state, toolEvidence);
-  saveState(payload.session_id, state);
+if (payload.session_id) {
+  // Scoped as the router and the prompt hook scope it, or the marker below and
+  // the tool evidence land in a file neither of them reads.
+  const scope = payload.transcript_path || null;
+  const state = loadState(payload.session_id, scope);
+  if (toolEvidence.proven) rememberOptimizerTools(state, toolEvidence);
+  // Startup, resume, clear and compact all rebuild the context, so the block
+  // the prompt hook said into the old one is due again (task-session.mjs).
+  contextStarted(state);
+  saveState(payload.session_id, state, scope);
+}
+// MEASURE-ONLY FOLD (toolprune.mjs `measureOnly`). Claude Code's SessionStart
+// is this file, not the adapter's, so the adapter's fold never ran for it and
+// task classification had no per-prompt costs to report (task-ledger.mjs).
+// This folds finished transcripts for their costs alone: no deny list, no
+// catalog probe, no injection-holdout outcome -- those stay with the adapter
+// until Claude Code adopts them. Detached; never delays the session.
+if (payload.session_id && payload.transcript_path) {
+  try {
+    const learned = learnedLocation(payload.cwd || process.env.CLAUDE_PROJECT_DIR || process.cwd());
+    scheduleFold({
+      dir: learned.dir,
+      root: learned.root,
+      transcriptPath: payload.transcript_path,
+      sessionId: payload.session_id,
+      measureOnly: true,
+    });
+  } catch {
+    // Telemetry never costs the session its start.
+  }
 }
 // ASSEMBLED IN CACHE ORDER, not in the order the blocks are discovered below.
 // This text sits near the FRONT of the prompt prefix, which a cache invalidates
@@ -216,7 +256,9 @@ const blocks = [
   {
     id: 'policy',
     volatility: 0,
-    text: policyText(true, toolEvidence.names, toolEvidence.proven),
+    // The output-discipline block comes with the prompt (UserPromptSubmit), where
+    // the task is known and its own settings row decides (task-session.mjs).
+    text: policyText(true, toolEvidence.names, toolEvidence.proven, { deferDiscipline: true }),
   },
 ];
 // Short agent prompts: said only when a brief is approved, so only when true.

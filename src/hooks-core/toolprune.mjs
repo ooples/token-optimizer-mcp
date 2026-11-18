@@ -72,6 +72,7 @@ import { writeAtomically } from './policy.mjs';
 import { decide as decideHoldout, holdoutSettings, recordOutcome } from './injection-holdout.mjs';
 import { projectRootFor, unrootedRoot, wikiDir } from './wiki.mjs';
 import { canonicalPath } from './paths.mjs';
+import { ledgerPath, readTaskEvents, recordOutcomes } from './task-ledger.mjs';
 
 export const TOOLPRUNE_MODES = Object.freeze(['auto', 'propose', 'off']);
 export const STORE_FILE = 'toolprune.json';
@@ -266,6 +267,11 @@ export function sessionUsage(transcriptPath, { maxBytes = MAX_FOLD_BYTES, mentio
   // sharing a message.id, each carrying the usage SO FAR, so only the last row
   // per id counts: summing every row overstated cache reads 1.8x.
   const usageById = new Map();
+  // PER PROMPT, for task classification's ledger (task-ledger.mjs): each
+  // response is billed to the prompt it answered, which is the segment open
+  // when its message id is first seen.
+  const segmentOf = new Map();
+  const segments = [];
   let prompts = 0;
   let firstAt = 0;
   let lastAt = 0;
@@ -290,7 +296,9 @@ export function sessionUsage(transcriptPath, { maxBytes = MAX_FOLD_BYTES, mentio
     const role = message.role || entry.type;
     const content = message.content;
     if (role === 'assistant' && message.usage && typeof message.usage === 'object') {
-      usageById.set(String(message.id || entry.uuid || usageById.size), message.usage);
+      const id = String(message.id || entry.uuid || usageById.size);
+      usageById.set(id, message.usage);
+      if (!segmentOf.has(id) && segments.length) segmentOf.set(id, segments.length - 1);
     }
     if (role === 'assistant' && Array.isArray(content)) {
       for (const block of content) {
@@ -317,6 +325,7 @@ export function sessionUsage(transcriptPath, { maxBytes = MAX_FOLD_BYTES, mentio
     const typed = textOf(content);
     if (!isPrompt(entry, typed)) continue;
     prompts += 1;
+    segments.push({ at, costUnits: 0, outputTokens: 0 });
     for (const name of watch) {
       if (new RegExp(`\\b${escapeRegExp(name)}\\b`).test(typed)) mentioned.add(name);
     }
@@ -325,9 +334,18 @@ export function sessionUsage(transcriptPath, { maxBytes = MAX_FOLD_BYTES, mentio
   // A tool that only ever failed as absent was not "used"; it was missing.
   for (const name of absent) used.delete(name);
   let costUnits = 0;
-  for (const usage of usageById.values()) costUnits += costUnitsOf(usage);
+  for (const [id, usage] of usageById) {
+    const units = costUnitsOf(usage);
+    costUnits += units;
+    const segment = segments[segmentOf.get(id)];
+    if (segment) {
+      segment.costUnits += units;
+      segment.outputTokens += Number(usage.output_tokens) > 0 ? Number(usage.output_tokens) : 0;
+    }
+  }
   return {
     costUnits,
+    segments,
     sessionId: sessionId || basename(transcriptPath).replace(/\.jsonl$/i, ''),
     prompts,
     used: [...used].sort(),
@@ -584,11 +602,28 @@ export function idleMs(transcriptDir, currentSession, { now = Date.now() } = {})
  * @param {string|null} args.currentSession the session that is running now
  * @returns {object} a summary, for status output and tests
  */
-export function runFold({ dir, root, transcriptDir, currentSession = null, env = process.env, now = Date.now() }) {
+export function runFold({
+  dir,
+  root,
+  transcriptDir,
+  currentSession = null,
+  env = process.env,
+  now = Date.now(),
+  measureOnly = false,
+}) {
   const settings = toolpruneSettings(env);
   const holdout = holdoutSettings(env);
   let store = loadStore(dir);
   const folded = new Map(store.sessions.map((session) => [session.sessionId, session.endedAt || 0]));
+  // Only sessions the ledger already knows: a first fold on a machine with
+  // months of transcripts would otherwise write the cost of every prompt ever
+  // answered, none of which was classified, and crowd the classified rows out
+  // of the ledger's size cap.
+  let ledgerSessions = null;
+  const ledgerKnows = (id) => {
+    ledgerSessions ??= new Set(readTaskEvents(env).map((row) => row.s));
+    return ledgerSessions.has(id);
+  };
   let foldedNow = 0;
   try {
     for (const name of readdirSync(transcriptDir)) {
@@ -607,19 +642,26 @@ export function runFold({ dir, root, transcriptDir, currentSession = null, env =
       if (!usage || usage.prompts === 0) continue;
       usage.sessionId = sessionId;
       store = foldSession(store, usage, { now });
-      if (holdout.enabled) {
+      // Not when measuring only: that caller never applied the injection
+      // holdout, so its sessions' arms would be labels for a treatment they
+      // never received.
+      if (holdout.enabled && !measureOnly) {
         recordOutcome(dir, { sessionId, costUnits: usage.costUnits, prompts: usage.prompts, endedAt: usage.lastAt || mtime }, holdout);
       }
+      // What each prompt cost, for the task-classification report. Every
+      // folded session, whatever the holdout setting: with it off there is no
+      // comparison, but the per-category cost is still the user's to see.
+      if (ledgerKnows(sessionId)) recordOutcomes(sessionId, usage.segments, env);
       foldedNow += 1;
     }
   } catch {
     // No transcript directory: nothing to learn from yet.
   }
 
-  if (holdout.enabled && foldedNow) decideHoldout(dir, { now });
-  if (settings.mode === 'off') {
+  if (holdout.enabled && foldedNow && !measureOnly) decideHoldout(dir, { now });
+  if (measureOnly || settings.mode === 'off') {
     saveStore(dir, store);
-    return { mode: 'off', folded: foldedNow };
+    return { mode: measureOnly ? 'measure' : 'off', folded: foldedNow };
   }
 
   const wanted = candidates(store, settings, allowedTools(root)).map((item) => item.name);
@@ -798,14 +840,30 @@ export function catalogDue(store, { now = Date.now() } = {}) {
  * probe when due, in a detached process that outlives the hook. Returns at
  * once; the session start never waits on a transcript scan.
  */
-export function scheduleFold({ dir, root, transcriptPath, sessionId, env = process.env }) {
-  if (toolpruneSettings(env).mode === 'off' && !holdoutSettings(env).enabled) return false;
+/**
+ * `measureOnly`: fold finished sessions for their costs and nothing else -- no
+ * deny list, no catalog probe, no injection-holdout outcome. For a client that
+ * has not adopted pruning or the injection holdout but whose per-prompt costs
+ * other measurements need (Claude Code's own SessionStart; task-ledger.mjs).
+ */
+export function scheduleFold({ dir, root, transcriptPath, sessionId, env = process.env, measureOnly = false }) {
+  if (!measureOnly && toolpruneSettings(env).mode === 'off' && !holdoutSettings(env).enabled) return false;
+  // Nothing was ever classified, so there is no prompt to cost: no process.
+  if (measureOnly && !existsSync(ledgerPath(env))) return false;
   if (env.TOKEN_OPTIMIZER_SIDECALL) return false;
   if (!transcriptPath || !root || !dir) return false;
   try {
     const child = spawn(
       process.execPath,
-      [fileURLToPath(import.meta.url), '--fold', dir, root, dirname(transcriptPath), sessionId || ''],
+      [
+        fileURLToPath(import.meta.url),
+        '--fold',
+        dir,
+        root,
+        dirname(transcriptPath),
+        sessionId || '',
+        measureOnly ? 'measure' : '',
+      ],
       { cwd: tmpdir(), detached: true, stdio: 'ignore', windowsHide: true, env: { ...env } }
     );
     child.unref();
@@ -894,7 +952,11 @@ export async function waitAndApply({ dir, root, transcriptDir, env = process.env
 }
 
 async function backgroundMain(argv) {
-  const [dir, root, transcriptDir, currentSession] = argv;
+  const [dir, root, transcriptDir, currentSession, how] = argv;
+  if (how === 'measure') {
+    runFold({ dir, root, transcriptDir, currentSession: currentSession || null, measureOnly: true });
+    return;
+  }
   const store = loadStore(dir);
   if (toolpruneSettings().mode !== 'off' && catalogDue(store)) {
     const probed = await probeCatalog();

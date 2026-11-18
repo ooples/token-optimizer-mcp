@@ -9,6 +9,14 @@
         "timeoutSec": 5
       }
     ],
+    "userPromptSubmitted": [
+      {
+        "type": "command",
+        "bash": "node .github/hooks/prompt.mjs",
+        "powershell": "node .github/hooks/prompt.mjs",
+        "timeoutSec": 5
+      }
+    ],
     "preToolUse": [
       {
         "type": "command",

@@ -59,6 +59,9 @@ import {
   nodeUnsupportedReason,
 } from './node-floor.mjs';
 import { SLOW_P90_MS, recentToolHookLatency } from './hook-latency.mjs';
+import { EVIDENCE, SETTING_ENV, explicitSetting, settingsTable } from './task-settings.mjs';
+import { taskReportFromLedger } from './task-report.mjs';
+import { holdoutSettings } from './injection-holdout.mjs';
 
 /**
  * Bytes as a person reads them.
@@ -2401,6 +2404,7 @@ export async function diagnose({
 
   const checks = [
     ...probeMode({ settingsPath }),
+    ...probeTaskSettings(),
     ...checklist({ root, settingsPath, install }),
     ...probeVersion({ install, crossClient }),
     ...probeClaudeCodeHooks({ install, versionText: claudeCodeVersion }),
@@ -2429,6 +2433,61 @@ export async function diagnose({
     healthy: failed.length === 0,
     failed,
   };
+}
+
+/**
+ * The per-task settings table (task-settings.mjs): which categories differ
+ * from the defaults, why, and whether an env switch overrides them all.
+ * Never a failure: a switch the hooks ignore is a warning. It is the one place a
+ * person can see that a rewrite session will not be outlined, and the
+ * measurement that decided it.
+ */
+export function probeTaskSettings(env = process.env) {
+  const table = settingsTable();
+  const base = table.unknown;
+  const differs = [];
+  for (const [category, row] of Object.entries(table))
+    for (const [setting, value] of Object.entries(row))
+      if (value !== base[setting])
+        differs.push(`${category}.${setting}=${value} (${(EVIDENCE[`${category}.${setting}`] || 'no evidence recorded').split(':')[0]})`);
+  // Judged by the parser settingsFor uses, so the doctor never reports a value
+  // the hooks ignore as one that fixes a setting.
+  const forced = [];
+  const ignored = [];
+  for (const [setting, name] of Object.entries(SETTING_ENV)) {
+    const raw = String(env[name] ?? '').trim();
+    if (raw === '') continue;
+    const value = explicitSetting(raw);
+    if (value === undefined) ignored.push(`${name}=${raw}`);
+    else forced.push(`${name}=${raw} turns ${setting} ${value ? 'on' : 'off'} for every task`);
+  }
+  // WHETHER IT IS BEING MEASURED, and how much evidence there is so far: the
+  // full breakdown is get_optimization_report's (task-report.mjs).
+  const holdout = holdoutSettings(env);
+  let evidence = 'no classified prompts recorded yet';
+  try {
+    const { report } = taskReportFromLedger({ env });
+    if (report.prompts) evidence = `${report.prompts} prompt(s) classified, ${report.matched} costed`;
+  } catch {
+    // An unreadable ledger costs the clause, not the check.
+  }
+  const detail = [
+    differs.length ? `differs from defaults: ${differs.join('; ')}` : 'every task runs on the defaults',
+    ...forced,
+    holdout.enabled
+      ? `${Math.round(holdout.fraction * 100)}% of sessions held out on the default row to measure it`
+      : 'holdout off, so no category effect can be measured',
+    evidence,
+  ].join('; ');
+  if (ignored.length)
+    return [
+      warn(
+        'per-task settings',
+        `${detail}; ignored (not on/off): ${ignored.join(', ')}`,
+        'Set each to one of on, off, 1, 0, true, false, yes, no -- or remove it to use the per-task table.'
+      ),
+    ];
+  return [ok('per-task settings', detail)];
 }
 
 /**

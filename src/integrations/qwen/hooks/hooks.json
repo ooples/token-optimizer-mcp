@@ -12,6 +12,18 @@
         ]
       }
     ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$QWEN_PROJECT_DIR/.qwen/hooks/token-optimizer/prompt.mjs\"",
+            "name": "token-optimizer-task-settings",
+            "timeout": 5000
+          }
+        ]
+      }
+    ],
     "PreToolUse": [
       {
         "matcher": "read_file|grep_search|glob|edit|write_file|run_shell_command",

@@ -15,6 +15,19 @@
         ]
       }
     ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${PLUGIN_ROOT}/hooks/prompt.mjs\"",
+            "commandWindows": "node \"$env:PLUGIN_ROOT\\hooks\\prompt.mjs\"",
+            "timeout": 5,
+            "statusMessage": "Choosing settings for this task"
+          }
+        ]
+      }
+    ],
     "PreToolUse": [
       {
         "matcher": "Read|read_file|view_file|Grep|grep|search_file_content|Glob|glob|find_files|Edit|edit_file|apply_patch|Write|write_file|Bash|shell|run_command|functions\\.exec|exec",

@@ -15,7 +15,7 @@
  */
 import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
 import { spawnSync } from 'child_process';
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'fs';
+import { mkdtempSync, rmSync, writeFileSync, mkdirSync, readdirSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import {
@@ -33,6 +33,7 @@ const PRECOMPACT = join(
   'hooks',
   'precompact-optimize.mjs'
 );
+const ROUTER = join(process.cwd(), 'src', 'plugin', 'hooks', 'pretooluse-router.mjs');
 const SESSION_START = join(
   process.cwd(),
   'src',
@@ -86,8 +87,10 @@ afterEach(() => {
   }
   // Only this run's own state file -- the directory is shared with real
   // sessions and must not be removed wholesale.
+  // ...including the transcript-scoped ones, `${session}-<hash>.json`.
   try {
-    rmSync(join(stateRoot, `${session}.json`), { force: true });
+    for (const f of readdirSync(stateRoot))
+      if (f.startsWith(session)) rmSync(join(stateRoot, f), { force: true });
   } catch {
     /* already gone */
   }
@@ -232,6 +235,79 @@ describe('SessionStart spends them', () => {
     expect(ctx).toContain('b.ts owns the retry budget');
   }, 90_000);
 
+  it('restores in a real session, whose every payload carries a transcript path', () => {
+    // The router records `seen` under the transcript path. PreCompact and
+    // SessionStart used to read the unscoped file, which a real session never
+    // writes; and PreCompact cleared `seen` before SessionStart could use it.
+    // Both hid behind tests that re-wrote `seen` between the two hooks.
+    const a = join(project, 'a.ts');
+    const b = join(project, 'b.ts');
+    const transcript_path = join(project, 'transcript.jsonl');
+    writeFileSync(a, 'export const a = 1;\n');
+    writeFileSync(b, 'export const b = 2;\n');
+    writeFileSync(transcript_path, '');
+    const bNode = putNode(dir, { kind: 'file', key: b, hash: 'h' });
+    putNodeWithEdges(
+      dir,
+      { kind: 'finding', key: 'about-b', claim: 'b.ts owns the retry budget.', confidence: 0.95 },
+      [{ edge: 'derived_from', to: bNode }]
+    );
+    const read = (file) =>
+      run(ROUTER, {
+        session_id: session,
+        cwd: project,
+        transcript_path,
+        hook_event_name: 'PreToolUse',
+        tool_name: 'Read',
+        tool_input: { file_path: file },
+      });
+    read(a);
+    read(b);
+    run(PRECOMPACT, { session_id: session, cwd: project, transcript_path });
+    // PreCompact found what the router recorded and related the two files.
+    expect(load(dir).edges.filter((e) => e.edge === 'related').length).toBeGreaterThan(0);
+    // NOTHING RUNS BETWEEN THEM: a compaction is followed directly by
+    // SessionStart, with `seen` already cleared for the read cache.
+    const out = run(SESSION_START, {
+      session_id: session,
+      cwd: project,
+      transcript_path,
+      source: 'compact',
+    });
+    const ctx = JSON.parse(out.stdout || '{}')?.hookSpecificOutput?.additionalContext || '';
+    expect(ctx).toContain('Restored after compaction');
+    expect(ctx).toContain('b.ts owns the retry budget');
+  }, 90_000);
+
+  it('ignores anchors left by an earlier compaction', () => {
+    const a = join(project, 'a.ts');
+    const b = join(project, 'b.ts');
+    writeFileSync(a, 'export const a = 1;\n');
+    writeFileSync(b, 'export const b = 2;\n');
+    const bNode = putNode(dir, { kind: 'file', key: b, hash: 'h' });
+    putNodeWithEdges(
+      dir,
+      { kind: 'finding', key: 'about-b', claim: 'b.ts owns the retry budget.', confidence: 0.95 },
+      [{ edge: 'derived_from', to: bNode }]
+    );
+    mkdirSync(stateRoot, { recursive: true });
+    const restoreWith = (at) => {
+      writeFileSync(
+        join(stateRoot, `${session}.json`),
+        JSON.stringify({ seen: {}, compactionAnchors: { paths: [a, b], at } })
+      );
+      const out = run(SESSION_START, { session_id: session, cwd: project, source: 'compact' });
+      expect(out.status).toBe(0);
+      return JSON.parse(out.stdout || '{}')?.hookSpecificOutput?.additionalContext || '';
+    };
+    // The control: the same anchors, just written, do restore.
+    expect(restoreWith(Date.now())).toContain('b.ts owns the retry budget');
+    // An hour old, they belong to an earlier compaction.
+    const stale = restoreWith(Date.now() - 60 * 60 * 1000);
+    expect(stale).toContain('Token optimization is active');
+    expect(stale).not.toContain('Restored after compaction');
+  }, 90_000);
+
   it('says nothing on a cold start, so the text is not paid for every session', () => {
     const a = join(project, 'a.ts');
     writeFileSync(a, 'export const a = 1;\n');
@@ -248,7 +324,9 @@ describe('SessionStart spends them', () => {
 
     expect(ctx).not.toContain('Restored after compaction');
     // The policy notice still arrives, which is the hook's original job.
-    expect(ctx.length).toBeGreaterThan(50);
+    // Named, not measured: the output-discipline block that used to pad this
+    // past 50 characters now arrives with the prompt (task-session.mjs).
+    expect(ctx).toContain('Token optimization is active');
   }, 60_000);
 
   it('still emits the policy notice when the graph is unreadable', () => {
@@ -265,6 +343,8 @@ describe('SessionStart spends them', () => {
     const ctx =
       JSON.parse(out.stdout || '{}')?.hookSpecificOutput?.additionalContext ||
       '';
-    expect(ctx.length).toBeGreaterThan(50);
+    // Named, not measured: the output-discipline block that used to pad this
+    // past 50 characters now arrives with the prompt (task-session.mjs).
+    expect(ctx).toContain('Token optimization is active');
   }, 60_000);
 });

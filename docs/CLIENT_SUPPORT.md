@@ -108,6 +108,50 @@ needs the complete 102-tool specialist catalog. Use the four-operation
 | `TOKEN_OPTIMIZER_LOG_MAX_BYTES`         | `5242880`  | Rotate an active lifecycle log at size   |
 | `TOKEN_OPTIMIZER_LOG_RETENTION_DAYS`    | `14`       | Maximum lifecycle log age                |
 | `TOKEN_OPTIMIZER_LOG_MAX_FILES`         | `40`       | Maximum retained lifecycle log files     |
+| `TOKEN_OPTIMIZER_OUTPUT_DISCIPLINE`     | per task   | `on`/`off` overrides the task's setting  |
+| `TOKEN_OPTIMIZER_OUTLINE`               | per task   | `on`/`off` overrides the task's setting  |
 
 An unrecognised `TOKEN_OPTIMIZER_MODE` falls back to `enforce`, so a typo cannot
 quietly turn the product off.
+
+### Settings follow the task
+
+Some settings help one kind of task and cost another. Outlining a large file
+helps a model find something in it and costs 1.36x when the model is about to
+rewrite the whole file. Earlier Claude measurements supported turning output
+discipline off for surveys, but the full Codex comparison measured that category
+at 1.0556x baseline and failed its fixed 1.03 limit. The survey override was
+removed; output discipline stays on for every category. Rewrites still skip
+outline substitution. Each session gets a task category and measured defaults
+(`src/hooks-core/task-settings.mjs`).
+
+- **When the prompt arrives**, an explicit request selects fix, build, rewrite,
+  survey, locate, explain or unknown. The free classifier uses bounded rules,
+  the prompt's first 4 KB and the sizes of up to eight named files; no model call.
+- **Approvals and continuations use recent context.** “Yes, do that” can accept
+  the assistant's proposed next action, and “do #1” selects just that numbered
+  option. Otherwise a continuation inherits the current task. A new explicit
+  request wins; cancellations and unrelated chat do not inherit.
+  Claude and Codex JSONL transcripts provide up to six recent text messages
+  from a 64 KiB tail, with at most 4,000 characters per message. Tools, reasoning,
+  injected instructions, quotes and code examples do not supply proposals.
+  Missing or unsupported transcripts fall back to the saved category; context
+  older than 24 hours is not reused. Raw conversation is not stored in telemetry.
+- **The first six tool calls can settle `unknown`.** A whole-file read over
+  256 KB suggests `locate`; a failing test run suggests `fix`. Tool use cannot
+  replace a known task, and overwriting a read file does not establish `rewrite`.
+- **Delivered instructions follow explicit switches.** On prompt-context clients,
+  turning output discipline off releases an earlier block; turning it back on
+  delivers it again. Task changes and continuations add no duplicate while the
+  selected setting stays the same.
+- **`unknown` runs with the defaults the product had before categories.** A
+  category only differs where a measurement says so, and the table names it.
+- **The output-discipline block comes with the prompt** on clients whose prompt
+  hook can add context: Claude Code, Codex, Gemini CLI (`BeforeAgent`), Qwen
+  Code and Cline (4.1.20 or later). Copilot CLI, Cursor, OpenCode, Kilo and
+  Windsurf get it at session start with the `unknown` setting; their tool-call
+  settings still follow the task. Copilot's prompt hook still classifies, but
+  adds no text: its hooks reference says a config-file `userPromptSubmitted`
+  hook's output is dropped, while its changelog says the context arrives since
+  1.0.65, and that has not been confirmed on a live CLI.
+- An explicit switch in the table above wins over the category.

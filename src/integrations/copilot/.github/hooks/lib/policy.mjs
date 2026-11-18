@@ -65,6 +65,7 @@ import { isFsSafePath } from './paths.mjs';
 import { SESSION_CAP as ADVISED_CAP } from './advise.mjs';
 import { noteHookOutput } from './observability.mjs';
 import { repoAskEnabled } from './quiet-env.mjs';
+import { RECLASSIFY_WINDOW, TaskCategory, mayReplace } from './task-class.mjs';
 
 /** Enforcement modes, least to most permissive. */
 export const MODE_ENFORCE = 'enforce';
@@ -429,6 +430,16 @@ function emptyState() {
     optimizerServerFailedAt: 0,
     optimizerTools: [],
     optimizerToolsObservedAt: 0,
+    taskClass: null,
+    // When the prompt hook last said the output-discipline block, and when the
+    // context was last rebuilt (SessionStart: startup, resume, clear, compact).
+    // The block is said again once the context it was said into is gone.
+    disciplineServedAt: 0,
+    disciplineReleasedAt: 0,
+    contextStartedAt: 0,
+    // What was in view when the context was last compacted: clearSeen empties
+    // `seen` for the read cache, and SessionStart's restoration still needs it.
+    compactionAnchors: null,
     // The harvest nudge the Stop hook held for the next turn (null when none).
     pendingHarvest: null,
     repeats: {},
@@ -454,8 +465,12 @@ function emptyState() {
  */
 const loadedHarvest = new WeakMap();
 
+/** The task class each loaded snapshot started from; see mergedTaskClass. */
+const loadedTaskClass = new WeakMap();
+
 function tracked(state) {
   loadedCalls.set(state, Number(state.toolCalls) || 0);
+  loadedTaskClass.set(state, validTaskClass(state.taskClass));
   loadedHarvest.set(state, state.pendingHarvest ?? null);
   return state;
 }
@@ -464,6 +479,74 @@ function tracked(state) {
 function changedHarvest(state) {
   if (!loadedHarvest.has(state)) return Object.prototype.hasOwnProperty.call(state, 'pendingHarvest');
   return (state.pendingHarvest ?? null) !== loadedHarvest.get(state);
+}
+
+/** A stored task category, or null when absent or malformed. */
+const MAX_COMPACTION_ANCHORS = 64;
+
+/** `{paths, at}` as clearSeen writes it -- `paths` may be empty -- or null. */
+function validAnchors(value) {
+  if (!value || typeof value !== 'object' || !Array.isArray(value.paths)) return null;
+  if (!Number.isFinite(value.at) || value.at <= 0) return null;
+  const paths = value.paths.filter((p) => typeof p === 'string').slice(-MAX_COMPACTION_ANCHORS);
+  return { paths, at: value.at };
+}
+
+function validTaskClass(value) {
+  if (!value || typeof value !== 'object' || typeof value.category !== 'string') return null;
+  return {
+    category: value.category,
+    source: typeof value.source === 'string' ? value.source : 'none',
+    calls: Number.isFinite(value.calls) && value.calls > 0 ? value.calls : 0,
+    gen: Number.isFinite(value.gen) && value.gen > 0 ? value.gen : 0,
+  };
+}
+
+/**
+ * The task class after one caller's save, under the lock.
+ *
+ * GENERATIONS FIRST. Each prompt starts one (task-session.mjs). A save from an
+ * older generation -- a post-tool hook that loaded before the next prompt
+ * landed -- loses outright, so a late correction for the previous task cannot
+ * become the new task's category.
+ *
+ * WITHIN A GENERATION, COUNTS ARE ADDED, NOT MAXED, as toolCalls is: six
+ * parallel hooks that each loaded calls=0 and saved calls=1 counted six calls,
+ * not one. The category is this caller's only if this caller moved it;
+ * otherwise whatever is stored stands, so a mere tally never undoes a
+ * concurrent correction. A snapshot this module never handed out (a hand-built
+ * state) has nothing to add to and simply carries its own values.
+ *
+ * A CORRECTION OBEYS THE RULES A SINGLE CALL DOES, judged against what is
+ * stored rather than what the caller loaded. It must replace the stored
+ * category by the overrule rule (mayReplace), so a parallel `fix` cannot undo a
+ * stored `rewrite`. And the call behind it must fall inside the window once the
+ * calls other hooks saved meanwhile are counted -- a hook that loaded calls=5
+ * cannot know it was the seventh. Its position is assigned here, under the
+ * lock: its last counted call follows every count already stored; a result
+ * judged without counting belongs to the call its loaded count ends on.
+ */
+function mergedTaskClass(current, mine, loaded) {
+  const a = validTaskClass(current);
+  const b = validTaskClass(mine);
+  if (!b) return a;
+  if (!a || b.gen > a.gen) return b;
+  if (b.gen < a.gen) return a;
+  // `loaded` is undefined for an untracked (hand-built) state, and null for a
+  // loaded state that had no task class yet -- a client with no prompt hook,
+  // whose first tool calls start from the UNKNOWN row with nothing counted.
+  const base =
+    loaded === undefined
+      ? null
+      : (validTaskClass(loaded) ?? { category: TaskCategory.UNKNOWN, source: 'none', calls: 0, gen: 0 });
+  const sameGen = base !== null && base.gen === b.gen;
+  const added = sameGen ? Math.max(0, b.calls - base.calls) : 0;
+  const moved = !sameGen || b.category !== base.category;
+  const calls = Math.max(a.calls + added, b.calls);
+  if (!moved) return { ...a, calls };
+  const position = added > 0 ? a.calls + added : base ? base.calls : b.calls;
+  const admitted = position <= RECLASSIFY_WINDOW && mayReplace(a.category, b.category);
+  return { ...(admitted ? b : a), calls };
 }
 
 export function loadState(sessionId, agent) {
@@ -585,6 +668,13 @@ export function loadState(sessionId, agent) {
       optimizerToolsObservedAt: Number.isFinite(parsed.optimizerToolsObservedAt)
         ? parsed.optimizerToolsObservedAt
         : 0,
+      // The task category (task-class.mjs). Set at prompt submit, corrected by
+      // the first tool calls, and read by every hook that applies a setting.
+      taskClass: validTaskClass(parsed.taskClass),
+      disciplineServedAt: Number.isFinite(parsed.disciplineServedAt) ? parsed.disciplineServedAt : 0,
+      disciplineReleasedAt: Number.isFinite(parsed.disciplineReleasedAt) ? parsed.disciplineReleasedAt : 0,
+      contextStartedAt: Number.isFinite(parsed.contextStartedAt) ? parsed.contextStartedAt : 0,
+      compactionAnchors: validAnchors(parsed.compactionAnchors),
     });
   } catch {
     return tracked(emptyState());
@@ -757,6 +847,18 @@ export function saveState(sessionId, state, agent) {
       // The caller's own view of the run: it just observed this call.
       singleRun: Number(state.singleRun) || 0,
       batchNudged: Boolean(current.batchNudged || state.batchNudged),
+      // NEWEST WINS. A prompt-submit classification and a tool-call correction
+      // can race; the later decision is the one that saw more evidence.
+      taskClass: mergedTaskClass(current.taskClass, state.taskClass, loadedTaskClass.get(state)),
+      // POINTS IN TIME, so the latest wins. A boolean could never be reset by a
+      // compaction: this merge would OR the old "said" back in.
+      disciplineServedAt: Math.max(Number(current.disciplineServedAt) || 0, Number(state.disciplineServedAt) || 0),
+      disciplineReleasedAt: Math.max(Number(current.disciplineReleasedAt) || 0, Number(state.disciplineReleasedAt) || 0),
+      contextStartedAt: Math.max(Number(current.contextStartedAt) || 0, Number(state.contextStartedAt) || 0),
+      // The latest compaction's set; a caller that loaded an older one keeps nothing back.
+      compactionAnchors: [validAnchors(current.compactionAnchors), validAnchors(state.compactionAnchors)]
+        .filter(Boolean)
+        .sort((x, y) => y.at - x.at)[0] ?? null,
       // ADDED, NOT MAXED: what this caller counted goes on top of what the
       // locked read found, so a concurrent hook's call is not forgotten. See
       // `loadedCalls` above for why this one count is merged differently.
@@ -817,6 +919,10 @@ export function saveState(sessionId, state, agent) {
     // nothing. After the rename, because a throw above leaves the delta owed.
     if (loadedCalls.has(state)) {
       loadedCalls.set(state, Number(state.toolCalls) || 0);
+    }
+    // Likewise the task class: what this caller counted or moved is now on disk.
+    if (loadedTaskClass.has(state)) {
+      loadedTaskClass.set(state, validTaskClass(state.taskClass));
     }
   } catch {
     // State is an optimization, not a requirement. Losing it degrades re-read
@@ -889,7 +995,7 @@ export function writeAtomically(target, text, { rename = renameSync, attempts = 
   }
 }
 
-export function clearSeen(sessionId, agent) {
+export function clearSeen(sessionId, agent, { anchors = false, now = Date.now() } = {}) {
   let lock = null;
   try {
     mkdirSync(stateRoot(), { recursive: true, mode: 0o700 });
@@ -898,6 +1004,15 @@ export function clearSeen(sessionId, agent) {
 
     const current = loadState(sessionId, agent);
     const cleared = { ...current, seen: {} };
+    // IN THE SAME LOCKED WRITE, so no save can land between "cleared" and
+    // "remembered". A compaction is followed by SessionStart with no tool call
+    // between them: `seen` is empty by then, and restoration starts from these.
+    if (anchors) {
+      const paths = Object.keys(current.seen || {}).slice(-MAX_COMPACTION_ANCHORS);
+      // Timestamped even when empty: a snapshot loaded before this clear may
+      // still hold an older set, and only a newer record outranks it in the merge.
+      cleared.compactionAnchors = { paths, at: now };
+    }
 
     writeAtomically(statePath(sessionId, agent), JSON.stringify(cleared));
     return true;
