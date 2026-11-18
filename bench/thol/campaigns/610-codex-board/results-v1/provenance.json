@@ -1,0 +1,873 @@
+{
+  "protocolFiles": {
+    "campaign.py": "79fd6561bff90182b3edc25830da0ad50b5a8558c5dc192db502b5a7df7fa999",
+    "Dockerfile": "b60d04ad42cdc49accc093b3d048952874d545eeb35042f475000ce3978d906a",
+    "hook-audit.py": "5f5329a8e1581247662962b62ad1df30d0c713a66f8fa39cb8ce738b0cd74273",
+    "input-manifest.py": "e7e36046b674e799c78cf1d00010f1ea46af2a4d05446a14fe7bb1e8e50ae58a",
+    "PREREGISTRATION.md": "19b1f1580fd7527ea3c9e6ec43172737576fc4defe1a629dd1aea03639c8a5df",
+    "rate-card.json": "866ac9fb99ef0d6ed7c8e8b6ea8eb0d05b03c727bf4feac08de2694a9c84c051",
+    "README.md": "06659982315e266f85bce1673bd5f344c09d495ab3663566691a64cd6ddcc570",
+    "report.py": "2a6bab443cc14222c7f70ec7fb76b7e107a4601e26637e73022294299b41ca36",
+    "run.py": "cab13745d5e7bc4151f1f28b56d0955470250d359de623b89b5c531abf61c86c"
+  },
+  "images": {
+    "pr610": "sha256:22e7d3481ca9c2c870d82237877ebb6d6edaedb34f3e9360a4e3835a56612b81",
+    "master": "sha256:2d3016e9bc022e9b387558ae83b2f67720318d17c39b6608a94f0c125c56d427"
+  },
+  "inputManifestSha256": "3d7b7234f8a126b875d367a90f94bd8be28e4863fc8def9f6ef4bdd3ad4006a6",
+  "fixtureVolume": "thol-610-board-v2-pr610",
+  "model": "gpt-6.1-sol",
+  "effort": "high",
+  "plan": [
+    {
+      "image": "pr610",
+      "task": "code-bugfix-py",
+      "rep": 1
+    },
+    {
+      "image": "master",
+      "task": "code-bugfix-py",
+      "rep": 1
+    },
+    {
+      "image": "pr610",
+      "task": "code-refactor-split-py",
+      "rep": 1
+    },
+    {
+      "image": "master",
+      "task": "code-refactor-split-py",
+      "rep": 1
+    },
+    {
+      "image": "pr610",
+      "task": "log-needle-zh",
+      "rep": 1
+    },
+    {
+      "image": "master",
+      "task": "log-needle-zh",
+      "rep": 1
+    },
+    {
+      "image": "pr610",
+      "task": "code-iterate-tests",
+      "rep": 1
+    },
+    {
+      "image": "master",
+      "task": "code-iterate-tests",
+      "rep": 1
+    },
+    {
+      "image": "pr610",
+      "task": "code-feature-js",
+      "rep": 1
+    },
+    {
+      "image": "master",
+      "task": "code-feature-js",
+      "rep": 1
+    },
+    {
+      "image": "pr610",
+      "task": "code-migration-py-xl",
+      "rep": 1
+    },
+    {
+      "image": "master",
+      "task": "code-migration-py-xl",
+      "rep": 1
+    },
+    {
+      "image": "pr610",
+      "task": "code-migration-py",
+      "rep": 1
+    },
+    {
+      "image": "master",
+      "task": "code-migration-py",
+      "rep": 1
+    },
+    {
+      "image": "pr610",
+      "task": "code-feature-validate-py",
+      "rep": 1
+    },
+    {
+      "image": "master",
+      "task": "code-feature-validate-py",
+      "rep": 1
+    },
+    {
+      "image": "pr610",
+      "task": "seo-audit",
+      "rep": 1
+    },
+    {
+      "image": "master",
+      "task": "seo-audit",
+      "rep": 1
+    },
+    {
+      "image": "pr610",
+      "task": "report-pdf",
+      "rep": 1
+    },
+    {
+      "image": "master",
+      "task": "report-pdf",
+      "rep": 1
+    },
+    {
+      "image": "pr610",
+      "task": "code-overview-cobra",
+      "rep": 1
+    },
+    {
+      "image": "master",
+      "task": "code-overview-cobra",
+      "rep": 1
+    },
+    {
+      "image": "pr610",
+      "task": "code-settings-inventory-django",
+      "rep": 1
+    },
+    {
+      "image": "master",
+      "task": "code-settings-inventory-django",
+      "rep": 1
+    },
+    {
+      "image": "pr610",
+      "task": "code-comprehension-django",
+      "rep": 1
+    },
+    {
+      "image": "master",
+      "task": "code-comprehension-django",
+      "rep": 1
+    },
+    {
+      "image": "pr610",
+      "task": "code-debug-pipeline-py",
+      "rep": 1
+    },
+    {
+      "image": "master",
+      "task": "code-debug-pipeline-py",
+      "rep": 1
+    },
+    {
+      "image": "pr610",
+      "task": "code-debug-ledger-py",
+      "rep": 1
+    },
+    {
+      "image": "master",
+      "task": "code-debug-ledger-py",
+      "rep": 1
+    },
+    {
+      "image": "pr610",
+      "task": "code-debug-cascade-py",
+      "rep": 1
+    },
+    {
+      "image": "master",
+      "task": "code-debug-cascade-py",
+      "rep": 1
+    },
+    {
+      "image": "pr610",
+      "task": "code-rewrite-modernize-py",
+      "rep": 1
+    },
+    {
+      "image": "master",
+      "task": "code-rewrite-modernize-py",
+      "rep": 1
+    },
+    {
+      "image": "master",
+      "task": "code-bugfix-py",
+      "rep": 2
+    },
+    {
+      "image": "pr610",
+      "task": "code-bugfix-py",
+      "rep": 2
+    },
+    {
+      "image": "master",
+      "task": "code-refactor-split-py",
+      "rep": 2
+    },
+    {
+      "image": "pr610",
+      "task": "code-refactor-split-py",
+      "rep": 2
+    },
+    {
+      "image": "master",
+      "task": "log-needle-zh",
+      "rep": 2
+    },
+    {
+      "image": "pr610",
+      "task": "log-needle-zh",
+      "rep": 2
+    },
+    {
+      "image": "master",
+      "task": "code-iterate-tests",
+      "rep": 2
+    },
+    {
+      "image": "pr610",
+      "task": "code-iterate-tests",
+      "rep": 2
+    },
+    {
+      "image": "master",
+      "task": "code-feature-js",
+      "rep": 2
+    },
+    {
+      "image": "pr610",
+      "task": "code-feature-js",
+      "rep": 2
+    },
+    {
+      "image": "master",
+      "task": "code-migration-py-xl",
+      "rep": 2
+    },
+    {
+      "image": "pr610",
+      "task": "code-migration-py-xl",
+      "rep": 2
+    },
+    {
+      "image": "master",
+      "task": "code-migration-py",
+      "rep": 2
+    },
+    {
+      "image": "pr610",
+      "task": "code-migration-py",
+      "rep": 2
+    },
+    {
+      "image": "master",
+      "task": "code-feature-validate-py",
+      "rep": 2
+    },
+    {
+      "image": "pr610",
+      "task": "code-feature-validate-py",
+      "rep": 2
+    },
+    {
+      "image": "master",
+      "task": "seo-audit",
+      "rep": 2
+    },
+    {
+      "image": "pr610",
+      "task": "seo-audit",
+      "rep": 2
+    },
+    {
+      "image": "master",
+      "task": "report-pdf",
+      "rep": 2
+    },
+    {
+      "image": "pr610",
+      "task": "report-pdf",
+      "rep": 2
+    },
+    {
+      "image": "master",
+      "task": "code-overview-cobra",
+      "rep": 2
+    },
+    {
+      "image": "pr610",
+      "task": "code-overview-cobra",
+      "rep": 2
+    },
+    {
+      "image": "master",
+      "task": "code-settings-inventory-django",
+      "rep": 2
+    },
+    {
+      "image": "pr610",
+      "task": "code-settings-inventory-django",
+      "rep": 2
+    },
+    {
+      "image": "master",
+      "task": "code-comprehension-django",
+      "rep": 2
+    },
+    {
+      "image": "pr610",
+      "task": "code-comprehension-django",
+      "rep": 2
+    },
+    {
+      "image": "master",
+      "task": "code-debug-pipeline-py",
+      "rep": 2
+    },
+    {
+      "image": "pr610",
+      "task": "code-debug-pipeline-py",
+      "rep": 2
+    },
+    {
+      "image": "master",
+      "task": "code-debug-ledger-py",
+      "rep": 2
+    },
+    {
+      "image": "pr610",
+      "task": "code-debug-ledger-py",
+      "rep": 2
+    },
+    {
+      "image": "master",
+      "task": "code-debug-cascade-py",
+      "rep": 2
+    },
+    {
+      "image": "pr610",
+      "task": "code-debug-cascade-py",
+      "rep": 2
+    },
+    {
+      "image": "master",
+      "task": "code-rewrite-modernize-py",
+      "rep": 2
+    },
+    {
+      "image": "pr610",
+      "task": "code-rewrite-modernize-py",
+      "rep": 2
+    },
+    {
+      "image": "pr610",
+      "task": "code-bugfix-py",
+      "rep": 3
+    },
+    {
+      "image": "master",
+      "task": "code-bugfix-py",
+      "rep": 3
+    },
+    {
+      "image": "pr610",
+      "task": "code-refactor-split-py",
+      "rep": 3
+    },
+    {
+      "image": "master",
+      "task": "code-refactor-split-py",
+      "rep": 3
+    },
+    {
+      "image": "pr610",
+      "task": "log-needle-zh",
+      "rep": 3
+    },
+    {
+      "image": "master",
+      "task": "log-needle-zh",
+      "rep": 3
+    },
+    {
+      "image": "pr610",
+      "task": "code-iterate-tests",
+      "rep": 3
+    },
+    {
+      "image": "master",
+      "task": "code-iterate-tests",
+      "rep": 3
+    },
+    {
+      "image": "pr610",
+      "task": "code-feature-js",
+      "rep": 3
+    },
+    {
+      "image": "master",
+      "task": "code-feature-js",
+      "rep": 3
+    },
+    {
+      "image": "pr610",
+      "task": "code-migration-py-xl",
+      "rep": 3
+    },
+    {
+      "image": "master",
+      "task": "code-migration-py-xl",
+      "rep": 3
+    },
+    {
+      "image": "pr610",
+      "task": "code-migration-py",
+      "rep": 3
+    },
+    {
+      "image": "master",
+      "task": "code-migration-py",
+      "rep": 3
+    },
+    {
+      "image": "pr610",
+      "task": "code-feature-validate-py",
+      "rep": 3
+    },
+    {
+      "image": "master",
+      "task": "code-feature-validate-py",
+      "rep": 3
+    },
+    {
+      "image": "pr610",
+      "task": "seo-audit",
+      "rep": 3
+    },
+    {
+      "image": "master",
+      "task": "seo-audit",
+      "rep": 3
+    },
+    {
+      "image": "pr610",
+      "task": "report-pdf",
+      "rep": 3
+    },
+    {
+      "image": "master",
+      "task": "report-pdf",
+      "rep": 3
+    },
+    {
+      "image": "pr610",
+      "task": "code-overview-cobra",
+      "rep": 3
+    },
+    {
+      "image": "master",
+      "task": "code-overview-cobra",
+      "rep": 3
+    },
+    {
+      "image": "pr610",
+      "task": "code-settings-inventory-django",
+      "rep": 3
+    },
+    {
+      "image": "master",
+      "task": "code-settings-inventory-django",
+      "rep": 3
+    },
+    {
+      "image": "pr610",
+      "task": "code-comprehension-django",
+      "rep": 3
+    },
+    {
+      "image": "master",
+      "task": "code-comprehension-django",
+      "rep": 3
+    },
+    {
+      "image": "pr610",
+      "task": "code-debug-pipeline-py",
+      "rep": 3
+    },
+    {
+      "image": "master",
+      "task": "code-debug-pipeline-py",
+      "rep": 3
+    },
+    {
+      "image": "pr610",
+      "task": "code-debug-ledger-py",
+      "rep": 3
+    },
+    {
+      "image": "master",
+      "task": "code-debug-ledger-py",
+      "rep": 3
+    },
+    {
+      "image": "pr610",
+      "task": "code-debug-cascade-py",
+      "rep": 3
+    },
+    {
+      "image": "master",
+      "task": "code-debug-cascade-py",
+      "rep": 3
+    },
+    {
+      "image": "pr610",
+      "task": "code-rewrite-modernize-py",
+      "rep": 3
+    },
+    {
+      "image": "master",
+      "task": "code-rewrite-modernize-py",
+      "rep": 3
+    },
+    {
+      "image": "master",
+      "task": "code-bugfix-py",
+      "rep": 4
+    },
+    {
+      "image": "pr610",
+      "task": "code-bugfix-py",
+      "rep": 4
+    },
+    {
+      "image": "master",
+      "task": "code-refactor-split-py",
+      "rep": 4
+    },
+    {
+      "image": "pr610",
+      "task": "code-refactor-split-py",
+      "rep": 4
+    },
+    {
+      "image": "master",
+      "task": "log-needle-zh",
+      "rep": 4
+    },
+    {
+      "image": "pr610",
+      "task": "log-needle-zh",
+      "rep": 4
+    },
+    {
+      "image": "master",
+      "task": "code-iterate-tests",
+      "rep": 4
+    },
+    {
+      "image": "pr610",
+      "task": "code-iterate-tests",
+      "rep": 4
+    },
+    {
+      "image": "master",
+      "task": "code-feature-js",
+      "rep": 4
+    },
+    {
+      "image": "pr610",
+      "task": "code-feature-js",
+      "rep": 4
+    },
+    {
+      "image": "master",
+      "task": "code-migration-py-xl",
+      "rep": 4
+    },
+    {
+      "image": "pr610",
+      "task": "code-migration-py-xl",
+      "rep": 4
+    },
+    {
+      "image": "master",
+      "task": "code-migration-py",
+      "rep": 4
+    },
+    {
+      "image": "pr610",
+      "task": "code-migration-py",
+      "rep": 4
+    },
+    {
+      "image": "master",
+      "task": "code-feature-validate-py",
+      "rep": 4
+    },
+    {
+      "image": "pr610",
+      "task": "code-feature-validate-py",
+      "rep": 4
+    },
+    {
+      "image": "master",
+      "task": "seo-audit",
+      "rep": 4
+    },
+    {
+      "image": "pr610",
+      "task": "seo-audit",
+      "rep": 4
+    },
+    {
+      "image": "master",
+      "task": "report-pdf",
+      "rep": 4
+    },
+    {
+      "image": "pr610",
+      "task": "report-pdf",
+      "rep": 4
+    },
+    {
+      "image": "master",
+      "task": "code-overview-cobra",
+      "rep": 4
+    },
+    {
+      "image": "pr610",
+      "task": "code-overview-cobra",
+      "rep": 4
+    },
+    {
+      "image": "master",
+      "task": "code-settings-inventory-django",
+      "rep": 4
+    },
+    {
+      "image": "pr610",
+      "task": "code-settings-inventory-django",
+      "rep": 4
+    },
+    {
+      "image": "master",
+      "task": "code-comprehension-django",
+      "rep": 4
+    },
+    {
+      "image": "pr610",
+      "task": "code-comprehension-django",
+      "rep": 4
+    },
+    {
+      "image": "master",
+      "task": "code-debug-pipeline-py",
+      "rep": 4
+    },
+    {
+      "image": "pr610",
+      "task": "code-debug-pipeline-py",
+      "rep": 4
+    },
+    {
+      "image": "master",
+      "task": "code-debug-ledger-py",
+      "rep": 4
+    },
+    {
+      "image": "pr610",
+      "task": "code-debug-ledger-py",
+      "rep": 4
+    },
+    {
+      "image": "master",
+      "task": "code-debug-cascade-py",
+      "rep": 4
+    },
+    {
+      "image": "pr610",
+      "task": "code-debug-cascade-py",
+      "rep": 4
+    },
+    {
+      "image": "master",
+      "task": "code-rewrite-modernize-py",
+      "rep": 4
+    },
+    {
+      "image": "pr610",
+      "task": "code-rewrite-modernize-py",
+      "rep": 4
+    },
+    {
+      "image": "pr610",
+      "task": "code-bugfix-py",
+      "rep": 5
+    },
+    {
+      "image": "master",
+      "task": "code-bugfix-py",
+      "rep": 5
+    },
+    {
+      "image": "pr610",
+      "task": "code-refactor-split-py",
+      "rep": 5
+    },
+    {
+      "image": "master",
+      "task": "code-refactor-split-py",
+      "rep": 5
+    },
+    {
+      "image": "pr610",
+      "task": "log-needle-zh",
+      "rep": 5
+    },
+    {
+      "image": "master",
+      "task": "log-needle-zh",
+      "rep": 5
+    },
+    {
+      "image": "pr610",
+      "task": "code-iterate-tests",
+      "rep": 5
+    },
+    {
+      "image": "master",
+      "task": "code-iterate-tests",
+      "rep": 5
+    },
+    {
+      "image": "pr610",
+      "task": "code-feature-js",
+      "rep": 5
+    },
+    {
+      "image": "master",
+      "task": "code-feature-js",
+      "rep": 5
+    },
+    {
+      "image": "pr610",
+      "task": "code-migration-py-xl",
+      "rep": 5
+    },
+    {
+      "image": "master",
+      "task": "code-migration-py-xl",
+      "rep": 5
+    },
+    {
+      "image": "pr610",
+      "task": "code-migration-py",
+      "rep": 5
+    },
+    {
+      "image": "master",
+      "task": "code-migration-py",
+      "rep": 5
+    },
+    {
+      "image": "pr610",
+      "task": "code-feature-validate-py",
+      "rep": 5
+    },
+    {
+      "image": "master",
+      "task": "code-feature-validate-py",
+      "rep": 5
+    },
+    {
+      "image": "pr610",
+      "task": "seo-audit",
+      "rep": 5
+    },
+    {
+      "image": "master",
+      "task": "seo-audit",
+      "rep": 5
+    },
+    {
+      "image": "pr610",
+      "task": "report-pdf",
+      "rep": 5
+    },
+    {
+      "image": "master",
+      "task": "report-pdf",
+      "rep": 5
+    },
+    {
+      "image": "pr610",
+      "task": "code-overview-cobra",
+      "rep": 5
+    },
+    {
+      "image": "master",
+      "task": "code-overview-cobra",
+      "rep": 5
+    },
+    {
+      "image": "pr610",
+      "task": "code-settings-inventory-django",
+      "rep": 5
+    },
+    {
+      "image": "master",
+      "task": "code-settings-inventory-django",
+      "rep": 5
+    },
+    {
+      "image": "pr610",
+      "task": "code-comprehension-django",
+      "rep": 5
+    },
+    {
+      "image": "master",
+      "task": "code-comprehension-django",
+      "rep": 5
+    },
+    {
+      "image": "pr610",
+      "task": "code-debug-pipeline-py",
+      "rep": 5
+    },
+    {
+      "image": "master",
+      "task": "code-debug-pipeline-py",
+      "rep": 5
+    },
+    {
+      "image": "pr610",
+      "task": "code-debug-ledger-py",
+      "rep": 5
+    },
+    {
+      "image": "master",
+      "task": "code-debug-ledger-py",
+      "rep": 5
+    },
+    {
+      "image": "pr610",
+      "task": "code-debug-cascade-py",
+      "rep": 5
+    },
+    {
+      "image": "master",
+      "task": "code-debug-cascade-py",
+      "rep": 5
+    },
+    {
+      "image": "pr610",
+      "task": "code-rewrite-modernize-py",
+      "rep": 5
+    },
+    {
+      "image": "master",
+      "task": "code-rewrite-modernize-py",
+      "rep": 5
+    }
+  ]
+}
