@@ -251,7 +251,7 @@
     "npm": "^12.2.2",
     "playwright": "^1.65.0",
     "prettier": "^3.10.1",
-    "semantic-release": "^25.0.2",
+    "semantic-release": "^26.0.1",
     "ts-jest": "^29.4.15"
   },
   "dependencies": {
@@ -272,7 +272,7 @@
     "graphlib": "^2.1.8",
     "lru-cache": "^11.5.3",
     "tiktoken": "^1.0.22",
-    "typescript": "^5.9.3",
+    "typescript": "^7.0.2",
     "yaml": "^2.9.1",
     "zod": "^4.6.7"
   },
